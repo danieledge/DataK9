@@ -1,0 +1,116 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+venv/
+.venv/
+.venv_*/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Testing
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+coverage_report.txt
+.tox/
+.hypothesis/
+test-results/
+test_results/
+junit.xml
+pytest.xml
+nosetests.xml
+*.db
+tests/temp_*
+tests/*.db
+.pytest/
+tmp*.yaml
+tmp*.csv
+tmp*.json
+tmp*.xlsx
+tmp*.parquet
+tmp*_profile_report.html
+tmp*_validation.yaml
+
+# Demo artifacts
+demo-tmp/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# MyPy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Generated data files (keep structure, ignore content)
+examples/sample_data/*.csv
+examples/sample_data/*.xlsx
+examples/sample_data/*.parquet
+
+# But DO track documentation HTML files and example configs
+!docs/*.html
+!docs/**/*.html
+!examples/sample_config.yaml
+
+# Track DataK9 Studio application
+!datak9-studio.html
+!config-builder/index.html
+
+# Generated reports
+examples/validation_report.html
+examples/validation_summary.json
+validation_report.html
+validation_summary.json
+*.html
+*.json
+
+# Logs
+*.log
+
+# Environment variables
+.env
+.env.local
+
+# Large files
+*.gz
+*.zip
+*.tar
+*.7z
+
+# OS
+Thumbs.db

@@ -1,0 +1,71 @@
+validation_job:
+  name: "Auto-generated validation for ecommerce_transactions.csv"
+  version: "1.0"
+
+  files:
+    - name: "ecommerce_transactions"
+      path: "ecommerce_transactions.csv"
+      format: "csv"
+
+      validations:
+        - type: "MandatoryFieldCheck"
+          severity: "ERROR"
+          params:
+            fields:
+              - "transaction_id"
+
+        - type: "MandatoryFieldCheck"
+          severity: "ERROR"
+          params:
+            fields:
+              - "transaction_date"
+
+        - type: "MandatoryFieldCheck"
+          severity: "ERROR"
+          params:
+            fields:
+              - "customer_id"
+
+        - type: "MandatoryFieldCheck"
+          severity: "ERROR"
+          params:
+            fields:
+              - "product_id"
+
+        - type: "MandatoryFieldCheck"
+          severity: "ERROR"
+          params:
+            fields:
+              - "product_category"
+
+        - type: "MandatoryFieldCheck"
+          severity: "ERROR"
+          params:
+            fields:
+              - "product_name"
+
+        - type: "MandatoryFieldCheck"
+          severity: "ERROR"
+          params:
+            fields:
+              - "quantity"
+
+        - type: "RangeCheck"
+          severity: "WARNING"
+          params:
+            field: "quantity"
+            min_value: 1.0
+            max_value: 10.0
+
+        - type: "MandatoryFieldCheck"
+          severity: "ERROR"
+          params:
+            fields:
+              - "unit_price"
+
+        - type: "RangeCheck"
+          severity: "WARNING"
+          params:
+            field: "unit_price"
+            min_value: 5.99
+            max_value: 999.97

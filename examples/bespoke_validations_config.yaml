@@ -1,0 +1,211 @@
+# Bespoke Data Validation Configuration
+# This file shows how to define custom validations WITHOUT writing Python code!
+# Business Analysts can copy and modify these examples for their needs.
+
+validation_job:
+  name: "Bespoke Custom Validations Example"
+  version: "1.0"
+
+  files:
+    - name: "customer_data"
+      path: "examples/sample_data/customers.csv"
+      format: "csv"
+
+      validations:
+        # ========================================================================
+        # EXAMPLE 1: Custom Regex Pattern (No Coding Required!)
+        # ========================================================================
+        # Validate UK phone numbers
+        - type: "InlineRegexCheck"
+          severity: "ERROR"
+          params:
+            field: "phone"
+            pattern: "^\\+44[0-9]{10}$"
+            description: "UK phone numbers must start with +44 and have 10 digits"
+
+        # Validate employee ID format (EMP followed by 6 digits)
+        - type: "InlineRegexCheck"
+          severity: "ERROR"
+          params:
+            field: "employee_id"
+            pattern: "^EMP[0-9]{6}$"
+            description: "Employee ID must be EMP followed by 6 digits (e.g., EMP123456)"
+
+        # Check that customer names don't contain numbers (should NOT match)
+        - type: "InlineRegexCheck"
+          severity: "WARNING"
+          params:
+            field: "first_name"
+            pattern: "[0-9]"
+            description: "Customer names should not contain numbers"
+            should_match: false
+
+        # Validate credit card format (basic check)
+        - type: "InlineRegexCheck"
+          severity: "ERROR"
+          params:
+            field: "credit_card"
+            pattern: "^[0-9]{4}-[0-9]{4}-[0-9]{4}-[0-9]{4}$"
+            description: "Credit card must be in format ####-####-####-####"
+
+        # ========================================================================
+        # EXAMPLE 2: Business Rules (SQL-like expressions)
+        # ========================================================================
+        # Age must be 18 or older
+        - type: "InlineBusinessRuleCheck"
+          severity: "ERROR"
+          params:
+            rule: "age >= 18"
+            description: "Customers must be 18 years or older"
+            error_message: "Customer age is below minimum requirement of 18"
+
+        # Balance must be positive
+        - type: "InlineBusinessRuleCheck"
+          severity: "ERROR"
+          params:
+            rule: "account_balance >= 0"
+            description: "Account balance cannot be negative"
+            error_message: "Account has negative balance"
+
+        # Discount must be reasonable (between 0% and 50%)
+        - type: "InlineBusinessRuleCheck"
+          severity: "WARNING"
+          params:
+            rule: "discount_percent >= 0 & discount_percent <= 50"
+            description: "Discount must be between 0% and 50%"
+            error_message: "Discount percentage is outside acceptable range"
+
+        # Conditional rule: VIP customers must have high balance
+        - type: "InlineBusinessRuleCheck"
+          severity: "WARNING"
+          params:
+            rule: "(status == 'VIP' & account_balance >= 10000) | (status != 'VIP')"
+            description: "VIP customers should have balance of at least $10,000"
+            error_message: "VIP customer has balance below $10,000"
+
+        # Multi-field validation: End date must be after start date
+        - type: "InlineBusinessRuleCheck"
+          severity: "ERROR"
+          params:
+            rule: "end_date > start_date"
+            description: "End date must be after start date"
+            error_message: "End date is before or equal to start date"
+
+        # ========================================================================
+        # EXAMPLE 3: Reference Data Lookups (Allowed/Blocked Lists)
+        # ========================================================================
+        # Only accept customers from approved countries
+        - type: "InlineLookupCheck"
+          severity: "ERROR"
+          params:
+            field: "country_code"
+            check_type: "allow"
+            reference_values:
+              - "US"
+              - "UK"
+              - "CA"
+              - "AU"
+              - "NZ"
+              - "DE"
+              - "FR"
+              - "ES"
+              - "IT"
+              - "NL"
+            description: "Only customers from supported countries are allowed"
+
+        # Block temporary email providers
+        - type: "InlineLookupCheck"
+          severity: "WARNING"
+          params:
+            field: "email_domain"
+            check_type: "deny"
+            reference_values:
+              - "tempmail.com"
+              - "throwaway.email"
+              - "guerrillamail.com"
+              - "10minutemail.com"
+              - "mailinator.com"
+            description: "Temporary email providers are not allowed"
+
+        # Validate product codes against approved list
+        - type: "InlineLookupCheck"
+          severity: "ERROR"
+          params:
+            field: "product_code"
+            check_type: "allow"
+            reference_values:
+              - "PROD-001"
+              - "PROD-002"
+              - "PROD-003"
+              - "PROD-004"
+              - "PROD-005"
+            description: "Product code must be in approved catalog"
+
+        # Block high-risk countries (sanctions list)
+        - type: "InlineLookupCheck"
+          severity: "ERROR"
+          params:
+            field: "country_code"
+            check_type: "deny"
+            reference_values:
+              - "XX"  # Replace with actual codes as needed
+              - "YY"
+            description: "Transactions from sanctioned countries are blocked"
+
+        # Valid payment methods
+        - type: "InlineLookupCheck"
+          severity: "ERROR"
+          params:
+            field: "payment_method"
+            check_type: "allow"
+            reference_values:
+              - "CREDIT_CARD"
+              - "DEBIT_CARD"
+              - "BANK_TRANSFER"
+              - "PAYPAL"
+              - "APPLE_PAY"
+            description: "Payment method must be one of the accepted types"
+
+  output:
+    html_report: "ba_validation_report.html"
+    json_summary: "ba_validation_summary.json"
+    fail_on_error: true
+
+# ============================================================================
+# COMMON REGEX PATTERNS FOR BUSINESS ANALYSTS
+# ============================================================================
+# Copy and paste these patterns into your validations above
+#
+# Email: ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$
+# UK Postcode: ^[A-Z]{1,2}[0-9][A-Z0-9]? [0-9][A-Z]{2}$
+# US ZIP Code: ^[0-9]{5}(-[0-9]{4})?$
+# US Phone: ^\+1[0-9]{10}$
+# UK Phone: ^\+44[0-9]{10}$
+# Date (YYYY-MM-DD): ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
+# Date (DD/MM/YYYY): ^[0-9]{2}/[0-9]{2}/[0-9]{4}$
+# Credit Card: ^[0-9]{4}-[0-9]{4}-[0-9]{4}-[0-9]{4}$
+# US SSN: ^[0-9]{3}-[0-9]{2}-[0-9]{4}$
+# UK National Insurance: ^[A-Z]{2}[0-9]{6}[A-Z]$
+# Numbers Only: ^[0-9]+$
+# Letters Only: ^[a-zA-Z]+$
+# No Special Chars: ^[a-zA-Z0-9 ]+$
+# Currency (£1,234.56): ^£[0-9]{1,3}(,[0-9]{3})*\.[0-9]{2}$
+# IP Address: ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$
+# URL: ^https?://[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}
+#
+# ============================================================================
+# BUSINESS RULE OPERATORS
+# ============================================================================
+# Comparison: ==, !=, <, >, <=, >=
+# Logic: & (AND), | (OR), ~ (NOT)
+# Math: +, -, *, /
+# Special: today (current date), now (current datetime)
+#
+# Examples:
+#   age >= 18
+#   balance > 0 & balance < 1000000
+#   status == 'ACTIVE' | status == 'PENDING'
+#   end_date > start_date
+#   transaction_date <= today
+#   (type == 'VIP' & balance >= 10000) | (type != 'VIP')
+# ============================================================================

@@ -1,0 +1,241 @@
+# Advanced Data Validation Configuration
+# Demonstrates the 6 new advanced validation types added based on industry research.
+#
+# These validations are based on research into Great Expectations and other
+# leading data quality frameworks. See docs/RESEARCH_FINDINGS.md for details.
+
+validation_job:
+  name: "Advanced Validation Example - Statistical & Quality Checks"
+  version: "1.0"
+  description: "Comprehensive validation suite demonstrating advanced statistical analysis and data quality checks including outlier detection, completeness validation, and precision enforcement."
+
+  files:
+    - name: "financial_data"
+      path: "examples/sample_data/transactions.csv"
+      format: "csv"
+
+      validations:
+        # ========================================================================
+        # STATISTICAL OUTLIER DETECTION
+        # ========================================================================
+        # Detect transactions that are statistical outliers using Z-score method
+        - type: "StatisticalOutlierCheck"
+          severity: "WARNING"
+          params:
+            field: "amount"
+            method: "zscore"
+            threshold: 3.0  # Flag values more than 3 standard deviations from mean
+            description: "Detect unusually large/small transaction amounts"
+
+        # Detect outliers using IQR (Interquartile Range) method
+        - type: "StatisticalOutlierCheck"
+          severity: "WARNING"
+          params:
+            field: "amount"
+            method: "iqr"
+            threshold: 1.5  # Flag values beyond 1.5*IQR from Q1/Q3
+            description: "Detect transaction amount outliers using IQR method"
+
+        # ========================================================================
+        # CROSS-FIELD COMPARISON
+        # ========================================================================
+        # Ensure transaction date is not in the future
+        # (This example assumes you have both transaction_date and current_date fields)
+
+        # Verify amounts are positive
+        - type: "RangeCheck"
+          severity: "ERROR"
+          params:
+            field: "amount"
+            min_value: 0
+            description: "Transaction amounts must be positive"
+
+        # ========================================================================
+        # DATA COMPLETENESS
+        # ========================================================================
+        # Ensure at least 98% of transactions have an amount
+        - type: "CompletenessCheck"
+          severity: "ERROR"
+          params:
+            field: "amount"
+            min_completeness: 0.98  # 98% of records must have amount
+            description: "Transaction amount field must be 98% complete"
+
+        # Ensure customer_id is always present
+        - type: "CompletenessCheck"
+          severity: "ERROR"
+          params:
+            field: "customer_id"
+            min_completeness: 1.0  # 100% required
+            description: "Customer ID must always be present"
+
+        # ========================================================================
+        # STRING LENGTH VALIDATION
+        # ========================================================================
+        # Validate transaction ID length
+        - type: "StringLengthCheck"
+          severity: "ERROR"
+          params:
+            field: "transaction_id"
+            min_length: 10
+            max_length: 50
+            description: "Transaction ID must be 10-50 characters"
+
+        # ========================================================================
+        # NUMERIC PRECISION
+        # ========================================================================
+        # Ensure currency amounts have exactly 2 decimal places
+        - type: "NumericPrecisionCheck"
+          severity: "ERROR"
+          params:
+            field: "amount"
+            exact_decimal_places: 2
+            description: "Currency amounts must have exactly 2 decimal places"
+
+    - name: "customer_master"
+      path: "examples/sample_data/customers.csv"
+      format: "csv"
+
+      validations:
+        # ========================================================================
+        # FILE FRESHNESS CHECK
+        # ========================================================================
+        # Ensure customer file was updated within last 24 hours
+        - type: "FreshnessCheck"
+          severity: "WARNING"
+          params:
+            check_type: "file"
+            max_age_hours: 24
+            description: "Customer data should be refreshed daily"
+
+        # ========================================================================
+        # COMPLETENESS CHECKS
+        # ========================================================================
+        # Email should be at least 90% complete
+        - type: "CompletenessCheck"
+          severity: "WARNING"
+          params:
+            field: "email"
+            min_completeness: 0.90
+            description: "Email addresses should be 90% complete"
+
+        # First and last names must be 100% complete
+        - type: "CompletenessCheck"
+          severity: "ERROR"
+          params:
+            field: "first_name"
+            min_completeness: 1.0
+            description: "First name must always be present"
+
+        - type: "CompletenessCheck"
+          severity: "ERROR"
+          params:
+            field: "last_name"
+            min_completeness: 1.0
+            description: "Last name must always be present"
+
+        # ========================================================================
+        # STRING LENGTH VALIDATIONS
+        # ========================================================================
+        # Ensure names are reasonable length
+        - type: "StringLengthCheck"
+          severity: "WARNING"
+          params:
+            field: "first_name"
+            min_length: 2
+            max_length: 50
+            description: "First name should be 2-50 characters"
+
+        - type: "StringLengthCheck"
+          severity: "WARNING"
+          params:
+            field: "last_name"
+            min_length: 2
+            max_length: 50
+            description: "Last name should be 2-50 characters"
+
+        # Phone numbers should be standardized length
+        - type: "StringLengthCheck"
+          severity: "ERROR"
+          params:
+            field: "phone"
+            min_length: 10
+            max_length: 15
+            description: "Phone number should be 10-15 characters"
+
+        # ========================================================================
+        # CROSS-FIELD COMPARISONS
+        # ========================================================================
+        # For customers with account_balance and credit_limit fields:
+        # (These would need to exist in your customer data)
+
+        # Example: Ensure account balance doesn't exceed credit limit
+        # - type: "CrossFieldComparisonCheck"
+        #   severity: "WARNING"
+        #   params:
+        #     field_a: "account_balance"
+        #     operator: "<="
+        #     field_b: "credit_limit"
+        #     description: "Account balance should not exceed credit limit"
+
+        # ========================================================================
+        # STATISTICAL OUTLIER DETECTION
+        # ========================================================================
+        # Detect customers with unusual ages
+        - type: "StatisticalOutlierCheck"
+          severity: "WARNING"
+          params:
+            field: "age"
+            method: "zscore"
+            threshold: 2.5
+            description: "Detect unusual customer ages"
+
+  output:
+    html_report: "advanced_validation_report.html"
+    json_summary: "advanced_validation_summary.json"
+    fail_on_error: false  # Generate report even with errors
+
+# ============================================================================
+# VALIDATION TYPE REFERENCE
+# ============================================================================
+#
+# 1. StatisticalOutlierCheck
+#    - Detects outliers using Z-score or IQR methods
+#    - Methods: 'zscore' (default) or 'iqr'
+#    - Threshold: 3.0 for zscore, 1.5 for IQR (default values)
+#
+# 2. CrossFieldComparisonCheck
+#    - Compares two fields within same record
+#    - Operators: >, <, >=, <=, ==, !=
+#    - Example: end_date > start_date
+#
+# 3. FreshnessCheck
+#    - Validates file or data age
+#    - Types: 'file' (modification time) or 'data' (data timestamps)
+#    - Specify max_age_hours
+#
+# 4. CompletenessCheck
+#    - Ensures minimum percentage of non-null values
+#    - min_completeness: 0.0-1.0 (or 0-100 for percentage)
+#    - Example: 0.95 = 95% of records must have value
+#
+# 5. StringLengthCheck
+#    - Validates string field length
+#    - Parameters: min_length, max_length (at least one required)
+#    - Good for database column constraints
+#
+# 6. NumericPrecisionCheck
+#    - Validates decimal places in numeric fields
+#    - Parameters: max_decimal_places or exact_decimal_places
+#    - Critical for currency fields
+#
+# ============================================================================
+# TOTAL VALIDATION TYPES AVAILABLE: 22
+# ============================================================================
+# - 3 File-level checks
+# - 2 Schema checks
+# - 5 Field-level checks
+# - 3 Record-level checks
+# - 3 Bespoke inline checks
+# - 6 Advanced checks (NEW!)
+# ============================================================================

@@ -1,0 +1,165 @@
+# Auto-generated validation configuration
+# Generated from profile of: HI-Large_Trans.parquet
+# Generated at: 2025-11-16 01:05:41
+
+validation_job:
+  name: "Validation for HI-Large_Trans.parquet"
+  description: "Auto-generated from data profile"
+
+  files:
+    - name: "HI-Large_Trans"
+      path: "/home/daniel/www/test-data/HI-Large_Trans.parquet"
+      format: "parquet"
+
+      validations:
+        - type: "EmptyFileCheck"
+          severity: "ERROR"
+          # Prevent empty file loads
+
+        - type: "StringLengthCheck"
+          severity: "ERROR"
+          params:
+            field: "Timestamp"
+            min_length: 16
+            max_length: 16
+          # Field has fixed length of 16 characters
+
+        - type: "StringLengthCheck"
+          severity: "ERROR"
+          params:
+            field: "Account"
+            min_length: 9
+            max_length: 9
+          # Field has fixed length of 9 characters
+
+        - type: "StringLengthCheck"
+          severity: "ERROR"
+          params:
+            field: "Account.1"
+            min_length: 9
+            max_length: 9
+          # Field has fixed length of 9 characters
+
+        - type: "StringLengthCheck"
+          severity: "ERROR"
+          params:
+            field: "Is Laundering"
+            min_length: 1
+            max_length: 1
+          # Field has fixed length of 1 characters
+
+        - type: "MandatoryFieldCheck"
+          severity: "ERROR"
+          params:
+            fields:
+              - "Timestamp"
+              - "From Bank"
+              - "Account"
+              - "To Bank"
+              - "Account.1"
+              - "Amount Received"
+              - "Receiving Currency"
+              - "Amount Paid"
+              - "Payment Currency"
+              - "Payment Format"
+              - "Is Laundering"
+          # 11 fields have >95% completeness
+
+        - type: "RangeCheck"
+          severity: "WARNING"
+          params:
+            field: "From Bank"
+            min_value: 6.0
+            max_value: 3132287.0
+          # Values typically range from P1 (6.00) to P99 (3132287.00)
+
+        - type: "RangeCheck"
+          severity: "WARNING"
+          params:
+            field: "To Bank"
+            min_value: 11.0
+            max_value: 3111263.0
+          # Values typically range from P1 (11.00) to P99 (3111263.00)
+
+        - type: "RangeCheck"
+          severity: "WARNING"
+          params:
+            field: "Amount Received"
+            min_value: 0.05
+            max_value: 41282678.22470002
+          # Values typically range from P1 (0.05) to P99 (41282678.22)
+
+        - type: "RangeCheck"
+          severity: "WARNING"
+          params:
+            field: "Amount Paid"
+            min_value: 0.05
+            max_value: 40168355.53070003
+          # Values typically range from P1 (0.05) to P99 (40168355.53)
+
+        - type: "RangeCheck"
+          severity: "WARNING"
+          params:
+            field: "Is Laundering"
+            min_value: 0.0
+            max_value: 0.0
+          # Values typically range from P1 (0.00) to P99 (0.00)
+
+        - type: "StatisticalOutlierCheck"
+          severity: "WARNING"
+          params:
+            field: "Amount Received"
+            method: "iqr"
+            threshold: 1.5
+          # Detected 186785 outliers (18.7%) - distribution is right_skewed
+
+        - type: "ValidValuesCheck"
+          severity: "ERROR"
+          params:
+            field: "Receiving Currency"
+            valid_values:
+              - "US Dollar"
+              - "Euro"
+              - "Yuan"
+              - "Ruble"
+              - "Yen"
+              - "Rupee"
+              - "UK Pound"
+              - "Bitcoin"
+              - "Canadian Dollar"
+              - "Mexican Peso"
+          # Low cardinality field with 15 unique values
+
+        - type: "StatisticalOutlierCheck"
+          severity: "WARNING"
+          params:
+            field: "Amount Paid"
+            method: "iqr"
+            threshold: 1.5
+          # Detected 187662 outliers (18.8%) - distribution is right_skewed
+
+        - type: "ValidValuesCheck"
+          severity: "ERROR"
+          params:
+            field: "Payment Currency"
+            valid_values:
+              - "US Dollar"
+              - "Euro"
+              - "Yuan"
+              - "Ruble"
+              - "Yen"
+              - "Rupee"
+              - "UK Pound"
+              - "Bitcoin"
+              - "Canadian Dollar"
+              - "Australian Dollar"
+          # Low cardinality field with 15 unique values
+
+  processing:
+    chunk_size: 200000  # Optimized for large files (5-7x speedup vs 50K)
+    max_sample_failures: 100
+
+  reporting:
+    html_report_path: "hi_large_validation_report.html"
+    json_summary_path: "hi_large_validation_summary.json"
+    fail_on_error: true

@@ -1,0 +1,190 @@
+# Sample Data Validation Configuration
+# This demonstrates various validation types and configurations
+
+validation_job:
+  name: "Financial Data Validation Example"
+  version: "1.0"
+
+  files:
+    # Example 1: CSV file with customer data
+    - name: "customers"
+      path: "examples/sample_data/customers.csv"
+      format: "csv"
+      delimiter: ","
+      encoding: "utf-8"
+      header: 0
+
+      validations:
+        # File-level checks
+        - type: "EmptyFileCheck"
+          severity: "ERROR"
+          description: "Ensure file is not empty"
+
+        - type: "RowCountRangeCheck"
+          severity: "WARNING"
+          params:
+            min_rows: 10
+            max_rows: 1000000
+          description: "Expected between 10 and 1M rows"
+
+        # Schema validation
+        - type: "SchemaMatchCheck"
+          severity: "ERROR"
+          params:
+            expected_schema:
+              customer_id: "integer"
+              first_name: "string"
+              last_name: "string"
+              email: "string"
+              phone: "string"
+              account_balance: "float"
+              registration_date: "string"
+              status: "string"
+            strict: false
+            check_order: false
+
+        # Mandatory field checks
+        - type: "MandatoryFieldCheck"
+          severity: "ERROR"
+          params:
+            fields: ["customer_id", "email", "first_name", "last_name"]
+            allow_whitespace: false
+          description: "Critical fields must not be empty"
+
+        # Email validation using regex
+        - type: "RegexCheck"
+          severity: "ERROR"
+          params:
+            field: "email"
+            pattern: "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
+            message: "Invalid email format"
+          description: "Validate email addresses"
+
+        # Phone validation using regex
+        - type: "RegexCheck"
+          severity: "WARNING"
+          params:
+            field: "phone"
+            pattern: "^\\+?[1-9]\\d{1,14}$"
+            message: "Invalid phone format (E.164 format expected)"
+          description: "Validate phone numbers"
+
+        # Status values check
+        - type: "ValidValuesCheck"
+          severity: "ERROR"
+          params:
+            field: "status"
+            valid_values: ["ACTIVE", "INACTIVE", "SUSPENDED", "PENDING"]
+            case_sensitive: true
+          description: "Status must be valid"
+
+        # Balance range check
+        - type: "RangeCheck"
+          severity: "WARNING"
+          params:
+            field: "account_balance"
+            min_value: 0
+            max_value: 10000000
+          description: "Balance should be reasonable"
+
+        # Date format check
+        - type: "DateFormatCheck"
+          severity: "WARNING"
+          params:
+            field: "registration_date"
+            format: "%Y-%m-%d"
+            allow_null: false
+          description: "Registration date format validation"
+
+        # Duplicate check
+        - type: "DuplicateRowCheck"
+          severity: "ERROR"
+          params:
+            key_fields: ["customer_id"]
+          description: "Customer IDs must be unique"
+
+        # Blank record check
+        - type: "BlankRecordCheck"
+          severity: "WARNING"
+          params:
+            exclude_fields: []
+          description: "Check for completely empty rows"
+
+    # Example 2: Transaction data (CSV or Parquet)
+    - name: "transactions"
+      path: "examples/sample_data/transactions.csv"
+      format: "csv"
+
+      validations:
+        - type: "EmptyFileCheck"
+          severity: "ERROR"
+
+        - type: "ColumnPresenceCheck"
+          severity: "ERROR"
+          params:
+            required_columns:
+              - "transaction_id"
+              - "customer_id"
+              - "amount"
+              - "transaction_date"
+              - "transaction_type"
+            case_sensitive: true
+
+        - type: "MandatoryFieldCheck"
+          severity: "ERROR"
+          params:
+            fields: ["transaction_id", "customer_id", "amount", "transaction_date"]
+
+        - type: "UniqueKeyCheck"
+          severity: "ERROR"
+          params:
+            fields: ["transaction_id"]
+
+        - type: "RangeCheck"
+          severity: "ERROR"
+          params:
+            field: "amount"
+            min_value: 0.01
+            max_value: 1000000
+          description: "Transaction amount must be positive and reasonable"
+
+        - type: "ValidValuesCheck"
+          severity: "ERROR"
+          params:
+            field: "transaction_type"
+            valid_values: ["DEPOSIT", "WITHDRAWAL", "TRANSFER", "PAYMENT"]
+
+    # Example 3: Accounts file (Excel or CSV)
+    - name: "accounts"
+      path: "examples/sample_data/accounts.csv"
+      format: "csv"
+
+      validations:
+        - type: "EmptyFileCheck"
+          severity: "ERROR"
+
+        - type: "MandatoryFieldCheck"
+          severity: "ERROR"
+          params:
+            fields: ["account_id", "account_type", "customer_id"]
+
+        # Custom validation example: 8-digit account numbers
+        - type: "RegexCheck"
+          severity: "ERROR"
+          params:
+            field: "account_number"
+            pattern: "^\\d{8}$"
+            message: "Account number must be exactly 8 digits"
+
+  # Output configuration
+  output:
+    html_report: "validation_report.html"
+    json_summary: "validation_summary.json"
+    fail_on_error: true
+    fail_on_warning: false
+
+  # Processing options
+  processing:
+    chunk_size: 50000         # Number of rows per chunk
+    parallel_files: false     # Process files sequentially
+    max_sample_failures: 100  # Maximum failure samples to collect
