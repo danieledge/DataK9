@@ -1,0 +1,137 @@
+# Auto-generated validation configuration
+# Generated from profile of: customers.csv
+# Generated at: 2025-11-15 19:54:47
+
+validation_job:
+  name: "Validation for customers.csv"
+  description: "Auto-generated from data profile"
+
+settings:
+  chunk_size: 50000
+  max_sample_failures: 100
+
+files:
+  - name: "customers"
+    path: "examples/sample_data/customers.csv"
+    format: "csv"
+
+    validations:
+      - type: "EmptyFileCheck"
+        severity: "ERROR"
+        # Prevent empty file loads
+
+      - type: "RegexCheck"
+        severity: "ERROR"
+        params:
+          field: "email"
+          pattern: "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
+        # Detected email addresses (100% confidence)
+
+      - type: "UniqueKeyCheck"
+        severity: "ERROR"
+        params:
+          fields:
+            - "first_name"
+        # Field appears to be a unique identifier (99%+ unique values)
+
+      - type: "UniqueKeyCheck"
+        severity: "ERROR"
+        params:
+          fields:
+            - "last_name"
+        # Field appears to be a unique identifier (99%+ unique values)
+
+      - type: "UniqueKeyCheck"
+        severity: "ERROR"
+        params:
+          fields:
+            - "email"
+        # Field appears to be a unique identifier (99%+ unique values)
+
+      - type: "UniqueKeyCheck"
+        severity: "ERROR"
+        params:
+          fields:
+            - "phone"
+        # Field appears to be a unique identifier (99%+ unique values)
+
+      - type: "UniqueKeyCheck"
+        severity: "ERROR"
+        params:
+          fields:
+            - "account_balance"
+        # Field appears to be a unique identifier (99%+ unique values)
+
+      - type: "StringLengthCheck"
+        severity: "ERROR"
+        params:
+          field: "registration_date"
+          exact_length: 10
+        # Field has fixed length of 10 characters
+
+      - type: "MandatoryFieldCheck"
+        severity: "ERROR"
+        params:
+          fields:
+            - "customer_id"
+            - "first_name"
+            - "last_name"
+            - "email"
+            - "phone"
+            - "account_balance"
+            - "registration_date"
+            - "status"
+        # 8 fields have >95% completeness
+
+      - type: "RangeCheck"
+        severity: "WARNING"
+        params:
+          field: "customer_id"
+          min_value: 10.99
+          max_value: 990.01
+        # Values typically range from P1 (10.99) to P99 (990.01)
+
+      - type: "RangeCheck"
+        severity: "WARNING"
+        params:
+          field: "phone"
+          min_value: 11098549531.04
+          max_value: 19863713308.66
+        # Values typically range from P1 (11098549531.04) to P99 (19863713308.66)
+
+      - type: "RangeCheck"
+        severity: "WARNING"
+        params:
+          field: "account_balance"
+          min_value: 462.4197
+          max_value: 5156193.678499976
+        # Values typically range from P1 (462.42) to P99 (5156193.68)
+
+      - type: "ValidValuesCheck"
+        severity: "ERROR"
+        params:
+          field: "status"
+          valid_values:
+            - "INACTIVE"
+            - "SUSPENDED"
+            - "ACTIVE"
+            - "PENDING"
+            - "UNKNOWN"
+            - "DELETED"
+        # Low cardinality field with 6 unique values
+
+      - type: "StringLengthCheck"
+        severity: "WARNING"
+        params:
+          field: "customer_id"
+          min_length: 3
+          max_length: 6
+        # String length ranges from 3 to 6
+
+      - type: "StringLengthCheck"
+        severity: "WARNING"
+        params:
+          field: "first_name"
+          min_length: 10
+          max_length: 12
+        # String length ranges from 10 to 12
