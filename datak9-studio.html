@@ -2603,6 +2603,63 @@ files:
 
         // Application state object
         const app = {
+            /* ====================================================================
+               Security Utilities (Phase 1 - Security Fixes)
+               ==================================================================== */
+
+            /**
+             * Escapes HTML special characters to prevent XSS attacks
+             * @param {string} unsafe - Unescaped user input
+             * @returns {string} - HTML-safe string
+             */
+            escapeHtml(unsafe) {
+                if (typeof unsafe !== 'string') return unsafe;
+                return unsafe
+                    .replace(/&/g, "&amp;")
+                    .replace(/</g, "&lt;")
+                    .replace(/>/g, "&gt;")
+                    .replace(/"/g, "&quot;")
+                    .replace(/'/g, "&#039;");
+            },
+
+            /**
+             * Validates config structure before loading
+             * @param {object} config - Config object to validate
+             * @returns {boolean} - True if valid structure
+             */
+            validateConfigStructure(config) {
+                if (!config || typeof config !== 'object') return false;
+                if (!config.validation_job || typeof config.validation_job !== 'object') return false;
+                if (!Array.isArray(config.files)) return false;
+                if (!config.settings || typeof config.settings !== 'object') return false;
+
+                // Validate settings have required fields
+                const requiredSettings = ['chunk_size', 'max_sample_failures', 'log_level'];
+                for (const field of requiredSettings) {
+                    if (!(field in config.settings)) return false;
+                }
+
+                return true;
+            },
+
+            /**
+             * Deep sanitizes all string values in config to prevent XSS
+             * @param {object} config - Config object to sanitize
+             * @returns {object} - Sanitized config
+             */
+            sanitizeConfig(config) {
+                return JSON.parse(JSON.stringify(config, (key, value) => {
+                    if (typeof value === 'string') {
+                        return this.escapeHtml(value);
+                    }
+                    return value;
+                }));
+            },
+
+            /* ====================================================================
+               Application State
+               ==================================================================== */
+
             // Current project configuration
             config: {
                 validation_job: {
@@ -2631,6 +2688,9 @@ files:
 
             // Flag to prevent circular updates during sync
             isSyncing: false,
+
+            // Sync token for race condition prevention
+            syncToken: 0,
 
             // Project state management (Phase 3)
             projectState: {
@@ -3576,39 +3636,54 @@ files:
                ==================================================================== */
 
             async init() {
-                console.log('Initializing DataK9 Studio...');
+                try {
+                    console.log('Initializing DataK9 Studio...');
 
-                // Show loading indicator
-                this.showLoadingIndicator('Loading validation definitions...');
+                    // Show loading indicator
+                    this.showLoadingIndicator('Loading validation definitions...');
 
-                // Load validation definitions from JSON (Phase 1 Enhancement)
-                this.validationLibrary = await this.loadValidationDefinitions();
-                console.log(`Loaded ${Object.keys(this.validationLibrary).length} validations into library`);
+                    // Phase 2: Load validation definitions with proper error handling
+                    try {
+                        this.validationLibrary = await this.loadValidationDefinitions();
+                        console.log(`Loaded ${Object.keys(this.validationLibrary).length} validations into library`);
+                    } catch (error) {
+                        console.error('Failed to load validation definitions:', error);
+                        // Use fallback library
+                        this.validationLibrary = this.fallbackValidationLibrary;
+                        console.warn('Using fallback validation library');
+                    }
 
-                // Load saved project from localStorage if exists
-                this.loadFromLocalStorage();
+                    // Load saved project from localStorage if exists
+                    this.loadFromLocalStorage();
 
-                // Phase 3: Check if project was loaded and mark as open
-                if (this.config.validation_job?.name || this.config.files?.length > 0) {
-                    this.updateProjectState(true, null);  // Project loaded from localStorage
-                    this.markSaved();  // Loaded projects start as saved
-                } else {
-                    this.updateProjectState(false);  // No project loaded
+                    // Phase 3: Check if project was loaded and mark as open
+                    if (this.config.validation_job?.name || this.config.files?.length > 0) {
+                        this.updateProjectState(true, null);  // Project loaded from localStorage
+                        this.markSaved();  // Loaded projects start as saved
+                    } else {
+                        this.updateProjectState(false);  // No project loaded
+                    }
+
+                    // Initialize Monaco Editor
+                    this.initMonacoEditor();
+
+                    // Set up keyboard shortcuts
+                    this.initKeyboardShortcuts();
+
+                    // Render initial UI state
+                    this.render();
+
+                    // Hide loading indicator
+                    this.hideLoadingIndicator();
+
+                    console.log('DataK9 Studio initialized successfully');
+                } catch (error) {
+                    console.error('Initialization failed:', error);
+                    this.hideLoadingIndicator();
+
+                    // Show error to user
+                    alert('Failed to initialize DataK9 Studio. Please refresh the page.\n\nError: ' + error.message);
                 }
-
-                // Initialize Monaco Editor
-                this.initMonacoEditor();
-
-                // Set up keyboard shortcuts
-                this.initKeyboardShortcuts();
-
-                // Render initial UI state
-                this.render();
-
-                // Hide loading indicator
-                this.hideLoadingIndicator();
-
-                console.log('DataK9 Studio initialized successfully');
             },
 
             /**
@@ -3832,8 +3907,8 @@ files:
                                 <div class="file-info">
                                     <span class="file-drag-handle" title="Drag to reorder" onclick="event.stopPropagation()">⋮⋮</span>
                                     <span class="file-icon">📄</span>
-                                    <span class="file-name">${file.name}</span>
-                                    <span class="file-format-badge">${file.format.toUpperCase()}</span>
+                                    <span class="file-name">${this.escapeHtml(file.name)}</span>
+                                    <span class="file-format-badge">${this.escapeHtml(file.format).toUpperCase()}</span>
                                 </div>
                                 <div class="file-actions">
                                     <button class="file-action-btn" onclick="event.stopPropagation(); app.addValidationToFile(${fileIndex})" title="Add Validation">
@@ -3871,11 +3946,11 @@ files:
                                      ontouchend="app.handleValidationTouchEnd(event)">
                                     <span class="validation-drag-handle" title="Drag to reorder" onclick="event.stopPropagation()">☰</span>
                                     <div class="validation-info">
-                                        <span class="validation-icon">${icon}</span>
-                                        <span class="validation-name">${name}</span>
+                                        <span class="validation-icon">${this.escapeHtml(icon)}</span>
+                                        <span class="validation-name">${this.escapeHtml(name)}</span>
                                     </div>
                                     <div style="display: flex; align-items: center; gap: 4px;">
-                                        <span class="severity-badge ${severity.toLowerCase()}">${severity}</span>
+                                        <span class="severity-badge ${severity.toLowerCase()}">${this.escapeHtml(severity)}</span>
                                         <div class="validation-actions">
                                             <button class="validation-action-btn"
                                                     onclick="event.stopPropagation(); app.moveValidationUp(${fileIndex}, ${valIndex})"
@@ -3933,17 +4008,17 @@ files:
                 let html = `
                     <div class="card">
                         <div class="card-header">
-                            <h3>📄 File: ${file.name}</h3>
+                            <h3>📄 File: ${this.escapeHtml(file.name)}</h3>
                         </div>
                         <div class="card-body">
                             <div class="form-group">
                                 <label class="form-label">File Name</label>
-                                <input type="text" class="form-input" value="${file.name}"
+                                <input type="text" class="form-input" value="${this.escapeHtml(file.name)}"
                                        onchange="app.updateFileName(${this.selectedFile}, this.value)">
                             </div>
                             <div class="form-group">
                                 <label class="form-label">File Path</label>
-                                <input type="text" class="form-input" value="${file.path}"
+                                <input type="text" class="form-input" value="${this.escapeHtml(file.path)}"
                                        onchange="app.updateFilePath(${this.selectedFile}, this.value)">
                             </div>
                             <div class="form-group">
@@ -4069,16 +4144,26 @@ files:
             updateYAMLEditor() {
                 if (this.isSyncing) return;
 
+                // Phase 2: Increment sync token to prevent race conditions
+                this.syncToken = (this.syncToken || 0) + 1;
+                const currentToken = this.syncToken;
+
                 this.isSyncing = true;
                 const yaml = this.generateYAML();
 
-                if (this.monacoEditor) {
+                // Only update if token hasn't changed (no newer sync started)
+                if (this.monacoEditor && this.syncToken === currentToken) {
                     this.monacoEditor.setValue(yaml);
-                } else {
+                } else if (this.syncToken === currentToken) {
                     document.getElementById('yaml-textarea').value = yaml;
                 }
 
-                this.isSyncing = false;
+                // Use setTimeout to ensure Monaco has finished processing
+                setTimeout(() => {
+                    if (this.syncToken === currentToken) {
+                        this.isSyncing = false;
+                    }
+                }, 0);
             },
 
             updateValidationSummary() {
@@ -4308,21 +4393,52 @@ params:
             },
 
             wizardFinish() {
-                // Collect data from wizard
-                this.config.validation_job.name = document.getElementById('wizard-project-name').value;
-                this.config.validation_job.description = document.getElementById('wizard-project-description').value;
+                // Phase 3: Validate wizard inputs
+                const projectName = document.getElementById('wizard-project-name').value.trim();
+                const projectDescription = document.getElementById('wizard-project-description').value.trim();
 
-                this.config.settings.chunk_size = parseInt(document.getElementById('wizard-chunk-size').value) || 50000;
-                this.config.settings.max_sample_failures = parseInt(document.getElementById('wizard-max-failures').value) || 100;
+                if (!projectName) {
+                    alert('Project name is required');
+                    return;
+                }
+
+                if (projectName.length > 100) {
+                    alert('Project name must be 100 characters or less');
+                    return;
+                }
+
+                const chunkSize = parseInt(document.getElementById('wizard-chunk-size').value);
+                if (isNaN(chunkSize) || chunkSize < 1000 || chunkSize > 1000000) {
+                    alert('Chunk size must be between 1,000 and 1,000,000');
+                    return;
+                }
+
+                const maxFailures = parseInt(document.getElementById('wizard-max-failures').value);
+                if (isNaN(maxFailures) || maxFailures < 1 || maxFailures > 10000) {
+                    alert('Max sample failures must be between 1 and 10,000');
+                    return;
+                }
+
+                // Collect data from wizard
+                this.config.validation_job.name = projectName;
+                this.config.validation_job.description = projectDescription;
+
+                this.config.settings.chunk_size = chunkSize;
+                this.config.settings.max_sample_failures = maxFailures;
                 this.config.settings.fail_on_error = document.getElementById('wizard-fail-error').checked;
                 this.config.settings.fail_on_warning = document.getElementById('wizard-fail-warning').checked;
                 this.config.settings.log_level = document.getElementById('wizard-log-level').value;
 
-                const fileName = document.getElementById('wizard-file-name').value;
-                const filePath = document.getElementById('wizard-file-path').value;
+                const fileName = document.getElementById('wizard-file-name').value.trim();
+                const filePath = document.getElementById('wizard-file-path').value.trim();
                 const fileFormat = document.getElementById('wizard-file-format').value;
 
                 if (fileName && filePath) {
+                    if (fileName.length > 100 || filePath.length > 500) {
+                        alert('File name (max 100 chars) or path (max 500 chars) too long');
+                        return;
+                    }
+
                     this.config.files.push({
                         name: fileName,
                         path: filePath,
@@ -4364,12 +4480,29 @@ params:
             },
 
             saveNewFile() {
-                const name = document.getElementById('add-file-name').value;
-                const path = document.getElementById('add-file-path').value;
+                const name = document.getElementById('add-file-name').value.trim();
+                const path = document.getElementById('add-file-path').value.trim();
                 const format = document.getElementById('add-file-format').value;
 
+                // Phase 3: Comprehensive input validation
                 if (!name || !path) {
                     alert('Please provide both file name and path');
+                    return;
+                }
+
+                if (name.length > 100) {
+                    alert('File name must be 100 characters or less');
+                    return;
+                }
+
+                if (path.length > 500) {
+                    alert('File path must be 500 characters or less');
+                    return;
+                }
+
+                // Check for duplicate file names
+                if (this.config.files.some(f => f.name === name)) {
+                    alert('A file with this name already exists. Please use a different name.');
                     return;
                 }
 
@@ -4381,6 +4514,7 @@ params:
                 });
 
                 this.closeModal('add-file-modal');
+                this.markUnsavedChanges();
                 this.saveToLocalStorage();
                 this.render();
             },
@@ -5864,11 +5998,23 @@ params:
                 try {
                     const saved = localStorage.getItem('datak9-config');
                     if (saved) {
-                        this.config = JSON.parse(saved);
-                        console.log('Configuration loaded from localStorage');
+                        const parsed = JSON.parse(saved);
+
+                        // Phase 1: Validate structure before loading
+                        if (!this.validateConfigStructure(parsed)) {
+                            console.error('Invalid config structure detected, resetting to defaults');
+                            localStorage.removeItem('datak9-config');
+                            return;
+                        }
+
+                        // Phase 1: Sanitize all string values to prevent XSS
+                        this.config = this.sanitizeConfig(parsed);
+                        console.log('Configuration loaded and sanitized from localStorage');
                     }
                 } catch (e) {
                     console.error('Failed to load from localStorage:', e);
+                    // Remove corrupt data
+                    localStorage.removeItem('datak9-config');
                 }
             }
         };
