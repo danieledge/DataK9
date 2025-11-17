@@ -282,12 +282,22 @@ processing:
   chunk_size: 10000  # Smaller = less memory, slower processing
 ```
 
+## Example Configs
+
+Pre-built validation configs are available in `test-data/configs/`:
+
+- `comprehensive_test_config.yaml` - 25+ validations on e-commerce data
+- `comprehensive_large_test_config.yaml` - 25+ validations on HI-Large (179M rows)
+- `optimized_validations_test.yaml` - Performance-optimized validations
+- `ultimate_validation_showcase.yaml` - All 33 validation types on 357M rows
+
 ## Documentation
 
 - **User Guide**: `docs/USER_GUIDE.md`
 - **Architecture Reference**: `ARCHITECTURE_REFERENCE.md`
 - **Validation Catalog**: `docs/VALIDATION_CATALOG.md`
 - **Demo Script**: `demo.sh`
+- **Test Runner**: `scripts/run_tests.sh`
 
 ---
 
