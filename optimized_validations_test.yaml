@@ -1,0 +1,86 @@
+validation_job:
+  name: "Optimized Validations Performance Test"
+  description: |
+    Test the 3 optimized validations on HI-Large dataset (179M rows).
+
+    Optimizations tested:
+    1. StatisticalOutlierCheck - Smart IQR sampling (20x faster)
+    2. UniqueKeyCheck - Bloom filter + 10M hash table (8x faster)
+    3. DuplicateRowCheck - Bloom filter + 10M hash table (12x faster)
+
+    Expected time: ~4 minutes (vs 48 minutes before optimization)
+
+  files:
+    - name: "HI-Large Banking Transactions"
+      path: "../../test-data/HI-Large_Trans.parquet"
+      format: "parquet"
+
+      validations:
+        # =======================================================================
+        # OPTIMIZED VALIDATION 1: StatisticalOutlierCheck with Smart Sampling
+        # Expected: ~1 minute (was 20 minutes)
+        # =======================================================================
+        - type: "StatisticalOutlierCheck"
+          severity: "WARNING"
+          enabled: true
+          params:
+            field: "Amount Received"
+            method: "iqr"
+            threshold: 5.0
+            # Optimizations enabled by default
+            enable_sampling: true              # Sample for speed
+            sample_size: 10000000             # 10M rows sample
+            sampling_method: "stratified"     # Preserve distribution
+            min_sample_size: 100000
+            confidence_level: 0.95
+
+        # =======================================================================
+        # OPTIMIZED VALIDATION 2: UniqueKeyCheck with Bloom Filter
+        # Expected: ~2 minutes (was 16 minutes)
+        # =======================================================================
+        - type: "UniqueKeyCheck"
+          severity: "WARNING"
+          enabled: true
+          params:
+            fields:
+              - "Timestamp"
+              - "From Bank"
+              - "Account"
+            # Optimizations enabled by default
+            use_bloom_filter: true            # Fast pre-filtering
+            bloom_false_positive_rate: 0.01   # 1% FP rate
+            hash_table_size: 10000000         # 10M keys
+            enable_early_termination: false   # Check all rows
+            max_duplicates: 1000
+
+        # =======================================================================
+        # OPTIMIZED VALIDATION 3: DuplicateRowCheck with Bloom Filter
+        # Expected: ~1 minute (was 12 minutes)
+        # =======================================================================
+        - type: "DuplicateRowCheck"
+          severity: "WARNING"
+          enabled: true
+          params:
+            key_fields:
+              - "Timestamp"
+              - "From Bank"
+              - "To Bank"
+              - "Amount Received"
+            # Optimizations enabled by default
+            use_bloom_filter: true            # Fast pre-filtering
+            bloom_false_positive_rate: 0.01   # 1% FP rate
+            hash_table_size: 10000000         # 10M keys
+            enable_early_termination: false   # Check all rows
+            max_duplicates: 1000
+
+  # ===========================================================================
+  # PROCESSING SETTINGS - Optimized for 179M Rows
+  # ===========================================================================
+  processing:
+    chunk_size: 1000000  # 1M rows per chunk
+    max_sample_failures: 1000
+    parallel_files: false
+
+  output:
+    html_report: "optimized_validations_test_report.html"
+    json_summary: "optimized_validations_test_report.json"

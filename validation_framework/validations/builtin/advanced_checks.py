@@ -14,6 +14,7 @@ from typing import Iterator, Dict, Any, List
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
+import logging
 import os
 from validation_framework.validations.base import FileValidationRule, ValidationResult, DataValidationRule
 from validation_framework.validations.backend_aware_base import BackendAwareValidationRule
@@ -24,6 +25,8 @@ from validation_framework.core.exceptions import (
     DataLoadError
 )
 from validation_framework.core.constants import MAX_SAMPLE_FAILURES
+
+logger = logging.getLogger(__name__)
 
 if HAS_POLARS:
     import polars as pl
@@ -340,13 +343,13 @@ class StatisticalOutlierCheck(BackendAwareValidationRule):
         # Log sampling decision
         use_sampling = enable_sampling and total_rows > sample_size
         if use_sampling:
-            self.logger.info(
+            logger.info(
                 f"IQR outlier check: Sampling {sample_size:,} of {total_rows:,} rows "
                 f"({sampling_method} method, {confidence_level*100}% confidence)"
             )
         else:
             if total_rows > sample_size and not enable_sampling:
-                self.logger.info(
+                logger.info(
                     f"IQR outlier check: Processing all {total_rows:,} rows "
                     f"(sampling disabled by user)"
                 )
@@ -386,7 +389,7 @@ class StatisticalOutlierCheck(BackendAwareValidationRule):
 
         # Check if sample size is sufficient
         if len(all_values) < min_sample_size:
-            self.logger.warning(
+            logger.warning(
                 f"Sample size {len(all_values):,} is below minimum {min_sample_size:,}. "
                 f"Results may not be statistically significant."
             )
