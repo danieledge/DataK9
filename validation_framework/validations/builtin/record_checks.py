@@ -5,12 +5,19 @@ These validations check entire rows/records:
 - Duplicate detection
 - Blank/empty record detection
 - Uniqueness constraints
+
+Author: Daniel Edge
 """
 
 from typing import Iterator, Dict, Any, List
 import pandas as pd
 from validation_framework.validations.base import DataValidationRule, ValidationResult
 from validation_framework.core.memory_bounded_tracker import MemoryBoundedTracker
+from validation_framework.core.exceptions import (
+    ColumnNotFoundError,
+    ParameterValidationError
+)
+from validation_framework.core.constants import MAX_SAMPLE_FAILURES
 
 
 class DuplicateRowCheck(DataValidationRule):
@@ -71,15 +78,16 @@ class DuplicateRowCheck(DataValidationRule):
                 key_fields = self.params.get("key_fields", [])
 
                 if not consider_all and not key_fields:
-                    return self._create_result(
-                        passed=False,
-                        message="No key fields specified for duplicate check",
-                        failed_count=1,
+                    raise ParameterValidationError(
+                        "No key fields specified for duplicate check",
+                        validation_name=self.name,
+                        parameter="key_fields",
+                        value=None
                     )
 
                 total_rows = 0
                 failed_rows = []
-                max_samples = context.get("max_sample_failures", 100)
+                max_samples = context.get("max_sample_failures", MAX_SAMPLE_FAILURES)
                 duplicate_count = 0
 
                 # Process each chunk
@@ -91,10 +99,10 @@ class DuplicateRowCheck(DataValidationRule):
                         # Verify key fields exist
                         missing_fields = [f for f in key_fields if f not in chunk.columns]
                         if missing_fields:
-                            return self._create_result(
-                                passed=False,
-                                message=f"Key fields not found in data: {', '.join(missing_fields)}",
-                                failed_count=1,
+                            raise ColumnNotFoundError(
+                                validation_name=self.name,
+                                column=missing_fields[0],
+                                available_columns=list(chunk.columns)
                             )
                         check_cols = key_fields
 
@@ -189,7 +197,7 @@ class BlankRecordCheck(DataValidationRule):
 
             total_rows = 0
             failed_rows = []
-            max_samples = context.get("max_sample_failures", 100)
+            max_samples = context.get("max_sample_failures", MAX_SAMPLE_FAILURES)
 
             # Process each chunk
             for chunk_idx, chunk in enumerate(data_iterator):
@@ -203,22 +211,26 @@ class BlankRecordCheck(DataValidationRule):
                         failed_count=1,
                     )
 
-                # Find rows where all checked columns are null or empty
-                for idx in range(len(chunk)):
-                    row = chunk.iloc[idx][check_cols]
+                # Find rows where all checked columns are null or empty (vectorized)
+                chunk_subset = chunk[check_cols]
 
-                    # Check if all values are null or empty strings
-                    is_blank = True
-                    for value in row:
-                        if pd.notna(value) and str(value).strip() != '':
-                            is_blank = False
-                            break
+                # Check for nulls and empty strings efficiently
+                # For string columns, replace empty strings with NaN
+                chunk_subset = chunk_subset.replace('', pd.NA)
+                chunk_subset = chunk_subset.replace(r'^\s*$', pd.NA, regex=True)
 
-                    if is_blank and len(failed_rows) < max_samples:
-                        failed_rows.append({
-                            "row": int(total_rows + idx),
-                            "message": "Completely blank row detected"
-                        })
+                # Find rows where ALL columns are null/empty (much faster!)
+                blank_mask = chunk_subset.isna().all(axis=1)
+                blank_indices = blank_mask[blank_mask].index.tolist()
+
+                # Collect samples up to max_samples
+                for idx in blank_indices:
+                    if len(failed_rows) >= max_samples:
+                        break
+                    failed_rows.append({
+                        "row": int(total_rows + idx),
+                        "message": "Completely blank row detected"
+                    })
 
                 total_rows += len(chunk)
 
@@ -289,15 +301,16 @@ class UniqueKeyCheck(DataValidationRule):
             try:
                 fields = self.params.get("fields", [])
                 if not fields:
-                    return self._create_result(
-                        passed=False,
-                        message="No fields specified for uniqueness check",
-                        failed_count=1,
+                    raise ParameterValidationError(
+                        "No fields specified for uniqueness check",
+                        validation_name=self.name,
+                        parameter="fields",
+                        value=None
                     )
 
                 total_rows = 0
                 failed_rows = []
-                max_samples = context.get("max_sample_failures", 100)
+                max_samples = context.get("max_sample_failures", MAX_SAMPLE_FAILURES)
                 duplicate_count = 0
 
                 # Track first occurrence of keys for better error messages
@@ -310,10 +323,10 @@ class UniqueKeyCheck(DataValidationRule):
                     # Verify fields exist
                     missing_fields = [f for f in fields if f not in chunk.columns]
                     if missing_fields:
-                        return self._create_result(
-                            passed=False,
-                            message=f"Fields not found in data: {', '.join(missing_fields)}",
-                            failed_count=1,
+                        raise ColumnNotFoundError(
+                            validation_name=self.name,
+                            column=missing_fields[0],
+                            available_columns=list(chunk.columns)
                         )
 
                     # Check each row
