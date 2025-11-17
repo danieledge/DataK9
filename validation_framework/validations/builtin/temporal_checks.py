@@ -268,8 +268,11 @@ class BaselineComparisonCheck(DataValidationRule):
     ) -> float:
         """Calculate baseline from historical data."""
         try:
-            # Load baseline data
-            baseline_df = pd.read_csv(baseline_file)
+            # Load baseline data (support CSV and Parquet)
+            if baseline_file.endswith('.parquet'):
+                baseline_df = pd.read_parquet(baseline_file)
+            else:
+                baseline_df = pd.read_csv(baseline_file)
 
             # Validate columns exist
             if date_col not in baseline_df.columns:
@@ -544,8 +547,11 @@ class TrendDetectionCheck(DataValidationRule):
     ) -> float:
         """Get historical value from N days ago."""
         try:
-            # Load baseline data
-            baseline_df = pd.read_csv(baseline_file)
+            # Load baseline data (support CSV and Parquet)
+            if baseline_file.endswith('.parquet'):
+                baseline_df = pd.read_parquet(baseline_file)
+            else:
+                baseline_df = pd.read_csv(baseline_file)
 
             # Parse dates
             baseline_df[date_col] = pd.to_datetime(baseline_df[date_col])

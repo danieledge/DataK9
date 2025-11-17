@@ -1,12 +1,12 @@
 validation_job:
-  name: "Ultimate Validation Showcase - All 33 Validation Types"
+  name: "Ultimate Validation Showcase - All Available Validation Types"
   description: |
     Comprehensive test of DataK9 framework using IBM AML Banking dataset.
-    Tests all 33 validation types (excluding SQL) across 357M rows in 2 files.
+    Tests 31 validation types (excluding SQL) across 357M rows in 2 files.
 
     Dataset: HI-Large (179M rows) + LI-Large (177M rows) = 357M rows, 10.1 GB
-    Validations: 33 types across 10 categories
-    Cross-file: 5 validations testing referential integrity
+    Validations: 31 types across 10 categories
+    Cross-file: 3 validations testing referential integrity
 
   files:
     # ==========================================================================
@@ -157,29 +157,30 @@ validation_job:
           params:
             field: "Amount Received"
             method: "iqr"
-            threshold: 5.0
+            threshold: 1.5
 
         - type: "CrossFieldComparisonCheck"
           severity: "WARNING"
           enabled: true
           params:
-            field1: "Amount Received"
-            field2: "Amount Paid"
-            comparison: ">="
-            tolerance: 0.01
+            field_a: "Amount Received"
+            operator: ">="
+            field_b: "Amount Paid"
 
         - type: "FreshnessCheck"
           severity: "WARNING"
           enabled: true
           params:
+            check_type: "data"
             date_field: "Timestamp"
-            max_days_old: 3650
+            max_age_hours: 87600
 
         - type: "CompletenessCheck"
           severity: "WARNING"
           enabled: true
           params:
-            threshold: 0.95
+            field: "Timestamp"
+            min_completeness: 0.95
 
         - type: "StringLengthCheck"
           severity: "WARNING"
@@ -236,15 +237,15 @@ validation_job:
           enabled: true
           params:
             column: "Amount Received"
-            distribution_type: "normal"
-            confidence_level: 0.95
+            expected_distribution: "normal"
+            significance_level: 0.05
 
         - type: "CorrelationCheck"
           severity: "WARNING"
           enabled: true
           params:
-            field1: "Amount Received"
-            field2: "Amount Paid"
+            column1: "Amount Received"
+            column2: "Amount Paid"
             min_correlation: 0.7
             max_correlation: 1.0
 
@@ -252,11 +253,10 @@ validation_job:
           severity: "WARNING"
           enabled: true
           params:
-            fields:
-              - "Amount Received"
-              - "Amount Paid"
+            column: "Amount Received"
             method: "isolation_forest"
-            contamination: 0.01
+            threshold: 0.01
+            max_anomaly_pct: 5
 
         # ======================================================================
         # TEMPORAL VALIDATIONS (2 types)
@@ -266,20 +266,18 @@ validation_job:
           severity: "WARNING"
           enabled: true
           params:
+            metric: "count"
             baseline_file: "../../test-data/HI-Large_Trans_baseline.parquet"
-            comparison_fields:
-              - "Amount Received"
-              - "Amount Paid"
-            tolerance: 0.1
+            tolerance_pct: 10
 
         - type: "TrendDetectionCheck"
           severity: "WARNING"
           enabled: true
           params:
-            date_field: "Timestamp"
-            value_field: "Amount Received"
-            window_days: 30
-            trend_threshold: 0.2
+            metric: "count"
+            baseline_file: "../../test-data/HI-Large_Trans_daily.parquet"
+            max_growth_pct: 20
+            max_decline_pct: 20
 
         # ======================================================================
         # CONDITIONAL VALIDATION (1 type)
@@ -337,50 +335,36 @@ validation_job:
           severity: "ERROR"
           enabled: true
           params:
-            foreign_key_field: "From Bank"
+            foreign_key: "From Bank"
             reference_file: "../../test-data/HI-Large_Trans.parquet"
-            reference_key_field: "From Bank"
+            reference_key: "From Bank"
+            reference_file_format: "parquet"
 
         - type: "CrossFileComparisonCheck"
           severity: "WARNING"
           enabled: true
           params:
-            field: "Amount Received"
-            comparison_file: "../../test-data/HI-Large_Trans.parquet"
-            comparison_field: "Amount Received"
             aggregation: "mean"
-            tolerance: 0.5
+            column: "Amount Received"
+            comparison: "=="
+            reference_file: "../../test-data/HI-Large_Trans.parquet"
+            reference_aggregation: "mean"
+            reference_column: "Amount Received"
+            reference_file_format: "parquet"
+            tolerance_pct: 50
 
         - type: "CrossFileDuplicateCheck"
           severity: "WARNING"
           enabled: true
           params:
-            fields:
+            columns:
               - "Timestamp"
               - "From Bank"
               - "To Bank"
               - "Amount Received"
-            comparison_file: "../../test-data/HI-Large_Trans.parquet"
-
-        - type: "CrossFileKeyCheck"
-          severity: "ERROR"
-          enabled: true
-          params:
-            key_field: "From Bank"
-            comparison_file: "../../test-data/HI-Large_Trans.parquet"
-            comparison_key_field: "From Bank"
-            check_type: "superset"
-
-        - type: "CrossFileAggregationCheck"
-          severity: "WARNING"
-          enabled: true
-          params:
-            field: "Amount Received"
-            aggregation: "sum"
-            comparison_file: "../../test-data/HI-Large_Trans.parquet"
-            comparison_field: "Amount Received"
-            comparison_aggregation: "sum"
-            tolerance: 0.1
+            reference_files:
+              - "../../test-data/HI-Large_Trans.parquet"
+            reference_file_format: "parquet"
 
   # ============================================================================
   # PROCESSING SETTINGS - Optimized for 357M Rows with 16GB RAM
