@@ -66,15 +66,23 @@ class ValidationEngine:
         engine.generate_json_report(report, 'report.json')
     """
 
-    def __init__(self, config: ValidationConfig) -> None:
+    def __init__(
+        self,
+        config: ValidationConfig,
+        observers: Optional[List['EngineObserver']] = None
+    ) -> None:
         """
         Initialize the validation engine.
 
         Args:
             config: Validation configuration object
+            observers: Optional list of observers to receive engine events.
+                      If None, creates a default CLIProgressObserver for
+                      backwards compatibility.
         """
         self.config: ValidationConfig = config
         self.registry: ValidationRegistry = get_registry()
+        self.observers: List['EngineObserver'] = observers if observers is not None else []
 
     @classmethod
     def from_config(cls, config_path: str) -> "ValidationEngine":
@@ -93,12 +101,70 @@ class ValidationEngine:
         config = ValidationConfig.from_yaml(config_path)
         return cls(config)
 
+    # Observer notification methods
+    def _notify_job_start(self, job_name: str, file_count: int) -> None:
+        """Notify observers that job is starting."""
+        for observer in self.observers:
+            try:
+                observer.on_job_start(job_name, file_count)
+            except Exception as e:
+                logger.warning(f"Observer {observer.__class__.__name__} failed on_job_start: {e}")
+
+    def _notify_file_start(self, file_name: str, file_path: str, validation_count: int) -> None:
+        """Notify observers that file validation is starting."""
+        for observer in self.observers:
+            try:
+                observer.on_file_start(file_name, file_path, validation_count)
+            except Exception as e:
+                logger.warning(f"Observer {observer.__class__.__name__} failed on_file_start: {e}")
+
+    def _notify_validation_start(self, validation_type: str, file_name: str) -> None:
+        """Notify observers that validation is starting."""
+        for observer in self.observers:
+            try:
+                observer.on_validation_start(validation_type, file_name)
+            except Exception as e:
+                logger.warning(f"Observer {observer.__class__.__name__} failed on_validation_start: {e}")
+
+    def _notify_validation_complete(self, validation_type: str, result: 'ValidationResult') -> None:
+        """Notify observers that validation is complete."""
+        for observer in self.observers:
+            try:
+                observer.on_validation_complete(validation_type, result)
+            except Exception as e:
+                logger.warning(f"Observer {observer.__class__.__name__} failed on_validation_complete: {e}")
+
+    def _notify_file_complete(self, report: 'FileValidationReport') -> None:
+        """Notify observers that file validation is complete."""
+        for observer in self.observers:
+            try:
+                observer.on_file_complete(report)
+            except Exception as e:
+                logger.warning(f"Observer {observer.__class__.__name__} failed on_file_complete: {e}")
+
+    def _notify_job_complete(self, report: 'ValidationReport') -> None:
+        """Notify observers that job is complete."""
+        for observer in self.observers:
+            try:
+                observer.on_job_complete(report)
+            except Exception as e:
+                logger.warning(f"Observer {observer.__class__.__name__} failed on_job_complete: {e}")
+
+    def _notify_error(self, error: Exception, context: Dict[str, Any]) -> None:
+        """Notify observers of an error."""
+        for observer in self.observers:
+            try:
+                observer.on_error(error, context)
+            except Exception as e:
+                logger.warning(f"Observer {observer.__class__.__name__} failed on_error: {e}")
+
     def run(self, verbose: bool = True) -> ValidationReport:
         """
         Execute all validations defined in the configuration.
 
         Args:
-            verbose: If True, print progress information
+            verbose: If True, print progress information (auto-adds CLIProgressObserver
+                    if no observers were provided)
 
         Returns:
             ValidationReport with complete validation results
@@ -106,12 +172,14 @@ class ValidationEngine:
         logger.info(f"Starting validation job: {self.config.job_name}")
         logger.debug(f"Number of files to validate: {len(self.config.files)}")
 
-        if verbose:
-            po.logo()
-            po.header("VALIDATION JOB")
-            po.key_value("Job Name", self.config.job_name, indent=2)
-            po.key_value("Files to Validate", len(self.config.files), indent=2, value_color=po.PRIMARY)
-            po.blank_line()
+        # For backwards compatibility: if verbose=True and no observers provided,
+        # add a CLIProgressObserver
+        if verbose and not self.observers:
+            from validation_framework.core.observers import CLIProgressObserver
+            self.observers = [CLIProgressObserver(verbose=True)]
+
+        # Notify observers that job is starting
+        self._notify_job_start(self.config.job_name, len(self.config.files))
 
         start_time = time.time()
 
@@ -131,12 +199,12 @@ class ValidationEngine:
             logger.info(f"Processing file {file_idx}/{len(self.config.files)}: {file_config['name']}")
             logger.debug(f"File path: {file_config['path']}, Format: {file_config['format']}")
 
-            if verbose:
-                po.section(f"File {file_idx}/{len(self.config.files)}: {file_config['name']}")
-                po.key_value("Path", file_config['path'], indent=2)
-                po.key_value("Format", file_config['format'].upper(), indent=2, value_color=po.INFO)
-                po.key_value("Validations", len(file_config['validations']), indent=2, value_color=po.PRIMARY)
-                po.blank_line()
+            # Notify observers that file validation is starting
+            self._notify_file_start(
+                file_config['name'],
+                file_config['path'],
+                len(file_config['validations'])
+            )
 
             # Validate the file
             file_report = self._validate_file(file_config, verbose)
@@ -145,14 +213,11 @@ class ValidationEngine:
             # Add to overall report
             report.add_file_report(file_report)
 
-            # Print summary for this file
-            if verbose:
-                po.divider("─")
-                if file_report.status == Status.PASSED:
-                    po.success(f"Status: {file_report.status.value}", indent=2)
-                else:
-                    po.error(f"Status: {file_report.status.value}", indent=2)
+            # Notify observers that file validation is complete
+            self._notify_file_complete(file_report)
 
+            # Legacy verbose output (will be removed once observers fully integrated)
+            if verbose and not self.observers:
                 error_color = po.ERROR if file_report.error_count > 0 else po.DIM
                 warning_color = po.WARNING if file_report.warning_count > 0 else po.DIM
                 po.key_value("Errors", file_report.error_count, indent=2, value_color=error_color)
@@ -167,9 +232,8 @@ class ValidationEngine:
         logger.info(f"Validation job completed in {report.duration_seconds:.2f}s")
         logger.info(f"Overall status: {report.overall_status.value} (Errors: {report.total_errors}, Warnings: {report.total_warnings})")
 
-        # Print final summary
-        if verbose:
-            self._print_summary(report)
+        # Notify observers that job is complete
+        self._notify_job_complete(report)
 
         return report
 

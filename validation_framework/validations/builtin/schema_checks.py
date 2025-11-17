@@ -5,11 +5,17 @@ These validations check the structure and data types of the dataset:
 - Expected columns presence
 - Column data types
 - Column order
+
+Author: Daniel Edge
 """
 
 from typing import Iterator, Dict, Any
 import pandas as pd
 from validation_framework.validations.base import FileValidationRule, ValidationResult
+from validation_framework.core.exceptions import (
+    ParameterValidationError,
+    ValidationExecutionError
+)
 
 
 class SchemaMatchCheck(FileValidationRule):
@@ -58,10 +64,11 @@ class SchemaMatchCheck(FileValidationRule):
         try:
             expected_schema = self.params.get("expected_schema", {})
             if not expected_schema:
-                return self._create_result(
-                    passed=False,
-                    message="No expected schema specified",
-                    failed_count=1,
+                raise ParameterValidationError(
+                    "No expected schema specified",
+                    validation_name=self.name,
+                    parameter="expected_schema",
+                    value=None
                 )
 
             strict = self.params.get("strict", False)
@@ -208,10 +215,11 @@ class ColumnPresenceCheck(FileValidationRule):
         try:
             required_columns = self.params.get("required_columns", [])
             if not required_columns:
-                return self._create_result(
-                    passed=False,
-                    message="No required columns specified",
-                    failed_count=1,
+                raise ParameterValidationError(
+                    "No required columns specified",
+                    validation_name=self.name,
+                    parameter="required_columns",
+                    value=None
                 )
 
             case_sensitive = self.params.get("case_sensitive", True)

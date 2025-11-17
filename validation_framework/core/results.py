@@ -1,4 +1,13 @@
-"""Classes for storing and managing validation results."""
+"""
+Validation Result Classes.
+
+This module defines dataclasses for storing validation results at different levels:
+- ValidationResult: Single validation rule execution result
+- FileValidationReport: All validations for one file
+- ValidationReport: Overall report for entire job
+
+Author: Daniel Edge
+"""
 
 from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional
@@ -7,13 +16,36 @@ from enum import Enum
 
 
 class Severity(Enum):
-    """Validation severity levels."""
+    """
+    Validation severity levels.
+
+    Determines impact of validation failure:
+    - ERROR: Critical issue, validation job should fail
+    - WARNING: Non-critical issue, log but continue
+
+    Example:
+        >>> validation = MandatoryFieldCheck(
+        ...     name="email_check",
+        ...     severity=Severity.ERROR  # Critical - must have email
+        ... )
+    """
     ERROR = "ERROR"
     WARNING = "WARNING"
 
 
 class Status(Enum):
-    """Overall validation status."""
+    """
+    Overall validation status.
+
+    Aggregated status across multiple validations:
+    - PASSED: All validations passed
+    - WARNING: All passed or warnings only
+    - FAILED: At least one ERROR-level failure
+
+    Example:
+        >>> report = FileValidationReport(...)
+        >>> report.status = Status.FAILED  # Has ERROR-level failures
+    """
     PASSED = "PASSED"
     FAILED = "FAILED"
     WARNING = "WARNING"
@@ -21,7 +53,43 @@ class Status(Enum):
 
 @dataclass
 class ValidationResult:
-    """Result of a single validation rule execution."""
+    """
+    Result of a single validation rule execution.
+
+    Contains all information about a validation execution including:
+    - Pass/fail status
+    - Failure count and samples
+    - Execution metrics
+    - Human-readable message
+
+    Attributes:
+        rule_name: Name of the validation rule that was executed
+        severity: Severity level (ERROR or WARNING)
+        passed: True if validation passed, False otherwise
+        message: Human-readable summary of validation result
+        failed_count: Number of failures detected (0 if passed)
+        total_count: Total number of items checked
+        details: Additional structured details about the validation
+        sample_failures: List of sample failure examples (max 100)
+        execution_time: Time taken to execute validation (seconds)
+
+    Example:
+        >>> result = ValidationResult(
+        ...     rule_name="MandatoryFieldCheck",
+        ...     severity=Severity.ERROR,
+        ...     passed=False,
+        ...     message="Found 42 rows with missing email",
+        ...     failed_count=42,
+        ...     total_count=1000,
+        ...     sample_failures=[
+        ...         {"row": 15, "field": "email", "value": "nan"},
+        ...         {"row": 23, "field": "email", "value": ""}
+        ...     ],
+        ...     execution_time=0.523
+        ... )
+        >>> print(f"Success rate: {result._calculate_success_rate()}%")
+        Success rate: 95.8%
+    """
 
     rule_name: str
     severity: Severity
@@ -34,7 +102,26 @@ class ValidationResult:
     execution_time: float = 0.0
 
     def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary."""
+        """
+        Convert validation result to dictionary for JSON serialization.
+
+        Returns:
+            Dictionary with all result fields, including calculated success_rate
+
+        Example:
+            >>> result.to_dict()
+            {
+                'rule_name': 'MandatoryFieldCheck',
+                'severity': 'ERROR',
+                'passed': False,
+                'message': 'Found 42 rows with missing email',
+                'failed_count': 42,
+                'total_count': 1000,
+                'success_rate': 95.8,
+                'sample_failures': [...],  # Max 10 samples
+                'execution_time': 0.523
+            }
+        """
         return {
             "rule_name": self.rule_name,
             "severity": self.severity.value,

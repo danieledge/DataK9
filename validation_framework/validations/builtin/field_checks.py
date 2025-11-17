@@ -9,6 +9,8 @@ These validations check individual field (column) values:
 - Data type validation
 - String length constraints
 - Date format validation
+
+Author: Daniel Edge
 """
 
 from typing import Iterator, Dict, Any, List, Set
@@ -16,7 +18,13 @@ import pandas as pd
 import re
 from datetime import datetime
 from dateutil import parser as date_parser
+
 from validation_framework.validations.base import DataValidationRule, ValidationResult
+from validation_framework.core.exceptions import (
+    ColumnNotFoundError,
+    ParameterValidationError
+)
+from validation_framework.core.constants import MAX_SAMPLE_FAILURES
 
 
 class MandatoryFieldCheck(DataValidationRule):
@@ -70,17 +78,17 @@ class MandatoryFieldCheck(DataValidationRule):
 
             total_rows = 0
             failed_rows = []
-            max_samples = context.get("max_sample_failures", 100)
+            max_samples = context.get("max_sample_failures", MAX_SAMPLE_FAILURES)
 
             # Process each chunk
             for chunk_idx, chunk in enumerate(data_iterator):
                 # Verify fields exist
                 missing_fields = [f for f in fields if f not in chunk.columns]
                 if missing_fields:
-                    return self._create_result(
-                        passed=False,
-                        message=f"Fields not found in data: {', '.join(missing_fields)}",
-                        failed_count=1,
+                    raise ColumnNotFoundError(
+                        validation_name=self.name,
+                        column=missing_fields[0],
+                        available_columns=list(chunk.columns)
                     )
 
                 # Apply conditional filter if condition is specified
@@ -257,16 +265,16 @@ class RegexCheck(DataValidationRule):
 
             total_rows = 0
             failed_rows = []
-            max_samples = context.get("max_sample_failures", 100)
+            max_samples = context.get("max_sample_failures", MAX_SAMPLE_FAILURES)
 
             # Process each chunk
             for chunk_idx, chunk in enumerate(data_iterator):
                 # Verify field exists
                 if field not in chunk.columns:
-                    return self._create_result(
-                        passed=False,
-                        message=f"Field not found in data: {field}",
-                        failed_count=1,
+                    raise ColumnNotFoundError(
+                        validation_name=self.name,
+                        column=field,
+                        available_columns=list(chunk.columns)
                     )
 
                 # Apply conditional filter if condition is specified
@@ -411,17 +419,17 @@ class ValidValuesCheck(DataValidationRule):
 
             total_rows = 0
             failed_rows = []
-            max_samples = context.get("max_sample_failures", 100)
+            max_samples = context.get("max_sample_failures", MAX_SAMPLE_FAILURES)
             invalid_values_found: Set[str] = set()
 
             # Process each chunk
             for chunk_idx, chunk in enumerate(data_iterator):
                 # Verify field exists
                 if field not in chunk.columns:
-                    return self._create_result(
-                        passed=False,
-                        message=f"Field not found in data: {field}",
-                        failed_count=1,
+                    raise ColumnNotFoundError(
+                        validation_name=self.name,
+                        column=field,
+                        available_columns=list(chunk.columns)
                     )
 
                 # Apply conditional filter if condition is specified
@@ -547,16 +555,16 @@ class RangeCheck(DataValidationRule):
 
             total_rows = 0
             failed_rows = []
-            max_samples = context.get("max_sample_failures", 100)
+            max_samples = context.get("max_sample_failures", MAX_SAMPLE_FAILURES)
 
             # Process each chunk
             for chunk_idx, chunk in enumerate(data_iterator):
                 # Verify field exists
                 if field not in chunk.columns:
-                    return self._create_result(
-                        passed=False,
-                        message=f"Field not found in data: {field}",
-                        failed_count=1,
+                    raise ColumnNotFoundError(
+                        validation_name=self.name,
+                        column=field,
+                        available_columns=list(chunk.columns)
                     )
 
                 # Apply conditional filter if condition is specified
@@ -687,16 +695,16 @@ class DateFormatCheck(DataValidationRule):
 
             total_rows = 0
             failed_rows = []
-            max_samples = context.get("max_sample_failures", 100)
+            max_samples = context.get("max_sample_failures", MAX_SAMPLE_FAILURES)
 
             # Process each chunk
             for chunk_idx, chunk in enumerate(data_iterator):
                 # Verify field exists
                 if field not in chunk.columns:
-                    return self._create_result(
-                        passed=False,
-                        message=f"Field not found in data: {field}",
-                        failed_count=1,
+                    raise ColumnNotFoundError(
+                        validation_name=self.name,
+                        column=field,
+                        available_columns=list(chunk.columns)
                     )
 
                 # Apply conditional filter if condition is specified

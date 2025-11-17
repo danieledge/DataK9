@@ -1,0 +1,395 @@
+validation_job:
+  name: "Ultimate Validation Showcase - All 33 Validation Types"
+  description: |
+    Comprehensive test of DataK9 framework using IBM AML Banking dataset.
+    Tests all 33 validation types (excluding SQL) across 357M rows in 2 files.
+
+    Dataset: HI-Large (179M rows) + LI-Large (177M rows) = 357M rows, 10.1 GB
+    Validations: 33 types across 10 categories
+    Cross-file: 5 validations testing referential integrity
+
+  files:
+    # ==========================================================================
+    # FILE 1: HI-Large Transactions (179M rows) - High Illicit Activity
+    # ==========================================================================
+    - name: "HI-Large Banking Transactions"
+      path: "../../test-data/HI-Large_Trans.parquet"
+      format: "parquet"
+
+      validations:
+        # ======================================================================
+        # FILE-LEVEL VALIDATIONS (3 types)
+        # ======================================================================
+
+        - type: "EmptyFileCheck"
+          severity: "ERROR"
+          enabled: true
+
+        - type: "RowCountRangeCheck"
+          severity: "WARNING"
+          enabled: true
+          params:
+            min_rows: 100000000
+            max_rows: 200000000
+
+        - type: "FileSizeCheck"
+          severity: "WARNING"
+          enabled: true
+          params:
+            min_size_mb: 4000
+            max_size_mb: 6000
+
+        # ======================================================================
+        # SCHEMA VALIDATIONS (2 types)
+        # ======================================================================
+
+        - type: "SchemaMatchCheck"
+          severity: "ERROR"
+          enabled: true
+          params:
+            expected_schema:
+              - "Timestamp"
+              - "From Bank"
+              - "Account"
+              - "To Bank"
+              - "Account.1"
+              - "Amount Received"
+              - "Receiving Currency"
+              - "Amount Paid"
+              - "Payment Currency"
+              - "Payment Format"
+              - "Is Laundering"
+
+        - type: "ColumnPresenceCheck"
+          severity: "ERROR"
+          enabled: true
+          params:
+            required_columns:
+              - "Timestamp"
+              - "Amount Received"
+              - "Amount Paid"
+
+        # ======================================================================
+        # FIELD-LEVEL VALIDATIONS (5 types)
+        # ======================================================================
+
+        - type: "MandatoryFieldCheck"
+          severity: "ERROR"
+          enabled: true
+          params:
+            field: "Timestamp"
+
+        - type: "MandatoryFieldCheck"
+          severity: "ERROR"
+          enabled: true
+          params:
+            field: "From Bank"
+
+        - type: "RegexCheck"
+          severity: "WARNING"
+          enabled: true
+          params:
+            field: "Timestamp"
+            pattern: "^\\d{4}-\\d{2}-\\d{2}"
+
+        - type: "ValidValuesCheck"
+          severity: "WARNING"
+          enabled: true
+          params:
+            field: "Payment Format"
+            valid_values:
+              - "Reinvestment"
+              - "Cheque"
+              - "ACH"
+              - "Wire"
+              - "Credit"
+              - "Cash"
+
+        - type: "RangeCheck"
+          severity: "WARNING"
+          enabled: true
+          params:
+            field: "From Bank"
+            min_value: 0
+            max_value: 10000000
+
+        - type: "DateFormatCheck"
+          severity: "ERROR"
+          enabled: true
+          params:
+            field: "Timestamp"
+            date_format: "%Y-%m-%d"
+
+        # ======================================================================
+        # RECORD-LEVEL VALIDATIONS (3 types)
+        # ======================================================================
+
+        - type: "DuplicateRowCheck"
+          severity: "WARNING"
+          enabled: true
+          params:
+            subset:
+              - "Timestamp"
+              - "From Bank"
+              - "To Bank"
+              - "Amount Received"
+
+        - type: "BlankRecordCheck"
+          severity: "WARNING"
+          enabled: true
+
+        - type: "UniqueKeyCheck"
+          severity: "WARNING"
+          enabled: true
+          params:
+            key_fields:
+              - "Timestamp"
+              - "From Bank"
+              - "Account"
+
+        # ======================================================================
+        # ADVANCED VALIDATIONS (6 types)
+        # ======================================================================
+
+        - type: "StatisticalOutlierCheck"
+          severity: "WARNING"
+          enabled: true
+          params:
+            field: "Amount Received"
+            method: "iqr"
+            threshold: 5.0
+
+        - type: "CrossFieldComparisonCheck"
+          severity: "WARNING"
+          enabled: true
+          params:
+            field1: "Amount Received"
+            field2: "Amount Paid"
+            comparison: ">="
+            tolerance: 0.01
+
+        - type: "FreshnessCheck"
+          severity: "WARNING"
+          enabled: true
+          params:
+            date_field: "Timestamp"
+            max_days_old: 3650
+
+        - type: "CompletenessCheck"
+          severity: "WARNING"
+          enabled: true
+          params:
+            threshold: 0.95
+
+        - type: "StringLengthCheck"
+          severity: "WARNING"
+          enabled: true
+          params:
+            field: "Payment Format"
+            min_length: 3
+            max_length: 20
+
+        - type: "NumericPrecisionCheck"
+          severity: "WARNING"
+          enabled: true
+          params:
+            field: "Amount Received"
+            max_decimal_places: 6
+
+        # ======================================================================
+        # INLINE VALIDATIONS (3 types)
+        # ======================================================================
+
+        - type: "InlineRegexCheck"
+          severity: "WARNING"
+          enabled: true
+          params:
+            field: "Receiving Currency"
+            pattern: "^[A-Z]{3}$"
+
+        - type: "InlineBusinessRuleCheck"
+          severity: "ERROR"
+          enabled: true
+          params:
+            field: "Amount Received"
+            expression: "Amount Received >= 0"
+
+        - type: "InlineLookupCheck"
+          severity: "WARNING"
+          enabled: true
+          params:
+            field: "Payment Format"
+            lookup_values:
+              - "Reinvestment"
+              - "Cheque"
+              - "ACH"
+              - "Wire"
+              - "Credit"
+              - "Cash"
+
+        # ======================================================================
+        # STATISTICAL VALIDATIONS (3 types)
+        # ======================================================================
+
+        - type: "DistributionCheck"
+          severity: "WARNING"
+          enabled: true
+          params:
+            column: "Amount Received"
+            distribution_type: "normal"
+            confidence_level: 0.95
+
+        - type: "CorrelationCheck"
+          severity: "WARNING"
+          enabled: true
+          params:
+            field1: "Amount Received"
+            field2: "Amount Paid"
+            min_correlation: 0.7
+            max_correlation: 1.0
+
+        - type: "AdvancedAnomalyDetectionCheck"
+          severity: "WARNING"
+          enabled: true
+          params:
+            fields:
+              - "Amount Received"
+              - "Amount Paid"
+            method: "isolation_forest"
+            contamination: 0.01
+
+        # ======================================================================
+        # TEMPORAL VALIDATIONS (2 types)
+        # ======================================================================
+
+        - type: "BaselineComparisonCheck"
+          severity: "WARNING"
+          enabled: true
+          params:
+            baseline_file: "../../test-data/HI-Large_Trans_baseline.parquet"
+            comparison_fields:
+              - "Amount Received"
+              - "Amount Paid"
+            tolerance: 0.1
+
+        - type: "TrendDetectionCheck"
+          severity: "WARNING"
+          enabled: true
+          params:
+            date_field: "Timestamp"
+            value_field: "Amount Received"
+            window_days: 30
+            trend_threshold: 0.2
+
+        # ======================================================================
+        # CONDITIONAL VALIDATION (1 type)
+        # ======================================================================
+
+        - type: "ConditionalValidation"
+          severity: "WARNING"
+          enabled: true
+          params:
+            condition: "Is Laundering == 1"
+            validation:
+              type: "RangeCheck"
+              params:
+                field: "Amount Received"
+                min_value: 10000
+
+    # ==========================================================================
+    # FILE 2: LI-Large Transactions (177M rows) - Low Illicit Activity
+    # ==========================================================================
+    - name: "LI-Large Banking Transactions"
+      path: "../../test-data/LI-Large_Trans.parquet"
+      format: "parquet"
+
+      validations:
+        # Basic validations for second file
+        - type: "EmptyFileCheck"
+          severity: "ERROR"
+          enabled: true
+
+        - type: "MandatoryFieldCheck"
+          severity: "ERROR"
+          enabled: true
+          params:
+            field: "Timestamp"
+
+        - type: "MandatoryFieldCheck"
+          severity: "ERROR"
+          enabled: true
+          params:
+            field: "Amount Received"
+
+        - type: "RangeCheck"
+          severity: "WARNING"
+          enabled: true
+          params:
+            field: "Amount Received"
+            min_value: 0
+            max_value: 10000000000000
+
+        # ======================================================================
+        # CROSS-FILE VALIDATIONS (5 types)
+        # ======================================================================
+
+        - type: "ReferentialIntegrityCheck"
+          severity: "ERROR"
+          enabled: true
+          params:
+            foreign_key_field: "From Bank"
+            reference_file: "../../test-data/HI-Large_Trans.parquet"
+            reference_key_field: "From Bank"
+
+        - type: "CrossFileComparisonCheck"
+          severity: "WARNING"
+          enabled: true
+          params:
+            field: "Amount Received"
+            comparison_file: "../../test-data/HI-Large_Trans.parquet"
+            comparison_field: "Amount Received"
+            aggregation: "mean"
+            tolerance: 0.5
+
+        - type: "CrossFileDuplicateCheck"
+          severity: "WARNING"
+          enabled: true
+          params:
+            fields:
+              - "Timestamp"
+              - "From Bank"
+              - "To Bank"
+              - "Amount Received"
+            comparison_file: "../../test-data/HI-Large_Trans.parquet"
+
+        - type: "CrossFileKeyCheck"
+          severity: "ERROR"
+          enabled: true
+          params:
+            key_field: "From Bank"
+            comparison_file: "../../test-data/HI-Large_Trans.parquet"
+            comparison_key_field: "From Bank"
+            check_type: "superset"
+
+        - type: "CrossFileAggregationCheck"
+          severity: "WARNING"
+          enabled: true
+          params:
+            field: "Amount Received"
+            aggregation: "sum"
+            comparison_file: "../../test-data/HI-Large_Trans.parquet"
+            comparison_field: "Amount Received"
+            comparison_aggregation: "sum"
+            tolerance: 0.1
+
+  # ============================================================================
+  # PROCESSING SETTINGS - Optimized for 357M Rows with 16GB RAM
+  # ============================================================================
+  processing:
+    chunk_size: 1000000  # 1M rows per chunk (optimized for 16GB RAM)
+    max_sample_failures: 1000
+    parallel_files: false  # Sequential to avoid memory spikes on cross-file validations
+
+  output:
+    html_report: "ultimate_showcase_report.html"
+    json_summary: "ultimate_showcase_report.json"

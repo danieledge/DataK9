@@ -5,30 +5,33 @@ import os
 from typing import Dict, Any, List, Optional
 from pathlib import Path
 from validation_framework.core.results import Severity
+from validation_framework.core.exceptions import (
+    ConfigError,
+    YAMLSizeError,
+    ConfigValidationError
+)
+from validation_framework.core.constants import (
+    MAX_YAML_FILE_SIZE,
+    MAX_YAML_NESTING_DEPTH,
+    MAX_YAML_KEY_COUNT,
+    MAX_STRING_LENGTH,
+    DEFAULT_CHUNK_SIZE,
+    MAX_SAMPLE_FAILURES
+)
 
 
-class ConfigError(Exception):
-    """Configuration error."""
-    pass
-
-
-class YAMLSizeError(ConfigError):
-    """YAML file size exceeds limit."""
-    pass
-
-
-class YAMLStructureError(ConfigError):
-    """YAML structure is invalid or too complex."""
-    pass
+# Alias for backwards compatibility
+YAMLStructureError = ConfigValidationError
 
 
 class ValidationConfig:
     """Configuration for a validation job."""
 
-    # Security limits for YAML files
-    MAX_YAML_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
-    MAX_YAML_NESTING_DEPTH = 20  # Maximum depth of nested structures
-    MAX_YAML_KEYS = 10000  # Maximum number of keys/items in entire YAML
+    # Security limits for YAML files - imported from constants module
+    # These prevent DoS attacks via malicious configuration files
+    MAX_YAML_FILE_SIZE = MAX_YAML_FILE_SIZE
+    MAX_YAML_NESTING_DEPTH = MAX_YAML_NESTING_DEPTH
+    MAX_YAML_KEYS = MAX_YAML_KEY_COUNT
 
     def __init__(self, config_dict: Dict[str, Any]):
         """
@@ -151,9 +154,9 @@ class ValidationConfig:
 
         elif isinstance(obj, str):
             # Check for unreasonably long strings (potential DoS)
-            if len(obj) > 1_000_000:  # 1 MB
+            if len(obj) > MAX_STRING_LENGTH:
                 raise YAMLStructureError(
-                    f"YAML contains string exceeding 1MB: '{obj[:50]}...'"
+                    f"YAML contains string exceeding maximum length ({MAX_STRING_LENGTH:,} bytes): '{obj[:50]}...'"
                 )
 
     def _parse_config(self) -> None:
@@ -183,9 +186,9 @@ class ValidationConfig:
 
         # Processing options
         processing = job_config.get("processing", {})
-        self.chunk_size = processing.get("chunk_size", 50000)
+        self.chunk_size = processing.get("chunk_size", DEFAULT_CHUNK_SIZE)
         self.parallel_files = processing.get("parallel_files", False)
-        self.max_sample_failures = processing.get("max_sample_failures", 100)
+        self.max_sample_failures = processing.get("max_sample_failures", MAX_SAMPLE_FAILURES)
 
     def _parse_files(self, files_config: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Parse files configuration."""

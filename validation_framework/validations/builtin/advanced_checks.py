@@ -18,6 +18,12 @@ import os
 from validation_framework.validations.base import FileValidationRule, ValidationResult, DataValidationRule
 from validation_framework.validations.backend_aware_base import BackendAwareValidationRule
 from validation_framework.core.backend import HAS_POLARS
+from validation_framework.core.exceptions import (
+    ColumnNotFoundError,
+    ParameterValidationError,
+    DataLoadError
+)
+from validation_framework.core.constants import MAX_SAMPLE_FAILURES
 
 if HAS_POLARS:
     import polars as pl
@@ -80,10 +86,11 @@ class StatisticalOutlierCheck(BackendAwareValidationRule):
         threshold = self.params.get("threshold", 3.0 if method == "zscore" else 1.5)
 
         if not field:
-            return self._create_result(
-                passed=False,
-                message="Parameter 'field' is required",
-                failed_count=1
+            raise ParameterValidationError(
+                "Parameter 'field' is required",
+                validation_name=self.name,
+                parameter="field",
+                value=None
             )
 
         # Use streaming algorithm for Z-score (memory efficient)
@@ -201,7 +208,7 @@ class StatisticalOutlierCheck(BackendAwareValidationRule):
         data_iterator_pass2 = loader.load()
 
         failed_rows = []
-        max_samples = context.get("max_sample_failures", 100)
+        max_samples = context.get("max_sample_failures", MAX_SAMPLE_FAILURES)
         outlier_count = 0
         row_offset = 0
 
@@ -332,7 +339,7 @@ class StatisticalOutlierCheck(BackendAwareValidationRule):
 
         # Collect sample failures
         failed_rows = []
-        max_samples = context.get("max_sample_failures", 100)
+        max_samples = context.get("max_sample_failures", MAX_SAMPLE_FAILURES)
 
         for i, is_outlier in enumerate(outlier_mask):
             if is_outlier and len(failed_rows) < max_samples:
@@ -438,22 +445,24 @@ class CrossFieldComparisonCheck(BackendAwareValidationRule):
         field_b = self.params.get("field_b")
 
         if not all([field_a, operator, field_b]):
-            return self._create_result(
-                passed=False,
-                message="Parameters 'field_a', 'operator', and 'field_b' are required",
-                failed_count=1
+            raise ParameterValidationError(
+                "Parameters 'field_a', 'operator', and 'field_b' are required",
+                validation_name=self.name,
+                parameter="field_a/operator/field_b",
+                value=None
             )
 
         if operator not in self.VALID_OPERATORS:
-            return self._create_result(
-                passed=False,
-                message=f"Invalid operator '{operator}'. Use one of: {', '.join(self.VALID_OPERATORS)}",
-                failed_count=1
+            raise ParameterValidationError(
+                f"Invalid operator '{operator}'. Use one of: {', '.join(self.VALID_OPERATORS)}",
+                validation_name=self.name,
+                parameter="operator",
+                value=operator
             )
 
         total_rows = 0
         failed_rows = []
-        max_samples = context.get("max_sample_failures", 100)
+        max_samples = context.get("max_sample_failures", MAX_SAMPLE_FAILURES)
 
         for chunk in data_iterator:
             # Backend-agnostic column checks
@@ -582,10 +591,11 @@ class FreshnessCheck(FileValidationRule):
         max_age_hours = self.params.get("max_age_hours")
 
         if max_age_hours is None:
-            return self._create_result(
-                passed=False,
-                message="Parameter 'max_age_hours' is required",
-                failed_count=1
+            raise ParameterValidationError(
+                "Parameter 'max_age_hours' is required",
+                validation_name=self.name,
+                parameter="max_age_hours",
+                value=None
             )
 
         max_age = timedelta(hours=max_age_hours)
@@ -631,10 +641,11 @@ class FreshnessCheck(FileValidationRule):
             date_field = self.params.get("date_field")
 
             if not date_field:
-                return self._create_result(
-                    passed=False,
-                    message="Parameter 'date_field' is required for data freshness check",
-                    failed_count=1
+                raise ParameterValidationError(
+                    "Parameter 'date_field' is required for data freshness check",
+                    validation_name=self.name,
+                    parameter="date_field",
+                    value=None
                 )
 
             # This will be called as file validation, but we need to peek at data
@@ -691,17 +702,19 @@ class CompletenessCheck(BackendAwareValidationRule):
         min_completeness = self.params.get("min_completeness")
 
         if not field:
-            return self._create_result(
-                passed=False,
-                message="Parameter 'field' is required",
-                failed_count=1
+            raise ParameterValidationError(
+                "Parameter 'field' is required",
+                validation_name=self.name,
+                parameter="field",
+                value=None
             )
 
         if min_completeness is None:
-            return self._create_result(
-                passed=False,
-                message="Parameter 'min_completeness' is required",
-                failed_count=1
+            raise ParameterValidationError(
+                "Parameter 'min_completeness' is required",
+                validation_name=self.name,
+                parameter="min_completeness",
+                value=None
             )
 
         # Convert percentage to decimal if needed
@@ -808,22 +821,24 @@ class StringLengthCheck(BackendAwareValidationRule):
         max_length = self.params.get("max_length")
 
         if not field:
-            return self._create_result(
-                passed=False,
-                message="Parameter 'field' is required",
-                failed_count=1
+            raise ParameterValidationError(
+                "Parameter 'field' is required",
+                validation_name=self.name,
+                parameter="field",
+                value=None
             )
 
         if min_length is None and max_length is None:
-            return self._create_result(
-                passed=False,
-                message="At least one of 'min_length' or 'max_length' is required",
-                failed_count=1
+            raise ParameterValidationError(
+                "At least one of 'min_length' or 'max_length' is required",
+                validation_name=self.name,
+                parameter="min_length/max_length",
+                value=None
             )
 
         total_rows = 0
         failed_rows = []
-        max_samples = context.get("max_sample_failures", 100)
+        max_samples = context.get("max_sample_failures", MAX_SAMPLE_FAILURES)
 
         for chunk in data_iterator:
             # Backend-agnostic column check
@@ -978,22 +993,24 @@ class NumericPrecisionCheck(BackendAwareValidationRule):
         exact_decimal_places = self.params.get("exact_decimal_places")
 
         if not field:
-            return self._create_result(
-                passed=False,
-                message="Parameter 'field' is required",
-                failed_count=1
+            raise ParameterValidationError(
+                "Parameter 'field' is required",
+                validation_name=self.name,
+                parameter="field",
+                value=None
             )
 
         if max_decimal_places is None and exact_decimal_places is None:
-            return self._create_result(
-                passed=False,
-                message="Either 'max_decimal_places' or 'exact_decimal_places' is required",
-                failed_count=1
+            raise ParameterValidationError(
+                "Either 'max_decimal_places' or 'exact_decimal_places' is required",
+                validation_name=self.name,
+                parameter="max_decimal_places/exact_decimal_places",
+                value=None
             )
 
         total_rows = 0
         failed_rows = []
-        max_samples = context.get("max_sample_failures", 100)
+        max_samples = context.get("max_sample_failures", MAX_SAMPLE_FAILURES)
 
         for chunk in data_iterator:
             # Backend-agnostic column check
