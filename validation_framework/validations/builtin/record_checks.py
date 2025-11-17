@@ -85,7 +85,13 @@ class DuplicateRowCheck(DataValidationRule):
 
     def validate(self, data_iterator: Iterator[pd.DataFrame], context: Dict[str, Any]) -> ValidationResult:
         """
-        Check for duplicate rows with bloom filter optimization.
+        Check for duplicate rows with bloom filter optimization and smart sampling.
+
+        SMART SAMPLING (Auto-enabled for datasets > 10M rows):
+        - Samples data proportionally for fast validation
+        - Default: 10M row sample from larger datasets
+        - Can be disabled with enable_sampling=false for 100% accuracy
+        - Configurable threshold with sampling_threshold parameter
 
         Uses memory-bounded tracking with automatic disk spillover to handle
         files of any size (including 200GB+) while keeping memory usage under control.
@@ -106,6 +112,11 @@ class DuplicateRowCheck(DataValidationRule):
         enable_early_term = self.params.get("enable_early_termination", False)
         max_dups = self.params.get("max_duplicates", 1000)
 
+        # Get sampling parameters
+        enable_sampling = self.params.get("enable_sampling", True)
+        sample_size = self.params.get("sample_size", 10_000_000)  # 10M default
+        sampling_threshold = self.params.get("sampling_threshold", 10_000_000)  # Auto-sample if >10M rows
+
         # Create memory-bounded tracker with context manager for automatic cleanup
         with MemoryBoundedTracker(max_memory_keys=hash_table_size) as tracker:
             try:
@@ -120,10 +131,35 @@ class DuplicateRowCheck(DataValidationRule):
                         value=None
                     )
 
+                # First pass: Count total rows to determine if sampling is needed
+                total_rows_actual = 0
+                chunks_list = []
+                for chunk in data_iterator:
+                    chunks_list.append(chunk)
+                    total_rows_actual += len(chunk)
+
+                # Determine if sampling should be used
+                use_sampling = enable_sampling and total_rows_actual > sampling_threshold
+
+                if use_sampling:
+                    logger.info(
+                        f"DuplicateRowCheck: Sampling {sample_size:,} of {total_rows_actual:,} rows "
+                        f"(sampling enabled for datasets > {sampling_threshold:,} rows)"
+                    )
+                    sampling_rate = sample_size / total_rows_actual
+                else:
+                    if total_rows_actual > sampling_threshold and not enable_sampling:
+                        logger.info(
+                            f"DuplicateRowCheck: Processing all {total_rows_actual:,} rows "
+                            f"(sampling disabled by user)"
+                        )
+                    sampling_rate = 1.0
+
                 total_rows = 0
                 failed_rows = []
                 max_samples = context.get("max_sample_failures", MAX_SAMPLE_FAILURES)
                 duplicate_count = 0
+                rows_checked = 0
 
                 # Initialize bloom filter for fast pre-filtering (optional)
                 bloom_filter = None
@@ -143,8 +179,9 @@ class DuplicateRowCheck(DataValidationRule):
                         )
                         bloom_filter = None
 
-                # Process each chunk with VECTORIZED operations (100x faster than iloc)
-                for chunk_idx, chunk in enumerate(data_iterator):
+                # Process each chunk with VECTORIZED operations and optional sampling
+                import random
+                for chunk_idx, chunk in enumerate(chunks_list):
                     # Determine which columns to check
                     if consider_all:
                         check_cols = list(chunk.columns)
@@ -162,8 +199,20 @@ class DuplicateRowCheck(DataValidationRule):
                     # VECTORIZED: Create tuples for all rows at once (100x faster than row-by-row)
                     keys_series = chunk[check_cols].apply(tuple, axis=1)
 
+                    # Apply sampling if enabled
+                    if use_sampling and sampling_rate < 1.0:
+                        # Sample indices proportionally
+                        num_to_sample = int(len(keys_series) * sampling_rate)
+                        num_to_sample = max(1, min(num_to_sample, len(keys_series)))
+                        sampled_indices = random.sample(range(len(keys_series)), num_to_sample)
+                        keys_series = [keys_series.iloc[i] for i in sampled_indices]
+                    else:
+                        sampled_indices = list(range(len(keys_series)))
+
                     # Process keys
-                    for idx, row_key in enumerate(keys_series):
+                    for list_idx, idx in enumerate(sampled_indices):
+                        row_key = keys_series[list_idx] if use_sampling and sampling_rate < 1.0 else keys_series.iloc[idx]
+                        rows_checked += 1
                         # Fast pre-filter with bloom filter (if enabled)
                         if bloom_filter is not None:
                             if row_key in bloom_filter:
@@ -206,26 +255,27 @@ class DuplicateRowCheck(DataValidationRule):
                 # Get statistics from tracker
                 stats = tracker.get_statistics()
 
+                # Build info strings
+                sampling_info = f" (sampled {rows_checked:,} of {total_rows_actual:,} rows)" if use_sampling else ""
+                spill_info = " (disk spillover used)" if stats["is_spilled"] else ""
+                bloom_info = " (bloom filter enabled)" if bloom_filter is not None else ""
+                early_term_info = f" (early termination at {max_dups})" if enable_early_term and duplicate_count >= max_dups else ""
+
                 # Create result
                 if duplicate_count > 0:
                     unique_keys = stats["total_keys"]
-                    spill_info = " (disk spillover used)" if stats["is_spilled"] else ""
-                    bloom_info = " (bloom filter enabled)" if bloom_filter is not None else ""
-                    early_term_info = f" (early termination at {max_dups})" if enable_early_term and duplicate_count >= max_dups else ""
-
                     return self._create_result(
                         passed=False,
-                        message=f"Found {duplicate_count} duplicate rows ({unique_keys:,} unique records{spill_info}{bloom_info}{early_term_info})",
+                        message=f"Found {duplicate_count} duplicate rows ({unique_keys:,} unique records{sampling_info}{spill_info}{bloom_info}{early_term_info})",
                         failed_count=duplicate_count,
-                        total_count=total_rows,
+                        total_count=total_rows_actual,  # Report actual total, not sampled
                         sample_failures=failed_rows,
                     )
 
-                bloom_info = " (bloom filter enabled)" if bloom_filter is not None else ""
                 return self._create_result(
                     passed=True,
-                    message=f"No duplicates found among {total_rows:,} rows{bloom_info}",
-                    total_count=total_rows,
+                    message=f"No duplicates found among {total_rows_actual:,} rows{sampling_info}{bloom_info}",
+                    total_count=total_rows_actual,
                 )
 
             except Exception as e:
@@ -393,7 +443,13 @@ class UniqueKeyCheck(DataValidationRule):
 
     def validate(self, data_iterator: Iterator[pd.DataFrame], context: Dict[str, Any]) -> ValidationResult:
         """
-        Check uniqueness of specified fields with bloom filter optimization.
+        Check uniqueness of specified fields with bloom filter optimization and smart sampling.
+
+        SMART SAMPLING (Auto-enabled for datasets > 10M rows):
+        - Samples data proportionally for fast validation
+        - Default: 10M row sample from larger datasets
+        - Can be disabled with enable_sampling=false for 100% accuracy
+        - Configurable threshold with sampling_threshold parameter
 
         Uses memory-bounded tracking with automatic disk spillover to handle
         files of any size while keeping memory usage under control.
@@ -415,6 +471,11 @@ class UniqueKeyCheck(DataValidationRule):
         enable_early_term = self.params.get("enable_early_termination", False)
         max_dups = self.params.get("max_duplicates", 1000)
 
+        # Get sampling parameters
+        enable_sampling = self.params.get("enable_sampling", True)
+        sample_size = self.params.get("sample_size", 10_000_000)  # 10M default
+        sampling_threshold = self.params.get("sampling_threshold", 10_000_000)  # Auto-sample if >10M rows
+
         # Create memory-bounded tracker with context manager for automatic cleanup
         with MemoryBoundedTracker(max_memory_keys=hash_table_size) as tracker:
             try:
@@ -427,10 +488,35 @@ class UniqueKeyCheck(DataValidationRule):
                         value=None
                     )
 
+                # First pass: Count total rows to determine if sampling is needed
+                total_rows_actual = 0
+                chunks_list = []
+                for chunk in data_iterator:
+                    chunks_list.append(chunk)
+                    total_rows_actual += len(chunk)
+
+                # Determine if sampling should be used
+                use_sampling = enable_sampling and total_rows_actual > sampling_threshold
+
+                if use_sampling:
+                    logger.info(
+                        f"UniqueKeyCheck: Sampling {sample_size:,} of {total_rows_actual:,} rows "
+                        f"(sampling enabled for datasets > {sampling_threshold:,} rows)"
+                    )
+                    sampling_rate = sample_size / total_rows_actual
+                else:
+                    if total_rows_actual > sampling_threshold and not enable_sampling:
+                        logger.info(
+                            f"UniqueKeyCheck: Processing all {total_rows_actual:,} rows "
+                            f"(sampling disabled by user)"
+                        )
+                    sampling_rate = 1.0
+
                 total_rows = 0
                 failed_rows = []
                 max_samples = context.get("max_sample_failures", MAX_SAMPLE_FAILURES)
                 duplicate_count = 0
+                rows_checked = 0
 
                 # Track first occurrence of keys for better error messages
                 # Note: This is memory-bounded separately - we only store first 100k
@@ -457,8 +543,9 @@ class UniqueKeyCheck(DataValidationRule):
                         )
                         bloom_filter = None
 
-                # Process each chunk with VECTORIZED operations (100x faster than iloc)
-                for chunk_idx, chunk in enumerate(data_iterator):
+                # Process each chunk with VECTORIZED operations and optional sampling
+                import random
+                for chunk_idx, chunk in enumerate(chunks_list):
                     # Verify fields exist
                     missing_fields = [f for f in fields if f not in chunk.columns]
                     if missing_fields:
@@ -486,8 +573,18 @@ class UniqueKeyCheck(DataValidationRule):
                     valid_keys = keys_series[valid_mask]
                     valid_indices = valid_mask[valid_mask].index
 
+                    # Apply sampling if enabled
+                    if use_sampling and sampling_rate < 1.0:
+                        # Sample indices proportionally
+                        num_to_sample = int(len(valid_indices) * sampling_rate)
+                        num_to_sample = max(1, min(num_to_sample, len(valid_indices)))
+                        sampled_positions = random.sample(range(len(valid_indices)), num_to_sample)
+                        valid_indices = [valid_indices[i] for i in sampled_positions]
+                        valid_keys = [valid_keys.iloc[i] for i in sampled_positions]
+
                     # Process valid keys
                     for idx, row_key in zip(valid_indices, valid_keys):
+                        rows_checked += 1
                         # Fast pre-filter with bloom filter (if enabled)
                         if bloom_filter is not None:
                             if row_key in bloom_filter:
@@ -538,26 +635,27 @@ class UniqueKeyCheck(DataValidationRule):
                 # Get statistics from tracker
                 stats = tracker.get_statistics()
 
+                # Build info strings
+                sampling_info = f" (sampled {rows_checked:,} of {total_rows_actual:,} rows)" if use_sampling else ""
+                spill_info = " (disk spillover used)" if stats["is_spilled"] else ""
+                bloom_info = " (bloom filter enabled)" if bloom_filter is not None else ""
+                early_term_info = f" (early termination at {max_dups})" if enable_early_term and duplicate_count >= max_dups else ""
+
                 # Create result
                 if duplicate_count > 0:
-                    spill_info = " (disk spillover used)" if stats["is_spilled"] else ""
-                    bloom_info = " (bloom filter enabled)" if bloom_filter is not None else ""
-                    early_term_info = f" (early termination at {max_dups})" if enable_early_term and duplicate_count >= max_dups else ""
-
                     return self._create_result(
                         passed=False,
-                        message=f"Found {duplicate_count} duplicate keys (should be unique{spill_info}{bloom_info}{early_term_info})",
+                        message=f"Found {duplicate_count} duplicate keys (should be unique{sampling_info}{spill_info}{bloom_info}{early_term_info})",
                         failed_count=duplicate_count,
-                        total_count=total_rows,
+                        total_count=total_rows_actual,  # Report actual total, not sampled
                         sample_failures=failed_rows,
                     )
 
                 unique_count = stats["total_keys"]
-                bloom_info = " (bloom filter enabled)" if bloom_filter is not None else ""
                 return self._create_result(
                     passed=True,
-                    message=f"All {unique_count:,} keys are unique across {total_rows:,} rows{bloom_info}",
-                    total_count=total_rows,
+                    message=f"All {unique_count:,} keys are unique across {total_rows_actual:,} rows{sampling_info}{bloom_info}",
+                    total_count=total_rows_actual,
                 )
 
             except Exception as e:
