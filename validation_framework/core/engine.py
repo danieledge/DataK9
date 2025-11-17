@@ -279,6 +279,7 @@ class ValidationEngine:
                 "file_path": file_config["path"],
                 "file_name": file_config["name"],
                 "file_format": file_config["format"],
+                "file_config": file_config,  # Include full file config for validations that need it
                 "max_sample_failures": self.config.max_sample_failures,
                 **metadata,
             }
