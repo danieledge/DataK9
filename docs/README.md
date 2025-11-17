@@ -45,6 +45,7 @@ Deep dive into DataK9's internals, create custom validations, and contribute to 
 |-------------------|---------|
 | Install DataK9 | [Installation Guide](getting-started/installation.md) |
 | High-performance validation | [Polars Backend Guide](POLARS_BACKEND_GUIDE.md) ⚡ |
+| Optimize large-scale validations | [Performance Optimization Guide](PERFORMANCE_OPTIMIZATION_GUIDE.md) 🚀 |
 | See all 34 validation types | [Validation Reference](reference/validation-reference.md) |
 | Real-world examples | [Examples & Recipes](examples/) |
 | Optimize performance | [Performance Tuning](using-datak9/performance-tuning.md) |
