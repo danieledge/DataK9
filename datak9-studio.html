@@ -165,6 +165,67 @@
             background-color: var(--bg-panel-hover);
         }
 
+        /* Phase 5: Dropdown Menu Styles */
+        .menu-item {
+            position: relative;
+        }
+
+        .menu-dropdown {
+            display: none;
+            position: absolute;
+            top: 100%;
+            left: 0;
+            background-color: var(--bg-panel);
+            border: 1px solid var(--border-main);
+            border-radius: 4px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            min-width: 220px;
+            z-index: 10000;
+            margin-top: 2px;
+        }
+
+        .menu-item.active .menu-dropdown {
+            display: block;
+        }
+
+        .menu-dropdown-item {
+            padding: 8px 16px;
+            cursor: pointer;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 13px;
+            border-bottom: 1px solid var(--border-subtle);
+        }
+
+        .menu-dropdown-item:last-child {
+            border-bottom: none;
+        }
+
+        .menu-dropdown-item:hover:not(.disabled) {
+            background-color: var(--bg-panel-hover);
+        }
+
+        .menu-dropdown-item.disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .menu-dropdown-item.separator {
+            height: 1px;
+            padding: 0;
+            margin: 4px 0;
+            background-color: var(--border-main);
+            cursor: default;
+        }
+
+        .menu-dropdown-item .shortcut {
+            color: var(--text-secondary);
+            font-size: 11px;
+            margin-left: 24px;
+        }
+
         .app-title {
             font-size: 13px;
             color: var(--text-secondary);
@@ -1856,10 +1917,94 @@
                 ☰
             </button>
 
-            <div class="menu-item" onclick="app.showMenu('file')">File</div>
-            <div class="menu-item" onclick="app.showMenu('edit')">Edit</div>
-            <div class="menu-item" onclick="app.showMenu('view')">View</div>
-            <div class="menu-item" onclick="app.showMenu('help')">Help</div>
+            <!-- Phase 5: Full dropdown menus -->
+            <div class="menu-item" id="file-menu" onclick="app.toggleMenu('file')">
+                File
+                <div class="menu-dropdown">
+                    <div class="menu-dropdown-item" onclick="event.stopPropagation(); app.closeAllMenus(); app.newProject()">
+                        <span>New Project</span>
+                        <span class="shortcut">Ctrl+N</span>
+                    </div>
+                    <div class="menu-dropdown-item" onclick="event.stopPropagation(); app.closeAllMenus(); app.openFile()">
+                        <span>Open Project...</span>
+                        <span class="shortcut">Ctrl+O</span>
+                    </div>
+                    <div class="menu-dropdown-item separator"></div>
+                    <div class="menu-dropdown-item" onclick="event.stopPropagation(); app.closeAllMenus(); app.saveYAMLFile()">
+                        <span>Save</span>
+                        <span class="shortcut">Ctrl+S</span>
+                    </div>
+                    <div class="menu-dropdown-item" onclick="event.stopPropagation(); app.closeAllMenus(); app.saveYAMLAs()">
+                        <span>Save As...</span>
+                        <span class="shortcut">Ctrl+Shift+S</span>
+                    </div>
+                    <div class="menu-dropdown-item separator"></div>
+                    <div class="menu-dropdown-item" onclick="event.stopPropagation(); app.closeAllMenus(); app.openExportDocsDialog()">
+                        <span>Export Documentation...</span>
+                    </div>
+                    <div class="menu-dropdown-item" onclick="event.stopPropagation(); app.closeAllMenus(); app.exportYAML()">
+                        <span>Export YAML</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="menu-item" id="edit-menu" onclick="app.toggleMenu('edit')">
+                Edit
+                <div class="menu-dropdown">
+                    <div class="menu-dropdown-item disabled">
+                        <span>Undo</span>
+                        <span class="shortcut">Ctrl+Z</span>
+                    </div>
+                    <div class="menu-dropdown-item disabled">
+                        <span>Redo</span>
+                        <span class="shortcut">Ctrl+Y</span>
+                    </div>
+                    <div class="menu-dropdown-item separator"></div>
+                    <div class="menu-dropdown-item" onclick="event.stopPropagation(); app.closeAllMenus(); app.addFile()">
+                        <span>Add File...</span>
+                    </div>
+                    <div class="menu-dropdown-item" onclick="event.stopPropagation(); app.closeAllMenus(); app.addValidation()">
+                        <span>Add Validation...</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="menu-item" id="view-menu" onclick="app.toggleMenu('view')">
+                View
+                <div class="menu-dropdown">
+                    <div class="menu-dropdown-item" onclick="event.stopPropagation(); app.closeAllMenus(); panelManager.togglePanel('left')">
+                        <span>Toggle Sidebar</span>
+                        <span class="shortcut">Ctrl+B</span>
+                    </div>
+                    <div class="menu-dropdown-item" onclick="event.stopPropagation(); app.closeAllMenus(); panelManager.togglePanel('bottom')">
+                        <span>Toggle Output</span>
+                        <span class="shortcut">Ctrl+J</span>
+                    </div>
+                    <div class="menu-dropdown-item separator"></div>
+                    <div class="menu-dropdown-item" onclick="event.stopPropagation(); app.closeAllMenus(); app.showAbout()">
+                        <span>About DataK9 Studio</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="menu-item" id="help-menu" onclick="app.toggleMenu('help')">
+                Help
+                <div class="menu-dropdown">
+                    <div class="menu-dropdown-item" onclick="event.stopPropagation(); app.closeAllMenus(); window.open('https://github.com/danieledge/data-quality-framework', '_blank')">
+                        <span>Documentation</span>
+                    </div>
+                    <div class="menu-dropdown-item" onclick="event.stopPropagation(); app.closeAllMenus(); app.showValidationCatalog()">
+                        <span>Validation Catalog</span>
+                    </div>
+                    <div class="menu-dropdown-item" onclick="event.stopPropagation(); app.closeAllMenus(); app.showKeyboardShortcuts()">
+                        <span>Keyboard Shortcuts</span>
+                    </div>
+                    <div class="menu-dropdown-item separator"></div>
+                    <div class="menu-dropdown-item" onclick="event.stopPropagation(); app.closeAllMenus(); app.showAbout()">
+                        <span>About</span>
+                    </div>
+                </div>
+            </div>
             <div class="app-title">
                 <span class="logo">🐕</span>
                 <span>DataK9 Studio - Your IDE for Data Quality</span>
@@ -3636,6 +3781,13 @@ files:
                         }
                     }
                 });
+
+                // Phase 5: Close menus when clicking outside
+                document.addEventListener('click', (e) => {
+                    if (!e.target.closest('.menu-item')) {
+                        this.closeAllMenus();
+                    }
+                });
             },
 
             /* ====================================================================
@@ -5051,17 +5203,95 @@ params:
                Menu Actions
                ==================================================================== */
 
-            showMenu(menu) {
-                // Phase 2: Basic menu implementation
-                if (menu === 'file') {
-                    // Show simple alert with options for now
-                    const action = confirm('Export Documentation?\n\nOK = Yes, Cancel = Show other options');
-                    if (action) {
-                        this.openExportDocsDialog();
+            /* ====================================================================
+               Menu System (Phase 5)
+               ==================================================================== */
+
+            toggleMenu(menuName) {
+                const menuId = `${menuName}-menu`;
+                const menuElement = document.getElementById(menuId);
+
+                // Close other menus
+                document.querySelectorAll('.menu-item').forEach(item => {
+                    if (item.id !== menuId) {
+                        item.classList.remove('active');
                     }
-                } else {
-                    console.log(`Menu ${menu} clicked - coming in future phases`);
+                });
+
+                // Toggle this menu
+                menuElement.classList.toggle('active');
+            },
+
+            closeAllMenus() {
+                document.querySelectorAll('.menu-item').forEach(item => {
+                    item.classList.remove('active');
+                });
+            },
+
+            showValidationCatalog() {
+                // Show all validations in a modal
+                const categories = {};
+                for (const [type, val] of Object.entries(this.validationLibrary)) {
+                    const cat = val.category || 'Other';
+                    if (!categories[cat]) categories[cat] = [];
+                    categories[cat].push(val);
                 }
+
+                let html = '<div style="max-height: 600px; overflow-y: auto;">';
+                for (const [category, validations] of Object.entries(categories)) {
+                    html += `<h3 style="color: var(--color-primary); margin-top: 20px;">${category}</h3>`;
+                    html += '<div style="display: grid; gap: 10px;">';
+                    for (const val of validations) {
+                        html += `
+                            <div style="border: 1px solid var(--border-main); padding: 12px; border-radius: 4px;">
+                                <div style="font-weight: bold; margin-bottom: 4px;">
+                                    ${val.icon} ${val.name}
+                                </div>
+                                <div style="font-size: 12px; color: var(--text-secondary);">
+                                    ${val.description}
+                                </div>
+                            </div>
+                        `;
+                    }
+                    html += '</div>';
+                }
+                html += '</div>';
+
+                // Show in output panel
+                document.getElementById('output-content').innerHTML = html;
+                panelManager.showPanel('bottom');
+            },
+
+            showKeyboardShortcuts() {
+                const shortcuts = [
+                    { key: 'Ctrl+N', action: 'New Project' },
+                    { key: 'Ctrl+O', action: 'Open Project' },
+                    { key: 'Ctrl+S', action: 'Save' },
+                    { key: 'Ctrl+Shift+S', action: 'Save As' },
+                    { key: 'Ctrl+B', action: 'Toggle Sidebar' },
+                    { key: 'Ctrl+J', action: 'Toggle Output Panel' },
+                    { key: 'Ctrl+Up', action: 'Move Validation Up' },
+                    { key: 'Ctrl+Down', action: 'Move Validation Down' },
+                    { key: 'Delete', action: 'Delete Selected Item' }
+                ];
+
+                let html = '<div style="max-height: 600px; overflow-y: auto; padding: 20px;">';
+                html += '<h2 style="color: var(--color-primary); margin-bottom: 20px;">Keyboard Shortcuts</h2>';
+                html += '<table style="width: 100%; border-collapse: collapse;">';
+                html += '<thead><tr style="border-bottom: 2px solid var(--border-main);"><th style="text-align: left; padding: 8px;">Shortcut</th><th style="text-align: left; padding: 8px;">Action</th></tr></thead>';
+                html += '<tbody>';
+                for (const shortcut of shortcuts) {
+                    html += `
+                        <tr style="border-bottom: 1px solid var(--border-subtle);">
+                            <td style="padding: 8px; font-family: monospace; color: var(--color-primary);">${shortcut.key}</td>
+                            <td style="padding: 8px;">${shortcut.action}</td>
+                        </tr>
+                    `;
+                }
+                html += '</tbody></table></div>';
+
+                document.getElementById('output-content').innerHTML = html;
+                panelManager.showPanel('bottom');
             },
 
             showAbout() {
