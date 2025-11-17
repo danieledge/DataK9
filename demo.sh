@@ -1,912 +1,486 @@
 #!/bin/bash
 
-################################################################################
-# DataK9 Interactive Demo
-#
-# Comprehensive demonstration of DataK9 data validation framework features.
-# This script provides an interactive menu to showcase validation, profiling,
-# testing, and reporting capabilities.
-#
-# All demo artifacts are stored in demo-tmp/ directory which can be optionally
-# cleaned up on exit.
-#
+###############################################################################
+# DataK9 Demo Script - Brilliant First-Time User Experience
 # Author: Daniel Edge
-################################################################################
+# Description: Interactive demo showcasing DataK9 validation and profiling
+#              with 5 dataset tiers (Tiny → Ultimate)
+###############################################################################
 
-# Color codes for output
+set -e  # Exit on error
+
+# Color definitions
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
-MAGENTA='\033[0;35m'
 CYAN='\033[0;36m'
-WHITE='\033[1;37m'
+MAGENTA='\033[0;35m'
+BOLD='\033[1m'
 NC='\033[0m' # No Color
 
-# Demo configuration
-DEMO_DIR="demo-tmp"
-CONFIGS_DIR="$DEMO_DIR/configs"
-REPORTS_DIR="$DEMO_DIR/reports"
-PROFILES_DIR="$DEMO_DIR/profiles"
-BACKUP_DIR="$DEMO_DIR/config-backups"
-SAMPLE_DATA_DIR="examples/sample_data"
+# Paths
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DEMO_TMP="$SCRIPT_DIR/demo-tmp"
+LOGO_FILE="$SCRIPT_DIR/resources/images/datak9.txt"
 
-# Config file templates
-CUSTOMERS_CONFIG="$CONFIGS_DIR/customers_validation.yaml"
-TRANSACTIONS_CONFIG="$CONFIGS_DIR/transactions_validation.yaml"
-ACCOUNTS_CONFIG="$CONFIGS_DIR/accounts_validation.yaml"
-CROSS_FILE_CONFIG="$CONFIGS_DIR/cross_file_validation.yaml"
+###############################################################################
+# Display Functions
+###############################################################################
 
-################################################################################
-# Helper Functions
-################################################################################
-
-print_logo() {
-    if [ -f "resources/images/ascii-art.txt" ]; then
-        cat resources/images/ascii-art.txt
-        echo ""
-        echo -e "${CYAN}                    INTERACTIVE DEMO${NC}"
-        echo ""
-    else
+show_logo() {
+    clear
+    if [[ -f "$LOGO_FILE" ]]; then
         echo -e "${CYAN}"
-        echo "╔══════════════════════════════════════════════════════════════════╗"
-        echo "║                                                                  ║"
-        echo "║                  DataK9 - INTERACTIVE DEMO                      ║"
-        echo "║                                                                  ║"
-        echo "╚══════════════════════════════════════════════════════════════════╝"
+        cat "$LOGO_FILE"
+        echo -e "${NC}"
+    else
+        echo -e "${CYAN}${BOLD}"
+        echo "╔═══════════════════════════════════════════════════════════╗"
+        echo "║                    DataK9 Framework                       ║"
+        echo "║         Your K9 Guardian for Data Quality                 ║"
+        echo "╚═══════════════════════════════════════════════════════════╝"
         echo -e "${NC}"
     fi
+    echo
 }
 
-print_section() {
-    echo -e "\n${WHITE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "${WHITE}  $1${NC}"
-    echo -e "${WHITE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}\n"
+show_header() {
+    echo -e "${BLUE}${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${CYAN}${BOLD}  $1${NC}"
+    echo -e "${BLUE}${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo
 }
 
-print_success() {
-    echo -e "${GREEN}✓${NC} $1"
+show_info() {
+    echo -e "${CYAN}ℹ${NC}  $1"
 }
 
-print_error() {
-    echo -e "${RED}✗${NC} $1"
+show_success() {
+    echo -e "${GREEN}✓${NC}  $1"
 }
 
-print_warning() {
-    echo -e "${YELLOW}⚠${NC} $1"
+show_warning() {
+    echo -e "${YELLOW}⚠${NC}  $1"
 }
 
-print_info() {
-    echo -e "${BLUE}ℹ${NC} $1"
+show_error() {
+    echo -e "${RED}✗${NC}  $1"
 }
 
-################################################################################
-# Setup and Initialization
-################################################################################
-
-setup_demo_environment() {
-    print_section "Setting Up Demo Environment"
-
-    # Create demo directories
-    mkdir -p "$DEMO_DIR" "$CONFIGS_DIR" "$REPORTS_DIR" "$PROFILES_DIR" "$BACKUP_DIR"
-
-    if [ $? -eq 0 ]; then
-        print_success "Created demo directory structure"
-        print_info "Demo files will be stored in: $DEMO_DIR/"
-    else
-        print_error "Failed to create demo directories"
-        return 1
-    fi
-
-    # Check if sample data exists
-    if [ ! -d "$SAMPLE_DATA_DIR" ]; then
-        print_error "Sample data directory not found: $SAMPLE_DATA_DIR"
-        print_info "Run: python3 examples/generate_sample_data.py"
-        return 1
-    fi
-
-    # Count sample data files
-    local data_files=$(ls -1 $SAMPLE_DATA_DIR/*.csv 2>/dev/null | wc -l)
-    print_success "Found $data_files sample data files"
-
-    # Generate default config files if they don't exist
-    generate_default_configs
-
-    echo ""
-    return 0
+show_command() {
+    echo
+    echo -e "${MAGENTA}${BOLD}▶ Command:${NC}"
+    echo -e "${YELLOW}$1${NC}"
+    echo
 }
 
-################################################################################
-# Configuration File Generation
-################################################################################
-
-generate_default_configs() {
-    print_info "Generating default validation configurations..."
-
-    # Generate customers validation config
-    cat > "$CUSTOMERS_CONFIG" << 'EOF'
-# DataK9 Validation Configuration - Customer Data
-# Generated by demo.sh
-
-validation_job:
-  name: "Customer Data Validation Demo"
-  version: "1.0"
-
-  files:
-    - name: "customers"
-      path: "examples/sample_data/customers.csv"
-      format: "csv"
-
-      validations:
-        # File-level checks
-        - type: "EmptyFileCheck"
-          severity: "ERROR"
-
-        - type: "RowCountRangeCheck"
-          severity: "WARNING"
-          params:
-            min_rows: 100
-            max_rows: 10000
-
-        # Schema checks
-        - type: "ColumnPresenceCheck"
-          severity: "ERROR"
-          params:
-            required_columns:
-              - customer_id
-              - first_name
-              - last_name
-              - email
-              - phone
-              - account_balance
-              - registration_date
-              - status
-
-        # Field-level validations
-        - type: "MandatoryFieldCheck"
-          severity: "ERROR"
-          params:
-            columns:
-              - customer_id
-              - email
-              - status
-
-        - type: "RegexCheck"
-          severity: "ERROR"
-          params:
-            column: "email"
-            pattern: "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
-            description: "Valid email format"
-
-        - type: "RegexCheck"
-          severity: "WARNING"
-          params:
-            column: "phone"
-            pattern: "^\\+1[0-9]{10}$"
-            description: "Valid US phone format (+1XXXXXXXXXX)"
-
-        - type: "ValidValuesCheck"
-          severity: "ERROR"
-          params:
-            column: "status"
-            valid_values:
-              - "ACTIVE"
-              - "INACTIVE"
-              - "SUSPENDED"
-              - "PENDING"
-
-        - type: "RangeCheck"
-          severity: "WARNING"
-          params:
-            column: "account_balance"
-            min_value: 0
-            max_value: 10000000
-            description: "Balance between $0 and $10M"
-
-        - type: "DateFormatCheck"
-          severity: "ERROR"
-          params:
-            column: "registration_date"
-            date_format: "%Y-%m-%d"
-
-        # Record-level validations
-        - type: "DuplicateRowCheck"
-          severity: "ERROR"
-          params:
-            key_columns:
-              - customer_id
-
-        # Advanced validations
-        - type: "CompletenessCheck"
-          severity: "WARNING"
-          params:
-            column: "phone"
-            min_completeness: 95.0
-
-  # Output configuration
-  html_report_path: "demo-tmp/reports/customers_validation_report.html"
-  json_summary_path: "demo-tmp/reports/customers_validation_summary.json"
-  fail_on_error: false
-  fail_on_warning: false
-EOF
-
-    # Generate transactions validation config
-    cat > "$TRANSACTIONS_CONFIG" << 'EOF'
-# DataK9 Validation Configuration - Transaction Data
-# Generated by demo.sh
-
-validation_job:
-  name: "Transaction Data Validation Demo"
-  version: "1.0"
-
-  files:
-    - name: "transactions"
-      path: "examples/sample_data/transactions.csv"
-      format: "csv"
-
-      validations:
-        # File-level checks
-        - type: "EmptyFileCheck"
-          severity: "ERROR"
-
-        - type: "FileSizeCheck"
-          severity: "WARNING"
-          params:
-            min_size_bytes: 100
-            max_size_bytes: 10485760  # 10 MB
-
-        # Schema checks
-        - type: "ColumnPresenceCheck"
-          severity: "ERROR"
-          params:
-            required_columns:
-              - transaction_id
-              - customer_id
-              - amount
-              - status
-
-        # Field-level validations
-        - type: "MandatoryFieldCheck"
-          severity: "ERROR"
-          params:
-            columns:
-              - transaction_id
-              - amount
-              - status
-
-        - type: "RegexCheck"
-          severity: "ERROR"
-          params:
-            column: "transaction_id"
-            pattern: "^TXN[0-9]{10}$"
-            description: "Transaction ID format: TXN followed by 10 digits"
-
-        - type: "ValidValuesCheck"
-          severity: "ERROR"
-          params:
-            column: "status"
-            valid_values:
-              - "COMPLETED"
-              - "PENDING"
-              - "FAILED"
-              - "CANCELLED"
-
-        - type: "RangeCheck"
-          severity: "ERROR"
-          params:
-            column: "amount"
-            min_value: 0.01
-            max_value: 100000.00
-            description: "Transaction amount between $0.01 and $100,000"
-
-        # Record-level validations
-        - type: "DuplicateRowCheck"
-          severity: "WARNING"
-          params:
-            key_columns:
-              - transaction_id
-
-        # Advanced validations
-        - type: "CompletenessCheck"
-          severity: "WARNING"
-          params:
-            column: "customer_id"
-            min_completeness: 98.0
-
-  # Output configuration
-  html_report_path: "demo-tmp/reports/transactions_validation_report.html"
-  json_summary_path: "demo-tmp/reports/transactions_validation_summary.json"
-  fail_on_error: false
-  fail_on_warning: false
-EOF
-
-    # Generate accounts validation config
-    cat > "$ACCOUNTS_CONFIG" << 'EOF'
-# DataK9 Validation Configuration - Account Data
-# Generated by demo.sh
-
-validation_job:
-  name: "Account Data Validation Demo"
-  version: "1.0"
-
-  files:
-    - name: "accounts"
-      path: "examples/sample_data/accounts.csv"
-      format: "csv"
-
-      validations:
-        # File-level checks
-        - type: "EmptyFileCheck"
-          severity: "ERROR"
-
-        # Schema checks
-        - type: "ColumnPresenceCheck"
-          severity: "ERROR"
-          params:
-            required_columns:
-              - account_id
-              - account_number
-              - customer_id
-              - account_type
-              - opening_balance
-              - opening_date
-
-        # Field-level validations
-        - type: "MandatoryFieldCheck"
-          severity: "ERROR"
-          params:
-            columns:
-              - account_id
-              - account_number
-              - account_type
-
-        - type: "ValidValuesCheck"
-          severity: "ERROR"
-          params:
-            column: "account_type"
-            valid_values:
-              - "SAVINGS"
-              - "CHECKING"
-              - "CREDIT"
-              - "INVESTMENT"
-
-        - type: "RangeCheck"
-          severity: "WARNING"
-          params:
-            column: "opening_balance"
-            min_value: 0
-            max_value: 1000000
-            description: "Opening balance between $0 and $1M"
-
-        - type: "DateFormatCheck"
-          severity: "ERROR"
-          params:
-            column: "opening_date"
-            date_format: "%Y-%m-%d"
-
-        # Record-level validations
-        - type: "DuplicateRowCheck"
-          severity: "ERROR"
-          params:
-            key_columns:
-              - account_id
-
-        - type: "UniqueKeyCheck"
-          severity: "ERROR"
-          params:
-            column: "account_number"
-
-  # Output configuration
-  html_report_path: "demo-tmp/reports/accounts_validation_report.html"
-  json_summary_path: "demo-tmp/reports/accounts_validation_summary.json"
-  fail_on_error: false
-  fail_on_warning: false
-EOF
-
-    # Create backups of original configs
-    cp "$CUSTOMERS_CONFIG" "$BACKUP_DIR/customers_validation.yaml.original" 2>/dev/null
-    cp "$TRANSACTIONS_CONFIG" "$BACKUP_DIR/transactions_validation.yaml.original" 2>/dev/null
-    cp "$ACCOUNTS_CONFIG" "$BACKUP_DIR/accounts_validation.yaml.original" 2>/dev/null
-
-    print_success "Generated 3 validation configuration files"
-    print_info "Configs stored in: $CONFIGS_DIR/"
-}
-
-restore_default_configs() {
-    print_section "Restoring Default Configurations"
-
-    if [ -d "$BACKUP_DIR" ] && [ "$(ls -A $BACKUP_DIR)" ]; then
-        cp "$BACKUP_DIR/customers_validation.yaml.original" "$CUSTOMERS_CONFIG" 2>/dev/null
-        cp "$BACKUP_DIR/transactions_validation.yaml.original" "$TRANSACTIONS_CONFIG" 2>/dev/null
-        cp "$BACKUP_DIR/accounts_validation.yaml.original" "$ACCOUNTS_CONFIG" 2>/dev/null
-
-        print_success "Restored all configuration files to defaults"
-    else
-        print_warning "No backups found, regenerating default configs..."
-        generate_default_configs
-    fi
-
-    echo ""
-    read -p "Press Enter to continue..."
-}
-
-################################################################################
-# Validation Functions
-################################################################################
-
-validate_customers() {
-    print_section "Validating Customer Data"
-
-    print_info "Dataset: examples/sample_data/customers.csv"
-    print_info "Config: $CUSTOMERS_CONFIG"
-    echo ""
-
-    # Run validation with full output visible
-    python3 -m validation_framework.cli validate "$CUSTOMERS_CONFIG"
-    local exit_code=$?
-
-    echo ""
-    print_info "Reports generated:"
-    print_info "  HTML: $REPORTS_DIR/customers_validation_report.html"
-    print_info "  JSON: $REPORTS_DIR/customers_validation_summary.json"
-
-    echo ""
-    read -p "Press Enter to continue..."
-}
-
-validate_transactions() {
-    print_section "Validating Transaction Data"
-
-    print_info "Dataset: examples/sample_data/transactions.csv"
-    print_info "Config: $TRANSACTIONS_CONFIG"
-    echo ""
-
-    # Run validation with full output visible
-    python3 -m validation_framework.cli validate "$TRANSACTIONS_CONFIG"
-    local exit_code=$?
-
-    echo ""
-    print_info "Reports generated:"
-    print_info "  HTML: $REPORTS_DIR/transactions_validation_report.html"
-    print_info "  JSON: $REPORTS_DIR/transactions_validation_summary.json"
-
-    echo ""
-    read -p "Press Enter to continue..."
-}
-
-validate_accounts() {
-    print_section "Validating Account Data"
-
-    print_info "Dataset: examples/sample_data/accounts.csv"
-    print_info "Config: $ACCOUNTS_CONFIG"
-    echo ""
-
-    # Run validation with full output visible
-    python3 -m validation_framework.cli validate "$ACCOUNTS_CONFIG"
-    local exit_code=$?
-
-    echo ""
-    print_info "Reports generated:"
-    print_info "  HTML: $REPORTS_DIR/accounts_validation_report.html"
-    print_info "  JSON: $REPORTS_DIR/accounts_validation_summary.json"
-
-    echo ""
-    read -p "Press Enter to continue..."
-}
-
-validate_all_datasets() {
-    print_section "Validating All Datasets"
-
-    echo -e "${CYAN}Running validations for all 3 datasets...${NC}\n"
-
-    local temp_error=$(mktemp)
-
-    # Customers
-    echo -e "${WHITE}[1/3] Customers${NC}"
-    python3 -m validation_framework.cli validate "$CUSTOMERS_CONFIG" > /dev/null 2>"$temp_error"
-    if [ $? -eq 0 ]; then
-        print_success "Customers validated"
-    elif grep -q "ConfigError" "$temp_error"; then
-        print_error "Customers config error"
-    else
-        print_warning "Customers validation found issues"
-    fi
-
-    # Transactions
-    echo -e "${WHITE}[2/3] Transactions${NC}"
-    python3 -m validation_framework.cli validate "$TRANSACTIONS_CONFIG" > /dev/null 2>"$temp_error"
-    if [ $? -eq 0 ]; then
-        print_success "Transactions validated"
-    elif grep -q "ConfigError" "$temp_error"; then
-        print_error "Transactions config error"
-    else
-        print_warning "Transactions validation found issues"
-    fi
-
-    # Accounts
-    echo -e "${WHITE}[3/3] Accounts${NC}"
-    python3 -m validation_framework.cli validate "$ACCOUNTS_CONFIG" > /dev/null 2>"$temp_error"
-    if [ $? -eq 0 ]; then
-        print_success "Accounts validated"
-    elif grep -q "ConfigError" "$temp_error"; then
-        print_error "Accounts config error"
-    else
-        print_warning "Accounts validation found issues"
-    fi
-
-    rm -f "$temp_error"
-
-    echo ""
-    print_success "All validations completed"
-    print_info "Reports available in: $REPORTS_DIR/"
-
-    echo ""
-    read -p "Press Enter to continue..."
-}
-
-################################################################################
-# Profiling Functions
-################################################################################
-
-profile_customers() {
-    print_section "Profiling Customer Data"
-
-    print_info "Generating comprehensive data profile..."
-    echo ""
-
-    python3 -m validation_framework.cli profile \
-        examples/sample_data/customers.csv \
-        -o "$PROFILES_DIR/customers_profile_report.html" \
-        -c "$CONFIGS_DIR/customers_auto_config.yaml"
-
-    echo ""
-    print_success "Customer data profiling completed"
-    print_info "HTML Profile: $PROFILES_DIR/customers_profile_report.html"
-    print_info "Auto Config: $CONFIGS_DIR/customers_auto_config.yaml"
-
-    echo ""
-    read -p "Press Enter to continue..."
-}
-
-profile_transactions() {
-    print_section "Profiling Transaction Data"
-
-    print_info "Generating comprehensive data profile..."
-    echo ""
-
-    python3 -m validation_framework.cli profile \
-        examples/sample_data/transactions.csv \
-        -o "$PROFILES_DIR/transactions_profile_report.html" \
-        -c "$CONFIGS_DIR/transactions_auto_config.yaml"
-
-    echo ""
-    print_success "Transaction data profiling completed"
-    print_info "HTML Profile: $PROFILES_DIR/transactions_profile_report.html"
-    print_info "Auto Config: $CONFIGS_DIR/transactions_auto_config.yaml"
-
-    echo ""
-    read -p "Press Enter to continue..."
-}
-
-profile_accounts() {
-    print_section "Profiling Account Data"
-
-    print_info "Generating comprehensive data profile..."
-    echo ""
-
-    python3 -m validation_framework.cli profile \
-        examples/sample_data/accounts.csv \
-        -o "$PROFILES_DIR/accounts_profile_report.html" \
-        -c "$CONFIGS_DIR/accounts_auto_config.yaml"
-
-    echo ""
-    print_success "Account data profiling completed"
-    print_info "HTML Profile: $PROFILES_DIR/accounts_profile_report.html"
-    print_info "Auto Config: $CONFIGS_DIR/accounts_auto_config.yaml"
-
-    echo ""
-    read -p "Press Enter to continue..."
-}
-
-profile_all_datasets() {
-    print_section "Profiling All Datasets"
-
-    echo -e "${CYAN}Generating profiles for all 3 datasets...${NC}\n"
-
-    # Customers
-    echo -e "${WHITE}[1/3] Profiling Customers${NC}"
-    python3 -m validation_framework.cli profile examples/sample_data/customers.csv \
-        -o "$PROFILES_DIR/customers_profile_report.html" \
-        -c "$CONFIGS_DIR/customers_auto_config.yaml" > /dev/null 2>&1
-    print_success "Customers profiled"
-
-    # Transactions
-    echo -e "${WHITE}[2/3] Profiling Transactions${NC}"
-    python3 -m validation_framework.cli profile examples/sample_data/transactions.csv \
-        -o "$PROFILES_DIR/transactions_profile_report.html" \
-        -c "$CONFIGS_DIR/transactions_auto_config.yaml" > /dev/null 2>&1
-    print_success "Transactions profiled"
-
-    # Accounts
-    echo -e "${WHITE}[3/3] Profiling Accounts${NC}"
-    python3 -m validation_framework.cli profile examples/sample_data/accounts.csv \
-        -o "$PROFILES_DIR/accounts_profile_report.html" \
-        -c "$CONFIGS_DIR/accounts_auto_config.yaml" > /dev/null 2>&1
-    print_success "Accounts profiled"
-
-    echo ""
-    print_success "All data profiling completed"
-    print_info "Profiles available in: $PROFILES_DIR/"
-
-    echo ""
-    read -p "Press Enter to continue..."
-}
-
-################################################################################
-# Report Viewing Functions
-################################################################################
-
-view_reports() {
-    print_section "View Generated Reports"
-
-    echo "Available reports:"
-    echo ""
-
-    local report_count=0
-
-    # List validation reports
-    if [ -d "$REPORTS_DIR" ] && [ "$(ls -A $REPORTS_DIR/*.html 2>/dev/null)" ]; then
-        echo -e "${WHITE}Validation Reports:${NC}"
-        ls -1 "$REPORTS_DIR"/*.html 2>/dev/null | while read report; do
-            echo "  - $(basename $report)"
-            ((report_count++))
-        done
-        echo ""
-    fi
-
-    # List profile reports
-    if [ -d "$PROFILES_DIR" ] && [ "$(ls -A $PROFILES_DIR/*.html 2>/dev/null)" ]; then
-        echo -e "${WHITE}Profile Reports:${NC}"
-        ls -1 "$PROFILES_DIR"/*.html 2>/dev/null | while read report; do
-            echo "  - $(basename $report)"
-            ((report_count++))
-        done
-        echo ""
-    fi
-
-    # Show file counts
-    local html_count=$(find "$DEMO_DIR" -name "*.html" 2>/dev/null | wc -l)
-    local json_count=$(find "$DEMO_DIR" -name "*.json" 2>/dev/null | wc -l)
-    local yaml_count=$(find "$DEMO_DIR" -name "*.yaml" 2>/dev/null | wc -l)
-
-    print_info "Total: $html_count HTML reports, $json_count JSON summaries, $yaml_count YAML configs"
-
-    echo ""
-    echo "To view reports:"
-    echo "  - HTML reports: open demo-tmp/reports/*.html in browser"
-    echo "  - JSON summaries: cat demo-tmp/reports/*.json"
-    echo "  - Profile reports: open demo-tmp/profiles/*.html in browser"
-
-    echo ""
-    read -p "Press Enter to continue..."
-}
-
-list_demo_files() {
-    print_section "Demo Files and Artifacts"
-
-    if [ -d "$DEMO_DIR" ]; then
-        echo -e "${WHITE}Directory Structure:${NC}"
-        tree -L 2 "$DEMO_DIR" 2>/dev/null || find "$DEMO_DIR" -maxdepth 2 -type f -o -type d
-
-        echo ""
-        local total_size=$(du -sh "$DEMO_DIR" | awk '{print $1}')
-        print_info "Total demo artifacts size: $total_size"
-    else
-        print_warning "Demo directory not found"
-    fi
-
-    echo ""
-    read -p "Press Enter to continue..."
-}
-
-################################################################################
-# Testing Functions
-################################################################################
-
-run_framework_tests() {
-    print_section "Running Framework Tests"
-
-    echo "Select test suite:"
-    echo ""
-    echo "  1) Run All Tests"
-    echo "  2) Run Unit Tests Only"
-    echo "  3) Run Integration Tests Only"
-    echo "  4) Run with Coverage Report"
-    echo "  0) Back to Main Menu"
-    echo ""
-    read -p "Enter choice [0-4]: " test_choice
-
-    case $test_choice in
-        1)
-            print_info "Running all tests..."
-            ./run_tests.sh --all
-            ;;
-        2)
-            print_info "Running unit tests..."
-            ./run_tests.sh --unit
-            ;;
-        3)
-            print_info "Running integration tests..."
-            ./run_tests.sh --integration
-            ;;
-        4)
-            print_info "Running tests with coverage..."
-            ./run_tests.sh --coverage
-            ;;
-        0)
-            return
-            ;;
-        *)
-            print_error "Invalid choice"
-            ;;
+###############################################################################
+# Dataset Tier Definitions
+###############################################################################
+
+declare -A TIER_NAMES=(
+    [1]="Tiny"
+    [2]="Small"
+    [3]="Medium"
+    [4]="Large"
+    [5]="Ultimate"
+)
+
+declare -A TIER_PATHS=(
+    [1]="test-data/tiny"
+    [2]="test-data/small"
+    [3]="test-data/medium"
+    [4]="test-data/large"
+    [5]="test-data/ultimate"
+)
+
+declare -A TIER_DESCRIPTIONS=(
+    [1]="Sample datasets for quick testing (~2,500 rows)"
+    [2]="E-commerce transactions (100,000 rows, 17.5 MB)"
+    [3]="IBM AML Small - Banking transactions (5M rows, ~500 MB)"
+    [4]="IBM AML Medium - Banking transactions (31M rows, ~3 GB)"
+    [5]="IBM AML Large - Banking transactions (179M rows, 16 GB CSV / 5.1 GB Parquet)"
+)
+
+declare -A TIER_FILES=(
+    [1]="customers.csv|accounts.csv|transactions.csv"
+    [2]="ecommerce_transactions.csv|ecommerce_transactions.parquet"
+    [3]="HI-Small_Trans.csv|HI-Small_Trans.parquet|LI-Small_Trans.csv|LI-Small_Trans.parquet"
+    [4]="HI-Medium_Trans.csv|HI-Medium_Trans.parquet|LI-Medium_Trans.csv|LI-Medium_Trans.parquet"
+    [5]="HI-Large_Trans.csv|HI-Large_Trans.parquet|LI-Large_Trans.csv|LI-Large_Trans.parquet"
+)
+
+###############################################################################
+# Main Menu
+###############################################################################
+
+show_main_menu() {
+    show_logo
+    show_header "Welcome to DataK9 Demo"
+
+    echo -e "${BOLD}DataK9${NC} is a production-ready framework for data quality validation"
+    echo "and profiling. This demo helps you explore its capabilities with real datasets."
+    echo
+    echo -e "${CYAN}Choose an operation:${NC}"
+    echo
+    echo "  1) 🔍 Run Validation    - Check data quality with custom rules"
+    echo "  2) 📊 Run Profile       - Analyze data characteristics and patterns"
+    echo "  3) ℹ️  About DataK9      - Learn more about the framework"
+    echo "  0) Exit"
+    echo
+    echo -e -n "${BOLD}Enter your choice [0-3]:${NC} "
+    read -r choice
+
+    case $choice in
+        1) select_dataset "validate" ;;
+        2) select_dataset "profile" ;;
+        3) show_about ;;
+        0) exit 0 ;;
+        *) show_error "Invalid choice. Please try again."; sleep 2; show_main_menu ;;
     esac
-
-    echo ""
-    read -p "Press Enter to continue..."
 }
 
-################################################################################
-# Cleanup Functions
-################################################################################
+###############################################################################
+# About DataK9
+###############################################################################
 
-clean_demo_artifacts() {
-    print_section "Clean Demo Artifacts"
+show_about() {
+    show_logo
+    show_header "About DataK9"
 
-    if [ ! -d "$DEMO_DIR" ]; then
-        print_info "No demo artifacts to clean"
-        echo ""
-        read -p "Press Enter to continue..."
+    echo -e "${BOLD}DataK9 Data Quality Framework${NC}"
+    echo "Version: 1.0"
+    echo
+    echo -e "${CYAN}Features:${NC}"
+    echo "  • 34 built-in validation types across 10 categories"
+    echo "  • Advanced data profiling with anomaly detection"
+    echo "  • Memory-efficient chunked processing"
+    echo "  • Support for CSV, Excel, JSON, Parquet, and databases"
+    echo "  • Beautiful HTML reports with interactive visualizations"
+    echo "  • DataK9 Studio - Visual configuration IDE"
+    echo
+    echo -e "${CYAN}Performance:${NC}"
+    echo "  • Handles files from 1 MB to 200+ GB"
+    echo "  • Processes 179M rows in ~4 minutes (with optimizations)"
+    echo "  • Parquet format: 10x faster than CSV for large files"
+    echo
+    echo -e "${CYAN}Dataset Tiers Available:${NC}"
+    for i in 1 2 3 4 5; do
+        echo "  ${i}) ${TIER_NAMES[$i]}: ${TIER_DESCRIPTIONS[$i]}"
+    done
+    echo
+    echo -e "${CYAN}Documentation:${NC}"
+    echo "  • User Guide: docs/USER_GUIDE.md"
+    echo "  • Architecture: ARCHITECTURE_REFERENCE.md"
+    echo "  • Validation Catalog: docs/VALIDATION_CATALOG.md"
+    echo
+    echo -e -n "Press Enter to return to main menu..."
+    read -r
+    show_main_menu
+}
+
+###############################################################################
+# Dataset Selection
+###############################################################################
+
+select_dataset() {
+    local operation=$1
+
+    show_logo
+    show_header "Select Dataset Tier"
+
+    if [[ "$operation" == "validate" ]]; then
+        echo -e "${BOLD}Validation${NC} checks your data against quality rules"
+        echo "Example: Empty file check, schema validation, outlier detection, etc."
+    else
+        echo -e "${BOLD}Profiling${NC} analyzes data characteristics and patterns"
+        echo "Example: Data types, distributions, correlations, anomalies, etc."
+    fi
+    echo
+    echo -e "${CYAN}Choose a dataset tier:${NC}"
+    echo
+
+    for i in 1 2 3 4 5; do
+        echo "  ${i}) ${TIER_NAMES[$i]}"
+        echo "     ${TIER_DESCRIPTIONS[$i]}"
+        echo
+    done
+
+    echo "  0) Back to main menu"
+    echo
+    echo -e -n "${BOLD}Enter your choice [0-5]:${NC} "
+    read -r tier_choice
+
+    case $tier_choice in
+        1|2|3|4|5) select_file "$operation" "$tier_choice" ;;
+        0) show_main_menu ;;
+        *) show_error "Invalid choice. Please try again."; sleep 2; select_dataset "$operation" ;;
+    esac
+}
+
+###############################################################################
+# File Selection
+###############################################################################
+
+select_file() {
+    local operation=$1
+    local tier=$2
+    local tier_name="${TIER_NAMES[$tier]}"
+    local tier_path="${TIER_PATHS[$tier]}"
+
+    show_logo
+    show_header "Select File - $tier_name Tier"
+
+    echo -e "${CYAN}Available files in $tier_name tier:${NC}"
+    echo
+
+    # Get available files
+    IFS='|' read -ra FILES <<< "${TIER_FILES[$tier]}"
+    local file_count=0
+    local -a available_files
+
+    for file in "${FILES[@]}"; do
+        local full_path="$SCRIPT_DIR/$tier_path/$file"
+        if [[ -f "$full_path" ]] || [[ -L "$full_path" ]]; then
+            file_count=$((file_count + 1))
+            available_files+=("$file")
+
+            # Get file size
+            local size=""
+            if [[ -f "$full_path" ]]; then
+                size=$(du -h "$full_path" 2>/dev/null | cut -f1)
+            fi
+
+            echo "  ${file_count}) ${file}"
+            if [[ -n "$size" ]]; then
+                echo "     Size: $size"
+            fi
+            echo
+        fi
+    done
+
+    if [[ $file_count -eq 0 ]]; then
+        show_error "No files found in $tier_name tier"
+        echo
+        show_warning "Make sure datasets are organized in: $tier_path/"
+        echo
+        echo -e -n "Press Enter to go back..."
+        read -r
+        select_dataset "$operation"
         return
     fi
 
-    local total_size=$(du -sh "$DEMO_DIR" | awk '{print $1}')
-    local file_count=$(find "$DEMO_DIR" -type f | wc -l)
+    echo "  0) Back to tier selection"
+    echo
+    echo -e -n "${BOLD}Enter your choice [0-$file_count]:${NC} "
+    read -r file_choice
 
-    echo "Demo artifacts:"
-    echo "  Directory: $DEMO_DIR/"
-    echo "  Files: $file_count"
-    echo "  Size: $total_size"
-    echo ""
+    if [[ "$file_choice" == "0" ]]; then
+        select_dataset "$operation"
+    elif [[ "$file_choice" =~ ^[0-9]+$ ]] && [[ $file_choice -ge 1 ]] && [[ $file_choice -le $file_count ]]; then
+        local selected_file="${available_files[$((file_choice - 1))]}"
+        local full_path="$SCRIPT_DIR/$tier_path/$selected_file"
 
-    read -p "Delete all demo artifacts? (y/N): " -n 1 -r
+        if [[ "$operation" == "validate" ]]; then
+            run_validation "$full_path" "$selected_file" "$tier_name"
+        else
+            run_profile "$full_path" "$selected_file" "$tier_name"
+        fi
+    else
+        show_error "Invalid choice. Please try again."
+        sleep 2
+        select_file "$operation" "$tier"
+    fi
+}
+
+###############################################################################
+# Run Validation
+###############################################################################
+
+run_validation() {
+    local file_path=$1
+    local file_name=$2
+    local tier_name=$3
+
+    show_logo
+    show_header "Running Validation - $tier_name Tier"
+
+    # Create demo-tmp directory
+    mkdir -p "$DEMO_TMP"
+
+    # Generate a simple validation config
+    local config_file="$DEMO_TMP/validation_config.yaml"
+    local report_file="$DEMO_TMP/validation_report.html"
+    local json_file="$DEMO_TMP/validation_report.json"
+
+    show_info "Preparing validation for: $file_name"
+    show_info "Tier: $tier_name"
     echo
 
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-        rm -rf "$DEMO_DIR"
-        print_success "Demo artifacts deleted"
-    else
-        print_info "Demo artifacts preserved"
-    fi
+    # Create validation config
+    cat > "$config_file" << EOF
+validation_job:
+  name: "DataK9 Demo - $tier_name Validation"
+  description: "Quick validation demo for $file_name"
 
-    echo ""
-    read -p "Press Enter to continue..."
-}
+  files:
+    - name: "$file_name"
+      path: "$file_path"
+      format: "${file_name##*.}"
 
-cleanup_on_exit() {
-    echo ""
-    print_section "Exit Demo"
+      validations:
+        - type: "EmptyFileCheck"
+          severity: "ERROR"
+          enabled: true
+          params:
+            check_data_rows: true
 
-    if [ -d "$DEMO_DIR" ]; then
-        local total_size=$(du -sh "$DEMO_DIR" | awk '{print $1}')
-        local file_count=$(find "$DEMO_DIR" -type f | wc -l)
+        - type: "SchemaValidation"
+          severity: "WARNING"
+          enabled: true
+          params:
+            allow_extra_columns: true
 
-        echo "Demo artifacts summary:"
-        echo "  Files: $file_count"
-        echo "  Size: $total_size"
-        echo ""
+  processing:
+    chunk_size: 50000
+    max_sample_failures: 100
 
-        read -p "Delete demo artifacts on exit? (y/N): " -n 1 -r
+  output:
+    html_report: "$report_file"
+    json_summary: "$json_file"
+EOF
+
+    show_success "Configuration created: $config_file"
+    echo
+
+    # Show the command
+    local cmd="python3 -m validation_framework.cli validate '$config_file'"
+    show_command "$cmd"
+
+    show_info "Starting validation..."
+    echo
+    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo
+
+    # Run validation
+    if python3 -m validation_framework.cli validate "$config_file"; then
+        echo
+        echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        echo
+        show_success "Validation completed successfully!"
+        echo
+        show_info "Reports generated:"
+        echo "  • HTML Report: $report_file"
+        echo "  • JSON Summary: $json_file"
         echo
 
-        if [[ $REPLY =~ ^[Yy]$ ]]; then
-            rm -rf "$DEMO_DIR"
-            print_success "Demo artifacts deleted"
-        else
-            print_info "Demo artifacts preserved in: $DEMO_DIR/"
+        if [[ -f "$report_file" ]]; then
+            show_info "Open the HTML report in your browser to view detailed results"
         fi
+    else
+        echo
+        echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        echo
+        show_error "Validation failed"
     fi
 
-    echo ""
-    print_info "Thank you for exploring DataK9!"
-    echo ""
+    echo
+    echo -e -n "Press Enter to return to main menu..."
+    read -r
+    show_main_menu
 }
 
-################################################################################
-# Main Menu
-################################################################################
+###############################################################################
+# Run Profile
+###############################################################################
 
-show_main_menu() {
-    clear
-    print_logo
+run_profile() {
+    local file_path=$1
+    local file_name=$2
+    local tier_name=$3
 
-    echo "Welcome to the DataK9 Interactive Demo!"
-    echo ""
-    echo "This demo showcases the complete DataK9 data validation framework."
-    echo "All generated files are stored in: ${CYAN}$DEMO_DIR/${NC}"
-    echo ""
+    show_logo
+    show_header "Running Profile - $tier_name Tier"
 
-    echo -e "${WHITE}═══ DATA VALIDATION ═══${NC}"
-    echo "  1) Validate Customers Dataset"
-    echo "  2) Validate Transactions Dataset"
-    echo "  3) Validate Accounts Dataset"
-    echo "  4) Validate All Datasets"
-    echo ""
+    # Create demo-tmp directory
+    mkdir -p "$DEMO_TMP"
 
-    echo -e "${WHITE}═══ DATA PROFILING ═══${NC}"
-    echo "  5) Profile Customers Dataset"
-    echo "  6) Profile Transactions Dataset"
-    echo "  7) Profile Accounts Dataset"
-    echo "  8) Profile All Datasets"
-    echo ""
+    local report_file="$DEMO_TMP/profile_report.html"
+    local json_file="$DEMO_TMP/profile_report.json"
 
-    echo -e "${WHITE}═══ REPORTS & FILES ═══${NC}"
-    echo "  9) View Generated Reports"
-    echo "  10) List Demo Files"
-    echo ""
+    show_info "Preparing profile for: $file_name"
+    show_info "Tier: $tier_name"
+    echo
 
-    echo -e "${WHITE}═══ TESTING & CONFIG ═══${NC}"
-    echo "  11) Run Framework Tests"
-    echo "  12) Restore Default Configs"
-    echo "  13) Clean Demo Artifacts"
-    echo ""
+    # Show the command
+    local cmd="python3 -m validation_framework.cli profile '$file_path' -o '$report_file' -j '$json_file'"
+    show_command "$cmd"
 
-    echo "  0) Exit Demo"
-    echo ""
-    echo -n "Enter choice [0-13]: "
+    show_info "Starting profiler..."
+    echo
+    show_info "The profiler will analyze:"
+    echo "  • Column data types and statistics"
+    echo "  • Value distributions and patterns"
+    echo "  • Missing values and anomalies"
+    echo "  • Correlations and dependencies"
+    echo "  • PII detection (emails, phones, SSN, etc.)"
+    echo
+    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo
+
+    # Run profiler
+    if python3 -m validation_framework.cli profile "$file_path" -o "$report_file" -j "$json_file"; then
+        echo
+        echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        echo
+        show_success "Profiling completed successfully!"
+        echo
+        show_info "Reports generated:"
+        echo "  • HTML Report: $report_file"
+        echo "  • JSON Summary: $json_file"
+        echo
+
+        if [[ -f "$report_file" ]]; then
+            show_info "Open the HTML report in your browser to explore:"
+            echo "  • Interactive data distribution charts"
+            echo "  • Expandable column detail cards"
+            echo "  • Suggested validation rules"
+            echo "  • Anomaly detection results"
+        fi
+    else
+        echo
+        echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        echo
+        show_error "Profiling failed"
+    fi
+
+    echo
+    echo -e -n "Press Enter to return to main menu..."
+    read -r
+    show_main_menu
 }
 
-################################################################################
-# Main Logic
-################################################################################
+###############################################################################
+# Main Entry Point
+###############################################################################
 
 main() {
-    # Initial setup
-    if ! setup_demo_environment; then
-        echo ""
-        print_error "Demo environment setup failed"
+    # Check if running from correct directory
+    if [[ ! -d "validation_framework" ]]; then
+        echo -e "${RED}Error: Please run this script from the data-validation-tool directory${NC}"
         exit 1
     fi
 
-    # Main menu loop
-    while true; do
-        show_main_menu
-        read choice
+    # Check if Python module is available
+    if ! python3 -c "import validation_framework" 2>/dev/null; then
+        echo -e "${RED}Error: validation_framework module not found${NC}"
+        echo "Please ensure the framework is properly installed"
+        exit 1
+    fi
 
-        case $choice in
-            1) validate_customers ;;
-            2) validate_transactions ;;
-            3) validate_accounts ;;
-            4) validate_all_datasets ;;
-            5) profile_customers ;;
-            6) profile_transactions ;;
-            7) profile_accounts ;;
-            8) profile_all_datasets ;;
-            9) view_reports ;;
-            10) list_demo_files ;;
-            11) run_framework_tests ;;
-            12) restore_default_configs ;;
-            13) clean_demo_artifacts ;;
-            0)
-                cleanup_on_exit
-                exit 0
-                ;;
-            *)
-                print_error "Invalid choice. Please try again."
-                sleep 2
-                ;;
-        esac
-    done
+    show_main_menu
 }
 
 # Run main function
-main "$@"
+main

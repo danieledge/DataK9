@@ -112,6 +112,11 @@ validation_summary.json
 *.tar
 *.7z
 
+# Test data - only include tiny and small tiers
+test-data/medium/
+test-data/large/
+test-data/ultimate/
+
 # OS
 Thumbs.db
 wip/
