@@ -117,6 +117,10 @@ test-data/medium/
 test-data/large/
 test-data/ultimate/
 
+# Archive folders (keep structure, not content)
+archive/test-reports/
+archive/demo-examples/
+
 # OS
 Thumbs.db
 wip/
