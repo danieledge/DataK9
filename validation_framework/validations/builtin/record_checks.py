@@ -10,6 +10,7 @@ Author: Daniel Edge
 """
 
 from typing import Iterator, Dict, Any, List
+import logging
 import pandas as pd
 from validation_framework.validations.base import DataValidationRule, ValidationResult
 from validation_framework.core.memory_bounded_tracker import MemoryBoundedTracker
@@ -18,6 +19,8 @@ from validation_framework.core.exceptions import (
     ParameterValidationError
 )
 from validation_framework.core.constants import MAX_SAMPLE_FAILURES
+
+logger = logging.getLogger(__name__)
 
 
 class DuplicateRowCheck(DataValidationRule):
@@ -129,12 +132,12 @@ class DuplicateRowCheck(DataValidationRule):
                         from pybloom_live import BloomFilter
                         bloom_capacity = hash_table_size * 2
                         bloom_filter = BloomFilter(capacity=bloom_capacity, error_rate=bloom_fp_rate)
-                        self.logger.info(
+                        logger.info(
                             f"DuplicateRowCheck: Bloom filter enabled (capacity={bloom_capacity:,}, "
                             f"false_positive_rate={bloom_fp_rate})"
                         )
                     except ImportError:
-                        self.logger.warning(
+                        logger.warning(
                             "pybloom_live not available. Install with: pip install pybloom-live. "
                             "Falling back to standard duplicate detection."
                         )
@@ -188,7 +191,7 @@ class DuplicateRowCheck(DataValidationRule):
 
                             # Early termination if requested
                             if enable_early_term and duplicate_count >= max_dups:
-                                self.logger.info(
+                                logger.info(
                                     f"Early termination: Found {duplicate_count} duplicates "
                                     f"(max_duplicates={max_dups})"
                                 )
@@ -443,12 +446,12 @@ class UniqueKeyCheck(DataValidationRule):
                         # Estimate capacity based on hash table size
                         bloom_capacity = hash_table_size * 2  # 2x for safety margin
                         bloom_filter = BloomFilter(capacity=bloom_capacity, error_rate=bloom_fp_rate)
-                        self.logger.info(
+                        logger.info(
                             f"UniqueKeyCheck: Bloom filter enabled (capacity={bloom_capacity:,}, "
                             f"false_positive_rate={bloom_fp_rate})"
                         )
                     except ImportError:
-                        self.logger.warning(
+                        logger.warning(
                             "pybloom_live not available. Install with: pip install pybloom-live. "
                             "Falling back to standard duplicate detection."
                         )
@@ -507,7 +510,7 @@ class UniqueKeyCheck(DataValidationRule):
 
                             # Early termination if requested
                             if enable_early_term and duplicate_count >= max_dups:
-                                self.logger.info(
+                                logger.info(
                                     f"Early termination: Found {duplicate_count} duplicates "
                                     f"(max_duplicates={max_dups})"
                                 )
