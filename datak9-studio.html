@@ -1921,20 +1921,20 @@
             <div class="menu-item" id="file-menu" onclick="app.toggleMenu('file')">
                 File
                 <div class="menu-dropdown">
-                    <div class="menu-dropdown-item" onclick="event.stopPropagation(); app.closeAllMenus(); app.newProject()">
+                    <div class="menu-dropdown-item" onclick="event.stopPropagation(); app.closeAllMenus(); app.startNewProject()">
                         <span>New Project</span>
                         <span class="shortcut">Ctrl+N</span>
                     </div>
-                    <div class="menu-dropdown-item" onclick="event.stopPropagation(); app.closeAllMenus(); app.openFile()">
+                    <div class="menu-dropdown-item" onclick="event.stopPropagation(); app.closeAllMenus(); app.openImportDialog()">
                         <span>Open Project...</span>
                         <span class="shortcut">Ctrl+O</span>
                     </div>
                     <div class="menu-dropdown-item separator"></div>
-                    <div class="menu-dropdown-item" onclick="event.stopPropagation(); app.closeAllMenus(); app.saveYAMLFile()">
+                    <div class="menu-dropdown-item" onclick="event.stopPropagation(); app.closeAllMenus(); app.exportYAML()">
                         <span>Save</span>
                         <span class="shortcut">Ctrl+S</span>
                     </div>
-                    <div class="menu-dropdown-item" onclick="event.stopPropagation(); app.closeAllMenus(); app.saveYAMLAs()">
+                    <div class="menu-dropdown-item" onclick="event.stopPropagation(); app.closeAllMenus(); app.exportYAML()">
                         <span>Save As...</span>
                         <span class="shortcut">Ctrl+Shift+S</span>
                     </div>
@@ -1963,7 +1963,7 @@
                     <div class="menu-dropdown-item" onclick="event.stopPropagation(); app.closeAllMenus(); app.addFile()">
                         <span>Add File...</span>
                     </div>
-                    <div class="menu-dropdown-item" onclick="event.stopPropagation(); app.closeAllMenus(); app.addValidation()">
+                    <div class="menu-dropdown-item" onclick="event.stopPropagation(); app.closeAllMenus(); if(app.selectedFile !== null) app.addValidationToFile(app.selectedFile); else alert('Please select a file first');">
                         <span>Add Validation...</span>
                     </div>
                 </div>
@@ -1972,11 +1972,11 @@
             <div class="menu-item" id="view-menu" onclick="app.toggleMenu('view')">
                 View
                 <div class="menu-dropdown">
-                    <div class="menu-dropdown-item" onclick="event.stopPropagation(); app.closeAllMenus(); panelManager.togglePanel('left')">
+                    <div class="menu-dropdown-item" onclick="event.stopPropagation(); app.closeAllMenus(); panelManager.togglePanel('sidebar')">
                         <span>Toggle Sidebar</span>
                         <span class="shortcut">Ctrl+B</span>
                     </div>
-                    <div class="menu-dropdown-item" onclick="event.stopPropagation(); app.closeAllMenus(); panelManager.togglePanel('bottom')">
+                    <div class="menu-dropdown-item" onclick="event.stopPropagation(); app.closeAllMenus(); panelManager.togglePanel('bottom-panel')">
                         <span>Toggle Output</span>
                         <span class="shortcut">Ctrl+J</span>
                     </div>
