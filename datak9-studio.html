@@ -2424,22 +2424,18 @@ files:
             isSyncing: false,
 
             /* ====================================================================
-               Validation Library - 22 Actual Validation Types
+               Validation Library - Loaded Dynamically from JSON
                ====================================================================
 
-               This library contains all validation types supported by the
-               DataK9 validation framework, organized by category.
-               Each validation includes:
-               - icon: Visual identifier
-               - name: Display name
-               - type: YAML type identifier
-               - category: Organizational category
-               - description: What the validation does
-               - params: Array of parameter definitions
-               - examples: Common use cases
-               - tips: Best practices
+               This library is now loaded from validation_definitions.json at startup.
+               This ensures the Studio stays in sync with the framework's validation types.
+
+               Fallback definitions are maintained below for offline/error scenarios.
             */
-            validationLibrary: {
+            validationLibrary: {},  // Will be populated from JSON
+
+            // Fallback hardcoded validations (used if JSON load fails)
+            fallbackValidationLibrary: {
                 // File-Level Validations
                 'EmptyFileCheck': {
                     icon: '📄',
@@ -3243,14 +3239,134 @@ files:
                     examples: 'No duplicate IDs across files: columns: [customer_id], reference_files: [archive1.csv, archive2.csv]',
                     tips: 'Useful for preventing duplicates in incremental loads'
                 }
+            },  // End of fallbackValidationLibrary
+
+            /* ====================================================================
+               JSON Loading Functions
+               ==================================================================== */
+
+            /**
+             * Load validation definitions from JSON file
+             * @returns {Promise<Object>} Transformed validation library
+             */
+            async loadValidationDefinitions() {
+                try {
+                    console.log('Loading validation definitions from JSON...');
+                    const response = await fetch('./validation_definitions.json');
+
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+
+                    const jsonData = await response.json();
+                    console.log(`Loaded ${Object.keys(jsonData).length - 1} validation types from JSON`);
+
+                    return this.transformDefinitionsToStudioFormat(jsonData);
+                } catch (error) {
+                    console.error('Failed to load validation definitions from JSON:', error);
+                    console.warn('Falling back to hardcoded definitions');
+                    return this.fallbackValidationLibrary;
+                }
+            },
+
+            /**
+             * Transform JSON definitions to Studio format
+             * @param {Object} jsonDefs - Raw JSON definitions
+             * @returns {Object} Studio-formatted validation library
+             */
+            transformDefinitionsToStudioFormat(jsonDefs) {
+                const library = {};
+
+                for (const [type, def] of Object.entries(jsonDefs)) {
+                    // Skip metadata entry
+                    if (type === '_metadata') continue;
+
+                    library[type] = {
+                        icon: def.icon || '📋',
+                        name: this.formatValidationName(type),
+                        type: type,
+                        category: def.category || 'Other',
+                        description: def.description || '',
+                        params: this.transformParams(def.params || []),
+                        examples: def.examples || '',
+                        tips: def.tips || '',
+                        severity_recommendation: def.severity_recommendation
+                    };
+                }
+
+                return library;
+            },
+
+            /**
+             * Transform JSON param definitions to Studio format
+             * @param {Array} params - Array of parameter definitions
+             * @returns {Array} Studio-formatted parameters
+             */
+            transformParams(params) {
+                return params.map(param => ({
+                    name: param.name,
+                    label: this.formatParamLabel(param.name),
+                    type: this.mapParamType(param.type),
+                    required: param.required || false,
+                    help: param.description || '',
+                    default: param.default
+                }));
+            },
+
+            /**
+             * Format validation type name for display
+             * @param {string} type - e.g., "EmptyFileCheck"
+             * @returns {string} - e.g., "Empty File Check"
+             */
+            formatValidationName(type) {
+                return type
+                    .replace(/([A-Z])/g, ' $1')  // Add space before capitals
+                    .trim()                       // Remove leading space
+                    .replace(/Check$/, ' Check'); // Ensure "Check" has space
+            },
+
+            /**
+             * Format parameter name for label display
+             * @param {string} name - e.g., "min_rows"
+             * @returns {string} - e.g., "Min Rows"
+             */
+            formatParamLabel(name) {
+                return name
+                    .split('_')
+                    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+                    .join(' ');
+            },
+
+            /**
+             * Map JSON param types to Studio input types
+             * @param {string} type - JSON type
+             * @returns {string} - HTML input type
+             */
+            mapParamType(type) {
+                const typeMap = {
+                    'string': 'text',
+                    'int': 'number',
+                    'float': 'number',
+                    'bool': 'checkbox',
+                    'list': 'text',
+                    'dict': 'textarea'
+                };
+                return typeMap[type] || 'text';
             },
 
             /* ====================================================================
                Application Initialization
                ==================================================================== */
 
-            init() {
+            async init() {
                 console.log('Initializing DataK9 Studio...');
+
+                // Show loading indicator
+                this.showLoadingIndicator('Loading validation definitions...');
+
+                // Load validation definitions from JSON (Phase 1 Enhancement)
+                this.validationLibrary = await this.loadValidationDefinitions();
+                console.log(`Loaded ${Object.keys(this.validationLibrary).length} validations into library`);
 
                 // Load saved project from localStorage if exists
                 this.loadFromLocalStorage();
@@ -3264,7 +3380,81 @@ files:
                 // Render initial UI state
                 this.render();
 
+                // Hide loading indicator
+                this.hideLoadingIndicator();
+
                 console.log('DataK9 Studio initialized successfully');
+            },
+
+            /**
+             * Show loading indicator overlay
+             * @param {string} message - Loading message to display
+             */
+            showLoadingIndicator(message = 'Loading...') {
+                const existingLoader = document.getElementById('loading-overlay');
+                if (existingLoader) return;
+
+                const overlay = document.createElement('div');
+                overlay.id = 'loading-overlay';
+                overlay.style.cssText = `
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    right: 0;
+                    bottom: 0;
+                    background: rgba(30, 30, 30, 0.95);
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    justify-content: center;
+                    z-index: 10000;
+                    font-family: var(--font-sans);
+                `;
+
+                overlay.innerHTML = `
+                    <div style="text-align: center;">
+                        <div style="font-size: 48px; margin-bottom: 16px;">🐕</div>
+                        <div style="font-size: 18px; color: var(--k9-blue); margin-bottom: 8px;">DataK9 Studio</div>
+                        <div style="font-size: 14px; color: var(--text-secondary);">${message}</div>
+                        <div style="margin-top: 20px;">
+                            <div class="loading-spinner"></div>
+                        </div>
+                    </div>
+                `;
+
+                // Add spinner CSS if not already present
+                if (!document.getElementById('spinner-style')) {
+                    const style = document.createElement('style');
+                    style.id = 'spinner-style';
+                    style.textContent = `
+                        .loading-spinner {
+                            border: 3px solid rgba(74, 144, 226, 0.3);
+                            border-top: 3px solid var(--k9-blue);
+                            border-radius: 50%;
+                            width: 40px;
+                            height: 40px;
+                            animation: spin 1s linear infinite;
+                            margin: 0 auto;
+                        }
+                        @keyframes spin {
+                            0% { transform: rotate(0deg); }
+                            100% { transform: rotate(360deg); }
+                        }
+                    `;
+                    document.head.appendChild(style);
+                }
+
+                document.body.appendChild(overlay);
+            },
+
+            /**
+             * Hide loading indicator overlay
+             */
+            hideLoadingIndicator() {
+                const overlay = document.getElementById('loading-overlay');
+                if (overlay) {
+                    overlay.remove();
+                }
             },
 
             /* ====================================================================
