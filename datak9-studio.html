@@ -2487,6 +2487,14 @@ files:
             // Flag to prevent circular updates during sync
             isSyncing: false,
 
+            // Project state management (Phase 3)
+            projectState: {
+                isOpen: false,              // Whether a project is currently open
+                hasUnsavedChanges: false,   // Whether there are unsaved changes
+                projectPath: null,          // Path to opened project file
+                lastSaved: null             // Timestamp of last save
+            },
+
             /* ====================================================================
                Validation Library - Loaded Dynamically from JSON
                ====================================================================
@@ -3435,6 +3443,14 @@ files:
                 // Load saved project from localStorage if exists
                 this.loadFromLocalStorage();
 
+                // Phase 3: Check if project was loaded and mark as open
+                if (this.config.validation_job?.name || this.config.files?.length > 0) {
+                    this.updateProjectState(true, null);  // Project loaded from localStorage
+                    this.markSaved();  // Loaded projects start as saved
+                } else {
+                    this.updateProjectState(false);  // No project loaded
+                }
+
                 // Initialize Monaco Editor
                 this.initMonacoEditor();
 
@@ -4079,6 +4095,11 @@ params:
                ==================================================================== */
 
             startNewProject() {
+                // Phase 3: Check for unsaved changes before starting new project
+                if (!this.checkUnsavedChanges('start a new project')) {
+                    return;
+                }
+
                 this.openModal('new-project-modal');
                 this.wizardStep = 1;
                 this.updateWizardUI();
@@ -4147,6 +4168,11 @@ params:
                 }
 
                 this.closeModal('new-project-modal');
+
+                // Phase 3: Mark project as open and saved
+                this.updateProjectState(true, null);  // null = new project, not from file
+                this.markSaved();  // Wizard creates saved state
+
                 this.saveToLocalStorage();
                 this.render();
             },
@@ -4162,6 +4188,11 @@ params:
             },
 
             addFile() {
+                // Phase 3: Require project to be open before adding files
+                if (!this.requireProject('adding files')) {
+                    return;
+                }
+
                 this.openModal('add-file-modal');
                 document.getElementById('add-file-name').value = '';
                 document.getElementById('add-file-path').value = '';
@@ -5447,6 +5478,129 @@ params:
                 URL.revokeObjectURL(url);
 
                 console.log(`Documentation exported: ${filename}`);
+            },
+
+            /* ====================================================================
+               Project State Management (Phase 3)
+               ==================================================================== */
+
+            /**
+             * Update project state and UI accordingly
+             */
+            updateProjectState(isOpen, path = null) {
+                this.projectState.isOpen = isOpen;
+                this.projectState.projectPath = path;
+
+                if (isOpen) {
+                    this.projectState.lastSaved = new Date();
+                }
+
+                // Update UI to reflect state
+                this.updateUIState();
+                this.updateStatusBar();
+
+                console.log(`Project state updated: ${isOpen ? 'Open' : 'Closed'}`, path || '');
+            },
+
+            /**
+             * Mark project as having unsaved changes
+             */
+            markUnsavedChanges() {
+                if (!this.projectState.hasUnsavedChanges) {
+                    this.projectState.hasUnsavedChanges = true;
+                    this.updateStatusBar();
+                    console.log('Project marked as having unsaved changes');
+                }
+            },
+
+            /**
+             * Mark project as saved
+             */
+            markSaved() {
+                this.projectState.hasUnsavedChanges = false;
+                this.projectState.lastSaved = new Date();
+                this.updateStatusBar();
+                console.log('Project marked as saved');
+            },
+
+            /**
+             * Update UI elements based on project state
+             */
+            updateUIState() {
+                const disabled = !this.projectState.isOpen;
+                const welcomeScreen = document.getElementById('welcome-screen');
+                const visualEditor = document.getElementById('visual-editor');
+                const yamlPanel = document.getElementById('yaml-editor-panel');
+
+                // Show/hide welcome screen
+                if (welcomeScreen) {
+                    welcomeScreen.style.display = disabled ? 'flex' : 'none';
+                }
+
+                // Show/hide editor panels
+                if (visualEditor) {
+                    visualEditor.style.display = disabled ? 'none' : 'block';
+                }
+                if (yamlPanel) {
+                    yamlPanel.style.display = disabled ? 'none' : 'flex';
+                }
+
+                // Note: File operations buttons are controlled by their onclick handlers
+                // which will check projectState.isOpen before executing
+            },
+
+            /**
+             * Update status bar with current project state
+             */
+            updateStatusBar() {
+                const statusBar = document.getElementById('validation-summary');
+                if (!statusBar) return;
+
+                if (!this.projectState.isOpen) {
+                    statusBar.textContent = 'No project open';
+                    statusBar.style.color = 'var(--text-muted)';
+                    return;
+                }
+
+                const projectName = this.config.validation_job?.name || 'Untitled Project';
+                const fileCount = this.config.files?.length || 0;
+                const validationCount = this.config.files?.reduce((sum, file) =>
+                    sum + (file.validations?.length || 0), 0) || 0;
+
+                const unsavedIndicator = this.projectState.hasUnsavedChanges ? ' ●' : '';
+
+                statusBar.innerHTML = `
+                    <strong>${projectName}</strong>${unsavedIndicator} |
+                    ${fileCount} file${fileCount !== 1 ? 's' : ''} |
+                    ${validationCount} validation${validationCount !== 1 ? 's' : ''}
+                `;
+                statusBar.style.color = 'var(--text-primary)';
+            },
+
+            /**
+             * Check for unsaved changes before action
+             * Returns true if OK to proceed, false if cancelled
+             */
+            checkUnsavedChanges(action = 'continue') {
+                if (this.projectState.hasUnsavedChanges) {
+                    return confirm(
+                        `You have unsaved changes.\n\n` +
+                        `Do you want to ${action} without saving?\n\n` +
+                        `Click OK to ${action} anyway, or Cancel to go back and save.`
+                    );
+                }
+                return true;
+            },
+
+            /**
+             * Check if project is open before operation
+             */
+            requireProject(operationName = 'this operation') {
+                if (!this.projectState.isOpen) {
+                    alert(`Please create or open a project before ${operationName}.`);
+                    return false;
+                }
+                return true;
             },
 
             /* ====================================================================
