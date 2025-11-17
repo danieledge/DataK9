@@ -246,10 +246,10 @@ select_file() {
             file_count=$((file_count + 1))
             available_files+=("$file")
 
-            # Get file size
+            # Get file size (use -L to follow symlinks)
             local size=""
-            if [[ -f "$full_path" ]]; then
-                size=$(du -h "$full_path" 2>/dev/null | cut -f1)
+            if [[ -f "$full_path" ]] || [[ -L "$full_path" ]]; then
+                size=$(du -Lh "$full_path" 2>/dev/null | cut -f1)
             fi
 
             echo "  ${file_count}) ${file}"
