@@ -615,23 +615,22 @@
            ============================================================================ */
 
         .bottom-panel {
-            height: auto;
+            height: 40px;
+            min-height: 40px;
+            max-height: 40px;
             background-color: var(--bg-panel);
             border-top: 1px solid var(--border-main);
-            padding: var(--spacing-md);
+            padding: 0 16px;
             display: flex;
-            align-items: center;
             justify-content: space-between;
-            gap: var(--spacing-md);
+            align-items: center;
+            flex-shrink: 0;
         }
 
         .bottom-left {
             display: flex;
             align-items: center;
-            gap: var(--spacing-md);
-        }
-
-        .validation-summary {
+            gap: 16px;
             font-size: 12px;
             color: var(--text-secondary);
         }
@@ -639,7 +638,26 @@
         .bottom-right {
             display: flex;
             align-items: center;
-            gap: var(--spacing-sm);
+            gap: 8px;
+        }
+
+        .footer-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 8px;
+            background: var(--bg-main);
+            border-radius: 3px;
+            font-size: 11px;
+        }
+
+        .footer-item-label {
+            color: var(--text-muted);
+        }
+
+        .footer-item-value {
+            color: var(--text-primary);
+            font-weight: 500;
         }
 
         /* ============================================================================
@@ -1350,17 +1368,7 @@
         }
 
         .bottom-panel.collapsed {
-            min-height: 35px !important;
-            height: 35px !important;
-        }
-
-        .bottom-panel.collapsed .bottom-left,
-        .bottom-panel.collapsed .bottom-right {
             display: none;
-        }
-
-        .bottom-panel.collapsed .collapse-icon {
-            transform: rotate(180deg);
         }
 
         /* Collapsed panel bars */
@@ -1977,7 +1985,7 @@
                         <span class="shortcut">Ctrl+B</span>
                     </div>
                     <div class="menu-dropdown-item" onclick="event.stopPropagation(); app.closeAllMenus(); panelManager.togglePanel('bottom-panel')">
-                        <span>Toggle Output</span>
+                        <span>Toggle Footer</span>
                         <span class="shortcut">Ctrl+J</span>
                     </div>
                 </div>
@@ -2172,30 +2180,23 @@
 
         </div>
 
-        <!-- Bottom Panel -->
+        <!-- Footer (Fixed Height) -->
         <div class="bottom-panel" id="bottom-panel">
-            <!-- Resize handle for bottom panel -->
-            <div class="resize-handle resize-handle-horizontal resize-handle-bottom"
-                 data-panel="bottom-panel"
-                 aria-label="Resize bottom panel"></div>
-
-            <!-- Collapse button for bottom panel -->
-            <div class="bottom-panel-header">
-                <button class="collapse-btn" onclick="panelManager.togglePanel('bottom-panel')"
-                        aria-label="Collapse bottom panel (Ctrl+J)" title="Collapse bottom panel (Ctrl+J)">
-                    <span class="collapse-icon">▲</span>
-                </button>
-            </div>
-
             <div class="bottom-left">
-                <span class="validation-summary" id="validation-summary">
-                    No project loaded
-                </span>
+                <div class="footer-item" id="project-status">
+                    <span class="footer-item-label">Project:</span>
+                    <span class="footer-item-value">No project</span>
+                </div>
+                <div class="footer-item" id="files-count">
+                    <span class="footer-item-label">Files:</span>
+                    <span class="footer-item-value">0</span>
+                </div>
+                <div class="footer-item" id="validations-count">
+                    <span class="footer-item-label">Validations:</span>
+                    <span class="footer-item-value">0</span>
+                </div>
             </div>
             <div class="bottom-right">
-                <button class="btn btn-secondary btn-small" onclick="app.showAbout()">
-                    ℹ️ About
-                </button>
                 <button class="btn btn-secondary btn-small" onclick="app.openExportDocsDialog()">
                     📄 Export Docs
                 </button>
@@ -5400,7 +5401,7 @@ params:
                     { key: 'Ctrl+S', action: 'Save' },
                     { key: 'Ctrl+Shift+S', action: 'Save As' },
                     { key: 'Ctrl+B', action: 'Toggle Sidebar' },
-                    { key: 'Ctrl+J', action: 'Toggle Output Panel' },
+                    { key: 'Ctrl+J', action: 'Toggle Footer' },
                     { key: 'Ctrl+Up', action: 'Move Validation Up' },
                     { key: 'Ctrl+Down', action: 'Move Validation Down' },
                     { key: 'Delete', action: 'Delete Selected Item' }
@@ -5882,28 +5883,29 @@ params:
              * Update status bar with current project state
              */
             updateStatusBar() {
-                const statusBar = document.getElementById('validation-summary');
-                if (!statusBar) return;
-
-                if (!this.projectState.isOpen) {
-                    statusBar.textContent = 'No project open';
-                    statusBar.style.color = 'var(--text-muted)';
-                    return;
+                // Update project name
+                const projectStatus = document.querySelector('#project-status .footer-item-value');
+                if (projectStatus) {
+                    const projectName = this.config.validation_job?.name || 'No project';
+                    const unsaved = this.projectState.hasUnsavedChanges ? ' ●' : '';
+                    projectStatus.textContent = this.projectState.isOpen ? `${projectName}${unsaved}` : 'No project';
                 }
 
-                const projectName = this.config.validation_job?.name || 'Untitled Project';
-                const fileCount = this.config.files?.length || 0;
-                const validationCount = this.config.files?.reduce((sum, file) =>
-                    sum + (file.validations?.length || 0), 0) || 0;
+                // Update file count
+                const filesCount = document.querySelector('#files-count .footer-item-value');
+                if (filesCount) {
+                    filesCount.textContent = this.config.files?.length || 0;
+                }
 
-                const unsavedIndicator = this.projectState.hasUnsavedChanges ? ' ●' : '';
-
-                statusBar.innerHTML = `
-                    <strong>${projectName}</strong>${unsavedIndicator} |
-                    ${fileCount} file${fileCount !== 1 ? 's' : ''} |
-                    ${validationCount} validation${validationCount !== 1 ? 's' : ''}
-                `;
-                statusBar.style.color = 'var(--text-primary)';
+                // Update validation count
+                const validationsCount = document.querySelector('#validations-count .footer-item-value');
+                if (validationsCount) {
+                    let total = 0;
+                    (this.config.files || []).forEach(file => {
+                        total += file.validations?.length || 0;
+                    });
+                    validationsCount.textContent = total;
+                }
             },
 
             /**
