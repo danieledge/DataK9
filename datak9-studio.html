@@ -2370,9 +2370,9 @@ files:
     </div>
 
     <!-- ============================================================================
-         Monaco Editor (CDN for GitHub compatibility)
+         Monaco Editor (Self-Hosted for Corporate Environments)
          ============================================================================ -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs/loader.min.js"></script>
+    <script src="monaco-editor/min/vs/loader.js"></script>
 
     <!-- ============================================================================
          Application JavaScript
@@ -3168,7 +3168,7 @@ files:
             initMonacoEditor() {
                 require.config({
                     paths: {
-                        'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs'
+                        'vs': 'monaco-editor/min/vs'
                     }
                 });
 
