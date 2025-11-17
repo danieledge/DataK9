@@ -6,6 +6,8 @@ These validations compare current data against historical baselines:
 - Trend detection (growth/decline rates)
 - Seasonality validation
 - Data freshness checks with historical context
+
+Author: Daniel Edge
 """
 
 from typing import Iterator, Dict, Any, List
@@ -13,6 +15,12 @@ import pandas as pd
 from pathlib import Path
 from datetime import datetime, timedelta
 from validation_framework.validations.base import DataValidationRule, FileValidationRule, ValidationResult
+from validation_framework.core.exceptions import (
+    ColumnNotFoundError,
+    ParameterValidationError,
+    DataLoadError
+)
+from validation_framework.core.constants import MAX_SAMPLE_FAILURES
 import logging
 
 logger = logging.getLogger(__name__)
@@ -89,31 +97,35 @@ class BaselineComparisonCheck(DataValidationRule):
 
             # Validate required parameters
             if not metric:
-                return self._create_result(
-                    passed=False,
-                    message="Parameter 'metric' is required",
-                    failed_count=1,
+                raise ParameterValidationError(
+                    "Parameter 'metric' is required",
+                    validation_name=self.name,
+                    parameter="metric",
+                    value=None
                 )
 
             if metric != "count" and not column:
-                return self._create_result(
-                    passed=False,
-                    message="Parameter 'column' is required for non-count metrics",
-                    failed_count=1,
+                raise ParameterValidationError(
+                    "Parameter 'column' is required for non-count metrics",
+                    validation_name=self.name,
+                    parameter="column",
+                    value=None
                 )
 
             if not baseline_file:
-                return self._create_result(
-                    passed=False,
-                    message="Parameter 'baseline_file' is required",
-                    failed_count=1,
+                raise ParameterValidationError(
+                    "Parameter 'baseline_file' is required",
+                    validation_name=self.name,
+                    parameter="baseline_file",
+                    value=None
                 )
 
             if tolerance_pct is None:
-                return self._create_result(
-                    passed=False,
-                    message="Parameter 'tolerance_pct' is required",
-                    failed_count=1,
+                raise ParameterValidationError(
+                    "Parameter 'tolerance_pct' is required",
+                    validation_name=self.name,
+                    parameter="tolerance_pct",
+                    value=None
                 )
 
             # Calculate current metric
@@ -188,8 +200,11 @@ class BaselineComparisonCheck(DataValidationRule):
                 total = 0
                 for chunk in data_iterator:
                     if column not in chunk.columns:
-                        logger.error(f"Column '{column}' not found")
-                        return None
+                        raise ColumnNotFoundError(
+                            validation_name="BaselineComparisonCheck",
+                            column=column,
+                            available_columns=list(chunk.columns)
+                        )
                     total += chunk[column].sum()
                 return total
 
@@ -198,8 +213,11 @@ class BaselineComparisonCheck(DataValidationRule):
                 total_count = 0
                 for chunk in data_iterator:
                     if column not in chunk.columns:
-                        logger.error(f"Column '{column}' not found")
-                        return None
+                        raise ColumnNotFoundError(
+                            validation_name="BaselineComparisonCheck",
+                            column=column,
+                            available_columns=list(chunk.columns)
+                        )
                     valid_values = chunk[column].dropna()
                     total_sum += valid_values.sum()
                     total_count += len(valid_values)
@@ -209,8 +227,11 @@ class BaselineComparisonCheck(DataValidationRule):
                 min_val = float('inf')
                 for chunk in data_iterator:
                     if column not in chunk.columns:
-                        logger.error(f"Column '{column}' not found")
-                        return None
+                        raise ColumnNotFoundError(
+                            validation_name="BaselineComparisonCheck",
+                            column=column,
+                            available_columns=list(chunk.columns)
+                        )
                     chunk_min = chunk[column].min()
                     if pd.notna(chunk_min) and chunk_min < min_val:
                         min_val = chunk_min
@@ -220,8 +241,11 @@ class BaselineComparisonCheck(DataValidationRule):
                 max_val = float('-inf')
                 for chunk in data_iterator:
                     if column not in chunk.columns:
-                        logger.error(f"Column '{column}' not found")
-                        return None
+                        raise ColumnNotFoundError(
+                            validation_name="BaselineComparisonCheck",
+                            column=column,
+                            available_columns=list(chunk.columns)
+                        )
                     chunk_max = chunk[column].max()
                     if pd.notna(chunk_max) and chunk_max > max_val:
                         max_val = chunk_max
@@ -249,12 +273,18 @@ class BaselineComparisonCheck(DataValidationRule):
 
             # Validate columns exist
             if date_col not in baseline_df.columns:
-                logger.error(f"Date column '{date_col}' not found in baseline file")
-                return None
+                raise ColumnNotFoundError(
+                    validation_name="BaselineComparisonCheck",
+                    column=date_col,
+                    available_columns=list(baseline_df.columns)
+                )
 
             if value_col not in baseline_df.columns:
-                logger.error(f"Value column '{value_col}' not found in baseline file")
-                return None
+                raise ColumnNotFoundError(
+                    validation_name="BaselineComparisonCheck",
+                    column=value_col,
+                    available_columns=list(baseline_df.columns)
+                )
 
             # Parse dates
             baseline_df[date_col] = pd.to_datetime(baseline_df[date_col])
@@ -371,24 +401,27 @@ class TrendDetectionCheck(DataValidationRule):
 
             # Validate required parameters
             if not metric:
-                return self._create_result(
-                    passed=False,
-                    message="Parameter 'metric' is required",
-                    failed_count=1,
+                raise ParameterValidationError(
+                    "Parameter 'metric' is required",
+                    validation_name=self.name,
+                    parameter="metric",
+                    value=None
                 )
 
             if not baseline_file:
-                return self._create_result(
-                    passed=False,
-                    message="Parameter 'baseline_file' is required",
-                    failed_count=1,
+                raise ParameterValidationError(
+                    "Parameter 'baseline_file' is required",
+                    validation_name=self.name,
+                    parameter="baseline_file",
+                    value=None
                 )
 
             if max_growth is None and max_decline is None:
-                return self._create_result(
-                    passed=False,
-                    message="At least one of 'max_growth_pct' or 'max_decline_pct' must be specified",
-                    failed_count=1,
+                raise ParameterValidationError(
+                    "At least one of 'max_growth_pct' or 'max_decline_pct' must be specified",
+                    validation_name=self.name,
+                    parameter="max_growth_pct/max_decline_pct",
+                    value=None
                 )
 
             # Calculate current metric
@@ -473,7 +506,11 @@ class TrendDetectionCheck(DataValidationRule):
                     total = 0
                     for chunk in data_iterator:
                         if column not in chunk.columns:
-                            return None
+                            raise ColumnNotFoundError(
+                                validation_name="TrendDetectionCheck",
+                                column=column,
+                                available_columns=list(chunk.columns)
+                            )
                         total += chunk[column].sum()
                     return total
 
@@ -482,7 +519,11 @@ class TrendDetectionCheck(DataValidationRule):
                     total_count = 0
                     for chunk in data_iterator:
                         if column not in chunk.columns:
-                            return None
+                            raise ColumnNotFoundError(
+                                validation_name="TrendDetectionCheck",
+                                column=column,
+                                available_columns=list(chunk.columns)
+                            )
                         valid_values = chunk[column].dropna()
                         total_sum += valid_values.sum()
                         total_count += len(valid_values)

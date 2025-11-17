@@ -11,6 +11,12 @@ from typing import Iterator, Dict, Any, List
 import pandas as pd
 from pathlib import Path
 from validation_framework.validations.base import DataValidationRule, ValidationResult
+from validation_framework.core.exceptions import (
+    ColumnNotFoundError,
+    ParameterValidationError,
+    DataLoadError
+)
+from validation_framework.core.constants import MAX_SAMPLE_FAILURES
 import logging
 
 logger = logging.getLogger(__name__)
@@ -81,24 +87,27 @@ class ReferentialIntegrityCheck(DataValidationRule):
 
             # Validate required parameters
             if not foreign_key:
-                return self._create_result(
-                    passed=False,
-                    message="Parameter 'foreign_key' is required",
-                    failed_count=1,
+                raise ParameterValidationError(
+                    "Parameter 'foreign_key' is required",
+                    validation_name=self.name,
+                    parameter="foreign_key",
+                    value=None
                 )
 
             if not reference_file:
-                return self._create_result(
-                    passed=False,
-                    message="Parameter 'reference_file' is required",
-                    failed_count=1,
+                raise ParameterValidationError(
+                    "Parameter 'reference_file' is required",
+                    validation_name=self.name,
+                    parameter="reference_file",
+                    value=None
                 )
 
             if not reference_key:
-                return self._create_result(
-                    passed=False,
-                    message="Parameter 'reference_key' is required",
-                    failed_count=1,
+                raise ParameterValidationError(
+                    "Parameter 'reference_key' is required",
+                    validation_name=self.name,
+                    parameter="reference_key",
+                    value=None
                 )
 
             # Resolve reference file path
@@ -136,10 +145,10 @@ class ReferentialIntegrityCheck(DataValidationRule):
             for chunk in data_iterator:
                 # Check if foreign key column exists
                 if foreign_key not in chunk.columns:
-                    return self._create_result(
-                        passed=False,
-                        message=f"Foreign key column '{foreign_key}' not found in data",
-                        failed_count=1,
+                    raise ColumnNotFoundError(
+                        validation_name=self.name,
+                        column=foreign_key,
+                        available_columns=list(chunk.columns)
                     )
 
                 # Apply conditional filter if specified
@@ -366,38 +375,43 @@ class CrossFileComparisonCheck(DataValidationRule):
 
             # Validate required parameters
             if not aggregation:
-                return self._create_result(
-                    passed=False,
-                    message="Parameter 'aggregation' is required",
-                    failed_count=1,
+                raise ParameterValidationError(
+                    "Parameter 'aggregation' is required",
+                    validation_name=self.name,
+                    parameter="aggregation",
+                    value=None
                 )
 
             if aggregation != "count" and not column:
-                return self._create_result(
-                    passed=False,
-                    message="Parameter 'column' is required for non-count aggregations",
-                    failed_count=1,
+                raise ParameterValidationError(
+                    "Parameter 'column' is required for non-count aggregations",
+                    validation_name=self.name,
+                    parameter="column",
+                    value=None
                 )
 
             if not comparison:
-                return self._create_result(
-                    passed=False,
-                    message="Parameter 'comparison' is required",
-                    failed_count=1,
+                raise ParameterValidationError(
+                    "Parameter 'comparison' is required",
+                    validation_name=self.name,
+                    parameter="comparison",
+                    value=None
                 )
 
             if not reference_file:
-                return self._create_result(
-                    passed=False,
-                    message="Parameter 'reference_file' is required",
-                    failed_count=1,
+                raise ParameterValidationError(
+                    "Parameter 'reference_file' is required",
+                    validation_name=self.name,
+                    parameter="reference_file",
+                    value=None
                 )
 
             if not reference_aggregation:
-                return self._create_result(
-                    passed=False,
-                    message="Parameter 'reference_aggregation' is required",
-                    failed_count=1,
+                raise ParameterValidationError(
+                    "Parameter 'reference_aggregation' is required",
+                    validation_name=self.name,
+                    parameter="reference_aggregation",
+                    value=None
                 )
 
             # Calculate current file aggregate
@@ -514,8 +528,11 @@ class CrossFileComparisonCheck(DataValidationRule):
                 total = 0
                 for chunk in data_iterator:
                     if column not in chunk.columns:
-                        logger.error(f"Column '{column}' not found in data")
-                        return None
+                        raise ColumnNotFoundError(
+                            validation_name="CrossFileComparisonCheck",
+                            column=column,
+                            available_columns=list(chunk.columns)
+                        )
                     total += chunk[column].sum()
                 return total
 
@@ -524,8 +541,11 @@ class CrossFileComparisonCheck(DataValidationRule):
                 total_count = 0
                 for chunk in data_iterator:
                     if column not in chunk.columns:
-                        logger.error(f"Column '{column}' not found in data")
-                        return None
+                        raise ColumnNotFoundError(
+                            validation_name="CrossFileComparisonCheck",
+                            column=column,
+                            available_columns=list(chunk.columns)
+                        )
                     valid_values = chunk[column].dropna()
                     total_sum += valid_values.sum()
                     total_count += len(valid_values)
@@ -535,8 +555,11 @@ class CrossFileComparisonCheck(DataValidationRule):
                 min_val = float('inf')
                 for chunk in data_iterator:
                     if column not in chunk.columns:
-                        logger.error(f"Column '{column}' not found in data")
-                        return None
+                        raise ColumnNotFoundError(
+                            validation_name="CrossFileComparisonCheck",
+                            column=column,
+                            available_columns=list(chunk.columns)
+                        )
                     chunk_min = chunk[column].min()
                     if pd.notna(chunk_min) and chunk_min < min_val:
                         min_val = chunk_min
@@ -546,8 +569,11 @@ class CrossFileComparisonCheck(DataValidationRule):
                 max_val = float('-inf')
                 for chunk in data_iterator:
                     if column not in chunk.columns:
-                        logger.error(f"Column '{column}' not found in data")
-                        return None
+                        raise ColumnNotFoundError(
+                            validation_name="CrossFileComparisonCheck",
+                            column=column,
+                            available_columns=list(chunk.columns)
+                        )
                     chunk_max = chunk[column].max()
                     if pd.notna(chunk_max) and chunk_max > max_val:
                         max_val = chunk_max
@@ -719,20 +745,22 @@ class CrossFileDuplicateCheck(DataValidationRule):
 
             # Validate parameters
             if not columns:
-                return self._create_result(
-                    passed=False,
-                    message="Parameter 'columns' is required",
-                    failed_count=1,
+                raise ParameterValidationError(
+                    "Parameter 'columns' is required",
+                    validation_name=self.name,
+                    parameter="columns",
+                    value=None
                 )
 
             if not isinstance(columns, list):
                 columns = [columns]
 
             if not reference_files:
-                return self._create_result(
-                    passed=False,
-                    message="Parameter 'reference_files' is required",
-                    failed_count=1,
+                raise ParameterValidationError(
+                    "Parameter 'reference_files' is required",
+                    validation_name=self.name,
+                    parameter="reference_files",
+                    value=None
                 )
 
             if not isinstance(reference_files, list):

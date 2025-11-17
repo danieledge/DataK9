@@ -6,12 +6,22 @@ These validations use statistical methods to detect data quality issues:
 - Correlation validation
 - Seasonality detection
 - Advanced anomaly detection
+
+Author: Daniel Edge
 """
 
 from typing import Iterator, Dict, Any
 import pandas as pd
 import numpy as np
 from validation_framework.validations.base import DataValidationRule, ValidationResult
+from validation_framework.core.exceptions import (
+    ColumnNotFoundError,
+    ParameterValidationError
+)
+from validation_framework.core.constants import (
+    MAX_SAMPLE_FAILURES,
+    MIN_SAMPLE_SIZE_FOR_STATS
+)
 import logging
 
 logger = logging.getLogger(__name__)
@@ -80,31 +90,33 @@ class DistributionCheck(DataValidationRule):
             column = self.params.get("column")
             expected_dist = self.params.get("expected_distribution")
             alpha = self.params.get("significance_level", 0.05)
-            min_samples = self.params.get("min_sample_size", 30)
+            min_samples = self.params.get("min_sample_size", MIN_SAMPLE_SIZE_FOR_STATS)
 
             # Validate required parameters
             if not column:
-                return self._create_result(
-                    passed=False,
-                    message="Parameter 'column' is required",
-                    failed_count=1,
+                raise ParameterValidationError(
+                    "Parameter 'column' is required",
+                    validation_name=self.name,
+                    parameter="column",
+                    value=None
                 )
 
             if not expected_dist:
-                return self._create_result(
-                    passed=False,
-                    message="Parameter 'expected_distribution' is required",
-                    failed_count=1,
+                raise ParameterValidationError(
+                    "Parameter 'expected_distribution' is required",
+                    validation_name=self.name,
+                    parameter="expected_distribution",
+                    value=None
                 )
 
             # Collect all data (needed for distribution testing)
             all_data = []
             for chunk in data_iterator:
                 if column not in chunk.columns:
-                    return self._create_result(
-                        passed=False,
-                        message=f"Column '{column}' not found in data",
-                        failed_count=1,
+                    raise ColumnNotFoundError(
+                        validation_name=self.name,
+                        column=column,
+                        available_columns=list(chunk.columns)
                     )
 
                 # Apply conditional filter if specified
@@ -275,17 +287,17 @@ class CorrelationCheck(DataValidationRule):
             for chunk in data_iterator:
                 # Check columns exist
                 if column1 not in chunk.columns:
-                    return self._create_result(
-                        passed=False,
-                        message=f"Column '{column1}' not found in data",
-                        failed_count=1,
+                    raise ColumnNotFoundError(
+                        validation_name=self.name,
+                        column=column1,
+                        available_columns=list(chunk.columns)
                     )
 
                 if column2 not in chunk.columns:
-                    return self._create_result(
-                        passed=False,
-                        message=f"Column '{column2}' not found in data",
-                        failed_count=1,
+                    raise ColumnNotFoundError(
+                        validation_name=self.name,
+                        column=column2,
+                        available_columns=list(chunk.columns)
                     )
 
                 # Apply conditional filter if specified
@@ -430,10 +442,10 @@ class AdvancedAnomalyDetectionCheck(DataValidationRule):
 
             for chunk_idx, chunk in enumerate(data_iterator):
                 if column not in chunk.columns:
-                    return self._create_result(
-                        passed=False,
-                        message=f"Column '{column}' not found in data",
-                        failed_count=1,
+                    raise ColumnNotFoundError(
+                        validation_name=self.name,
+                        column=column,
+                        available_columns=list(chunk.columns)
                     )
 
                 # Apply conditional filter if specified

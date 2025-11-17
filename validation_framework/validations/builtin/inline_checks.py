@@ -11,6 +11,11 @@ from typing import Iterator, Dict, Any, List
 import pandas as pd
 import re
 from validation_framework.validations.base import DataValidationRule, ValidationResult
+from validation_framework.core.exceptions import (
+    ColumnNotFoundError,
+    ParameterValidationError
+)
+from validation_framework.core.constants import MAX_SAMPLE_FAILURES
 
 
 class InlineRegexCheck(DataValidationRule):
@@ -96,10 +101,11 @@ class InlineRegexCheck(DataValidationRule):
             description = self.params.get("description", "Custom validation")
 
             if not field or not pattern:
-                return self._create_result(
-                    passed=False,
-                    message="Missing required parameters: field and pattern",
-                    failed_count=1,
+                raise ParameterValidationError(
+                    "Missing required parameters: field and pattern",
+                    validation_name=self.name,
+                    parameter="field/pattern",
+                    value=None
                 )
 
             # Use pre-compiled regex pattern (compiled in __init__ for performance)
@@ -114,7 +120,7 @@ class InlineRegexCheck(DataValidationRule):
 
             total_rows = 0
             failed_rows = []
-            max_samples = context.get("max_sample_failures", 100)
+            max_samples = context.get("max_sample_failures", MAX_SAMPLE_FAILURES)
 
             # Process chunks
             for chunk in data_iterator:
@@ -234,7 +240,7 @@ class InlineBusinessRuleCheck(DataValidationRule):
 
             total_rows = 0
             failed_rows = []
-            max_samples = context.get("max_sample_failures", 100)
+            max_samples = context.get("max_sample_failures", MAX_SAMPLE_FAILURES)
 
             # Process chunks
             for chunk in data_iterator:
@@ -371,10 +377,11 @@ class InlineLookupCheck(DataValidationRule):
             description = self.params.get("description", "Reference data check")
 
             if not field or not reference_values:
-                return self._create_result(
-                    passed=False,
-                    message="Missing required parameters: field and reference_values",
-                    failed_count=1,
+                raise ParameterValidationError(
+                    "Missing required parameters: field and reference_values",
+                    validation_name=self.name,
+                    parameter="field/reference_values",
+                    value=None
                 )
 
             # Convert to set for efficient lookup
@@ -382,7 +389,7 @@ class InlineLookupCheck(DataValidationRule):
 
             total_rows = 0
             failed_rows = []
-            max_samples = context.get("max_sample_failures", 100)
+            max_samples = context.get("max_sample_failures", MAX_SAMPLE_FAILURES)
             invalid_values = set()
 
             # Process chunks
