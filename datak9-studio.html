@@ -3725,6 +3725,18 @@ files:
                                     <div style="display: flex; align-items: center; gap: 4px;">
                                         <span class="severity-badge ${severity.toLowerCase()}">${severity}</span>
                                         <div class="validation-actions">
+                                            <button class="validation-action-btn"
+                                                    onclick="event.stopPropagation(); app.moveValidationUp(${fileIndex}, ${valIndex})"
+                                                    title="Move Up"
+                                                    ${valIndex === 0 ? 'disabled style="opacity: 0.3; cursor: not-allowed;"' : ''}>
+                                                ↑
+                                            </button>
+                                            <button class="validation-action-btn"
+                                                    onclick="event.stopPropagation(); app.moveValidationDown(${fileIndex}, ${valIndex})"
+                                                    title="Move Down"
+                                                    ${valIndex === file.validations.length - 1 ? 'disabled style="opacity: 0.3; cursor: not-allowed;"' : ''}>
+                                                ↓
+                                            </button>
                                             <button class="validation-action-btn duplicate-btn"
                                                     onclick="event.stopPropagation(); app.duplicateValidation(${fileIndex}, ${valIndex})"
                                                     title="Duplicate validation">
@@ -4522,7 +4534,8 @@ params:
                     this.selectedValidation = validationIndex - 1;
                 }
 
-                // Update UI and save
+                // Phase 3 & 4: Track changes and update
+                this.markUnsavedChanges();
                 this.updateYAMLEditor();
                 this.saveToLocalStorage();
                 this.render();
@@ -4552,7 +4565,8 @@ params:
                     this.selectedValidation = validationIndex + 1;
                 }
 
-                // Update UI and save
+                // Phase 3 & 4: Track changes and update
+                this.markUnsavedChanges();
                 this.updateYAMLEditor();
                 this.saveToLocalStorage();
                 this.render();
