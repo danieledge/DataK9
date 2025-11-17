@@ -2058,6 +2058,9 @@
                 <button class="btn btn-secondary btn-small" onclick="app.showAbout()">
                     ℹ️ About
                 </button>
+                <button class="btn btn-secondary btn-small" onclick="app.openExportDocsDialog()">
+                    📄 Export Docs
+                </button>
                 <button class="btn btn-success btn-small" onclick="app.exportYAML()">
                     💾 Export YAML
                 </button>
@@ -2365,6 +2368,67 @@ files:
             </div>
             <div class="modal-footer">
                 <button class="btn btn-primary" onclick="app.closeModal('about-modal')">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Export Documentation Modal (Phase 2) -->
+    <div id="export-docs-modal" class="modal-overlay">
+        <div class="modal" style="max-width: 600px;">
+            <div class="modal-header">
+                <h2>📄 Export Documentation</h2>
+                <button class="modal-close" onclick="app.closeModal('export-docs-modal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="export-format">Format:</label>
+                    <select id="export-format" class="form-control">
+                        <option value="html">HTML (Interactive)</option>
+                        <option value="markdown">Markdown (Text)</option>
+                    </select>
+                    <p class="help-text">Choose the output format for your documentation</p>
+                </div>
+
+                <div class="form-group" id="theme-selector">
+                    <label for="export-theme">Theme:</label>
+                    <select id="export-theme" class="form-control">
+                        <option value="dark">Dark Theme</option>
+                        <option value="light">Light Theme</option>
+                    </select>
+                    <p class="help-text">Color scheme for HTML documentation</p>
+                </div>
+
+                <div class="form-group">
+                    <label>Include Sections:</label>
+                    <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 8px;">
+                        <label style="display: flex; align-items: center; gap: 8px;">
+                            <input type="checkbox" id="include-project-info" checked>
+                            <span>Project Information</span>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 8px;">
+                            <input type="checkbox" id="include-files" checked>
+                            <span>File List</span>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 8px;">
+                            <input type="checkbox" id="include-validations" checked>
+                            <span>Validation Summary</span>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 8px;">
+                            <input type="checkbox" id="include-params" checked>
+                            <span>Parameter Details</span>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 8px;">
+                            <input type="checkbox" id="include-examples" checked>
+                            <span>Examples & Tips</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="app.closeModal('export-docs-modal')">Cancel</button>
+                <button class="btn btn-primary" onclick="app.generateDocumentation()">
+                    📄 Generate Documentation
+                </button>
             </div>
         </div>
     </div>
@@ -4943,12 +5007,446 @@ params:
                ==================================================================== */
 
             showMenu(menu) {
-                // Placeholder for menu functionality
-                console.log(`Menu ${menu} clicked`);
+                // Phase 2: Basic menu implementation
+                if (menu === 'file') {
+                    // Show simple alert with options for now
+                    const action = confirm('Export Documentation?\n\nOK = Yes, Cancel = Show other options');
+                    if (action) {
+                        this.openExportDocsDialog();
+                    }
+                } else {
+                    console.log(`Menu ${menu} clicked - coming in future phases`);
+                }
             },
 
             showAbout() {
                 this.openModal('about-modal');
+            },
+
+            /* ====================================================================
+               Export Documentation (Phase 2)
+               ==================================================================== */
+
+            /**
+             * Open export documentation dialog
+             */
+            openExportDocsDialog() {
+                this.openModal('export-docs-modal');
+
+                // Setup format change listener to show/hide theme selector
+                const formatSelect = document.getElementById('export-format');
+                const themeSelector = document.getElementById('theme-selector');
+
+                formatSelect.onchange = () => {
+                    themeSelector.style.display = formatSelect.value === 'html' ? 'block' : 'none';
+                };
+            },
+
+            /**
+             * Generate documentation based on user selections
+             */
+            generateDocumentation() {
+                const format = document.getElementById('export-format').value;
+                const theme = document.getElementById('export-theme').value;
+                const options = {
+                    includeProjectInfo: document.getElementById('include-project-info').checked,
+                    includeFiles: document.getElementById('include-files').checked,
+                    includeValidations: document.getElementById('include-validations').checked,
+                    includeParams: document.getElementById('include-params').checked,
+                    includeExamples: document.getElementById('include-examples').checked
+                };
+
+                const config = this.config;
+
+                if (!config.job_name && !config.validation_job?.name) {
+                    alert('Please create a project first before exporting documentation.');
+                    return;
+                }
+
+                try {
+                    if (format === 'html') {
+                        this.generateHTMLDocumentation(config, theme, options);
+                    } else {
+                        this.generateMarkdownDocumentation(config, options);
+                    }
+
+                    this.closeModal('export-docs-modal');
+                } catch (error) {
+                    console.error('Error generating documentation:', error);
+                    alert('Error generating documentation: ' + error.message);
+                }
+            },
+
+            /**
+             * Generate HTML documentation
+             */
+            generateHTMLDocumentation(config, theme, options) {
+                const projectName = config.validation_job?.name || config.job_name || 'Untitled Project';
+                const description = config.validation_job?.description || config.description || '';
+
+                const styles = theme === 'dark' ? this.getDarkThemeCSS() : this.getLightThemeCSS();
+
+                let html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>${projectName} - DataK9 Validation Documentation</title>
+    <style>${styles}</style>
+</head>
+<body>
+    <div class="container">
+        <header class="doc-header">
+            <div class="doc-logo">🐕</div>
+            <h1>${projectName}</h1>
+            ${description ? `<p class="doc-description">${description}</p>` : ''}
+            <p class="doc-meta">Generated by DataK9 Studio on ${new Date().toLocaleString()}</p>
+        </header>
+
+        ${options.includeProjectInfo ? this.generateProjectInfoSection(config) : ''}
+        ${options.includeFiles ? this.generateFilesSection(config, options) : ''}
+
+        <footer class="doc-footer">
+            <p>Documentation generated by <strong>DataK9 Studio</strong></p>
+            <p class="doc-meta">Your IDE for Data Quality</p>
+        </footer>
+    </div>
+</body>
+</html>`;
+
+                this.downloadFile(html, `${projectName.replace(/\s+/g, '_')}_documentation.html`, 'text/html');
+            },
+
+            /**
+             * Generate Markdown documentation
+             */
+            generateMarkdownDocumentation(config, options) {
+                const projectName = config.validation_job?.name || config.job_name || 'Untitled Project';
+                const description = config.validation_job?.description || config.description || '';
+
+                let md = `# ${projectName}\n\n`;
+                md += `**DataK9 Validation Documentation**\n\n`;
+
+                if (description) {
+                    md += `${description}\n\n`;
+                }
+
+                md += `---\n\n`;
+                md += `*Generated by DataK9 Studio on ${new Date().toLocaleString()}*\n\n`;
+
+                if (options.includeProjectInfo) {
+                    md += this.generateProjectInfoMarkdown(config);
+                }
+
+                if (options.includeFiles) {
+                    md += this.generateFilesMarkdown(config, options);
+                }
+
+                md += `---\n\n`;
+                md += `*Documentation generated by **DataK9 Studio** - Your IDE for Data Quality* 🐕\n`;
+
+                this.downloadFile(md, `${projectName.replace(/\s+/g, '_')}_documentation.md`, 'text/markdown');
+            },
+
+            /**
+             * Generate project info section for HTML
+             */
+            generateProjectInfoSection(config) {
+                const settings = config.validation_job?.settings || config.settings || {};
+
+                return `
+        <section class="doc-section">
+            <h2>📋 Project Configuration</h2>
+            <table class="info-table">
+                <tr>
+                    <th>Setting</th>
+                    <th>Value</th>
+                </tr>
+                <tr>
+                    <td>Chunk Size</td>
+                    <td>${settings.chunk_size || 50000}</td>
+                </tr>
+                <tr>
+                    <td>Max Sample Failures</td>
+                    <td>${settings.max_sample_failures || 100}</td>
+                </tr>
+                <tr>
+                    <td>Fail on Error</td>
+                    <td>${settings.fail_on_error !== false ? 'Yes' : 'No'}</td>
+                </tr>
+                <tr>
+                    <td>Fail on Warning</td>
+                    <td>${settings.fail_on_warning ? 'Yes' : 'No'}</td>
+                </tr>
+                <tr>
+                    <td>Log Level</td>
+                    <td>${settings.log_level || 'INFO'}</td>
+                </tr>
+            </table>
+        </section>`;
+            },
+
+            /**
+             * Generate files section for HTML
+             */
+            generateFilesSection(config, options) {
+                const files = config.validation_job?.files || config.files || [];
+
+                if (files.length === 0) {
+                    return '<section class="doc-section"><h2>📁 Files</h2><p class="no-data">No files configured</p></section>';
+                }
+
+                let html = '<section class="doc-section"><h2>📁 Files</h2>';
+
+                files.forEach((file, index) => {
+                    html += `
+            <div class="file-card">
+                <h3>File ${index + 1}: ${file.name}</h3>
+                <table class="info-table">
+                    <tr>
+                        <th>Path</th>
+                        <td><code>${file.path}</code></td>
+                    </tr>
+                    <tr>
+                        <th>Format</th>
+                        <td>${file.format.toUpperCase()}</td>
+                    </tr>
+                    <tr>
+                        <th>Validations</th>
+                        <td>${file.validations?.length || 0}</td>
+                    </tr>
+                </table>
+
+                ${options.includeValidations && file.validations?.length > 0 ?
+                    this.generateValidationsHTML(file.validations, options) : ''}
+            </div>`;
+                });
+
+                html += '</section>';
+                return html;
+            },
+
+            /**
+             * Generate validations HTML
+             */
+            generateValidationsHTML(validations, options) {
+                let html = '<div class="validations-list"><h4>Validations:</h4>';
+
+                validations.forEach((validation, idx) => {
+                    const def = this.validationLibrary[validation.type];
+                    if (!def) return;
+
+                    html += `
+                <div class="validation-item">
+                    <div class="validation-header">
+                        <span class="validation-icon">${def.icon}</span>
+                        <span class="validation-name">${def.name}</span>
+                        <span class="severity-badge severity-${(validation.severity || 'WARNING').toLowerCase()}">${validation.severity || 'WARNING'}</span>
+                    </div>
+                    <p class="validation-desc">${def.description}</p>`;
+
+                    if (options.includeParams && validation.params && Object.keys(validation.params).length > 0) {
+                        html += '<div class="params-list"><strong>Parameters:</strong><ul>';
+                        for (const [key, value] of Object.entries(validation.params)) {
+                            html += `<li><code>${key}</code>: ${this.formatParamValue(value)}</li>`;
+                        }
+                        html += '</ul></div>';
+                    }
+
+                    if (options.includeExamples && def.examples) {
+                        html += `<div class="example-box"><strong>Example:</strong> ${def.examples}</div>`;
+                    }
+
+                    html += '</div>';
+                });
+
+                html += '</div>';
+                return html;
+            },
+
+            /**
+             * Format parameter value for display
+             */
+            formatParamValue(value) {
+                if (Array.isArray(value)) {
+                    return `[${value.join(', ')}]`;
+                } else if (typeof value === 'object' && value !== null) {
+                    return JSON.stringify(value);
+                } else {
+                    return String(value);
+                }
+            },
+
+            /**
+             * Generate project info markdown
+             */
+            generateProjectInfoMarkdown(config) {
+                const settings = config.validation_job?.settings || config.settings || {};
+
+                let md = `## 📋 Project Configuration\n\n`;
+                md += `| Setting | Value |\n`;
+                md += `|---------|-------|\n`;
+                md += `| Chunk Size | ${settings.chunk_size || 50000} |\n`;
+                md += `| Max Sample Failures | ${settings.max_sample_failures || 100} |\n`;
+                md += `| Fail on Error | ${settings.fail_on_error !== false ? 'Yes' : 'No'} |\n`;
+                md += `| Fail on Warning | ${settings.fail_on_warning ? 'Yes' : 'No'} |\n`;
+                md += `| Log Level | ${settings.log_level || 'INFO'} |\n\n`;
+
+                return md;
+            },
+
+            /**
+             * Generate files markdown
+             */
+            generateFilesMarkdown(config, options) {
+                const files = config.validation_job?.files || config.files || [];
+
+                if (files.length === 0) {
+                    return `## 📁 Files\n\nNo files configured.\n\n`;
+                }
+
+                let md = `## 📁 Files\n\n`;
+
+                files.forEach((file, index) => {
+                    md += `### File ${index + 1}: ${file.name}\n\n`;
+                    md += `- **Path**: \`${file.path}\`\n`;
+                    md += `- **Format**: ${file.format.toUpperCase()}\n`;
+                    md += `- **Validations**: ${file.validations?.length || 0}\n\n`;
+
+                    if (options.includeValidations && file.validations?.length > 0) {
+                        md += this.generateValidationsMarkdown(file.validations, options);
+                    }
+                });
+
+                return md;
+            },
+
+            /**
+             * Generate validations markdown
+             */
+            generateValidationsMarkdown(validations, options) {
+                let md = `#### Validations:\n\n`;
+
+                validations.forEach((validation, idx) => {
+                    const def = this.validationLibrary[validation.type];
+                    if (!def) return;
+
+                    md += `**${idx + 1}. ${def.icon} ${def.name}** (${validation.severity || 'WARNING'})\n\n`;
+                    md += `${def.description}\n\n`;
+
+                    if (options.includeParams && validation.params && Object.keys(validation.params).length > 0) {
+                        md += `**Parameters:**\n`;
+                        for (const [key, value] of Object.entries(validation.params)) {
+                            md += `- \`${key}\`: ${this.formatParamValue(value)}\n`;
+                        }
+                        md += `\n`;
+                    }
+
+                    if (options.includeExamples && def.examples) {
+                        md += `*Example: ${def.examples}*\n\n`;
+                    }
+                });
+
+                return md;
+            },
+
+            /**
+             * Get dark theme CSS for HTML export
+             */
+            getDarkThemeCSS() {
+                return `
+                    * { margin: 0; padding: 0; box-sizing: border-box; }
+                    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #1E1E1E; color: #D4D4D4; line-height: 1.6; }
+                    .container { max-width: 900px; margin: 0 auto; padding: 40px 20px; }
+                    .doc-header { text-align: center; margin-bottom: 48px; padding-bottom: 24px; border-bottom: 2px solid #3E3E42; }
+                    .doc-logo { font-size: 64px; margin-bottom: 16px; }
+                    h1 { font-size: 36px; color: #4A90E2; margin-bottom: 8px; }
+                    .doc-description { font-size: 18px; color: #858585; margin-top: 8px; }
+                    .doc-meta { font-size: 14px; color: #6A6A6A; margin-top: 8px; }
+                    .doc-section { margin-bottom: 40px; }
+                    h2 { font-size: 28px; color: #4A90E2; margin-bottom: 16px; }
+                    h3 { font-size: 22px; color: #D4D4D4; margin-bottom: 12px; margin-top: 20px; }
+                    h4 { font-size: 18px; color: #858585; margin-bottom: 8px; }
+                    .info-table { width: 100%; border-collapse: collapse; margin: 16px 0; background: #252526; border-radius: 8px; overflow: hidden; }
+                    .info-table th, .info-table td { padding: 12px 16px; text-align: left; border-bottom: 1px solid #3E3E42; }
+                    .info-table th { background: #2A2D2E; color: #4A90E2; font-weight: 600; }
+                    .info-table tr:last-child td { border-bottom: none; }
+                    code { background: #3C3C3C; padding: 2px 6px; border-radius: 3px; font-family: 'Consolas', monospace; font-size: 13px; color: #4EC9B0; }
+                    .file-card { background: #252526; padding: 24px; border-radius: 8px; margin-bottom: 24px; border: 1px solid #3E3E42; }
+                    .no-data { color: #858585; font-style: italic; }
+                    .validations-list { margin-top: 20px; }
+                    .validation-item { background: #2A2D2E; padding: 16px; border-radius: 6px; margin-bottom: 12px; border-left: 3px solid #4A90E2; }
+                    .validation-header { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+                    .validation-icon { font-size: 20px; }
+                    .validation-name { font-weight: 600; color: #D4D4D4; }
+                    .severity-badge { padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; text-transform: uppercase; }
+                    .severity-error { background: #F48771; color: #1E1E1E; }
+                    .severity-warning { background: #DCDCAA; color: #1E1E1E; }
+                    .validation-desc { color: #858585; font-size: 14px; margin-bottom: 8px; }
+                    .params-list { margin-top: 8px; padding: 12px; background: #1E1E1E; border-radius: 4px; }
+                    .params-list ul { margin-left: 20px; margin-top: 4px; }
+                    .params-list li { margin-bottom: 4px; color: #858585; }
+                    .example-box { margin-top: 8px; padding: 12px; background: #1E1E1E; border-radius: 4px; border-left: 3px solid #FF8C42; font-size: 14px; color: #858585; }
+                    .doc-footer { margin-top: 60px; padding-top: 24px; border-top: 2px solid #3E3E42; text-align: center; color: #6A6A6A; }
+                `;
+            },
+
+            /**
+             * Get light theme CSS for HTML export
+             */
+            getLightThemeCSS() {
+                return `
+                    * { margin: 0; padding: 0; box-sizing: border-box; }
+                    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #FFFFFF; color: #333333; line-height: 1.6; }
+                    .container { max-width: 900px; margin: 0 auto; padding: 40px 20px; }
+                    .doc-header { text-align: center; margin-bottom: 48px; padding-bottom: 24px; border-bottom: 2px solid #E0E0E0; }
+                    .doc-logo { font-size: 64px; margin-bottom: 16px; }
+                    h1 { font-size: 36px; color: #2563EB; margin-bottom: 8px; }
+                    .doc-description { font-size: 18px; color: #666666; margin-top: 8px; }
+                    .doc-meta { font-size: 14px; color: #999999; margin-top: 8px; }
+                    .doc-section { margin-bottom: 40px; }
+                    h2 { font-size: 28px; color: #2563EB; margin-bottom: 16px; }
+                    h3 { font-size: 22px; color: #333333; margin-bottom: 12px; margin-top: 20px; }
+                    h4 { font-size: 18px; color: #666666; margin-bottom: 8px; }
+                    .info-table { width: 100%; border-collapse: collapse; margin: 16px 0; background: #F8F9FA; border-radius: 8px; overflow: hidden; border: 1px solid #E0E0E0; }
+                    .info-table th, .info-table td { padding: 12px 16px; text-align: left; border-bottom: 1px solid #E0E0E0; }
+                    .info-table th { background: #F0F0F0; color: #2563EB; font-weight: 600; }
+                    .info-table tr:last-child td { border-bottom: none; }
+                    code { background: #F0F0F0; padding: 2px 6px; border-radius: 3px; font-family: 'Consolas', monospace; font-size: 13px; color: #059669; }
+                    .file-card { background: #F8F9FA; padding: 24px; border-radius: 8px; margin-bottom: 24px; border: 1px solid #E0E0E0; }
+                    .no-data { color: #999999; font-style: italic; }
+                    .validations-list { margin-top: 20px; }
+                    .validation-item { background: #FFFFFF; padding: 16px; border-radius: 6px; margin-bottom: 12px; border-left: 3px solid #2563EB; border: 1px solid #E0E0E0; }
+                    .validation-header { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+                    .validation-icon { font-size: 20px; }
+                    .validation-name { font-weight: 600; color: #333333; }
+                    .severity-badge { padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; text-transform: uppercase; }
+                    .severity-error { background: #DC2626; color: #FFFFFF; }
+                    .severity-warning { background: #F59E0B; color: #FFFFFF; }
+                    .validation-desc { color: #666666; font-size: 14px; margin-bottom: 8px; }
+                    .params-list { margin-top: 8px; padding: 12px; background: #F8F9FA; border-radius: 4px; border: 1px solid #E0E0E0; }
+                    .params-list ul { margin-left: 20px; margin-top: 4px; }
+                    .params-list li { margin-bottom: 4px; color: #666666; }
+                    .example-box { margin-top: 8px; padding: 12px; background: #FEF3C7; border-radius: 4px; border-left: 3px solid #F59E0B; font-size: 14px; color: #92400E; }
+                    .doc-footer { margin-top: 60px; padding-top: 24px; border-top: 2px solid #E0E0E0; text-align: center; color: #999999; }
+                `;
+            },
+
+            /**
+             * Download file helper
+             */
+            downloadFile(content, filename, mimeType) {
+                const blob = new Blob([content], { type: mimeType });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = filename;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+
+                console.log(`Documentation exported: ${filename}`);
             },
 
             /* ====================================================================
