@@ -4609,59 +4609,60 @@ params:
                 }
                 yaml += '\n';
 
-                // Settings section
-                yaml += 'settings:\n';
-                yaml += `  chunk_size: ${this.config.settings.chunk_size}\n`;
-                yaml += `  max_sample_failures: ${this.config.settings.max_sample_failures}\n`;
-                yaml += `  fail_on_error: ${this.config.settings.fail_on_error}\n`;
-                yaml += `  fail_on_warning: ${this.config.settings.fail_on_warning}\n`;
-                yaml += `  log_level: "${this.config.settings.log_level}"\n`;
+                // Settings section (under validation_job)
+                yaml += '  settings:\n';
+                const settings = this.config.settings || this.config.validation_job.settings || {};
+                yaml += `    chunk_size: ${settings.chunk_size || 50000}\n`;
+                yaml += `    max_sample_failures: ${settings.max_sample_failures || 100}\n`;
+                yaml += `    fail_on_error: ${settings.fail_on_error !== false}\n`;
+                yaml += `    fail_on_warning: ${settings.fail_on_warning === true}\n`;
+                yaml += `    log_level: "${settings.log_level || 'INFO'}"\n`;
                 yaml += '\n';
 
-                // Files section
-                yaml += 'files:\n';
+                // Files section (under validation_job)
+                yaml += '  files:\n';
                 if (this.config.files.length === 0) {
-                    yaml += '  []\n';
+                    yaml += '    []\n';
                 } else {
                     this.config.files.forEach(file => {
-                        yaml += `  - name: "${file.name}"\n`;
-                        yaml += `    path: "${file.path}"\n`;
-                        yaml += `    format: "${file.format}"\n`;
-                        yaml += `    validations:\n`;
+                        yaml += `    - name: "${file.name}"\n`;
+                        yaml += `      path: "${file.path}"\n`;
+                        yaml += `      format: "${file.format}"\n`;
+                        yaml += `      validations:\n`;
 
                         if (!file.validations || file.validations.length === 0) {
-                            yaml += '      []\n';
+                            yaml += '        []\n';
                         } else {
                             file.validations.forEach(validation => {
-                                yaml += `      - type: "${validation.type}"\n`;
-                                yaml += `        severity: "${validation.severity || 'ERROR'}"\n`;
+                                yaml += `        - type: "${validation.type}"\n`;
+                                yaml += `          severity: "${validation.severity || 'ERROR'}"\n`;
 
                                 if (validation.params && Object.keys(validation.params).length > 0) {
-                                    yaml += `        params:\n`;
+                                    yaml += `          params:\n`;
                                     for (const [key, value] of Object.entries(validation.params)) {
                                         if (value === undefined || value === null || value === '') continue;
 
                                         if (typeof value === 'boolean') {
-                                            yaml += `          ${key}: ${value}\n`;
+                                            yaml += `            ${key}: ${value}\n`;
                                         } else if (typeof value === 'number') {
-                                            yaml += `          ${key}: ${value}\n`;
+                                            yaml += `            ${key}: ${value}\n`;
                                         } else if (typeof value === 'string') {
                                             // Handle comma-separated values as arrays
                                             if (value.includes(',') && (key.includes('fields') || key.includes('columns') || key.includes('files'))) {
                                                 const items = value.split(',').map(v => v.trim()).filter(v => v);
-                                                yaml += `          ${key}:\n`;
+                                                yaml += `            ${key}:\n`;
                                                 items.forEach(item => {
-                                                    yaml += `            - "${item}"\n`;
+                                                    yaml += `              - "${item}"\n`;
                                                 });
                                             } else {
-                                                yaml += `          ${key}: "${value}"\n`;
+                                                yaml += `            ${key}: "${value}"\n`;
                                             }
                                         }
                                     }
                                 }
 
                                 if (validation.condition) {
-                                    yaml += `        condition: "${validation.condition}"\n`;
+                                    yaml += `          condition: "${validation.condition}"\n`;
                                 }
                             });
                         }
