@@ -19,6 +19,7 @@ from validation_framework.profiler.profile_result import (
     QualityMetrics, CorrelationResult, ValidationSuggestion
 )
 from validation_framework.loaders.factory import LoaderFactory
+from validation_framework.utils.chunk_size_calculator import ChunkSizeCalculator
 
 logger = logging.getLogger(__name__)
 
@@ -130,7 +131,7 @@ class DataProfiler:
 
         # Generate validation configuration
         config_yaml, config_command = self._generate_validation_config(
-            file_name, file_path, file_format, columns, suggested_validations
+            file_name, file_path, file_format, file_size, row_count, columns, suggested_validations
         )
 
         processing_time = time.time() - start_time
@@ -713,23 +714,52 @@ class DataProfiler:
         file_name: str,
         file_path: str,
         file_format: str,
+        file_size: int,
+        row_count: int,
         columns: List[ColumnProfile],
         suggestions: List[ValidationSuggestion]
     ) -> tuple[str, str]:
         """Generate validation configuration YAML and CLI command."""
+
+        # Calculate intelligent chunk size using ChunkSizeCalculator
+        calculator = ChunkSizeCalculator()
+        num_validations = len(suggestions[:15])  # Count suggested validations
+
+        # Determine validation complexity based on suggestion types
+        complexity = 'simple'
+        for suggestion in suggestions:
+            if 'Distribution' in suggestion.validation_type or 'Correlation' in suggestion.validation_type:
+                complexity = 'heavy'
+                break
+            elif 'Duplicate' in suggestion.validation_type or 'Unique' in suggestion.validation_type:
+                complexity = 'complex'
+            elif complexity == 'simple' and ('Outlier' in suggestion.validation_type or 'Pattern' in suggestion.validation_type):
+                complexity = 'moderate'
+
+        # Calculate optimal chunk size
+        result = calculator.calculate_optimal_chunk_size(
+            file_path=file_path,
+            file_format=file_format,
+            num_validations=num_validations,
+            validation_complexity=complexity
+        )
+
+        optimal_chunk_size = result['recommended_chunk_size']
 
         # Build YAML configuration
         yaml_lines = [
             "# Auto-generated validation configuration",
             f"# Generated from profile of: {file_name}",
             f"# Generated at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+            f"# File size: {file_size / (1024*1024):.1f} MB, Rows: {row_count:,}",
+            f"# Recommended chunk size: {optimal_chunk_size:,} rows ({result['rationale']})",
             "",
             "validation_job:",
             f'  name: "Validation for {file_name}"',
             '  description: "Auto-generated from data profile"',
             "",
             "settings:",
-            "  chunk_size: 50000",
+            f"  chunk_size: {optimal_chunk_size}  # Optimized for {file_format} format, {num_validations} validations ({complexity} complexity)",
             "  max_sample_failures: 100",
             "",
             "files:",
