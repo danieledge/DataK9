@@ -4770,6 +4770,43 @@ params:
             },
 
             wizardNext() {
+                // Validate current step before proceeding
+                if (this.wizardStep === 1) {
+                    // Step 1: Validate project name is filled
+                    const projectName = document.getElementById('wizard-project-name').value.trim();
+                    if (!projectName) {
+                        alert('Please enter a project name before continuing.');
+                        document.getElementById('wizard-project-name').focus();
+                        return;
+                    }
+                    if (projectName.length > 100) {
+                        alert('Project name must be 100 characters or less.');
+                        document.getElementById('wizard-project-name').focus();
+                        return;
+                    }
+                } else if (this.wizardStep === 3) {
+                    // Step 3: Validate file details
+                    const fileName = document.getElementById('wizard-file-name').value.trim();
+                    const filePath = document.getElementById('wizard-file-path').value.trim();
+                    const fileFormat = document.getElementById('wizard-file-format').value;
+
+                    if (!fileName) {
+                        alert('Please enter a file name before continuing.');
+                        document.getElementById('wizard-file-name').focus();
+                        return;
+                    }
+                    if (!filePath) {
+                        alert('Please enter a file path before continuing.');
+                        document.getElementById('wizard-file-path').focus();
+                        return;
+                    }
+                    if (!fileFormat) {
+                        alert('Please select a file format before continuing.');
+                        document.getElementById('wizard-file-format').focus();
+                        return;
+                    }
+                }
+
                 if (this.wizardStep < 3) {
                     this.wizardStep++;
                     this.updateWizardUI();
