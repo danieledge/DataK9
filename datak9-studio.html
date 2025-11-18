@@ -4049,10 +4049,6 @@ files:
                 });
 
                 require(['vs/editor/editor.main'], () => {
-                    // Detect iPad/iOS for clipboard workaround
-                    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
-                                 (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-
                     this.monacoEditor = monaco.editor.create(
                         document.getElementById('monaco-editor'),
                         {
@@ -4067,15 +4063,7 @@ files:
                             scrollBeyondLastLine: false,
                             readOnly: false,
                             cursorStyle: 'line',
-                            wordWrap: 'on',
-                            // Disable clipboard DOM read/write on iPad - causes focus loss
-                            domReadOnly: isIOS,
-                            // Disable find widget on iOS to prevent clipboard issues
-                            find: {
-                                addExtraSpaceOnTop: false,
-                                autoFindInSelection: 'never',
-                                seedSearchStringFromSelection: 'never'
-                            }
+                            wordWrap: 'on'
                         }
                     );
 
@@ -4089,20 +4077,7 @@ files:
                         }
                     });
 
-                    console.log('Monaco Editor initialized - readOnly:', this.monacoEditor.getOption(monaco.editor.EditorOption.readOnly));
-
-                    // On iPad, override Monaco's clipboard service to prevent focus loss
-                    if (isIOS) {
-                        // Wrap the editor's focus method to prevent clipboard access
-                        const editorDomNode = this.monacoEditor.getDomNode();
-                        if (editorDomNode) {
-                            // Stop clipboard events from propagating
-                            editorDomNode.addEventListener('cut', (e) => e.stopPropagation(), true);
-                            editorDomNode.addEventListener('copy', (e) => e.stopPropagation(), true);
-                            editorDomNode.addEventListener('paste', (e) => e.stopPropagation(), true);
-                        }
-                        console.log('iPad clipboard handlers disabled to prevent focus loss');
-                    }
+                    console.log('Monaco Editor initialized');
                 });
             },
 
