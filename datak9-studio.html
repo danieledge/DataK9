@@ -4158,7 +4158,7 @@ files:
                     // Project Settings Section
                     const projectName = this.config.validation_job?.name || 'Untitled Project';
                     const projectDescription = this.config.validation_job?.description || '';
-                    const settings = this.config.validation_job?.settings || {};
+                    const settings = this.config.settings || {};
                     const settingsExpanded = this.projectSettingsExpanded || false;
 
                     html += `
