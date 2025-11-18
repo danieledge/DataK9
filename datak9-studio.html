@@ -2434,12 +2434,24 @@
                         </div>
                         <div class="form-group">
                             <label class="form-label form-label-required">File Format</label>
-                            <select class="form-select" id="wizard-file-format">
+                            <select class="form-select" id="wizard-file-format" onchange="app.updateWizardRecommendations()">
                                 <option value="csv">CSV</option>
                                 <option value="excel">Excel</option>
                                 <option value="json">JSON</option>
                                 <option value="parquet">Parquet</option>
                             </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">File Size (MB)</label>
+                            <input type="number" class="form-input" id="wizard-file-size"
+                                   placeholder="100" min="0" step="0.1"
+                                   oninput="app.updateWizardRecommendations()">
+                            <div class="form-help">Optional: Estimated file size for performance recommendations</div>
+                        </div>
+
+                        <!-- Recommendations Display -->
+                        <div id="wizard-recommendations" style="display: none; margin-top: 20px; padding: 16px; border-radius: 8px; background: var(--bg-panel); border: 1px solid var(--border-color);">
+                            <!-- Content will be populated by JavaScript -->
                         </div>
                     </div>
                 </div>
@@ -4981,6 +4993,61 @@ params:
 
                 this.saveToLocalStorage();
                 this.render();
+            },
+
+            /**
+             * Update wizard recommendations based on file size and format
+             */
+            updateWizardRecommendations() {
+                const fileSizeInput = document.getElementById('wizard-file-size');
+                const fileFormatSelect = document.getElementById('wizard-file-format');
+                const recommendationsDiv = document.getElementById('wizard-recommendations');
+
+                if (!fileSizeInput || !fileFormatSelect || !recommendationsDiv) {
+                    return;
+                }
+
+                const fileSizeMB = parseFloat(fileSizeInput.value);
+                const fileFormat = fileFormatSelect.value;
+
+                // Hide recommendations if no file size entered
+                if (!fileSizeMB || fileSizeMB <= 0) {
+                    recommendationsDiv.style.display = 'none';
+                    return;
+                }
+
+                // Show recommendations
+                recommendationsDiv.style.display = 'block';
+
+                // Calculate chunk size (using 10 as default estimated validations)
+                const chunkCalc = this.calculateChunkSize(fileSizeMB, fileFormat, 10);
+
+                // Check for Parquet recommendation
+                const parquetRec = this.shouldRecommendParquet(fileSizeMB, fileFormat);
+
+                // Build recommendations HTML
+                let html = '<div style="font-weight: 600; margin-bottom: 12px; color: var(--text-primary);">📊 Performance Recommendations</div>';
+
+                // Chunk size recommendation
+                html += '<div style="margin-bottom: 12px;">';
+                html += '<div style="font-weight: 600; margin-bottom: 4px; font-size: 13px;">Recommended Chunk Size</div>';
+                html += `<div style="font-size: 13px; color: var(--text-secondary);">${chunkCalc.chunk_size.toLocaleString()} rows</div>`;
+                html += `<div style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">Estimated: ${chunkCalc.estimated_rows.toLocaleString()} total rows in ${chunkCalc.num_chunks} chunks</div>`;
+                html += '</div>';
+
+                // Parquet recommendation
+                if (parquetRec) {
+                    const icon = parquetRec.level === 'warning' ? '⚠️' : parquetRec.level === 'info' ? 'ℹ️' : '💡';
+                    const colorClass = parquetRec.level === 'warning' ? 'color: var(--color-warning)' :
+                                      parquetRec.level === 'info' ? 'color: var(--color-info)' :
+                                      'color: var(--color-success)';
+                    html += '<div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border);">';
+                    html += `<div style="font-weight: 600; margin-bottom: 4px; font-size: 13px; ${colorClass};">${icon} ${parquetRec.level === 'warning' ? 'Performance Warning' : 'Tip'}</div>`;
+                    html += `<div style="font-size: 13px; color: var(--text-secondary);">${parquetRec.recommendation}</div>`;
+                    html += '</div>';
+                }
+
+                recommendationsDiv.innerHTML = html;
             },
 
             /* ====================================================================
