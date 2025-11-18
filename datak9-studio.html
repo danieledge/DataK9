@@ -3969,8 +3969,13 @@ files:
 
                     // Listen for changes in Monaco Editor
                     this.monacoEditor.onDidChangeModelContent(() => {
-                        if (!this.isSyncing) {
-                            this.syncFromYAML();
+                        try {
+                            if (!this.isSyncing) {
+                                this.syncFromYAML();
+                            }
+                        } catch (error) {
+                            console.error('Error during YAML sync:', error);
+                            // Silently fail to prevent blocking the editor
                         }
                     });
 
