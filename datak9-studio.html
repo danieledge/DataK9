@@ -2852,6 +2852,21 @@ files:
                 return Promise.reject(new Error('Clipboard read not supported'));
             };
         }
+
+        // Suppress Monaco Editor's clipboard-related error logs on iPad/Safari
+        // These are internal Monaco errors that don't affect functionality
+        const originalConsoleError = console.error;
+        console.error = function(...args) {
+            // Filter out clipboard-related errors from Monaco
+            const message = args.join(' ');
+            if (message.includes('clipboard') ||
+                (message.includes('ERR') && args.length === 3)) {
+                // Silently skip these errors
+                return;
+            }
+            // Pass through other errors
+            originalConsoleError.apply(console, args);
+        };
     </script>
 
     <!-- ============================================================================
