@@ -6111,6 +6111,28 @@ params:
 
             copyYAML() {
                 const yaml = this.generateYAML();
+
+                // Check if clipboard API is available
+                if (!navigator.clipboard || !navigator.clipboard.writeText) {
+                    // Fallback for browsers without clipboard API or non-HTTPS contexts
+                    const textArea = document.createElement('textarea');
+                    textArea.value = yaml;
+                    textArea.style.position = 'fixed';
+                    textArea.style.left = '-999999px';
+                    document.body.appendChild(textArea);
+                    textArea.select();
+                    try {
+                        document.execCommand('copy');
+                        alert('YAML copied to clipboard!');
+                    } catch (err) {
+                        console.error('Failed to copy:', err);
+                        alert('Failed to copy. Please manually copy from the YAML editor.');
+                    }
+                    document.body.removeChild(textArea);
+                    return;
+                }
+
+                // Use modern clipboard API
                 navigator.clipboard.writeText(yaml)
                     .then(() => {
                         alert('YAML copied to clipboard!');
