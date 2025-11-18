@@ -15,6 +15,7 @@ from validation_framework.core.engine import ValidationEngine
 from validation_framework.core.registry import get_registry
 from validation_framework.core.logging_config import setup_logging, get_logger
 from validation_framework.core.pretty_output import PrettyOutput as po
+from validation_framework.utils.performance_advisor import get_performance_advisor
 
 logger = get_logger(__name__)
 
@@ -75,6 +76,18 @@ def validate(config_file, html_output, json_output, verbose, fail_on_warning, lo
         logger.debug(f"Loading configuration from {config_file}")
         engine = ValidationEngine.from_config(config_file)
         logger.info(f"Configuration loaded: {engine.config.job_name}")
+
+        # Performance advisory: Check files and recommend Parquet if needed
+        advisor = get_performance_advisor()
+        for file_config in engine.config.files:
+            file_path = file_config.path
+            if Path(file_path).exists():
+                analysis = advisor.analyze_file(file_path, operation='validation')
+                warnings_output = advisor.format_warnings_for_cli(analysis)
+                if warnings_output:
+                    for line in warnings_output:
+                        po.info(line)
+                    po.blank_line()
 
         report = engine.run(verbose=verbose)
 
@@ -366,6 +379,16 @@ def profile(file_path, format, html_output, json_output, config_output, chunk_si
             html_output = f"{file_stem}_profile_report.html"
         if not config_output:
             config_output = f"{file_stem}_validation.yaml"
+
+        # Performance advisory: Recommend Parquet if large CSV
+        advisor = get_performance_advisor()
+        analysis = advisor.analyze_file(file_path, operation='profile')
+        warnings_output = advisor.format_warnings_for_cli(analysis)
+        if warnings_output:
+            click.echo("")  # Blank line
+            for line in warnings_output:
+                click.echo(line)
+            click.echo("")  # Blank line
 
         # Create profiler and run analysis
         click.echo(f"🔍 Profiling {file_path}...")

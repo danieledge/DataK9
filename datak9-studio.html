@@ -7,7 +7,6 @@
 
     <!--
         DataK9 Studio - Professional IDE for Data Validation Configuration
-        Author: Daniel Edge
         Version: 1.0.0
 
         This is a comprehensive IDE-style interface for creating and modifying
@@ -288,6 +287,116 @@
             flex: 1;
             overflow-y: auto;
             padding: var(--spacing-sm);
+        }
+
+        /* Configuration Navigation Styles */
+        .config-section {
+            margin-bottom: var(--spacing-md);
+        }
+
+        .config-section-header {
+            padding: var(--spacing-sm) var(--spacing-md);
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .project-settings-item {
+            margin-bottom: var(--spacing-sm);
+            border: 1px solid var(--border-main);
+            border-radius: 4px;
+            background-color: var(--bg-panel);
+            overflow: hidden;
+        }
+
+        .project-settings-header {
+            padding: var(--spacing-sm) var(--spacing-md);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            background-color: var(--k9-blue);
+            color: white;
+        }
+
+        .project-settings-header:hover {
+            background-color: #3d7ac2;
+        }
+
+        .project-settings-info {
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-sm);
+            flex: 1;
+        }
+
+        .project-settings-icon {
+            font-size: 16px;
+        }
+
+        .project-settings-title {
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .project-settings-content {
+            padding: var(--spacing-md);
+            background-color: var(--bg-dark);
+            display: none;
+        }
+
+        .project-settings-content.expanded {
+            display: block;
+        }
+
+        .settings-field {
+            margin-bottom: var(--spacing-md);
+        }
+
+        .settings-field label {
+            display: block;
+            font-size: 12px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            margin-bottom: var(--spacing-xs);
+        }
+
+        .settings-field input[type="text"],
+        .settings-field textarea,
+        .settings-field input[type="number"],
+        .settings-field select {
+            width: 100%;
+            padding: var(--spacing-sm);
+            background: var(--bg-panel);
+            border: 1px solid var(--border-main);
+            border-radius: 4px;
+            color: var(--text-primary);
+            font-size: 13px;
+            font-family: inherit;
+        }
+
+        .settings-field textarea {
+            resize: vertical;
+            min-height: 60px;
+        }
+
+        .settings-field input:focus,
+        .settings-field textarea:focus,
+        .settings-field select:focus {
+            outline: none;
+            border-color: var(--k9-blue);
+        }
+
+        .settings-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: var(--spacing-md);
         }
 
         /* File Tree Styles */
@@ -1808,6 +1917,28 @@
             }
         }
 
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        @keyframes slideOut {
+            from {
+                opacity: 1;
+                transform: translateX(0);
+            }
+            to {
+                opacity: 0;
+                transform: translateX(20px);
+            }
+        }
+
         .context-menu-item {
             padding: 8px 16px;
             cursor: pointer;
@@ -1934,24 +2065,21 @@
                         <span class="shortcut">Ctrl+N</span>
                     </div>
                     <div class="menu-dropdown-item" onclick="event.stopPropagation(); app.closeAllMenus(); app.openImportDialog()">
-                        <span>Open Project...</span>
+                        <span>Open Project (Paste YAML)...</span>
                         <span class="shortcut">Ctrl+O</span>
                     </div>
-                    <div class="menu-dropdown-item separator"></div>
-                    <div class="menu-dropdown-item" onclick="event.stopPropagation(); app.closeAllMenus(); app.exportYAML()">
-                        <span>Save</span>
-                        <span class="shortcut">Ctrl+S</span>
+                    <div class="menu-dropdown-item" onclick="event.stopPropagation(); app.closeAllMenus(); app.openFromFile()">
+                        <span>Open from File...</span>
                     </div>
-                    <div class="menu-dropdown-item" onclick="event.stopPropagation(); app.closeAllMenus(); app.exportYAML()">
-                        <span>Save As...</span>
-                        <span class="shortcut">Ctrl+Shift+S</span>
+                    <div class="menu-dropdown-item" onclick="event.stopPropagation(); app.closeAllMenus(); app.closeProject()">
+                        <span>Close Project</span>
                     </div>
                     <div class="menu-dropdown-item separator"></div>
                     <div class="menu-dropdown-item" onclick="event.stopPropagation(); app.closeAllMenus(); app.openExportDocsDialog()">
                         <span>Export Documentation...</span>
                     </div>
                     <div class="menu-dropdown-item" onclick="event.stopPropagation(); app.closeAllMenus(); app.exportYAML()">
-                        <span>Export YAML</span>
+                        <span>Export YAML (Project)</span>
                     </div>
                 </div>
             </div>
@@ -2019,18 +2147,15 @@
             <div class="sidebar" id="sidebar">
                 <div class="sidebar-header">
                     <div class="panel-header-title">
-                        <h3>Project Files</h3>
+                        <h3>Configuration</h3>
                         <button class="collapse-btn" onclick="panelManager.togglePanel('sidebar')"
                                 aria-label="Collapse sidebar (Ctrl+B)" title="Collapse sidebar (Ctrl+B)">
                             <span class="collapse-icon">◀</span>
                         </button>
                     </div>
-                    <button class="btn btn-primary btn-small" onclick="app.addFile()">
-                        + Add File
-                    </button>
                 </div>
                 <div class="sidebar-content" id="file-tree">
-                    <!-- File tree will be rendered here -->
+                    <!-- Configuration navigation will be rendered here -->
                 </div>
                 <!-- Resize handle for sidebar -->
                 <div class="resize-handle resize-handle-vertical resize-handle-sidebar"
@@ -2052,8 +2177,11 @@
                                 <button class="btn btn-primary" onclick="app.startNewProject()">
                                     🚀 New Project
                                 </button>
+                                <button class="btn btn-secondary" onclick="app.openFromFile()">
+                                    📂 Open File
+                                </button>
                                 <button class="btn btn-secondary" onclick="app.openImportDialog()">
-                                    📂 Import YAML
+                                    📋 Paste YAML
                                 </button>
                                 <button class="btn btn-secondary" onclick="app.openCatalog()">
                                     📚 Browse Validations
@@ -2073,7 +2201,7 @@
                                     <p>Changes sync automatically between UI and YAML</p>
                                 </div>
                                 <div class="welcome-feature">
-                                    <h4>📦 22 Validation Types</h4>
+                                    <h4>📦 30+ Validation Types</h4>
                                     <p>Comprehensive library of production-tested validators</p>
                                 </div>
                             </div>
@@ -2111,6 +2239,9 @@
                             <div class="yaml-editor-header">
                                 <h3>YAML Configuration</h3>
                                 <div style="display: flex; gap: 8px;">
+                                    <button class="btn btn-small btn-primary" onclick="app.syncFromYAML()" title="Sync YAML changes to UI (Ctrl+R)">
+                                        🔄 Sync from YAML
+                                    </button>
                                     <button class="btn btn-small btn-secondary" onclick="app.copyYAML()">
                                         📋 Copy
                                     </button>
@@ -2166,13 +2297,13 @@
                     <div class="help-section">
                         <h4>Keyboard Shortcuts</h4>
                         <ul>
-                            <li>Ctrl+S - Save configuration</li>
+                            <li>Ctrl+S - Export YAML (Project)</li>
+                            <li>Ctrl+R - Sync from YAML</li>
                             <li>Ctrl+N - New project</li>
                             <li>Ctrl+O - Import YAML</li>
-                            <li>Ctrl+E - Export YAML</li>
                             <li>Ctrl+B - Toggle sidebar</li>
                             <li>Ctrl+H - Toggle help panel</li>
-                            <li>Ctrl+J - Toggle bottom panel</li>
+                            <li>Ctrl+J - Toggle footer</li>
                         </ul>
                     </div>
                 </div>
@@ -2201,7 +2332,7 @@
                     📄 Export Docs
                 </button>
                 <button class="btn btn-success btn-small" onclick="app.exportYAML()">
-                    💾 Export YAML
+                    💾 Export YAML (Project)
                 </button>
             </div>
         </div>
@@ -2501,10 +2632,6 @@ files:
                         <li>Auto-save to localStorage</li>
                     </ul>
                 </div>
-                <div class="help-section">
-                    <h4>Author</h4>
-                    <p>Created by Daniel Edge</p>
-                </div>
             </div>
             <div class="modal-footer">
                 <button class="btn btn-primary" onclick="app.closeModal('about-modal')">Close</button>
@@ -2569,6 +2696,15 @@ files:
                 <button class="btn btn-primary" onclick="app.generateDocumentation()">
                     📄 Generate Documentation
                 </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- YAML Error Modal -->
+    <div id="yaml-error-modal" class="modal-overlay">
+        <div class="modal">
+            <div id="yaml-error-content">
+                <!-- Error content will be dynamically inserted here -->
             </div>
         </div>
     </div>
@@ -2689,11 +2825,15 @@ files:
 
             // Project state management (Phase 3)
             projectState: {
-                isOpen: false,              // Whether a project is currently open
-                hasUnsavedChanges: false,   // Whether there are unsaved changes
-                projectPath: null,          // Path to opened project file
-                lastSaved: null             // Timestamp of last save
+                isOpen: false,                  // Whether a project is currently open
+                hasExportedYAML: false,         // Whether project has been exported at least once
+                lastExported: null,             // Timestamp of last YAML export
+                lastModified: null,             // Timestamp of last modification
+                projectFileName: null           // Filename from opened/exported file
             },
+
+            // UI state
+            projectSettingsExpanded: false,  // Whether project settings panel is expanded
 
             /* ====================================================================
                Validation Library - Loaded Dynamically from JSON
@@ -3799,10 +3939,15 @@ files:
 
             initKeyboardShortcuts() {
                 document.addEventListener('keydown', (e) => {
-                    // Ctrl/Cmd + S: Save (export)
+                    // Ctrl/Cmd + S: Export YAML (with filename prompt)
                     if ((e.ctrlKey || e.metaKey) && e.key === 's') {
                         e.preventDefault();
                         this.exportYAML();
+                    }
+                    // Ctrl/Cmd + R: Sync from YAML
+                    if ((e.ctrlKey || e.metaKey) && e.key === 'r') {
+                        e.preventDefault();
+                        this.syncFromYAML();
                     }
                     // Ctrl/Cmd + N: New project
                     if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
@@ -3813,11 +3958,6 @@ files:
                     if ((e.ctrlKey || e.metaKey) && e.key === 'o') {
                         e.preventDefault();
                         this.openImportDialog();
-                    }
-                    // Ctrl/Cmd + E: Export
-                    if ((e.ctrlKey || e.metaKey) && e.key === 'e') {
-                        e.preventDefault();
-                        this.exportYAML();
                     }
 
                     // Validation management shortcuts (only when a validation is selected)
@@ -3880,12 +4020,95 @@ files:
             renderFileTree() {
                 const container = document.getElementById('file-tree');
 
-                if (this.config.files.length === 0) {
-                    container.innerHTML = '<div style="padding: 16px; text-align: center; color: var(--text-muted); font-size: 12px;">No files added yet</div>';
-                    return;
-                }
-
                 let html = '';
+
+                // Project Settings Section
+                const projectName = this.config.validation_job?.name || 'Untitled Project';
+                const projectDescription = this.config.validation_job?.description || '';
+                const settings = this.config.validation_job?.settings || {};
+                const settingsExpanded = this.projectSettingsExpanded || false;
+
+                html += `
+                    <div class="config-section">
+                        <div class="project-settings-item">
+                            <div class="project-settings-header" onclick="app.toggleProjectSettings()">
+                                <div class="project-settings-info">
+                                    <span class="project-settings-icon">🔧</span>
+                                    <span class="project-settings-title">Project Settings</span>
+                                </div>
+                                <span style="font-size: 12px;">${settingsExpanded ? '▼' : '▶'}</span>
+                            </div>
+                            <div class="project-settings-content ${settingsExpanded ? 'expanded' : ''}">
+                                <div class="settings-field">
+                                    <label for="project-name-input">Project Name</label>
+                                    <input type="text"
+                                           id="project-name-input"
+                                           value="${this.escapeHtml(projectName)}"
+                                           onchange="app.updateProjectName(this.value)"
+                                           placeholder="Enter project name">
+                                </div>
+                                <div class="settings-field">
+                                    <label for="project-description-input">Description</label>
+                                    <textarea id="project-description-input"
+                                              onchange="app.updateProjectDescription(this.value)"
+                                              placeholder="Enter project description">${this.escapeHtml(projectDescription)}</textarea>
+                                </div>
+                                <div class="settings-grid">
+                                    <div class="settings-field">
+                                        <label for="max-sample-failures-input">Max Sample Failures</label>
+                                        <input type="number"
+                                               id="max-sample-failures-input"
+                                               value="${settings.max_sample_failures || 100}"
+                                               onchange="app.updateProjectSetting('max_sample_failures', parseInt(this.value))"
+                                               min="1">
+                                    </div>
+                                    <div class="settings-field">
+                                        <label for="chunk-size-input">Chunk Size</label>
+                                        <input type="number"
+                                               id="chunk-size-input"
+                                               value="${settings.chunk_size || 50000}"
+                                               onchange="app.updateProjectSetting('chunk_size', parseInt(this.value))"
+                                               min="1000"
+                                               step="1000">
+                                    </div>
+                                </div>
+                                <div class="settings-grid">
+                                    <div class="settings-field">
+                                        <label for="parallel-processing-input">Parallel Processing</label>
+                                        <select id="parallel-processing-input"
+                                                onchange="app.updateProjectSetting('parallel_processing', this.value === 'true')">
+                                            <option value="true" ${settings.parallel_processing !== false ? 'selected' : ''}>Enabled</option>
+                                            <option value="false" ${settings.parallel_processing === false ? 'selected' : ''}>Disabled</option>
+                                        </select>
+                                    </div>
+                                    <div class="settings-field">
+                                        <label for="stop-on-first-failure-input">Stop on First Failure</label>
+                                        <select id="stop-on-first-failure-input"
+                                                onchange="app.updateProjectSetting('stop_on_first_failure', this.value === 'true')">
+                                            <option value="false" ${!settings.stop_on_first_failure ? 'selected' : ''}>No</option>
+                                            <option value="true" ${settings.stop_on_first_failure ? 'selected' : ''}>Yes</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+                // Data Files Section
+                html += `
+                    <div class="config-section">
+                        <div class="config-section-header">
+                            <span>📁 Data Files (${this.config.files.length})</span>
+                            <button class="btn btn-primary btn-small" onclick="app.addFile()" style="padding: 2px 8px; font-size: 11px;">
+                                + Add
+                            </button>
+                        </div>
+                `;
+
+                if (this.config.files.length === 0) {
+                    html += '<div style="padding: 16px; text-align: center; color: var(--text-muted); font-size: 12px;">No data files added yet</div>';
+                } else {
                 this.config.files.forEach((file, fileIndex) => {
                     const isSelected = this.selectedFile === fileIndex;
                     const isExpanded = true; // Always expanded for simplicity
@@ -3978,8 +4201,58 @@ files:
                         </div>
                     `;
                 });
+                }
+
+                html += `</div>`; // Close config-section for Data Files
 
                 container.innerHTML = html;
+            },
+
+            /**
+             * Toggle Project Settings panel
+             */
+            toggleProjectSettings() {
+                this.projectSettingsExpanded = !this.projectSettingsExpanded;
+                this.renderFileTree();
+            },
+
+            /**
+             * Update project name
+             */
+            updateProjectName(name) {
+                if (!this.config.validation_job) {
+                    this.config.validation_job = {};
+                }
+                this.config.validation_job.name = name;
+                this.updateYAMLEditor();
+                this.markAsModified();
+            },
+
+            /**
+             * Update project description
+             */
+            updateProjectDescription(description) {
+                if (!this.config.validation_job) {
+                    this.config.validation_job = {};
+                }
+                this.config.validation_job.description = description;
+                this.updateYAMLEditor();
+                this.markAsModified();
+            },
+
+            /**
+             * Update project setting
+             */
+            updateProjectSetting(key, value) {
+                if (!this.config.validation_job) {
+                    this.config.validation_job = {};
+                }
+                if (!this.config.validation_job.settings) {
+                    this.config.validation_job.settings = {};
+                }
+                this.config.validation_job.settings[key] = value;
+                this.updateYAMLEditor();
+                this.markAsModified();
             },
 
             renderVisualEditor() {
@@ -4164,6 +4437,9 @@ files:
             updateValidationSummary() {
                 const summary = document.getElementById('validation-summary');
 
+                // Check if element exists before setting content
+                if (!summary) return;
+
                 if (this.config.validation_job.name === '') {
                     summary.textContent = 'No project loaded';
                     return;
@@ -4234,10 +4510,10 @@ params:
                     <div class="help-section">
                         <h4>Keyboard Shortcuts</h4>
                         <ul>
-                            <li>Ctrl+S - Export configuration</li>
+                            <li>Ctrl+S - Export YAML (Project)</li>
+                            <li>Ctrl+R - Sync from YAML</li>
                             <li>Ctrl+N - New project</li>
                             <li>Ctrl+O - Import YAML</li>
-                            <li>Ctrl+E - Export YAML</li>
                         </ul>
                     </div>
                 `;
@@ -4347,6 +4623,81 @@ params:
                 this.openModal('new-project-modal');
                 this.wizardStep = 1;
                 this.updateWizardUI();
+            },
+
+            /**
+             * Close current project and return to welcome screen
+             */
+            closeProject() {
+                // Check if there's a project open
+                if (!this.projectState.isOpen) {
+                    alert('No project is currently open.');
+                    return;
+                }
+
+                // Check for export status
+                if (!this.projectState.hasExportedYAML) {
+                    // Never exported
+                    const choice = confirm(
+                        'This project has never been exported.\n\n' +
+                        'Export YAML before closing?\n\n' +
+                        'OK = Export, Cancel = Close without exporting'
+                    );
+                    if (choice) {
+                        this.exportYAML();
+                        // Return early - user can close manually after export
+                        return;
+                    }
+                } else if (this.projectState.lastModified && this.projectState.lastModified > this.projectState.lastExported) {
+                    // Changes since last export
+                    const choice = confirm(
+                        'You have changes since last export.\n\n' +
+                        'Export updated YAML?\n\n' +
+                        'OK = Export, Cancel = Close without exporting'
+                    );
+                    if (choice) {
+                        this.exportYAML();
+                        // Return early - user can close manually after export
+                        return;
+                    }
+                }
+
+                // Reset to initial state
+                this.config = {
+                    validation_job: {
+                        name: '',
+                        description: '',
+                        settings: {},
+                        files: []
+                    },
+                    files: []
+                };
+
+                // Reset project state
+                this.projectState = {
+                    isOpen: false,
+                    hasExportedYAML: false,
+                    lastExported: null,
+                    lastModified: null,
+                    projectFileName: null
+                };
+
+                // Reset UI state
+                this.selectedFile = null;
+                this.selectedValidation = null;
+                this.projectSettingsExpanded = false;
+
+                // Update UI
+                this.renderFileTree();
+                this.updateYAMLEditor();
+                this.updateStatusBar();
+
+                // Show welcome screen
+                document.getElementById('welcome-screen').classList.remove('hidden');
+                document.getElementById('editor-view').classList.add('hidden');
+
+                // Show notification
+                this.showNotification('Project closed', 'info');
             },
 
             wizardNext() {
@@ -5274,6 +5625,76 @@ params:
                 document.getElementById('import-yaml-text').value = '';
             },
 
+            /**
+             * Open YAML file from disk using file picker
+             */
+            openFromFile() {
+                // Create file input element
+                const input = document.createElement('input');
+                input.type = 'file';
+                input.accept = '.yaml,.yml';
+
+                input.onchange = (e) => {
+                    const file = e.target.files[0];
+                    if (!file) return;
+
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                        try {
+                            const yamlContent = event.target.result;
+
+                            // Parse YAML using our custom parser
+                            const parsedConfig = this.parseYAML(yamlContent);
+
+                            // Validate structure
+                            if (!parsedConfig.validation_job) {
+                                throw new Error("Missing required 'validation_job' key in YAML");
+                            }
+
+                            // Load the configuration
+                            this.config = parsedConfig;
+
+                            // Extract filename (without extension) for project name
+                            const fileName = file.name.replace(/\.(yaml|yml)$/i, '');
+
+                            // Update project state
+                            this.projectState.isOpen = true;
+                            this.projectState.projectFileName = file.name;
+                            this.projectState.lastModified = Date.now();
+                            this.projectState.hasExportedYAML = false; // Loaded, not exported
+
+                            // Update UI
+                            this.renderFileTree();
+                            this.updateYAMLEditor();
+                            this.updateStatusBar();
+
+                            // Hide welcome screen, show editor
+                            document.getElementById('welcome-screen').classList.add('hidden');
+                            document.getElementById('editor-view').classList.remove('hidden');
+
+                            // Save to localStorage
+                            this.saveToLocalStorage();
+
+                            // Show success notification
+                            this.showNotification(`✓ Opened ${file.name}`, 'success');
+
+                        } catch (error) {
+                            console.error('Error loading file:', error);
+                            this.showYAMLError(error);
+                        }
+                    };
+
+                    reader.onerror = () => {
+                        alert('Error reading file. Please try again.');
+                    };
+
+                    reader.readAsText(file);
+                };
+
+                // Trigger file picker
+                input.click();
+            },
+
             importYAML() {
                 const yamlText = document.getElementById('import-yaml-text').value;
 
@@ -5285,14 +5706,40 @@ params:
             },
 
             exportYAML() {
+                // Generate default filename from project name
+                const projectName = this.config.validation_job?.name || 'validation';
+                const defaultFilename = `${projectName.replace(/\s+/g, '_')}_config.yaml`;
+
+                // Prompt user for filename
+                const filename = prompt('Enter filename for YAML export:', defaultFilename);
+                if (!filename) return; // User cancelled
+
+                // Ensure .yaml extension
+                const finalFilename = filename.endsWith('.yaml') || filename.endsWith('.yml')
+                    ? filename
+                    : `${filename}.yaml`;
+
+                // Export file
                 const yaml = this.generateYAML();
                 const blob = new Blob([yaml], { type: 'text/yaml' });
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = `${this.config.validation_job.name || 'validation'}.yaml`;
+                a.download = finalFilename;
                 a.click();
                 URL.revokeObjectURL(url);
+
+                // Update export state
+                const now = Date.now();
+                this.projectState.hasExportedYAML = true;
+                this.projectState.lastExported = now;
+                this.projectState.projectFileName = finalFilename;
+
+                // Update status bar
+                this.updateStatusBar();
+
+                // Show success notification
+                this.showNotification(`✓ Exported as ${finalFilename}`, 'success');
             },
 
             copyYAML() {
@@ -5305,6 +5752,244 @@ params:
             formatYAML() {
                 // Regenerate YAML (already formatted)
                 this.updateYAMLEditor();
+            },
+
+            /**
+             * Sync YAML changes back to the UI
+             * Parses YAML from editor and rebuilds the config and UI
+             */
+            syncFromYAML() {
+                try {
+                    // Get YAML content from Monaco editor or fallback textarea
+                    const yamlContent = this.yamlEditor
+                        ? this.yamlEditor.getValue()
+                        : document.getElementById('yaml-textarea').value;
+
+                    // Parse YAML to config object
+                    const parsedConfig = this.parseYAML(yamlContent);
+
+                    // Validate structure
+                    if (!parsedConfig.validation_job) {
+                        throw new Error("Missing required 'validation_job' key in YAML");
+                    }
+
+                    // Update internal config
+                    this.config = parsedConfig;
+
+                    // Mark as having unsaved changes
+                    this.projectState.hasUnsavedChanges = true;
+
+                    // Rebuild UI components
+                    this.renderFileTree();
+                    this.updateStatusBar();
+
+                    // Show success notification
+                    this.showNotification('✓ YAML synchronized to UI successfully', 'success');
+
+                } catch (error) {
+                    // Show error with details
+                    this.showYAMLError(error);
+                }
+            },
+
+            /**
+             * Simple YAML parser for DataK9 config structure
+             * Handles the specific YAML format used by DataK9
+             */
+            parseYAML(yamlText) {
+                try {
+                    const lines = yamlText.split('\n');
+                    const config = { validation_job: { files: [] } };
+                    let currentContext = config;
+                    let currentFile = null;
+                    let currentValidation = null;
+                    let currentCondition = null;
+                    let indentStack = [{ level: 0, context: config }];
+                    let inSettings = false;
+
+                    for (let i = 0; i < lines.length; i++) {
+                        const line = lines[i];
+                        const trimmed = line.trim();
+
+                        // Skip empty lines and comments
+                        if (!trimmed || trimmed.startsWith('#')) continue;
+
+                        // Calculate indentation level
+                        const indent = line.search(/\S/);
+
+                        // Parse key-value pairs
+                        const match = trimmed.match(/^([a-zA-Z_][a-zA-Z0-9_]*)\s*:\s*(.*)$/);
+                        if (!match) {
+                            // Handle list items
+                            if (trimmed.startsWith('- ')) {
+                                const listMatch = trimmed.match(/^-\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*:\s*(.*)$/);
+                                if (listMatch) {
+                                    const [, key, value] = listMatch;
+
+                                    // Determine what kind of list item this is
+                                    if (key === 'name' && currentContext === config.validation_job) {
+                                        // New file
+                                        currentFile = { name: this.unquoteValue(value), validations: [] };
+                                        config.validation_job.files.push(currentFile);
+                                        currentContext = currentFile;
+                                    } else if (key === 'type' && currentFile) {
+                                        // New validation
+                                        currentValidation = { type: this.unquoteValue(value) };
+                                        currentFile.validations.push(currentValidation);
+                                        currentContext = currentValidation;
+                                    }
+                                }
+                            }
+                            continue;
+                        }
+
+                        const [, key, value] = match;
+                        const unquotedValue = this.unquoteValue(value);
+
+                        // Handle different sections
+                        if (key === 'validation_job') {
+                            currentContext = config.validation_job;
+                            inSettings = false;
+                        } else if (key === 'name' && indent === 2) {
+                            config.validation_job.name = unquotedValue;
+                        } else if (key === 'description' && indent === 2) {
+                            config.validation_job.description = unquotedValue;
+                        } else if (key === 'settings') {
+                            inSettings = true;
+                            if (!config.validation_job.settings) {
+                                config.validation_job.settings = {};
+                            }
+                            currentContext = config.validation_job.settings;
+                        } else if (key === 'files') {
+                            currentContext = config.validation_job;
+                        } else if (key === 'validations') {
+                            if (currentFile) {
+                                currentContext = currentFile;
+                            }
+                        } else if (inSettings && indent === 4) {
+                            // Settings values
+                            config.validation_job.settings[key] = this.parseValue(unquotedValue);
+                        } else if (currentValidation && indent >= 8) {
+                            // Validation parameters
+                            if (key === 'condition') {
+                                currentValidation.condition = {};
+                                currentCondition = currentValidation.condition;
+                            } else if (currentCondition && indent >= 10) {
+                                // Condition parameters
+                                currentCondition[key] = this.parseValue(unquotedValue);
+                            } else {
+                                currentValidation[key] = this.parseValue(unquotedValue);
+                            }
+                        }
+                    }
+
+                    return config;
+
+                } catch (error) {
+                    throw new Error(`YAML parsing failed: ${error.message}`);
+                }
+            },
+
+            /**
+             * Remove quotes from YAML values
+             */
+            unquoteValue(value) {
+                if (!value) return '';
+                const trimmed = value.trim();
+                if ((trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+                    (trimmed.startsWith("'") && trimmed.endsWith("'"))) {
+                    return trimmed.slice(1, -1);
+                }
+                return trimmed;
+            },
+
+            /**
+             * Parse value to appropriate type
+             */
+            parseValue(value) {
+                if (value === 'true') return true;
+                if (value === 'false') return false;
+                if (value === 'null' || value === '~') return null;
+                if (/^-?\d+$/.test(value)) return parseInt(value, 10);
+                if (/^-?\d+\.\d+$/.test(value)) return parseFloat(value);
+                return value;
+            },
+
+            /**
+             * Show YAML error modal with details
+             */
+            showYAMLError(error) {
+                const errorMsg = error.message || 'Unknown error';
+
+                // Create error modal content
+                const modalContent = `
+                    <div style="padding: 24px; max-width: 600px;">
+                        <h2 style="color: var(--color-error); margin-bottom: 16px; display: flex; align-items: center; gap: 8px;">
+                            <span style="font-size: 24px;">⚠</span>
+                            <span>YAML Sync Error</span>
+                        </h2>
+                        <div style="background: var(--bg-main); padding: 16px; border-radius: 4px; border-left: 3px solid var(--color-error); margin-bottom: 16px;">
+                            <p style="margin: 0; color: var(--text-primary); font-family: monospace; font-size: 13px; white-space: pre-wrap;">${this.escapeHtml(errorMsg)}</p>
+                        </div>
+                        <div style="color: var(--text-muted); font-size: 13px; line-height: 1.6;">
+                            <p><strong>Common issues:</strong></p>
+                            <ul style="margin: 8px 0; padding-left: 20px;">
+                                <li>Missing required 'validation_job' key</li>
+                                <li>Incorrect indentation (use 2 or 4 spaces)</li>
+                                <li>Missing colons after keys</li>
+                                <li>Unquoted values with special characters</li>
+                            </ul>
+                            <p style="margin-top: 12px;">Fix the YAML syntax and try syncing again.</p>
+                        </div>
+                        <div style="margin-top: 24px; text-align: right;">
+                            <button class="btn btn-primary" onclick="app.closeModal('yaml-error-modal')">OK</button>
+                        </div>
+                    </div>
+                `;
+
+                // Show error in a modal
+                const modal = document.getElementById('yaml-error-modal');
+                if (modal) {
+                    document.getElementById('yaml-error-content').innerHTML = modalContent;
+                    this.openModal('yaml-error-modal');
+                } else {
+                    // Fallback to alert if modal doesn't exist
+                    alert('YAML Sync Error:\n\n' + errorMsg);
+                }
+            },
+
+            /**
+             * Show notification message
+             */
+            showNotification(message, type = 'info') {
+                // Create notification element
+                const notification = document.createElement('div');
+                notification.style.cssText = `
+                    position: fixed;
+                    top: 20px;
+                    right: 20px;
+                    padding: 12px 20px;
+                    background: ${type === 'success' ? 'var(--color-success)' : type === 'error' ? 'var(--color-error)' : 'var(--color-primary)'};
+                    color: white;
+                    border-radius: 4px;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+                    z-index: 10000;
+                    font-size: 14px;
+                    max-width: 400px;
+                    animation: slideIn 0.3s ease-out;
+                `;
+                notification.textContent = message;
+
+                // Add to document
+                document.body.appendChild(notification);
+
+                // Remove after 3 seconds
+                setTimeout(() => {
+                    notification.style.animation = 'slideOut 0.3s ease-out';
+                    setTimeout(() => {
+                        document.body.removeChild(notification);
+                    }, 300);
+                }, 3000);
             },
 
             /* ====================================================================
@@ -5398,8 +6083,8 @@ params:
                 const shortcuts = [
                     { key: 'Ctrl+N', action: 'New Project' },
                     { key: 'Ctrl+O', action: 'Open Project' },
-                    { key: 'Ctrl+S', action: 'Save' },
-                    { key: 'Ctrl+Shift+S', action: 'Save As' },
+                    { key: 'Ctrl+S', action: 'Export YAML (Project)' },
+                    { key: 'Ctrl+R', action: 'Sync from YAML' },
                     { key: 'Ctrl+B', action: 'Toggle Sidebar' },
                     { key: 'Ctrl+J', action: 'Toggle Footer' },
                     { key: 'Ctrl+Up', action: 'Move Validation Up' },
@@ -5491,6 +6176,18 @@ params:
                 const projectName = config.validation_job?.name || config.job_name || 'Untitled Project';
                 const description = config.validation_job?.description || config.description || '';
 
+                // Generate default filename
+                const defaultFilename = `${projectName.replace(/\s+/g, '_')}_validation_spec.html`;
+
+                // Prompt user for filename
+                const filename = prompt('Enter filename for HTML documentation:', defaultFilename);
+                if (!filename) return; // User cancelled
+
+                // Ensure .html extension
+                const finalFilename = filename.endsWith('.html') || filename.endsWith('.htm')
+                    ? filename
+                    : `${filename}.html`;
+
                 const styles = theme === 'dark' ? this.getDarkThemeCSS() : this.getLightThemeCSS();
 
                 let html = `<!DOCTYPE html>
@@ -5514,7 +6211,7 @@ params:
 </body>
 </html>`;
 
-                this.downloadFile(html, `${projectName.replace(/\s+/g, '_')}_validation_spec.html`, 'text/html');
+                this.downloadFile(html, finalFilename, 'text/html');
             },
 
             /**
@@ -5523,6 +6220,18 @@ params:
             generateMarkdownDocumentation(config, options) {
                 const projectName = config.validation_job?.name || config.job_name || 'Untitled Project';
                 const description = config.validation_job?.description || config.description || '';
+
+                // Generate default filename
+                const defaultFilename = `${projectName.replace(/\s+/g, '_')}_validation_spec.md`;
+
+                // Prompt user for filename
+                const filename = prompt('Enter filename for Markdown documentation:', defaultFilename);
+                if (!filename) return; // User cancelled
+
+                // Ensure .md extension
+                const finalFilename = filename.endsWith('.md') || filename.endsWith('.markdown')
+                    ? filename
+                    : `${filename}.md`;
 
                 let md = `# ${projectName}\n\n`;
 
@@ -5538,7 +6247,7 @@ params:
                     md += this.generateFilesMarkdown(config, options);
                 }
 
-                this.downloadFile(md, `${projectName.replace(/\s+/g, '_')}_validation_spec.md`, 'text/markdown');
+                this.downloadFile(md, finalFilename, 'text/markdown');
             },
 
             /**
@@ -5880,15 +6589,35 @@ params:
             },
 
             /**
+             * Mark project as modified (for tracking export status)
+             */
+            markAsModified() {
+                this.projectState.lastModified = Date.now();
+                this.saveToLocalStorage();
+                this.updateStatusBar();
+            },
+
+            /**
              * Update status bar with current project state
              */
             updateStatusBar() {
-                // Update project name
+                // Update project name with export status
                 const projectStatus = document.querySelector('#project-status .footer-item-value');
                 if (projectStatus) {
                     const projectName = this.config.validation_job?.name || 'No project';
-                    const unsaved = this.projectState.hasUnsavedChanges ? ' ●' : '';
-                    projectStatus.textContent = this.projectState.isOpen ? `${projectName}${unsaved}` : 'No project';
+
+                    if (!this.projectState.isOpen) {
+                        projectStatus.textContent = 'No project';
+                    } else if (!this.projectState.hasExportedYAML) {
+                        // Never exported
+                        projectStatus.textContent = `${projectName} ⚠️ Not exported yet`;
+                    } else if (this.projectState.lastModified > this.projectState.lastExported) {
+                        // Changed since last export
+                        projectStatus.textContent = `${projectName} ⚠️ Changes since export`;
+                    } else {
+                        // Up to date
+                        projectStatus.textContent = `${projectName} ✓`;
+                    }
                 }
 
                 // Update file count
@@ -5984,7 +6713,6 @@ params:
            - Keyboard shortcuts for panel toggles
            - Touch support for mobile devices
 
-           Author: Daniel Edge
            Version: 2.0.0
         */
         const panelManager = {

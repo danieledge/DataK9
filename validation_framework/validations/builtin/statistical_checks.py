@@ -109,8 +109,15 @@ class DistributionCheck(DataValidationRule):
                     value=None
                 )
 
-            # Collect all data (needed for distribution testing)
-            all_data = []
+            # Intelligent sampling for large datasets to prevent OOM
+            # Use max 10M rows for statistical tests (still statistically valid)
+            max_sample_size = self.params.get("max_sample_size", 10_000_000)
+
+            # Collect data as numpy arrays (8 bytes/value vs 36 bytes for Python list)
+            arrays = []
+            total_collected = 0
+            total_rows_seen = 0
+
             for chunk in data_iterator:
                 if column not in chunk.columns:
                     raise ColumnNotFoundError(
@@ -124,8 +131,29 @@ class DistributionCheck(DataValidationRule):
                     mask = self._evaluate_condition(chunk)
                     chunk = chunk[mask]
 
-                values = chunk[column].dropna()
-                all_data.extend(values.tolist())
+                values = chunk[column].dropna().values  # Keep as numpy array!
+                total_rows_seen += len(chunk)
+
+                # Sampling strategy: collect up to max_sample_size
+                if total_collected + len(values) <= max_sample_size:
+                    # Still room, add all values
+                    arrays.append(values)
+                    total_collected += len(values)
+                else:
+                    # Need to sample - use reservoir sampling
+                    remaining = max_sample_size - total_collected
+                    if remaining > 0:
+                        # Sample what we can fit
+                        if len(values) > remaining:
+                            sampled = np.random.choice(values, size=remaining, replace=False)
+                            arrays.append(sampled)
+                        else:
+                            arrays.append(values)
+                        total_collected = max_sample_size
+                    break  # Stop collecting once we have enough
+
+            # Concatenate to single numpy array
+            all_data = np.concatenate(arrays) if arrays else np.array([])
 
             if len(all_data) < min_samples:
                 return self._create_result(
@@ -134,8 +162,14 @@ class DistributionCheck(DataValidationRule):
                     failed_count=1,
                 )
 
-            # Perform distribution test
-            data_array = np.array(all_data)
+            # Perform distribution test (data_array already numpy)
+            data_array = all_data
+
+            # Document if sampling was used
+            sampling_info = ""
+            if total_rows_seen > len(data_array):
+                sample_pct = (len(data_array) / total_rows_seen) * 100
+                sampling_info = f" (sampled {len(data_array):,} of {total_rows_seen:,} rows, {sample_pct:.1f}%)"
 
             if expected_dist.lower() == "normal":
                 # Shapiro-Wilk test for normality
@@ -170,13 +204,13 @@ class DistributionCheck(DataValidationRule):
             if p_value > alpha:
                 return self._create_result(
                     passed=True,
-                    message=f"Data follows {expected_dist} distribution ({test_name} p-value: {p_value:.4f}, alpha: {alpha})",
+                    message=f"Data follows {expected_dist} distribution ({test_name} p-value: {p_value:.4f}, alpha: {alpha}){sampling_info}",
                     total_count=len(all_data),
                 )
             else:
                 return self._create_result(
                     passed=False,
-                    message=f"Data does NOT follow {expected_dist} distribution ({test_name} p-value: {p_value:.4f}, alpha: {alpha})",
+                    message=f"Data does NOT follow {expected_dist} distribution ({test_name} p-value: {p_value:.4f}, alpha: {alpha}){sampling_info}",
                     failed_count=1,
                     total_count=len(all_data),
                 )
@@ -280,9 +314,14 @@ class CorrelationCheck(DataValidationRule):
                     failed_count=1,
                 )
 
-            # Collect data
-            col1_data = []
-            col2_data = []
+            # Intelligent sampling for large datasets to prevent OOM
+            max_sample_size = self.params.get("max_sample_size", 10_000_000)
+
+            # Collect data as numpy arrays (8 bytes/value vs 36 bytes for Python list)
+            col1_arrays = []
+            col2_arrays = []
+            total_collected = 0
+            total_rows_seen = 0
 
             for chunk in data_iterator:
                 # Check columns exist
@@ -307,8 +346,32 @@ class CorrelationCheck(DataValidationRule):
 
                 # Get valid pairs (both non-null)
                 valid_data = chunk[[column1, column2]].dropna()
-                col1_data.extend(valid_data[column1].tolist())
-                col2_data.extend(valid_data[column2].tolist())
+                total_rows_seen += len(chunk)
+
+                # Sampling strategy: collect up to max_sample_size
+                if total_collected + len(valid_data) <= max_sample_size:
+                    # Still room, add all values
+                    col1_arrays.append(valid_data[column1].values)
+                    col2_arrays.append(valid_data[column2].values)
+                    total_collected += len(valid_data)
+                else:
+                    # Need to sample
+                    remaining = max_sample_size - total_collected
+                    if remaining > 0:
+                        # Sample what we can fit
+                        if len(valid_data) > remaining:
+                            sampled_indices = np.random.choice(len(valid_data), size=remaining, replace=False)
+                            col1_arrays.append(valid_data[column1].values[sampled_indices])
+                            col2_arrays.append(valid_data[column2].values[sampled_indices])
+                        else:
+                            col1_arrays.append(valid_data[column1].values)
+                            col2_arrays.append(valid_data[column2].values)
+                        total_collected = max_sample_size
+                    break  # Stop collecting once we have enough
+
+            # Concatenate to single numpy arrays
+            col1_data = np.concatenate(col1_arrays) if col1_arrays else np.array([])
+            col2_data = np.concatenate(col2_arrays) if col2_arrays else np.array([])
 
             if len(col1_data) < 3:
                 return self._create_result(
@@ -316,6 +379,12 @@ class CorrelationCheck(DataValidationRule):
                     message=f"Insufficient data for correlation test: {len(col1_data)} pairs (minimum: 3)",
                     failed_count=1,
                 )
+
+            # Document if sampling was used
+            sampling_info = ""
+            if total_rows_seen > len(col1_data):
+                sample_pct = (len(col1_data) / total_rows_seen) * 100
+                sampling_info = f" (sampled {len(col1_data):,} of {total_rows_seen:,} rows, {sample_pct:.1f}%)"
 
             # Calculate correlation
             if corr_type.lower() == "pearson":
@@ -347,14 +416,14 @@ class CorrelationCheck(DataValidationRule):
             if issues:
                 return self._create_result(
                     passed=False,
-                    message=f"Correlation check failed: {'; '.join(issues)} (p-value: {p_value:.4f})",
+                    message=f"Correlation check failed: {'; '.join(issues)} (p-value: {p_value:.4f}){sampling_info}",
                     failed_count=1,
                     total_count=len(col1_data),
                 )
 
             return self._create_result(
                 passed=True,
-                message=f"{corr_type.capitalize()} correlation between {column1} and {column2}: {correlation:.3f} (p-value: {p_value:.4f})",
+                message=f"{corr_type.capitalize()} correlation between {column1} and {column2}: {correlation:.3f} (p-value: {p_value:.4f}){sampling_info}",
                 total_count=len(col1_data),
             )
 
