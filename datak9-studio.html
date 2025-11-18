@@ -4030,80 +4030,84 @@ files:
 
                 let html = '';
 
-                // Project Settings Section
-                const projectName = this.config.validation_job?.name || 'Untitled Project';
-                const projectDescription = this.config.validation_job?.description || '';
-                const settings = this.config.validation_job?.settings || {};
-                const settingsExpanded = this.projectSettingsExpanded || false;
+                // Only show Project Settings if a project is open
+                if (this.projectState.isOpen) {
+                    // Project Settings Section
+                    const projectName = this.config.validation_job?.name || 'Untitled Project';
+                    const projectDescription = this.config.validation_job?.description || '';
+                    const settings = this.config.validation_job?.settings || {};
+                    const settingsExpanded = this.projectSettingsExpanded || false;
 
-                html += `
-                    <div class="config-section">
-                        <div class="project-settings-item">
-                            <div class="project-settings-header" onclick="app.toggleProjectSettings()">
-                                <div class="project-settings-info">
-                                    <span class="project-settings-icon">🔧</span>
-                                    <span class="project-settings-title">Project Settings</span>
+                    html += `
+                        <div class="config-section">
+                            <div class="project-settings-item">
+                                <div class="project-settings-header" onclick="app.toggleProjectSettings()">
+                                    <div class="project-settings-info">
+                                        <span class="project-settings-icon">🔧</span>
+                                        <span class="project-settings-title">Project Settings</span>
+                                    </div>
+                                    <span style="font-size: 12px;">${settingsExpanded ? '▼' : '▶'}</span>
                                 </div>
-                                <span style="font-size: 12px;">${settingsExpanded ? '▼' : '▶'}</span>
-                            </div>
-                            <div class="project-settings-content ${settingsExpanded ? 'expanded' : ''}">
-                                <div class="settings-field">
-                                    <label for="project-name-input">Project Name</label>
-                                    <input type="text"
-                                           id="project-name-input"
-                                           value="${this.escapeHtml(projectName)}"
-                                           oninput="app.updateProjectName(this.value)"
-                                           placeholder="Enter project name">
-                                </div>
-                                <div class="settings-field">
-                                    <label for="project-description-input">Description</label>
-                                    <textarea id="project-description-input"
-                                              oninput="app.updateProjectDescription(this.value)"
-                                              placeholder="Enter project description">${this.escapeHtml(projectDescription)}</textarea>
-                                </div>
-                                <div class="settings-grid">
+                                <div class="project-settings-content ${settingsExpanded ? 'expanded' : ''}">
                                     <div class="settings-field">
-                                        <label for="max-sample-failures-input">Max Sample Failures</label>
-                                        <input type="number"
-                                               id="max-sample-failures-input"
-                                               value="${settings.max_sample_failures || 100}"
-                                               oninput="app.updateProjectSetting('max_sample_failures', parseInt(this.value))"
-                                               min="1">
+                                        <label for="project-name-input">Project Name</label>
+                                        <input type="text"
+                                               id="project-name-input"
+                                               value="${this.escapeHtml(projectName)}"
+                                               oninput="app.updateProjectName(this.value)"
+                                               placeholder="Enter project name">
                                     </div>
                                     <div class="settings-field">
-                                        <label for="chunk-size-input">Chunk Size</label>
-                                        <input type="number"
-                                               id="chunk-size-input"
-                                               value="${settings.chunk_size || 50000}"
-                                               oninput="app.updateProjectSetting('chunk_size', parseInt(this.value))"
-                                               min="1000"
-                                               step="1000">
+                                        <label for="project-description-input">Description</label>
+                                        <textarea id="project-description-input"
+                                                  oninput="app.updateProjectDescription(this.value)"
+                                                  placeholder="Enter project description">${this.escapeHtml(projectDescription)}</textarea>
                                     </div>
-                                </div>
-                                <div class="settings-grid">
-                                    <div class="settings-field">
-                                        <label for="parallel-processing-input">Parallel Processing</label>
-                                        <select id="parallel-processing-input"
-                                                onchange="app.updateProjectSetting('parallel_processing', this.value === 'true')">
-                                            <option value="true" ${settings.parallel_processing !== false ? 'selected' : ''}>Enabled</option>
-                                            <option value="false" ${settings.parallel_processing === false ? 'selected' : ''}>Disabled</option>
-                                        </select>
+                                    <div class="settings-grid">
+                                        <div class="settings-field">
+                                            <label for="max-sample-failures-input">Max Sample Failures</label>
+                                            <input type="number"
+                                                   id="max-sample-failures-input"
+                                                   value="${settings.max_sample_failures || 100}"
+                                                   oninput="app.updateProjectSetting('max_sample_failures', parseInt(this.value))"
+                                                   min="1">
+                                        </div>
+                                        <div class="settings-field">
+                                            <label for="chunk-size-input">Chunk Size</label>
+                                            <input type="number"
+                                                   id="chunk-size-input"
+                                                   value="${settings.chunk_size || 50000}"
+                                                   oninput="app.updateProjectSetting('chunk_size', parseInt(this.value))"
+                                                   min="1000"
+                                                   step="1000">
+                                        </div>
                                     </div>
-                                    <div class="settings-field">
-                                        <label for="stop-on-first-failure-input">Stop on First Failure</label>
-                                        <select id="stop-on-first-failure-input"
-                                                onchange="app.updateProjectSetting('stop_on_first_failure', this.value === 'true')">
-                                            <option value="false" ${!settings.stop_on_first_failure ? 'selected' : ''}>No</option>
-                                            <option value="true" ${settings.stop_on_first_failure ? 'selected' : ''}>Yes</option>
-                                        </select>
+                                    <div class="settings-grid">
+                                        <div class="settings-field">
+                                            <label for="parallel-processing-input">Parallel Processing</label>
+                                            <select id="parallel-processing-input"
+                                                    onchange="app.updateProjectSetting('parallel_processing', this.value === 'true')">
+                                                <option value="true" ${settings.parallel_processing !== false ? 'selected' : ''}>Enabled</option>
+                                                <option value="false" ${settings.parallel_processing === false ? 'selected' : ''}>Disabled</option>
+                                            </select>
+                                        </div>
+                                        <div class="settings-field">
+                                            <label for="stop-on-first-failure-input">Stop on First Failure</label>
+                                            <select id="stop-on-first-failure-input"
+                                                    onchange="app.updateProjectSetting('stop_on_first_failure', this.value === 'true')">
+                                                <option value="false" ${!settings.stop_on_first_failure ? 'selected' : ''}>No</option>
+                                                <option value="true" ${settings.stop_on_first_failure ? 'selected' : ''}>Yes</option>
+                                            </select>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
-                    </div>
-                `;
+                    `;
+                }
 
-                // Data Files Section
+                // Data Files Section (only show if project is open)
+                if (this.projectState.isOpen) {
                 html += `
                     <div class="config-section">
                         <div class="config-section-header">
@@ -4212,6 +4216,7 @@ files:
                 }
 
                 html += `</div>`; // Close config-section for Data Files
+                } // Close if (this.projectState.isOpen)
 
                 container.innerHTML = html;
             },
