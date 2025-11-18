@@ -5930,9 +5930,14 @@ params:
 
             copyYAML() {
                 const yaml = this.generateYAML();
-                navigator.clipboard.writeText(yaml).then(() => {
-                    alert('YAML copied to clipboard!');
-                });
+                navigator.clipboard.writeText(yaml)
+                    .then(() => {
+                        alert('YAML copied to clipboard!');
+                    })
+                    .catch(err => {
+                        console.error('Failed to copy to clipboard:', err);
+                        alert('Failed to copy to clipboard. Please copy manually from the YAML editor.');
+                    });
             },
 
             formatYAML() {
