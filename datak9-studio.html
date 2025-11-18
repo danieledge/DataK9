@@ -4260,8 +4260,8 @@ files:
                                 <div class="file-info">
                                     <span class="file-drag-handle" title="Drag to reorder" onclick="event.stopPropagation()">⋮⋮</span>
                                     <span class="file-icon">📄</span>
-                                    <span class="file-name">${this.escapeHtml(file.name)}</span>
-                                    <span class="file-format-badge">${this.escapeHtml(file.format).toUpperCase()}</span>
+                                    <span class="file-name">${this.escapeHtml(file.name || 'Unnamed')}</span>
+                                    <span class="file-format-badge">${this.escapeHtml(file.format || 'csv').toUpperCase()}</span>
                                 </div>
                                 <div class="file-actions">
                                     <button class="file-action-btn" onclick="event.stopPropagation(); app.addValidationToFile(${fileIndex})" title="Add Validation">
