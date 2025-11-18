@@ -6303,9 +6303,23 @@ params:
                         throw new Error("Missing required 'validation_job' key in YAML");
                     }
 
-                    // Normalize structure: Move files to top level for internal use
+                    // Normalize structure: Move files and settings to top level for internal use
                     // The app expects this.config.files, not this.config.validation_job.files
                     parsedConfig.files = parsedConfig.validation_job.files || [];
+
+                    // The app expects this.config.settings, not this.config.validation_job.settings
+                    if (parsedConfig.validation_job.settings) {
+                        parsedConfig.settings = parsedConfig.validation_job.settings;
+                    } else {
+                        // Ensure settings object exists with defaults
+                        parsedConfig.settings = {
+                            chunk_size: 50000,
+                            max_sample_failures: 100,
+                            fail_on_error: true,
+                            fail_on_warning: false,
+                            log_level: 'INFO'
+                        };
+                    }
 
                     // Update internal config
                     this.config = parsedConfig;
