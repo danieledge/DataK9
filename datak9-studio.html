@@ -6254,6 +6254,9 @@ params:
                         // Then reload YAML from the UI state (this ensures consistency)
                         this.updateYAMLEditor();
 
+                        // Save to localStorage
+                        this.saveToLocalStorage();
+
                         // Now lock the editor
                         this.monacoEditor.updateOptions({ readOnly: true });
                         lockBtn.innerHTML = '🔒 Unlock to Edit';
