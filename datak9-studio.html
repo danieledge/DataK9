@@ -2122,7 +2122,7 @@
             <div class="menu-item" id="help-menu" onclick="app.toggleMenu('help')">
                 Help
                 <div class="menu-dropdown">
-                    <div class="menu-dropdown-item" onclick="event.stopPropagation(); app.closeAllMenus(); app.showValidationCatalog()">
+                    <div class="menu-dropdown-item" onclick="event.stopPropagation(); app.closeAllMenus(); app.openCatalog()">
                         <span>Validation Catalog</span>
                     </div>
                     <div class="menu-dropdown-item" onclick="event.stopPropagation(); app.closeAllMenus(); app.showKeyboardShortcuts()">
@@ -2559,9 +2559,9 @@ files:
                 <!-- Validation form will be rendered here -->
             </div>
             <div class="modal-footer">
-                <button class="btn btn-danger" onclick="app.deleteValidation()">Delete</button>
+                <button class="btn btn-danger" onclick="app.deleteCurrentValidation()">Delete</button>
                 <button class="btn btn-secondary" onclick="app.closeModal('edit-validation-modal')">Cancel</button>
-                <button class="btn btn-primary" onclick="app.saveValidation()">Save</button>
+                <button class="btn btn-primary" onclick="app.saveCurrentValidation()">Save</button>
             </div>
         </div>
     </div>
