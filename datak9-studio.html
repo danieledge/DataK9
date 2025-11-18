@@ -6128,8 +6128,8 @@ params:
             syncFromYAML() {
                 try {
                     // Get YAML content from Monaco editor or fallback textarea
-                    const yamlContent = this.yamlEditor
-                        ? this.yamlEditor.getValue()
+                    const yamlContent = this.monacoEditor
+                        ? this.monacoEditor.getValue()
                         : document.getElementById('yaml-textarea').value;
 
                     // Parse YAML to config object
