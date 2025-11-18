@@ -4068,14 +4068,12 @@ files:
                     );
 
                     // Listen for changes in Monaco Editor
+                    // Note: We don't sync on every keystroke as YAML will be invalid while typing
+                    // Instead, mark as having unsaved changes and sync only when user saves
                     this.monacoEditor.onDidChangeModelContent(() => {
-                        try {
-                            if (!this.isSyncing) {
-                                this.syncFromYAML();
-                            }
-                        } catch (error) {
-                            console.error('Error during YAML sync:', error);
-                            // Silently fail to prevent blocking the editor
+                        if (!this.isSyncing) {
+                            this.projectState.hasUnsavedChanges = true;
+                            this.updateStatusBar();
                         }
                     });
 
