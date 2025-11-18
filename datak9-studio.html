@@ -4044,13 +4044,13 @@ files:
                                     <input type="text"
                                            id="project-name-input"
                                            value="${this.escapeHtml(projectName)}"
-                                           onchange="app.updateProjectName(this.value)"
+                                           oninput="app.updateProjectName(this.value)"
                                            placeholder="Enter project name">
                                 </div>
                                 <div class="settings-field">
                                     <label for="project-description-input">Description</label>
                                     <textarea id="project-description-input"
-                                              onchange="app.updateProjectDescription(this.value)"
+                                              oninput="app.updateProjectDescription(this.value)"
                                               placeholder="Enter project description">${this.escapeHtml(projectDescription)}</textarea>
                                 </div>
                                 <div class="settings-grid">
@@ -4059,7 +4059,7 @@ files:
                                         <input type="number"
                                                id="max-sample-failures-input"
                                                value="${settings.max_sample_failures || 100}"
-                                               onchange="app.updateProjectSetting('max_sample_failures', parseInt(this.value))"
+                                               oninput="app.updateProjectSetting('max_sample_failures', parseInt(this.value))"
                                                min="1">
                                     </div>
                                     <div class="settings-field">
@@ -4067,7 +4067,7 @@ files:
                                         <input type="number"
                                                id="chunk-size-input"
                                                value="${settings.chunk_size || 50000}"
-                                               onchange="app.updateProjectSetting('chunk_size', parseInt(this.value))"
+                                               oninput="app.updateProjectSetting('chunk_size', parseInt(this.value))"
                                                min="1000"
                                                step="1000">
                                     </div>
@@ -4605,8 +4605,21 @@ params:
                ==================================================================== */
 
             syncFromYAML() {
-                // This is a simplified YAML parser for demonstration
-                // For production, use a proper YAML parsing library like js-yaml
+                // Check if config structure exists
+                if (!this.config || !this.config.validation_job) {
+                    alert('No valid configuration to sync. Please create or load a project first.');
+                    return;
+                }
+
+                // Check if files array exists
+                if (!this.config.files || !Array.isArray(this.config.files)) {
+                    alert('Configuration is missing files array. Cannot sync from YAML.');
+                    return;
+                }
+
+                // For now, just notify that sync is not fully implemented
+                // In the future, this would parse YAML editor content and update visual editor
+                alert('YAML sync feature is not yet fully implemented.\n\nCurrently, changes made in the visual editor automatically update the YAML editor.\n\nFuture versions will support bi-directional sync.');
                 console.log('YAML sync not fully implemented - requires js-yaml library');
             },
 
@@ -4662,18 +4675,17 @@ params:
                     }
                 }
 
-                // Reset to initial state
+                // Reset to initial state - use same structure as initialization
                 this.config = {
                     validation_job: {
                         name: '',
                         description: '',
-                        settings: {},
-                        files: []
+                        settings: {}
                     },
                     files: []
                 };
 
-                // Reset project state
+                // Reset project state FIRST before any UI updates
                 this.projectState = {
                     isOpen: false,
                     hasExportedYAML: false,
@@ -4696,19 +4708,28 @@ params:
                     this.monacoEditor.setValue('');
                 }
 
-                // Update UI
-                this.renderFileTree();
-                this.updateYAMLEditor();
-                this.updateStatusBar();
-                this.updateValidationSummary();
+                // Clear any selected panels before rendering
+                const filePanel = document.getElementById('file-panel');
+                const validationPanel = document.getElementById('validation-panel');
+                if (filePanel) {
+                    filePanel.innerHTML = '<div class="panel-placeholder">Select a file to configure</div>';
+                }
+                if (validationPanel) {
+                    validationPanel.innerHTML = '<div class="panel-placeholder">Select a validation to configure</div>';
+                }
 
-                // Clear any selected panels
-                document.getElementById('file-panel').innerHTML = '<div class="panel-placeholder">Select a file to configure</div>';
-                document.getElementById('validation-panel').innerHTML = '<div class="panel-placeholder">Select a validation to configure</div>';
+                // Show welcome screen and hide editor BEFORE render
+                const welcomeScreen = document.getElementById('welcome-screen');
+                const editorView = document.getElementById('editor-view');
+                if (welcomeScreen) {
+                    welcomeScreen.classList.remove('hidden');
+                }
+                if (editorView) {
+                    editorView.classList.add('hidden');
+                }
 
-                // Show welcome screen and hide editor
-                document.getElementById('welcome-screen').classList.remove('hidden');
-                document.getElementById('editor-view').classList.add('hidden');
+                // Now render all UI components - this will respect projectState.isOpen = false
+                this.render();
 
                 // Show notification
                 this.showNotification('Project closed - Ready to start new project or open existing YAML', 'info');
@@ -4860,6 +4881,11 @@ params:
                     return;
                 }
 
+                // Ensure config.files array exists
+                if (!this.config.files) {
+                    this.config.files = [];
+                }
+
                 // Check for duplicate file names
                 if (this.config.files.some(f => f.name === name)) {
                     alert('A file with this name already exists. Please use a different name.');
@@ -4873,10 +4899,18 @@ params:
                     validations: []
                 });
 
+                // Clear input fields for next time
+                document.getElementById('add-file-name').value = '';
+                document.getElementById('add-file-path').value = '';
+                document.getElementById('add-file-format').value = 'csv';
+
                 this.closeModal('add-file-modal');
-                this.markUnsavedChanges();
+                this.updateYAMLEditor();  // Update YAML to reflect new file
+                this.markAsModified();    // Mark as modified
                 this.saveToLocalStorage();
                 this.render();
+
+                this.showNotification(`File "${name}" added successfully`, 'success');
             },
 
             deleteFile(index) {
