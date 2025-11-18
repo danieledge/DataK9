@@ -6944,15 +6944,19 @@ params:
             updateUIState() {
                 const disabled = !this.projectState.isOpen;
                 const welcomeScreen = document.getElementById('welcome-screen');
+                const editorView = document.getElementById('editor-view');
                 const visualEditor = document.getElementById('visual-editor');
                 const yamlPanel = document.getElementById('yaml-editor-panel');
 
-                // Show/hide welcome screen
+                // Show/hide welcome screen and editor view
                 if (welcomeScreen) {
-                    welcomeScreen.style.display = disabled ? 'flex' : 'none';
+                    welcomeScreen.classList.toggle('hidden', !disabled);
+                }
+                if (editorView) {
+                    editorView.classList.toggle('hidden', disabled);
                 }
 
-                // Show/hide editor panels
+                // Show/hide editor panels (for finer control within editor-view)
                 if (visualEditor) {
                     visualEditor.style.display = disabled ? 'none' : 'block';
                 }
