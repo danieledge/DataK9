@@ -108,7 +108,7 @@ declare -A TIER_FILES=(
     [2]="ecommerce_transactions.csv|ecommerce_transactions.parquet"
     [3]="HI-Small_Trans.csv|HI-Small_Trans.parquet|LI-Small_Trans.csv|LI-Small_Trans.parquet"
     [4]="HI-Medium_Trans.csv|HI-Medium_Trans.parquet|LI-Medium_Trans.csv|LI-Medium_Trans.parquet"
-    [5]="HI-Large_Trans.csv|HI-Large_Trans.parquet|LI-Large_Trans.csv|LI-Large_Trans.parquet"
+    [5]="ultimate"  # Special marker - Ultimate uses comprehensive config, not individual files
 )
 
 ###############################################################################
@@ -229,6 +229,21 @@ select_file() {
     local tier_name="${TIER_NAMES[$tier]}"
     local tier_path="${TIER_PATHS[$tier]}"
 
+    # Special handling for Ultimate tier - skip file selection
+    if [[ "$tier" == "5" ]]; then
+        if [[ "$operation" == "validate" ]]; then
+            run_ultimate_validation
+        else
+            show_error "Profiling not available for Ultimate tier"
+            show_info "Ultimate tier only supports comprehensive validation testing"
+            echo
+            echo -e -n "Press Enter to go back..."
+            read -r
+            select_dataset "$operation"
+        fi
+        return
+    fi
+
     show_logo
     show_header "Select File - $tier_name Tier"
 
@@ -295,6 +310,85 @@ select_file() {
 }
 
 ###############################################################################
+# Run Ultimate Validation (Comprehensive Test)
+###############################################################################
+
+run_ultimate_validation() {
+    show_logo
+    show_header "Ultimate Validation - Comprehensive Test"
+
+    # Create demo-tmp directory
+    mkdir -p "$DEMO_TMP"
+
+    local ultimate_config="$SCRIPT_DIR/test-data/configs/ultimate_validation_showcase.yaml"
+    local report_file="$DEMO_TMP/ultimate_validation_report.html"
+    local json_file="$DEMO_TMP/ultimate_validation_results.json"
+
+    # Check if config exists
+    if [[ ! -f "$ultimate_config" ]]; then
+        show_error "Ultimate configuration not found: $ultimate_config"
+        echo
+        echo -e -n "Press Enter to return to main menu..."
+        read -r
+        show_main_menu
+        return
+    fi
+
+    echo -e "${BOLD}Ultimate Comprehensive Validation${NC}"
+    echo
+    show_info "Dataset: IBM AML Banking Transactions"
+    show_info "Files: HI-Large (179M rows) + LI-Large (176M rows) = 357M rows"
+    show_info "Size: 10.1 GB (Parquet format)"
+    show_info "Validations: 31 types across 10 categories"
+    echo
+    show_warning "This test will take several minutes to complete"
+    show_info "Processing: ~1M rows per chunk for optimal memory usage"
+    echo
+
+    # Show the command
+    local cmd="python3 -m validation_framework.cli validate '$ultimate_config' -o '$report_file' -j '$json_file'"
+    show_command "$cmd"
+
+    show_info "Starting comprehensive validation..."
+    echo
+    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo
+
+    # Run validation with the ultimate config
+    if python3 -m validation_framework.cli validate "$ultimate_config" -o "$report_file" -j "$json_file"; then
+        echo
+        echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        echo
+        show_success "Ultimate validation completed!"
+        echo
+        show_info "Summary:"
+        echo "  • Rows Processed: 357,000,000+"
+        echo "  • Files Validated: 2"
+        echo "  • Validation Types: 31"
+        echo
+        show_info "Reports generated:"
+        echo "  • HTML Report: $report_file"
+        echo "  • JSON Summary: $json_file"
+        echo
+
+        if [[ -f "$report_file" ]]; then
+            show_info "Open the HTML report in your browser to view detailed results"
+        fi
+    else
+        echo
+        echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        echo
+        show_error "Ultimate validation failed"
+        show_info "Check the output above for error details"
+    fi
+
+    echo
+    echo -e -n "Press Enter to return to main menu..."
+    read -r
+    show_main_menu
+}
+
+###############################################################################
 # Run Validation
 ###############################################################################
 
@@ -318,59 +412,6 @@ run_validation() {
     show_info "Tier: $tier_name"
     echo
 
-    # Check if this is Ultimate tier - use comprehensive config
-    if [[ "$tier_name" == "Ultimate" ]]; then
-        local ultimate_config="$SCRIPT_DIR/test-data/configs/ultimate_validation_showcase.yaml"
-        if [[ -f "$ultimate_config" ]]; then
-            show_info "Ultimate tier detected - using comprehensive validation config"
-            show_info "Testing all 31 validation types (excluding SQL validations)"
-            echo
-
-            # Show the command
-            local cmd="python3 -m validation_framework.cli validate '$ultimate_config'"
-            show_command "$cmd"
-
-            show_info "Starting comprehensive validation (this may take several minutes)..."
-            echo
-            echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-            echo
-
-            # Run validation with the ultimate config
-            if python3 -m validation_framework.cli validate "$ultimate_config" -o "$report_file" -j "$json_file"; then
-                echo
-                echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-                echo
-                show_success "Ultimate validation completed successfully!"
-                show_info "Processed 357M rows across 2 files with 31 validation types"
-                echo
-                show_info "Reports generated:"
-                echo "  • HTML Report: $report_file"
-                echo "  • JSON Summary: $json_file"
-                echo
-
-                if [[ -f "$report_file" ]]; then
-                    show_info "Open the HTML report in your browser to view detailed results"
-                fi
-            else
-                echo
-                echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-                echo
-                show_error "Ultimate validation failed"
-            fi
-
-            echo
-            echo -e -n "Press Enter to return to main menu..."
-            read -r
-            show_main_menu
-            return
-        else
-            show_warning "Ultimate config not found at: $ultimate_config"
-            show_info "Falling back to basic validation"
-            echo
-        fi
-    fi
-
-    # For non-Ultimate tiers or if Ultimate config not found, use basic config
     # Determine optimal chunk size based on file size
     local chunk_size=50000
     if [[ -f "$file_path" ]] || [[ -L "$file_path" ]]; then
