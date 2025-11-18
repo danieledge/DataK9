@@ -4611,25 +4611,8 @@ params:
             /* ====================================================================
                YAML Parsing (Import)
                ==================================================================== */
-
-            syncFromYAML() {
-                // Check if config structure exists
-                if (!this.config || !this.config.validation_job) {
-                    alert('No valid configuration to sync. Please create or load a project first.');
-                    return;
-                }
-
-                // Check if files array exists
-                if (!this.config.files || !Array.isArray(this.config.files)) {
-                    alert('Configuration is missing files array. Cannot sync from YAML.');
-                    return;
-                }
-
-                // For now, just notify that sync is not fully implemented
-                // In the future, this would parse YAML editor content and update visual editor
-                alert('YAML sync feature is not yet fully implemented.\n\nCurrently, changes made in the visual editor automatically update the YAML editor.\n\nFuture versions will support bi-directional sync.');
-                console.log('YAML sync not fully implemented - requires js-yaml library');
-            },
+            // NOTE: syncFromYAML() function is defined later in the file (line ~5964)
+            // with full YAML parsing implementation
 
             /* ====================================================================
                Project Management
