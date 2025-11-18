@@ -4049,6 +4049,10 @@ files:
                 });
 
                 require(['vs/editor/editor.main'], () => {
+                    // Detect iPad/iOS for clipboard workaround
+                    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+                                 (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
                     this.monacoEditor = monaco.editor.create(
                         document.getElementById('monaco-editor'),
                         {
@@ -4063,7 +4067,15 @@ files:
                             scrollBeyondLastLine: false,
                             readOnly: false,
                             cursorStyle: 'line',
-                            wordWrap: 'on'
+                            wordWrap: 'on',
+                            // Disable clipboard DOM read/write on iPad - causes focus loss
+                            domReadOnly: isIOS,
+                            // Disable find widget on iOS to prevent clipboard issues
+                            find: {
+                                addExtraSpaceOnTop: false,
+                                autoFindInSelection: 'never',
+                                seedSearchStringFromSelection: 'never'
+                            }
                         }
                     );
 
