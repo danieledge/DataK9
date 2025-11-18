@@ -6388,9 +6388,12 @@ params:
                             currentContext = config.validation_job.settings;
                         } else if (key === 'files') {
                             currentContext = config.validation_job;
+                            currentFile = null;
+                            currentValidation = null;
                         } else if (key === 'validations') {
                             if (currentFile) {
                                 currentContext = currentFile;
+                                currentValidation = null;  // Reset when entering validations list
                             }
                         } else if (inSettings && indent === 4) {
                             // Settings values
