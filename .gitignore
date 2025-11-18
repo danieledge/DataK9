@@ -98,6 +98,8 @@ validation_report.html
 validation_summary.json
 *.html
 *.json
+# Exception: validation definitions needed for Studio
+!validation_definitions.json
 
 # Logs
 *.log
@@ -117,10 +119,20 @@ test-data/medium/
 test-data/large/
 test-data/ultimate/
 
+# IBM AML Banking dataset (52 GB - too large for GitHub)
+# Download from: https://www.kaggle.com/datasets/ealtman2019/ibm-transactions-for-anti-money-laundering-aml
+../test-data/*.parquet
+../test-data/*.csv
+../test-data/*.zip
+../test-data/README.md
+
 # Archive folders (keep structure, not content)
 archive/test-reports/
 archive/demo-examples/
 
 # OS
 Thumbs.db
+
+# Development/Internal docs (not for public repo)
 wip/
+CLAUDE.md
