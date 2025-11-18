@@ -2586,12 +2586,20 @@ files:
                 </div>
                 <div class="form-group">
                     <label class="form-label form-label-required">File Format</label>
-                    <select class="form-select" id="add-file-format">
+                    <select class="form-select" id="add-file-format" onchange="app.updateFileRecommendations()">
                         <option value="csv">CSV</option>
                         <option value="excel">Excel</option>
                         <option value="json">JSON</option>
                         <option value="parquet">Parquet</option>
                     </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Estimated File Size (MB)</label>
+                    <input type="number" class="form-input" id="add-file-size" placeholder="100" min="0" step="1" oninput="app.updateFileRecommendations()">
+                    <div class="form-help">Optional: Helps calculate optimal chunk size and show format recommendations</div>
+                </div>
+                <div id="file-recommendations" style="display: none; margin-top: 16px; padding: 12px; background: var(--bg-panel); border-left: 3px solid var(--status-warning); border-radius: 4px;">
+                    <!-- Recommendations will be shown here -->
                 </div>
             </div>
             <div class="modal-footer">
