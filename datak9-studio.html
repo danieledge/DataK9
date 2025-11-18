@@ -2770,6 +2770,25 @@ files:
          Clipboard API Polyfill for iPad/Safari Compatibility
          ============================================================================ -->
     <script>
+        // Polyfill ClipboardItem class for Safari/iPad
+        if (typeof ClipboardItem === 'undefined') {
+            window.ClipboardItem = class ClipboardItem {
+                constructor(data) {
+                    this.data = data;
+                    this.types = Object.keys(data);
+                }
+
+                async getType(type) {
+                    const dataItem = this.data[type];
+                    if (dataItem instanceof Blob) {
+                        return dataItem;
+                    }
+                    // Convert string to Blob
+                    return new Blob([dataItem], { type });
+                }
+            };
+        }
+
         // Polyfill for clipboard API on Safari/iPad where it's not fully supported
         if (!navigator.clipboard) {
             navigator.clipboard = {};
