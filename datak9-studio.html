@@ -4687,17 +4687,31 @@ params:
                 this.selectedValidation = null;
                 this.projectSettingsExpanded = false;
 
+                // Clear localStorage
+                localStorage.removeItem('datak9_config');
+                localStorage.removeItem('datak9_project_state');
+
+                // Clear Monaco editor explicitly
+                if (this.monacoEditor) {
+                    this.monacoEditor.setValue('');
+                }
+
                 // Update UI
                 this.renderFileTree();
                 this.updateYAMLEditor();
                 this.updateStatusBar();
+                this.updateValidationSummary();
 
-                // Show welcome screen
+                // Clear any selected panels
+                document.getElementById('file-panel').innerHTML = '<div class="panel-placeholder">Select a file to configure</div>';
+                document.getElementById('validation-panel').innerHTML = '<div class="panel-placeholder">Select a validation to configure</div>';
+
+                // Show welcome screen and hide editor
                 document.getElementById('welcome-screen').classList.remove('hidden');
                 document.getElementById('editor-view').classList.add('hidden');
 
                 // Show notification
-                this.showNotification('Project closed', 'info');
+                this.showNotification('Project closed - Ready to start new project or open existing YAML', 'info');
             },
 
             wizardNext() {
