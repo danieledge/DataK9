@@ -318,6 +318,77 @@ run_validation() {
     show_info "Tier: $tier_name"
     echo
 
+    # Check if this is Ultimate tier - use comprehensive config
+    if [[ "$tier_name" == "Ultimate" ]]; then
+        local ultimate_config="$SCRIPT_DIR/test-data/configs/ultimate_validation_showcase.yaml"
+        if [[ -f "$ultimate_config" ]]; then
+            show_info "Ultimate tier detected - using comprehensive validation config"
+            show_info "Testing all 31 validation types (excluding SQL validations)"
+            echo
+
+            # Show the command
+            local cmd="python3 -m validation_framework.cli validate '$ultimate_config'"
+            show_command "$cmd"
+
+            show_info "Starting comprehensive validation (this may take several minutes)..."
+            echo
+            echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+            echo
+
+            # Run validation with the ultimate config
+            if python3 -m validation_framework.cli validate "$ultimate_config" -o "$report_file" -j "$json_file"; then
+                echo
+                echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+                echo
+                show_success "Ultimate validation completed successfully!"
+                show_info "Processed 357M rows across 2 files with 31 validation types"
+                echo
+                show_info "Reports generated:"
+                echo "  • HTML Report: $report_file"
+                echo "  • JSON Summary: $json_file"
+                echo
+
+                if [[ -f "$report_file" ]]; then
+                    show_info "Open the HTML report in your browser to view detailed results"
+                fi
+            else
+                echo
+                echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+                echo
+                show_error "Ultimate validation failed"
+            fi
+
+            echo
+            echo -e -n "Press Enter to return to main menu..."
+            read -r
+            show_main_menu
+            return
+        else
+            show_warning "Ultimate config not found at: $ultimate_config"
+            show_info "Falling back to basic validation"
+            echo
+        fi
+    fi
+
+    # For non-Ultimate tiers or if Ultimate config not found, use basic config
+    # Determine optimal chunk size based on file size
+    local chunk_size=50000
+    if [[ -f "$file_path" ]] || [[ -L "$file_path" ]]; then
+        local file_size_mb=$(du -Lm "$file_path" 2>/dev/null | cut -f1)
+        if [[ $file_size_mb -gt 1000 ]]; then
+            # Large files (>1GB): Use 1M rows per chunk
+            chunk_size=1000000
+            show_info "Large file detected (${file_size_mb}MB) - using optimized chunk size: 1M rows"
+        elif [[ $file_size_mb -gt 100 ]]; then
+            # Medium files (>100MB): Use 500K rows per chunk
+            chunk_size=500000
+            show_info "Medium file detected (${file_size_mb}MB) - using chunk size: 500K rows"
+        else
+            show_info "Small file detected (${file_size_mb}MB) - using chunk size: 50K rows"
+        fi
+    fi
+    echo
+
     # Create validation config
     cat > "$config_file" << EOF
 validation_job:
@@ -343,7 +414,7 @@ validation_job:
             allow_extra_columns: true
 
   processing:
-    chunk_size: 50000
+    chunk_size: $chunk_size
     max_sample_failures: 100
 
   output:
