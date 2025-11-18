@@ -6395,8 +6395,8 @@ params:
                         } else if (inSettings && indent === 4) {
                             // Settings values
                             config.validation_job.settings[key] = this.parseValue(unquotedValue);
-                        } else if (currentFile && !currentValidation && indent === 4 && (key === 'path' || key === 'format')) {
-                            // File properties (path, format)
+                        } else if (currentFile && !currentValidation && indent === 6 && (key === 'path' || key === 'format')) {
+                            // File properties (path, format) - indent 6 under validation_job.files
                             currentFile[key] = unquotedValue;
                         } else if (currentValidation && indent >= 8) {
                             // Validation parameters
