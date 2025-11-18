@@ -4090,6 +4090,19 @@ files:
                     });
 
                     console.log('Monaco Editor initialized - readOnly:', this.monacoEditor.getOption(monaco.editor.EditorOption.readOnly));
+
+                    // On iPad, override Monaco's clipboard service to prevent focus loss
+                    if (isIOS) {
+                        // Wrap the editor's focus method to prevent clipboard access
+                        const editorDomNode = this.monacoEditor.getDomNode();
+                        if (editorDomNode) {
+                            // Stop clipboard events from propagating
+                            editorDomNode.addEventListener('cut', (e) => e.stopPropagation(), true);
+                            editorDomNode.addEventListener('copy', (e) => e.stopPropagation(), true);
+                            editorDomNode.addEventListener('paste', (e) => e.stopPropagation(), true);
+                        }
+                        console.log('iPad clipboard handlers disabled to prevent focus loss');
+                    }
                 });
             },
 
