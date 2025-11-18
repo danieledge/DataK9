@@ -2233,8 +2233,8 @@
                             <div class="yaml-editor-header">
                                 <h3>YAML Configuration</h3>
                                 <div style="display: flex; gap: 8px;">
-                                    <button class="btn btn-small btn-primary" onclick="app.syncFromYAML()" title="Sync YAML changes to UI (Ctrl+R)">
-                                        🔄 Sync from YAML
+                                    <button id="yaml-lock-btn" class="btn btn-small btn-secondary" onclick="app.toggleYAMLLock()" title="Unlock to edit YAML directly">
+                                        🔒 Unlock to Edit
                                     </button>
                                     <button class="btn btn-small btn-secondary" onclick="app.copyYAML()">
                                         📋 Copy
@@ -3974,7 +3974,7 @@ files:
                             lineNumbers: 'on',
                             roundedSelection: false,
                             scrollBeyondLastLine: false,
-                            readOnly: false,
+                            readOnly: true,  // Start locked
                             cursorStyle: 'line',
                             wordWrap: 'on'
                         }
@@ -3990,7 +3990,7 @@ files:
                         }
                     });
 
-                    console.log('Monaco Editor initialized');
+                    console.log('Monaco Editor initialized (locked)');
                 });
             },
 
@@ -6217,6 +6217,49 @@ params:
             formatYAML() {
                 // Regenerate YAML (already formatted)
                 this.updateYAMLEditor();
+            },
+
+            /**
+             * Toggle YAML editor lock/unlock
+             * When locked: YAML is read-only and synced from UI
+             * When unlocked: YAML can be edited, changes stay in editor until locked again
+             */
+            toggleYAMLLock() {
+                if (!this.monacoEditor) return;
+
+                const isCurrentlyLocked = this.monacoEditor.getOption(monaco.editor.EditorOption.readOnly);
+                const lockBtn = document.getElementById('yaml-lock-btn');
+
+                if (isCurrentlyLocked) {
+                    // Unlock: Allow editing
+                    this.monacoEditor.updateOptions({ readOnly: false });
+                    lockBtn.innerHTML = '🔓 Lock & Reload';
+                    lockBtn.classList.remove('btn-secondary');
+                    lockBtn.classList.add('btn-warning');
+                    lockBtn.title = 'Lock editor and reload YAML from UI state';
+                    console.log('YAML editor unlocked - you can now edit');
+                } else {
+                    // Lock: Sync from YAML to UI, then reload YAML from UI
+                    try {
+                        // First, sync any edits from YAML to UI
+                        this.syncFromYAML();
+
+                        // Then reload YAML from the UI state (this ensures consistency)
+                        this.updateYAMLEditor();
+
+                        // Now lock the editor
+                        this.monacoEditor.updateOptions({ readOnly: true });
+                        lockBtn.innerHTML = '🔒 Unlock to Edit';
+                        lockBtn.classList.remove('btn-warning');
+                        lockBtn.classList.add('btn-secondary');
+                        lockBtn.title = 'Unlock to edit YAML directly';
+
+                        console.log('YAML editor locked - changes applied and YAML reloaded from UI');
+                    } catch (error) {
+                        alert('Error applying YAML changes: ' + error.message);
+                        console.error('Error in lock workflow:', error);
+                    }
+                }
             },
 
             /**
