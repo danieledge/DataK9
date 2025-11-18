@@ -4135,24 +4135,6 @@ files:
                                                    step="1000">
                                         </div>
                                     </div>
-                                    <div class="settings-grid">
-                                        <div class="settings-field">
-                                            <label for="parallel-processing-input">Parallel Processing</label>
-                                            <select id="parallel-processing-input"
-                                                    onchange="app.updateProjectSetting('parallel_processing', this.value === 'true')">
-                                                <option value="true" ${settings.parallel_processing !== false ? 'selected' : ''}>Enabled</option>
-                                                <option value="false" ${settings.parallel_processing === false ? 'selected' : ''}>Disabled</option>
-                                            </select>
-                                        </div>
-                                        <div class="settings-field">
-                                            <label for="stop-on-first-failure-input">Stop on First Failure</label>
-                                            <select id="stop-on-first-failure-input"
-                                                    onchange="app.updateProjectSetting('stop_on_first_failure', this.value === 'true')">
-                                                <option value="false" ${!settings.stop_on_first_failure ? 'selected' : ''}>No</option>
-                                                <option value="true" ${settings.stop_on_first_failure ? 'selected' : ''}>Yes</option>
-                                            </select>
-                                        </div>
-                                    </div>
                                 </div>
                             </div>
                         </div>
