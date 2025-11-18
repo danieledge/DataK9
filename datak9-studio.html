@@ -2064,12 +2064,9 @@
                         <span>New Project</span>
                         <span class="shortcut">Ctrl+N</span>
                     </div>
-                    <div class="menu-dropdown-item" onclick="event.stopPropagation(); app.closeAllMenus(); app.openImportDialog()">
-                        <span>Open Project (Paste YAML)...</span>
+                    <div class="menu-dropdown-item" onclick="event.stopPropagation(); app.closeAllMenus(); app.openProjectDialog()">
+                        <span>Open Project...</span>
                         <span class="shortcut">Ctrl+O</span>
-                    </div>
-                    <div class="menu-dropdown-item" onclick="event.stopPropagation(); app.closeAllMenus(); app.openFromFile()">
-                        <span>Open from File...</span>
                     </div>
                     <div class="menu-dropdown-item" onclick="event.stopPropagation(); app.closeAllMenus(); app.closeProject()">
                         <span>Close Project</span>
@@ -2177,11 +2174,8 @@
                                 <button class="btn btn-primary" onclick="app.startNewProject()">
                                     🚀 New Project
                                 </button>
-                                <button class="btn btn-secondary" onclick="app.openFromFile()">
-                                    📂 Open File
-                                </button>
-                                <button class="btn btn-secondary" onclick="app.openImportDialog()">
-                                    📋 Paste YAML
+                                <button class="btn btn-secondary" onclick="app.openProjectDialog()">
+                                    📂 Open Project
                                 </button>
                                 <button class="btn btn-secondary" onclick="app.openCatalog()">
                                     📚 Browse Validations
@@ -2300,7 +2294,7 @@
                             <li>Ctrl+S - Export YAML (Project)</li>
                             <li>Ctrl+R - Sync from YAML</li>
                             <li>Ctrl+N - New project</li>
-                            <li>Ctrl+O - Import YAML</li>
+                            <li>Ctrl+O - Open project</li>
                             <li>Ctrl+B - Toggle sidebar</li>
                             <li>Ctrl+H - Toggle help panel</li>
                             <li>Ctrl+J - Toggle footer</li>
@@ -2464,34 +2458,77 @@
         </div>
     </div>
 
-    <!-- Import YAML Modal -->
-    <div id="import-modal" class="modal-overlay">
-        <div class="modal">
+    <!-- Open Project Modal (Unified) -->
+    <div id="open-project-modal" class="modal-overlay">
+        <div class="modal" style="max-width: 700px;">
             <div class="modal-header">
-                <h2>Import YAML Configuration</h2>
-                <button class="modal-close" onclick="app.closeModal('import-modal')">&times;</button>
+                <h2>📂 Open Project</h2>
+                <button class="modal-close" onclick="app.closeModal('open-project-modal')">&times;</button>
             </div>
             <div class="modal-body">
-                <div class="form-group">
-                    <label class="form-label">Paste your YAML configuration below:</label>
-                    <textarea class="form-textarea" id="import-yaml-text"
-                              placeholder="validation_job:
+                <p style="margin-bottom: 24px; color: var(--text-secondary);">
+                    Choose how you want to open your YAML configuration:
+                </p>
+
+                <!-- Open Method Tabs -->
+                <div style="display: flex; gap: 8px; margin-bottom: 24px; border-bottom: 2px solid var(--border-color);">
+                    <button id="open-from-file-tab" class="tab-button active" onclick="app.switchOpenMethod('file')"
+                            style="padding: 12px 24px; background: none; border: none; border-bottom: 3px solid var(--k9-blue); color: var(--k9-blue); font-weight: 600; cursor: pointer;">
+                        📂 Open from File
+                    </button>
+                    <button id="open-from-paste-tab" class="tab-button" onclick="app.switchOpenMethod('paste')"
+                            style="padding: 12px 24px; background: none; border: none; border-bottom: 3px solid transparent; color: var(--text-secondary); font-weight: 600; cursor: pointer;">
+                        📋 Paste YAML
+                    </button>
+                </div>
+
+                <!-- Open from File Section -->
+                <div id="open-from-file-section" class="open-method-section">
+                    <div style="text-align: center; padding: 40px; border: 2px dashed var(--border-color); border-radius: 8px; background: var(--bg-panel);">
+                        <div style="font-size: 48px; margin-bottom: 16px;">📄</div>
+                        <h4 style="margin-bottom: 12px;">Select a YAML file to open</h4>
+                        <p style="color: var(--text-muted); margin-bottom: 20px; font-size: 13px;">
+                            Choose a .yaml or .yml configuration file from your computer
+                        </p>
+                        <input type="file" id="open-file-input" accept=".yaml,.yml" style="display: none;" onchange="app.handleFileSelect(event)">
+                        <button class="btn btn-primary" onclick="document.getElementById('open-file-input').click()">
+                            📂 Choose File...
+                        </button>
+                    </div>
+                    <div style="margin-top: 16px; padding: 12px; background: var(--bg-main); border-radius: 4px; border-left: 3px solid var(--k9-blue);">
+                        <p style="font-size: 12px; color: var(--text-muted); margin: 0;">
+                            <strong>Tip:</strong> You can also drag and drop a YAML file directly onto the Studio window
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Paste YAML Section -->
+                <div id="open-from-paste-section" class="open-method-section" style="display: none;">
+                    <div class="form-group">
+                        <label class="form-label">Paste your YAML configuration below:</label>
+                        <textarea class="form-textarea" id="import-yaml-text"
+                                  placeholder="validation_job:
   name: 'My Validation'
   description: 'Description here'
 
-settings:
+processing:
   chunk_size: 50000
+  max_sample_failures: 100
 
 files:
   - name: 'file1'
     path: 'data/file.csv'
     format: 'csv'
-    validations: []" style="min-height: 300px;"></textarea>
+    validations: []" style="min-height: 300px; font-family: 'Courier New', monospace; font-size: 13px;"></textarea>
+                        <div class="form-help">Paste a complete YAML configuration or copy from an existing project</div>
+                    </div>
                 </div>
             </div>
             <div class="modal-footer">
-                <button class="btn btn-secondary" onclick="app.closeModal('import-modal')">Cancel</button>
-                <button class="btn btn-primary" onclick="app.importYAML()">Import</button>
+                <button class="btn btn-secondary" onclick="app.closeModal('open-project-modal')">Cancel</button>
+                <button id="open-project-action-btn" class="btn btn-primary" onclick="app.openProjectFromFile()">
+                    Open from File
+                </button>
             </div>
         </div>
     </div>
@@ -3962,10 +3999,10 @@ files:
                         e.preventDefault();
                         this.startNewProject();
                     }
-                    // Ctrl/Cmd + O: Import
+                    // Ctrl/Cmd + O: Open Project
                     if ((e.ctrlKey || e.metaKey) && e.key === 'o') {
                         e.preventDefault();
-                        this.openImportDialog();
+                        this.openProjectDialog();
                     }
 
                     // Validation management shortcuts (only when a validation is selected)
@@ -5812,89 +5849,185 @@ params:
                Import/Export
                ==================================================================== */
 
-            openImportDialog() {
-                this.openModal('import-modal');
+            /**
+             * Open the unified Open Project dialog
+             */
+            openProjectDialog() {
+                this.openModal('open-project-modal');
+                // Clear paste textarea and reset to file tab
                 document.getElementById('import-yaml-text').value = '';
+                this.switchOpenMethod('file');
             },
 
             /**
-             * Open YAML file from disk using file picker
+             * Switch between file and paste methods in Open Project dialog
              */
-            openFromFile() {
-                // Create file input element
-                const input = document.createElement('input');
-                input.type = 'file';
-                input.accept = '.yaml,.yml';
+            switchOpenMethod(method) {
+                const fileTab = document.getElementById('open-from-file-tab');
+                const pasteTab = document.getElementById('open-from-paste-tab');
+                const fileSection = document.getElementById('open-from-file-section');
+                const pasteSection = document.getElementById('open-from-paste-section');
+                const actionBtn = document.getElementById('open-project-action-btn');
 
-                input.onchange = (e) => {
-                    const file = e.target.files[0];
-                    if (!file) return;
+                if (method === 'file') {
+                    // Activate file tab
+                    fileTab.classList.add('active');
+                    fileTab.style.borderBottom = '3px solid var(--k9-blue)';
+                    fileTab.style.color = 'var(--k9-blue)';
+                    pasteTab.classList.remove('active');
+                    pasteTab.style.borderBottom = '3px solid transparent';
+                    pasteTab.style.color = 'var(--text-secondary)';
 
-                    const reader = new FileReader();
-                    reader.onload = (event) => {
-                        try {
-                            const yamlContent = event.target.result;
+                    // Show file section, hide paste section
+                    fileSection.style.display = 'block';
+                    pasteSection.style.display = 'none';
 
-                            // Parse YAML using our custom parser
-                            const parsedConfig = this.parseYAML(yamlContent);
+                    // Update action button
+                    actionBtn.textContent = 'Open from File';
+                    actionBtn.onclick = () => this.openProjectFromFile();
+                } else {
+                    // Activate paste tab
+                    pasteTab.classList.add('active');
+                    pasteTab.style.borderBottom = '3px solid var(--k9-blue)';
+                    pasteTab.style.color = 'var(--k9-blue)';
+                    fileTab.classList.remove('active');
+                    fileTab.style.borderBottom = '3px solid transparent';
+                    fileTab.style.color = 'var(--text-secondary)';
 
-                            // Validate structure
-                            if (!parsedConfig.validation_job) {
-                                throw new Error("Missing required 'validation_job' key in YAML");
-                            }
+                    // Show paste section, hide file section
+                    fileSection.style.display = 'none';
+                    pasteSection.style.display = 'block';
 
-                            // Load the configuration
-                            this.config = parsedConfig;
-
-                            // Extract filename (without extension) for project name
-                            const fileName = file.name.replace(/\.(yaml|yml)$/i, '');
-
-                            // Update project state
-                            this.projectState.isOpen = true;
-                            this.projectState.projectFileName = file.name;
-                            this.projectState.lastModified = Date.now();
-                            this.projectState.hasExportedYAML = false; // Loaded, not exported
-
-                            // Update UI
-                            this.renderFileTree();
-                            this.updateYAMLEditor();
-                            this.updateStatusBar();
-
-                            // Hide welcome screen, show editor
-                            document.getElementById('welcome-screen').classList.add('hidden');
-                            document.getElementById('editor-view').classList.remove('hidden');
-
-                            // Save to localStorage
-                            this.saveToLocalStorage();
-
-                            // Show success notification
-                            this.showNotification(`✓ Opened ${file.name}`, 'success');
-
-                        } catch (error) {
-                            console.error('Error loading file:', error);
-                            this.showYAMLError(error);
-                        }
-                    };
-
-                    reader.onerror = () => {
-                        alert('Error reading file. Please try again.');
-                    };
-
-                    reader.readAsText(file);
-                };
-
-                // Trigger file picker
-                input.click();
+                    // Update action button
+                    actionBtn.textContent = 'Import YAML';
+                    actionBtn.onclick = () => this.openProjectFromPaste();
+                }
             },
 
-            importYAML() {
-                const yamlText = document.getElementById('import-yaml-text').value;
+            /**
+             * Open project from file (triggered from modal)
+             */
+            openProjectFromFile() {
+                // Trigger the hidden file input
+                document.getElementById('open-file-input').click();
+            },
 
-                // For production, use a proper YAML parser like js-yaml
-                // This is a simplified implementation
-                alert('YAML import requires js-yaml library. For now, use the wizard to create projects.');
+            /**
+             * Handle file selection from file input
+             */
+            handleFileSelect(event) {
+                const file = event.target.files[0];
+                if (!file) return;
 
-                this.closeModal('import-modal');
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        const yamlContent = e.target.result;
+
+                        // Parse YAML using our custom parser
+                        const parsedConfig = this.parseYAML(yamlContent);
+
+                        // Validate structure
+                        if (!parsedConfig.validation_job) {
+                            throw new Error("Missing required 'validation_job' key in YAML");
+                        }
+
+                        // Normalize structure
+                        parsedConfig.files = parsedConfig.validation_job.files || [];
+
+                        // Load the configuration
+                        this.config = parsedConfig;
+
+                        // Update project state
+                        this.projectState.isOpen = true;
+                        this.projectState.projectFileName = file.name;
+                        this.projectState.lastModified = Date.now();
+                        this.projectState.hasExportedYAML = false;
+
+                        // Update UI
+                        this.renderFileTree();
+                        this.updateYAMLEditor();
+                        this.updateStatusBar();
+
+                        // Hide welcome screen, show editor
+                        document.getElementById('welcome-screen').classList.add('hidden');
+                        document.getElementById('editor-view').classList.remove('hidden');
+
+                        // Save to localStorage
+                        this.saveToLocalStorage();
+
+                        // Close modal and show success
+                        this.closeModal('open-project-modal');
+                        this.showNotification(`✓ Opened ${file.name}`, 'success');
+
+                    } catch (error) {
+                        console.error('Error loading file:', error);
+                        this.showYAMLError(error);
+                    }
+                };
+
+                reader.onerror = () => {
+                    alert('Error reading file. Please try again.');
+                };
+
+                reader.readAsText(file);
+
+                // Reset file input
+                event.target.value = '';
+            },
+
+            /**
+             * Open project from pasted YAML
+             */
+            openProjectFromPaste() {
+                const yamlText = document.getElementById('import-yaml-text').value.trim();
+
+                if (!yamlText) {
+                    alert('Please paste a YAML configuration.');
+                    return;
+                }
+
+                try {
+                    // Parse YAML using our custom parser
+                    const parsedConfig = this.parseYAML(yamlText);
+
+                    // Validate structure
+                    if (!parsedConfig.validation_job) {
+                        throw new Error("Missing required 'validation_job' key in YAML");
+                    }
+
+                    // Normalize structure
+                    parsedConfig.files = parsedConfig.validation_job.files || [];
+
+                    // Load the configuration
+                    this.config = parsedConfig;
+
+                    // Update project state
+                    this.projectState.isOpen = true;
+                    this.projectState.projectFileName = null; // No file, pasted content
+                    this.projectState.lastModified = Date.now();
+                    this.projectState.hasExportedYAML = false;
+
+                    // Update UI
+                    this.renderFileTree();
+                    this.updateYAMLEditor();
+                    this.updateStatusBar();
+
+                    // Hide welcome screen, show editor
+                    document.getElementById('welcome-screen').classList.add('hidden');
+                    document.getElementById('editor-view').classList.remove('hidden');
+
+                    // Save to localStorage
+                    this.saveToLocalStorage();
+
+                    // Close modal and show success
+                    this.closeModal('open-project-modal');
+                    this.showNotification('✓ Project loaded from YAML', 'success');
+
+                } catch (error) {
+                    console.error('Error parsing YAML:', error);
+                    this.showYAMLError(error);
+                }
             },
 
             exportYAML() {
