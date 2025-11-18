@@ -5118,6 +5118,12 @@ params:
                     this.config.files[0].validations?.length || 10 : 10;
                 const chunkCalc = this.calculateChunkSize(fileSizeMB, fileFormat, numValidations);
 
+                // Update the chunk size input field with calculated value
+                const chunkSizeInput = document.getElementById('wizard-chunk-size');
+                if (chunkSizeInput) {
+                    chunkSizeInput.value = chunkCalc.recommendedChunkSize;
+                }
+
                 html += `<div style="border-top: 1px solid var(--border); padding-top: 12px;">`;
                 html += `<div style="font-weight: 600; margin-bottom: 6px;">📊 Recommended Chunk Size</div>`;
                 html += `<div style="font-size: 14px; color: var(--text-primary);">${chunkCalc.recommendedChunkSize.toLocaleString()} rows/chunk</div>`;
