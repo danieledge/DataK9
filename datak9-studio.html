@@ -2618,7 +2618,7 @@ files:
             </div>
             <div class="modal-body">
                 <div style="text-align: center; margin-bottom: 24px;">
-                    <img src="datak9studio-small.png" alt="DataK9 Studio" style="width: 120px; height: auto; margin-bottom: 16px;">
+                    <div style="font-size: 96px; margin-bottom: 16px;">🐕</div>
                     <h3 style="font-size: 24px; margin-bottom: 8px;">DataK9 Studio</h3>
                     <p style="color: var(--text-secondary); font-style: italic;">Your IDE for Data Quality</p>
                     <p style="color: var(--text-muted); font-size: 12px; margin-top: 8px;">Version 1.0.0</p>
@@ -4695,9 +4695,10 @@ params:
                 this.selectedValidation = null;
                 this.projectSettingsExpanded = false;
 
-                // Clear localStorage
-                localStorage.removeItem('datak9_config');
-                localStorage.removeItem('datak9_project_state');
+                // Clear localStorage (use correct key names with hyphens)
+                localStorage.removeItem('datak9-config');
+                localStorage.removeItem('datak9-project-state');
+                localStorage.removeItem('datak9-panel-state');
 
                 // Clear Monaco editor explicitly
                 if (this.monacoEditor) {
@@ -5969,8 +5970,17 @@ params:
                         throw new Error("Missing required 'validation_job' key in YAML");
                     }
 
+                    // Normalize structure: Move files to top level for internal use
+                    // The app expects this.config.files, not this.config.validation_job.files
+                    parsedConfig.files = parsedConfig.validation_job.files || [];
+
                     // Update internal config
                     this.config = parsedConfig;
+
+                    // Mark project as open if it has a name or files
+                    if (parsedConfig.validation_job.name || parsedConfig.files.length > 0) {
+                        this.updateProjectState(true, null);
+                    }
 
                     // Mark as having unsaved changes
                     this.projectState.hasUnsavedChanges = true;
@@ -6493,7 +6503,7 @@ params:
             <div class="file-card">
                 <h3>${file.name}</h3>
                 <p><strong>Path:</strong> <code>${file.path}</code></p>
-                <p><strong>Format:</strong> ${file.format.toUpperCase()}</p>
+                <p><strong>Format:</strong> ${file.format ? file.format.toUpperCase() : 'Not specified'}</p>
 
                 ${options.includeValidations && file.validations?.length > 0 ?
                     this.generateValidationsHTML(file.validations, options) : ''}
@@ -6581,7 +6591,7 @@ params:
                 files.forEach((file, index) => {
                     md += `### ${file.name}\n\n`;
                     md += `- **Path**: \`${file.path}\`\n`;
-                    md += `- **Format**: ${file.format.toUpperCase()}\n\n`;
+                    md += `- **Format**: ${file.format ? file.format.toUpperCase() : 'Not specified'}\n\n`;
 
                     if (options.includeValidations && file.validations?.length > 0) {
                         md += this.generateValidationsMarkdown(file.validations, options);
