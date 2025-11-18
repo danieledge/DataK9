@@ -4850,6 +4850,146 @@ params:
                File Management
                ==================================================================== */
 
+            /**
+             * Calculate optimal chunk size based on file characteristics
+             * JavaScript port of chunk_size_calculator.py logic
+             */
+            calculateChunkSize(fileSizeMB, fileFormat, numValidations = 10) {
+                // Constants from Python implementation
+                const BYTES_PER_ROW = {
+                    'csv': 150,
+                    'parquet': 50,
+                    'json': 200,
+                    'excel': 100
+                };
+
+                const VALIDATION_COMPLEXITY = {
+                    'simple': 1.0,
+                    'moderate': 2.0,
+                    'complex': 4.0,
+                    'heavy': 8.0
+                };
+
+                // Estimate available memory (assume 70% of 8GB = 5.6GB for safety)
+                const availableMemoryMB = 5600;
+                const targetMemoryMB = availableMemoryMB * 0.7;
+
+                // Estimate row count
+                const bytesPerRow = BYTES_PER_ROW[fileFormat] || 100;
+                const estimatedRows = (fileSizeMB * 1024 * 1024) / bytesPerRow;
+
+                // Determine complexity based on validation count
+                let complexity = 'simple';
+                if (numValidations > 20) complexity = 'heavy';
+                else if (numValidations > 15) complexity = 'complex';
+                else if (numValidations > 5) complexity = 'moderate';
+
+                const complexityFactor = VALIDATION_COMPLEXITY[complexity];
+
+                // Calculate memory per row with expansion (3x for pandas) and validation overhead
+                let memoryPerRow = bytesPerRow * 3.0 * complexityFactor;
+                memoryPerRow *= (1 + (numValidations * 0.1));
+
+                // Calculate optimal chunk size
+                const targetMemoryBytes = targetMemoryMB * 1024 * 1024;
+                let optimalChunkSize = Math.floor(targetMemoryBytes / memoryPerRow);
+
+                // Apply bounds: 10K min, 2M max
+                optimalChunkSize = Math.max(10000, Math.min(optimalChunkSize, 2000000));
+
+                // Calculate estimated chunks
+                const estimatedChunks = Math.ceil(estimatedRows / optimalChunkSize);
+
+                return {
+                    recommendedChunkSize: optimalChunkSize,
+                    estimatedRows: Math.floor(estimatedRows),
+                    estimatedChunks: estimatedChunks,
+                    complexity: complexity
+                };
+            },
+
+            /**
+             * Check if Parquet format is recommended
+             * JavaScript port of performance_advisor.py logic
+             */
+            shouldRecommendParquet(fileSizeMB, fileFormat) {
+                if (fileFormat !== 'csv') return null;
+
+                if (fileSizeMB >= 5000) {
+                    return {
+                        level: 'warning',
+                        message: `Very large CSV file (${fileSizeMB.toFixed(1)} MB)`,
+                        recommendation: 'Strongly recommend converting to Parquet format',
+                        benefit: '10x faster processing, 70% less memory usage'
+                    };
+                } else if (fileSizeMB >= 1000) {
+                    return {
+                        level: 'info',
+                        message: `Large CSV file (${fileSizeMB.toFixed(1)} MB)`,
+                        recommendation: 'Consider converting to Parquet format',
+                        benefit: '3-10x faster processing, significant memory savings'
+                    };
+                } else if (fileSizeMB >= 100) {
+                    return {
+                        level: 'tip',
+                        message: `CSV file is ${fileSizeMB.toFixed(1)} MB`,
+                        recommendation: 'Parquet format recommended for better performance',
+                        benefit: 'Faster processing and lower memory usage'
+                    };
+                }
+
+                return null;
+            },
+
+            /**
+             * Update file recommendations based on user input
+             */
+            updateFileRecommendations() {
+                const fileSizeInput = document.getElementById('add-file-size');
+                const fileFormatSelect = document.getElementById('add-file-format');
+                const recommendationsDiv = document.getElementById('file-recommendations');
+
+                if (!fileSizeInput || !fileFormatSelect || !recommendationsDiv) return;
+
+                const fileSizeMB = parseFloat(fileSizeInput.value);
+                const fileFormat = fileFormatSelect.value;
+
+                // Hide if no file size specified
+                if (!fileSizeMB || fileSizeMB <= 0) {
+                    recommendationsDiv.style.display = 'none';
+                    return;
+                }
+
+                let html = '';
+
+                // Check for Parquet recommendation
+                const parquetRec = this.shouldRecommendParquet(fileSizeMB, fileFormat);
+                if (parquetRec) {
+                    const icon = parquetRec.level === 'warning' ? '⚠️' : parquetRec.level === 'info' ? 'ℹ️' : '💡';
+                    html += `<div style="margin-bottom: 12px;">`;
+                    html += `<div style="font-weight: 600; margin-bottom: 4px;">${icon} ${parquetRec.message}</div>`;
+                    html += `<div style="font-size: 13px; color: var(--text-secondary);">${parquetRec.recommendation}</div>`;
+                    html += `<div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">Benefit: ${parquetRec.benefit}</div>`;
+                    html += `</div>`;
+                }
+
+                // Calculate chunk size
+                const numValidations = this.config.files.length > 0 ?
+                    this.config.files[0].validations?.length || 10 : 10;
+                const chunkCalc = this.calculateChunkSize(fileSizeMB, fileFormat, numValidations);
+
+                html += `<div style="border-top: 1px solid var(--border); padding-top: 12px;">`;
+                html += `<div style="font-weight: 600; margin-bottom: 6px;">📊 Recommended Chunk Size</div>`;
+                html += `<div style="font-size: 14px; color: var(--text-primary);">${chunkCalc.recommendedChunkSize.toLocaleString()} rows/chunk</div>`;
+                html += `<div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">`;
+                html += `Est. ${chunkCalc.estimatedRows.toLocaleString()} rows in ${chunkCalc.estimatedChunks} chunks (${chunkCalc.complexity} complexity)`;
+                html += `</div>`;
+                html += `</div>`;
+
+                recommendationsDiv.innerHTML = html;
+                recommendationsDiv.style.display = 'block';
+            },
+
             selectFile(index) {
                 this.selectedFile = index;
                 this.selectedValidation = null;
@@ -4866,6 +5006,13 @@ params:
                 document.getElementById('add-file-name').value = '';
                 document.getElementById('add-file-path').value = '';
                 document.getElementById('add-file-format').value = 'csv';
+                document.getElementById('add-file-size').value = '';
+
+                // Hide recommendations initially
+                const recsEl = document.getElementById('file-recommendations');
+                if (recsEl) {
+                    recsEl.style.display = 'none';
+                }
             },
 
             saveNewFile() {
