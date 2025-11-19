@@ -7172,6 +7172,9 @@ params:
                     editorView.classList.toggle('hidden', disabled);
                 }
 
+                // Update menu visibility
+                this.updateMenuState();
+
                 // Show/hide editor panels (for finer control within editor-view)
                 if (visualEditor) {
                     visualEditor.style.display = disabled ? 'none' : 'block';
