@@ -259,18 +259,29 @@ class ValidationEngine:
         )
 
         try:
-            # Create data loader
-            loader = LoaderFactory.create_loader(
-                file_path=file_config["path"],
-                file_format=file_config["format"],
-                chunk_size=self.config.chunk_size,
-                delimiter=file_config.get("delimiter"),
-                encoding=file_config.get("encoding"),
-                header=file_config.get("header"),
-                sheet_name=file_config.get("sheet_name"),
-            )
+            # Create data loader (file or database)
+            if file_config["format"] == "database":
+                # Database source
+                loader = LoaderFactory.create_database_loader(
+                    connection_string=file_config["connection_string"],
+                    table=file_config.get("table"),
+                    query=file_config.get("query"),
+                    chunk_size=self.config.chunk_size,
+                    db_type=file_config.get("db_type"),
+                )
+            else:
+                # File source
+                loader = LoaderFactory.create_loader(
+                    file_path=file_config["path"],
+                    file_format=file_config["format"],
+                    chunk_size=self.config.chunk_size,
+                    delimiter=file_config.get("delimiter"),
+                    encoding=file_config.get("encoding"),
+                    header=file_config.get("header"),
+                    sheet_name=file_config.get("sheet_name"),
+                )
 
-            # Get file metadata
+            # Get file metadata (or database metadata)
             metadata = loader.get_metadata()
             file_report.metadata = metadata
 

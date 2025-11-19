@@ -220,6 +220,142 @@ class ValidationDefinitionLoader:
         """
         return len(self._definitions)
 
+    def get_source_compatibility(self, validation_type: str) -> Dict[str, Any]:
+        """
+        Get source compatibility information for a validation.
+
+        Args:
+            validation_type: Name of the validation
+
+        Returns:
+            Source compatibility dictionary or empty dict if not found
+        """
+        defn = self.get_definition(validation_type)
+        if defn:
+            return defn.get('source_compatibility', {})
+        return {}
+
+    def is_compatible_with(self, validation_type: str, source_type: str) -> bool:
+        """
+        Check if a validation is compatible with a specific source type.
+
+        Args:
+            validation_type: Name of the validation
+            source_type: 'file' or 'database'
+
+        Returns:
+            True if compatible, False otherwise
+        """
+        compat = self.get_source_compatibility(validation_type)
+        return compat.get(source_type, False)
+
+    def get_by_source_compatibility(
+        self,
+        source_type: str,
+        include_partial: bool = True
+    ) -> Dict[str, Dict[str, Any]]:
+        """
+        Get validations compatible with a specific source type.
+
+        Args:
+            source_type: 'file' or 'database'
+            include_partial: If True, includes validations that work but aren't optimized
+
+        Returns:
+            Dictionary of compatible validations
+        """
+        if source_type not in ['file', 'database']:
+            raise ValueError(f"Invalid source_type: {source_type}. Must be 'file' or 'database'")
+
+        compatible = {}
+
+        for name, defn in self._definitions.items():
+            compat = defn.get('source_compatibility', {})
+
+            # Check if validation supports this source
+            if compat.get(source_type, False):
+                # If include_partial=False, exclude non-optimized ones
+                if not include_partial:
+                    optimized_for = compat.get('optimized_for', [source_type])
+                    if source_type not in optimized_for:
+                        continue
+
+                compatible[name] = defn
+
+        return compatible
+
+    def get_optimal_validations(self, source_type: str) -> Dict[str, Dict[str, Any]]:
+        """
+        Get validations optimized for a specific source type.
+
+        This returns only validations that are either:
+        - Specifically optimized for this source type
+        - Work identically on both sources (no optimization preference)
+
+        Args:
+            source_type: 'file' or 'database'
+
+        Returns:
+            Dictionary of optimal validations for that source
+        """
+        return self.get_by_source_compatibility(source_type, include_partial=False)
+
+    def get_compatibility_summary(self) -> Dict[str, int]:
+        """
+        Get summary statistics about source compatibility.
+
+        Returns:
+            Dictionary with counts:
+            - total: Total number of validations
+            - file_compatible: Number compatible with files
+            - database_compatible: Number compatible with databases
+            - both_compatible: Number compatible with both
+            - file_only: Number that only work with files
+            - database_only: Number that only work with databases
+            - file_optimized: Number optimized for files
+            - database_optimized: Number optimized for databases
+        """
+        total = len(self._definitions)
+        file_compatible = 0
+        database_compatible = 0
+        both_compatible = 0
+        file_only = 0
+        database_only = 0
+        file_optimized = 0
+        database_optimized = 0
+
+        for defn in self._definitions.values():
+            compat = defn.get('source_compatibility', {})
+            file_ok = compat.get('file', False)
+            db_ok = compat.get('database', False)
+            optimized = compat.get('optimized_for', [])
+
+            if file_ok:
+                file_compatible += 1
+            if db_ok:
+                database_compatible += 1
+            if file_ok and db_ok:
+                both_compatible += 1
+            if file_ok and not db_ok:
+                file_only += 1
+            if db_ok and not file_ok:
+                database_only += 1
+            if 'file' in optimized:
+                file_optimized += 1
+            if 'database' in optimized:
+                database_optimized += 1
+
+        return {
+            'total': total,
+            'file_compatible': file_compatible,
+            'database_compatible': database_compatible,
+            'both_compatible': both_compatible,
+            'file_only': file_only,
+            'database_only': database_only,
+            'file_optimized': file_optimized,
+            'database_optimized': database_optimized
+        }
+
     def export_for_javascript(self) -> str:
         """
         Export definitions as JavaScript object for Studio.

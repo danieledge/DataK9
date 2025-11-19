@@ -1,0 +1,74 @@
+# DataK9 Database Validation Configuration Example
+# Author: Daniel Edge
+# Description: Example showing how to validate database tables using DataK9
+
+validation_job:
+  name: "Database Quality Check"
+  version: "1.0"
+  description: "Validate customer data directly from SQLite database"
+
+  files:
+    # Database source - customers table
+    - name: "customers_db"
+      # For database sources, we currently use the loader via Python API
+      # This YAML demonstrates the structure for future database support
+      path: "sqlite:///test_data.db"  # Connection string
+      format: "database"  # Special format for database sources
+      table: "customers"  # Table name
+
+      validations:
+        # Schema validation
+        - type: "ColumnPresenceCheck"
+          severity: "ERROR"
+          params:
+            required_columns: "customer_id,first_name,last_name,email,phone"
+
+        # Field-level validations
+        - type: "MandatoryFieldCheck"
+          severity: "ERROR"
+          params:
+            fields: ["customer_id", "email"]
+
+        - type: "RegexCheck"
+          severity: "ERROR"
+          params:
+            field: "email"
+            pattern: "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
+            message: "Invalid email format"
+
+        - type: "UniqueKeyCheck"
+          severity: "ERROR"
+          params:
+            fields: ["customer_id"]
+
+        # Data quality checks
+        - type: "CompletenessCheck"
+          severity: "WARNING"
+          params:
+            field: "email"
+            min_completeness: 95
+
+        - type: "RangeCheck"
+          severity: "WARNING"
+          params:
+            field: "account_balance"
+            min_value: 0
+            max_value: 10000000
+
+        # Statistical checks
+        - type: "StatisticalOutlierCheck"
+          severity: "WARNING"
+          params:
+            field: "account_balance"
+            method: "iqr"
+            threshold: 1.5
+
+  output:
+    html_report: "database_validation_report.html"
+    json_summary: "database_validation_summary.json"
+    fail_on_error: false
+    fail_on_warning: false
+
+  processing:
+    chunk_size: 10000  # Rows per chunk from database
+    max_sample_failures: 100

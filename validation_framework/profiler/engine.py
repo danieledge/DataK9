@@ -48,6 +48,84 @@ class DataProfiler:
         self.chunk_size = chunk_size
         self.max_correlation_columns = max_correlation_columns
 
+    def profile_dataframe(
+        self,
+        df: pd.DataFrame,
+        name: str = "dataframe",
+        declared_schema: Optional[Dict[str, str]] = None
+    ) -> ProfileResult:
+        """
+        Profile an in-memory DataFrame (useful for database sources).
+
+        Args:
+            df: pandas DataFrame to profile
+            name: Name for the profile (e.g., table name)
+            declared_schema: Optional declared schema {column: type}
+
+        Returns:
+            ProfileResult with comprehensive profile information
+        """
+        start_time = time.time()
+        logger.info(f"Starting profile of DataFrame: {name}")
+
+        row_count = len(df)
+
+        # Initialize column profiles
+        column_profiles: Dict[str, Dict[str, Any]] = {}
+        numeric_data: Dict[str, List[float]] = {}
+
+        for col in df.columns:
+            column_profiles[col] = self._initialize_column_profile(col, declared_schema)
+
+        # Process entire dataframe (already in memory)
+        for col in df.columns:
+            self._update_column_profile(column_profiles[col], df[col], 0)
+
+            # Collect numeric data for correlations
+            if column_profiles[col]["inferred_type"] in ["integer", "float"]:
+                numeric_values = pd.to_numeric(df[col], errors='coerce').dropna()
+                numeric_data[col] = numeric_values.tolist()
+
+        # Finalize column profiles
+        columns = []
+        for col_name, profile_data in column_profiles.items():
+            column_profile = self._finalize_column_profile(col_name, profile_data, row_count)
+            columns.append(column_profile)
+
+        # Calculate correlations
+        correlations = self._calculate_correlations(numeric_data, row_count)
+
+        # Generate validation suggestions
+        suggested_validations = self._generate_validation_suggestions(columns, row_count)
+
+        # Calculate overall quality score
+        overall_quality = self._calculate_overall_quality(columns)
+
+        # Generate validation configuration (for database source)
+        config_yaml, config_command = self._generate_validation_config(
+            name, "", "database", 0, row_count, columns, suggested_validations
+        )
+
+        processing_time = time.time() - start_time
+        logger.info(f"Profile completed in {processing_time:.2f} seconds")
+
+        return ProfileResult(
+            file_name=f"{name} (DataFrame)",
+            file_path="",
+            file_size_bytes=0,
+            format="database",
+            row_count=row_count,
+            column_count=len(columns),
+            profiled_at=datetime.now(),
+            processing_time_seconds=processing_time,
+            columns=columns,
+            correlations=correlations,
+            suggested_validations=suggested_validations,
+            overall_quality_score=overall_quality,
+            generated_config_yaml=config_yaml,
+            generated_config_command=config_command
+        )
+
     def profile_file(
         self,
         file_path: str,

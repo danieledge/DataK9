@@ -191,23 +191,65 @@ class ValidationConfig:
         self.max_sample_failures = processing.get("max_sample_failures", MAX_SAMPLE_FAILURES)
 
     def _parse_files(self, files_config: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Parse files configuration."""
+        """
+        Parse files configuration.
+
+        Supports both file and database sources:
+        - File sources: path points to file, format is csv/excel/json/parquet
+        - Database sources: path is connection string, format is 'database',
+          table/query specify what to validate
+        """
         parsed_files = []
 
         for idx, file_config in enumerate(files_config):
-            if "path" not in file_config:
+            # Check if this is a database source
+            format_type = file_config.get("format", "")
+
+            # For database sources, path is optional (can be specified separately)
+            # For file sources, path is required
+            if format_type != "database" and "path" not in file_config:
                 raise ConfigError(f"File configuration {idx} missing 'path'")
 
+            # Infer format if not specified
+            if "path" in file_config and not format_type:
+                format_type = self._infer_format(file_config["path"])
+
+            # Build parsed file configuration
             parsed_file = {
                 "name": file_config.get("name", f"file_{idx}"),
-                "path": file_config["path"],
-                "format": file_config.get("format", self._infer_format(file_config["path"])),
-                "delimiter": file_config.get("delimiter", ","),
-                "encoding": file_config.get("encoding", "utf-8"),
-                "header": file_config.get("header", 0),
+                "path": file_config.get("path", ""),
+                "format": format_type,
                 "validations": self._parse_validations(file_config.get("validations", [])),
                 "metadata": file_config.get("metadata", {}),
             }
+
+            # Add format-specific fields
+            if format_type == "database":
+                # Database-specific configuration
+                parsed_file.update({
+                    "connection_string": file_config.get("path", file_config.get("connection_string", "")),
+                    "table": file_config.get("table"),
+                    "query": file_config.get("query"),
+                    "db_type": file_config.get("db_type"),  # Optional, will auto-detect if not provided
+                })
+
+                # Validate database configuration
+                if not parsed_file["connection_string"]:
+                    raise ConfigError(
+                        f"Database source {idx} must specify 'path' (connection string) "
+                        f"or 'connection_string'"
+                    )
+                if not parsed_file["table"] and not parsed_file["query"]:
+                    raise ConfigError(
+                        f"Database source {idx} must specify either 'table' or 'query'"
+                    )
+            else:
+                # File-specific configuration
+                parsed_file.update({
+                    "delimiter": file_config.get("delimiter", ","),
+                    "encoding": file_config.get("encoding", "utf-8"),
+                    "header": file_config.get("header", 0),
+                })
 
             parsed_files.append(parsed_file)
 

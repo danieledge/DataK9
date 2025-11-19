@@ -126,16 +126,18 @@ show_main_menu() {
     echo
     echo "  1) 🔍 Run Validation    - Check data quality with custom rules"
     echo "  2) 📊 Run Profile       - Analyze data characteristics and patterns"
-    echo "  3) ℹ️  About DataK9      - Learn more about the framework"
+    echo "  3) 🗄️  Database Demo     - Validate data directly from database"
+    echo "  4) ℹ️  About DataK9      - Learn more about the framework"
     echo "  0) Exit"
     echo
-    echo -e -n "${BOLD}Enter your choice [0-3]:${NC} "
+    echo -e -n "${BOLD}Enter your choice [0-4]:${NC} "
     read -r choice
 
     case $choice in
         1) select_dataset "validate" ;;
         2) select_dataset "profile" ;;
-        3) show_about ;;
+        3) run_database_demo ;;
+        4) show_about ;;
         0) exit 0 ;;
         *) show_error "Invalid choice. Please try again."; sleep 2; show_main_menu ;;
     esac
@@ -571,6 +573,227 @@ run_profile() {
     echo -e -n "Press Enter to return to main menu..."
     read -r
     show_main_menu
+}
+
+###############################################################################
+# Database Demo
+###############################################################################
+
+run_database_demo() {
+    show_logo
+    show_header "Database Validation Demo"
+
+    echo -e "${BOLD}Database Integration${NC}"
+    echo "DataK9 can validate data directly from databases without exporting to files."
+    echo
+    echo -e "${CYAN}Supported Databases:${NC}"
+    echo "  • PostgreSQL"
+    echo "  • MySQL"
+    echo "  • SQL Server"
+    echo "  • Oracle"
+    echo "  • SQLite"
+    echo
+    echo -e "${CYAN}Choose a demo:${NC}"
+    echo
+    echo "  1) 🔄 Python Script - Programmatic database validation"
+    echo "  2) 📄 YAML Config - Database validation via YAML"
+    echo "  3) 📊 Profile Database - Profile a database table"
+    echo "  0) Back to main menu"
+    echo
+    echo -e -n "${BOLD}Enter your choice [0-3]:${NC} "
+    read -r demo_choice
+
+    case $demo_choice in
+        1) run_database_python_demo ;;
+        2) run_database_yaml_demo ;;
+        3) run_database_profile_demo ;;
+        0) show_main_menu ;;
+        *) show_error "Invalid choice. Please try again."; sleep 2; run_database_demo ;;
+    esac
+}
+
+run_database_python_demo() {
+    show_logo
+    show_header "Database Validation - Python Script"
+
+    # Check if test database exists
+    if [[ ! -f "test_data.db" ]]; then
+        show_warning "Test database not found. Creating test database..."
+        echo
+        if python3 scripts/create_test_database.py; then
+            show_success "Test database created: test_data.db"
+            echo
+        else
+            show_error "Failed to create test database"
+            sleep 2
+            run_database_demo
+            return
+        fi
+    fi
+
+    show_info "Database: test_data.db (SQLite)"
+    show_info "Table: customers (1,020 rows)"
+    echo
+    show_info "This demo validates customer data directly from the database using"
+    show_info "the LoaderFactory and validation registry programmatically."
+    echo
+
+    # Show the command
+    local cmd="python3 examples/run_database_validation.py"
+    show_command "$cmd"
+
+    show_info "Running 5 validations:"
+    echo "  • MandatoryFieldCheck - Required fields validation"
+    echo "  • RegexCheck - Email format validation"
+    echo "  • UniqueKeyCheck - Customer ID uniqueness"
+    echo "  • CompletenessCheck - Field completeness threshold"
+    echo "  • RangeCheck - Account balance range validation"
+    echo
+    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo
+
+    # Run validation
+    python3 examples/run_database_validation.py || true
+
+    echo
+    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo
+    show_success "Database validation completed!"
+    echo
+    show_info "Key Points:"
+    echo "  • Database validations use the same rules as file validations"
+    echo "  • Data is processed in chunks for memory efficiency"
+    echo "  • 33/35 DataK9 validations work with databases"
+    echo "  • Connection string format: sqlite:///path or postgresql://user:pass@host/db"
+    echo
+    echo -e -n "Press Enter to return to database demo menu..."
+    read -r
+    run_database_demo
+}
+
+run_database_yaml_demo() {
+    show_logo
+    show_header "Database Validation - YAML Config"
+
+    # Check if test database exists
+    if [[ ! -f "test_data.db" ]]; then
+        show_warning "Test database not found. Creating test database..."
+        echo
+        if python3 scripts/create_test_database.py; then
+            show_success "Test database created: test_data.db"
+            echo
+        else
+            show_error "Failed to create test database"
+            sleep 2
+            run_database_demo
+            return
+        fi
+    fi
+
+    mkdir -p "$DEMO_TMP"
+
+    show_info "Database: test_data.db (SQLite)"
+    show_info "Table: customers (1,020 rows)"
+    show_info "Config: examples/database_validation_test.yaml"
+    echo
+    show_info "This demo validates customer data using a YAML configuration file."
+    show_info "The YAML format supports both file and database sources."
+    echo
+
+    # Show the command
+    local cmd="python3 -m validation_framework.cli validate examples/database_validation_test.yaml"
+    show_command "$cmd"
+
+    show_info "YAML Configuration:"
+    echo "  • format: 'database'"
+    echo "  • path: 'sqlite:///test_data.db' (connection string)"
+    echo "  • table: 'customers'"
+    echo "  • 5 validations defined"
+    echo
+    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo
+
+    # Run validation
+    python3 -m validation_framework.cli validate examples/database_validation_test.yaml || true
+
+    echo
+    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo
+    show_success "Database validation completed!"
+    echo
+    show_info "Reports generated:"
+    echo "  • HTML Report: demo-tmp/database_validation_report.html"
+    echo "  • JSON Summary: demo-tmp/database_validation_summary.json"
+    echo
+    echo -e -n "Press Enter to return to database demo menu..."
+    read -r
+    run_database_demo
+}
+
+run_database_profile_demo() {
+    show_logo
+    show_header "Database Profiling Demo"
+
+    # Check if test database exists
+    if [[ ! -f "test_data.db" ]]; then
+        show_warning "Test database not found. Creating test database..."
+        echo
+        if python3 scripts/create_test_database.py; then
+            show_success "Test database created: test_data.db"
+            echo
+        else
+            show_error "Failed to create test database"
+            sleep 2
+            run_database_demo
+            return
+        fi
+    fi
+
+    mkdir -p "$DEMO_TMP"
+    local report_file="$DEMO_TMP/db_profile.html"
+    local json_file="$DEMO_TMP/db_profile.json"
+
+    show_info "Database: test_data.db (SQLite)"
+    show_info "Table: customers (1,020 rows)"
+    echo
+    show_info "This demo profiles a database table directly without exporting to file."
+    echo
+
+    # Show the command
+    local cmd="python3 -m validation_framework.cli profile --database 'sqlite:///test_data.db' --table customers -o '$report_file' -j '$json_file'"
+    show_command "$cmd"
+
+    show_info "Profiling will analyze:"
+    echo "  • Column data types and statistics"
+    echo "  • Value distributions and patterns"
+    echo "  • Missing values and anomalies"
+    echo "  • PII detection"
+    echo
+    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo
+
+    # Run profiler
+    if python3 -m validation_framework.cli profile --database "sqlite:///test_data.db" --table customers -o "$report_file" -j "$json_file"; then
+        echo
+        echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        echo
+        show_success "Database profiling completed!"
+        echo
+        show_info "Reports generated:"
+        echo "  • HTML Report: $report_file"
+        echo "  • JSON Summary: $json_file"
+        echo
+    else
+        echo
+        echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        echo
+        show_error "Database profiling failed"
+    fi
+
+    echo
+    echo -e -n "Press Enter to return to database demo menu..."
+    read -r
+    run_database_demo
 }
 
 ###############################################################################

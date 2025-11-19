@@ -1,0 +1,53 @@
+# DataK9 Database Validation Configuration - Test
+# Validates customer data from SQLite database
+
+validation_job:
+  name: "Customer Database Quality Check"
+  version: "1.0"
+  description: "Test database validation via YAML configuration"
+
+  files:
+    - name: "customers_db"
+      path: "sqlite:///test_data.db"  # Connection string as path
+      format: "database"
+      table: "customers"  # Table to validate
+
+      validations:
+        - type: "MandatoryFieldCheck"
+          severity: "ERROR"
+          params:
+            fields: ["customer_id", "email"]
+
+        - type: "RegexCheck"
+          severity: "ERROR"
+          params:
+            field: "email"
+            pattern: "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
+
+        - type: "UniqueKeyCheck"
+          severity: "ERROR"
+          params:
+            fields: ["customer_id"]
+
+        - type: "CompletenessCheck"
+          severity: "WARNING"
+          params:
+            field: "email"
+            min_completeness: 95
+
+        - type: "RangeCheck"
+          severity: "WARNING"
+          params:
+            field: "account_balance"
+            min_value: 0
+            max_value: 10000000
+
+  output:
+    html_report: "demo-tmp/database_validation_report.html"
+    json_summary: "demo-tmp/database_validation_summary.json"
+    fail_on_error: false
+    fail_on_warning: false
+
+  processing:
+    chunk_size: 10000
+    max_sample_failures: 100
