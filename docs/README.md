@@ -147,6 +147,64 @@ Open `validation_report.html` in your browser to see:
 
 ---
 
+## 🗄️ Database Validation
+
+DataK9 can validate data directly from databases without exporting to files!
+
+**Supported Databases:** PostgreSQL, MySQL, SQL Server, Oracle, SQLite
+
+### Quick Example - Validate from Database
+
+```yaml
+validation_job:
+  name: "Database Quality Check"
+
+  files:
+    - name: "customers_db"
+      path: "sqlite:///database.db"  # Connection string
+      format: "database"
+      table: "customers"  # Or use query: "SELECT * FROM customers WHERE active = 1"
+
+      validations:
+        - type: "MandatoryFieldCheck"
+          severity: "ERROR"
+          params:
+            fields: ["customer_id", "email"]
+
+        - type: "RangeCheck"
+          severity: "WARNING"
+          params:
+            field: "account_balance"
+            min_value: 0
+            max_value: 10000000
+```
+
+### Run Database Validation
+
+```bash
+# Validate from database using YAML config
+python3 -m validation_framework.cli validate db_validation.yaml
+
+# Profile a database table directly
+python3 -m validation_framework.cli profile \
+  --database "postgresql://user:pass@localhost/mydb" \
+  --table customers \
+  -o profile.html
+
+# List validations compatible with databases
+python3 -m validation_framework.cli list-validations --source database
+```
+
+**Key Benefits:**
+- ✅ **33/35 validations** work identically on files and databases
+- ✅ **Memory efficient** - Chunked processing for large tables
+- ✅ **No export needed** - Validate data where it lives
+- ✅ **Same rules** - File validations work on databases seamlessly
+
+→ **[See examples/database_validation_config.yaml](../examples/database_validation_config.yaml)** for complete example
+
+---
+
 ## 📖 Popular Topics
 
 ### Essential Reading

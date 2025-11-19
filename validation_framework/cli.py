@@ -78,9 +78,14 @@ def validate(config_file, html_output, json_output, verbose, fail_on_warning, lo
         logger.info(f"Configuration loaded: {engine.config.job_name}")
 
         # Performance advisory: Check files and recommend Parquet if needed
+        # (Skip database sources)
         advisor = get_performance_advisor()
         for file_config in engine.config.files:
-            file_path = file_config.path
+            # Skip database sources - performance advisor is for files only
+            if file_config.get("format") == "database":
+                continue
+
+            file_path = file_config["path"]
             if Path(file_path).exists():
                 analysis = advisor.analyze_file(file_path, operation='validation')
                 warnings_output = advisor.format_warnings_for_cli(analysis)
@@ -150,7 +155,11 @@ def validate(config_file, html_output, json_output, verbose, fail_on_warning, lo
 @cli.command()
 @click.option('--category', '-c', type=click.Choice(['all', 'file', 'schema', 'field', 'record']),
               default='all', help='Filter by validation category')
-def list_validations(category):
+@click.option('--source', '-s', type=click.Choice(['file', 'database']),
+              help='Filter by source compatibility (file or database)')
+@click.option('--show-compatibility', is_flag=True,
+              help='Show source compatibility for each validation')
+def list_validations(category, source, show_compatibility):
     """
     List all available validation types.
 
@@ -159,6 +168,10 @@ def list_validations(category):
     - schema: Schema validation (columns, types, etc.)
     - field: Field-level checks (mandatory, regex, ranges, etc.)
     - record: Record-level checks (duplicates, blanks, etc.)
+
+    Use --source to filter by source compatibility:
+    - file: Validations that work with file sources
+    - database: Validations that work with database sources
 
     Examples:
 
@@ -169,9 +182,33 @@ def list_validations(category):
     \b
     # List only field-level validations
     data-validate list-validations --category field
+
+    \b
+    # List validations that work with databases
+    data-validate list-validations --source database
+
+    \b
+    # Show source compatibility for all validations
+    data-validate list-validations --show-compatibility
     """
+    from validation_framework.utils.definition_loader import ValidationDefinitionLoader
+    from pathlib import Path
+
     registry = get_registry()
+
+    # Create fresh loader to avoid singleton cache issues
+    # Get path relative to this file
+    cli_dir = Path(__file__).parent
+    def_file = cli_dir / "validation_definitions.json"
+    definition_loader = ValidationDefinitionLoader(def_file)
+
+    # Get validations from registry
     validations = sorted(registry.list_available())
+
+    # Filter by source compatibility if specified
+    if source:
+        compatible = definition_loader.get_by_source_compatibility(source)
+        validations = [v for v in validations if v in compatible]
 
     # Category filtering (simple string matching)
     if category != 'all':
@@ -184,18 +221,54 @@ def list_validations(category):
         keywords = category_keywords.get(category, [])
         validations = [v for v in validations if any(k.lower() in v.lower() for k in keywords)]
 
-    click.echo(f"\nAvailable Validations ({len(validations)}):\n")
+    # Show header with filter info
+    filter_info = []
+    if category != 'all':
+        filter_info.append(f"category={category}")
+    if source:
+        filter_info.append(f"source={source}")
+    filter_str = f" ({', '.join(filter_info)})" if filter_info else ""
+
+    click.echo(f"\nAvailable Validations{filter_str}: {len(validations)}\n")
+
+    # Show compatibility summary if requested
+    if show_compatibility and not source:
+        summary = definition_loader.get_compatibility_summary()
+        click.echo("📊 Source Compatibility Summary:")
+        click.echo(f"   Total validations: {summary['total']}")
+        click.echo(f"   📁 File-compatible: {summary['file_compatible']}")
+        click.echo(f"   🗄️  Database-compatible: {summary['database_compatible']}")
+        click.echo(f"   Both: {summary['both_compatible']}")
+        click.echo()
 
     for validation in validations:
         try:
+            # Get source compatibility badges
+            compat = definition_loader.get_source_compatibility(validation)
+            badges = []
+            if compat.get('file'):
+                badges.append('📁')
+            if compat.get('database'):
+                badges.append('🗄️')
+            badge_str = ' '.join(badges) if (show_compatibility or source) else ''
+
             # Get validation class to show description
             validation_class = registry.get(validation)
             # Create temporary instance to get description
             from validation_framework.core.results import Severity
             instance = validation_class(name=validation, severity=Severity.ERROR, params={})
             description = instance.get_description()
-            click.echo(f"  • {validation}")
-            click.echo(f"    {description}\n")
+
+            # Format output
+            name_with_badge = f"{badge_str} {validation}" if badge_str else f"  • {validation}"
+            click.echo(name_with_badge)
+            click.echo(f"    {description}")
+
+            # Show compatibility notes if available
+            if show_compatibility and compat.get('notes'):
+                click.echo(f"    💡 {compat['notes']}")
+
+            click.echo()
         except Exception:
             click.echo(f"  • {validation}\n")
 
@@ -314,18 +387,21 @@ def version():
 
 
 @cli.command()
-@click.argument('file_path', type=click.Path(exists=True))
+@click.argument('file_path', type=click.Path(exists=True), required=False)
 @click.option('--format', '-f', type=click.Choice(['csv', 'excel', 'json', 'parquet'], case_sensitive=False),
               help='File format (auto-detected if not specified)')
+@click.option('--database', '--db', help='Database connection string (e.g., sqlite:///test.db or postgresql://...)')
+@click.option('--table', '-t', help='Database table name to profile')
+@click.option('--query', '-q', help='SQL query to profile (alternative to --table)')
 @click.option('--html-output', '-o', help='Path for HTML profile report (default: profile_report.html)')
 @click.option('--json-output', '-j', help='Path for JSON profile output')
 @click.option('--config-output', '-c', help='Path to save generated validation config (default: <filename>_validation.yaml)')
-@click.option('--chunk-size', type=int, default=50000, help='Number of rows per chunk for large files')
+@click.option('--chunk-size', type=int, default=50000, help='Number of rows per chunk for large files/tables')
 @click.option('--log-level', type=click.Choice(['DEBUG', 'INFO', 'WARNING', 'ERROR'], case_sensitive=False),
               default='INFO', help='Logging level')
-def profile(file_path, format, html_output, json_output, config_output, chunk_size, log_level):
+def profile(file_path, format, database, table, query, html_output, json_output, config_output, chunk_size, log_level):
     """
-    Profile a data file to understand its structure and quality.
+    Profile a data file or database table to understand its structure and quality.
 
     Generates a comprehensive analysis including:
     - Schema and data type inference (known vs inferred)
@@ -335,7 +411,7 @@ def profile(file_path, format, html_output, json_output, config_output, chunk_si
     - Suggested validations
     - Auto-generated validation configuration
 
-    FILE_PATH: Path to data file to profile
+    FILE_PATH: Path to data file to profile (not required if using --database)
 
     Examples:
 
@@ -350,53 +426,117 @@ def profile(file_path, format, html_output, json_output, config_output, chunk_si
     \b
     # Profile large Parquet file with custom chunk size
     data-validate profile large_data.parquet --chunk-size 100000
+
+    \b
+    # Profile a database table
+    data-validate profile --database "sqlite:///test.db" --table customers
+
+    \b
+    # Profile database with custom query
+    data-validate profile --db "postgresql://user:pass@localhost/db" --query "SELECT * FROM orders WHERE date > '2024-01-01'"
     """
     from validation_framework.profiler.engine import DataProfiler
     from validation_framework.profiler.html_reporter import ProfileHTMLReporter
+    from validation_framework.loaders.factory import LoaderFactory
 
     # Setup logging
     setup_logging(level=log_level)
-    logger.info(f"Starting profile of: {file_path}")
+
+    # Validate arguments
+    if not file_path and not database:
+        click.echo("❌ Error: Must provide either FILE_PATH or --database option", err=True)
+        click.echo("Run 'data-validate profile --help' for usage examples")
+        sys.exit(1)
+
+    if database and not (table or query):
+        click.echo("❌ Error: When using --database, must provide either --table or --query", err=True)
+        sys.exit(1)
+
+    if file_path and database:
+        click.echo("❌ Error: Cannot use both FILE_PATH and --database. Choose one.", err=True)
+        sys.exit(1)
 
     try:
-        # Auto-detect format if not specified
-        if not format:
-            file_ext = Path(file_path).suffix.lower()
-            format_map = {
-                '.csv': 'csv',
-                '.xlsx': 'excel',
-                '.xls': 'excel',
-                '.json': 'json',
-                '.jsonl': 'json',
-                '.parquet': 'parquet'
-            }
-            format = format_map.get(file_ext, 'csv')
-            logger.info(f"Auto-detected format: {format}")
-
-        # Set default output paths
-        file_stem = Path(file_path).stem
-        if not html_output:
-            html_output = f"{file_stem}_profile_report.html"
-        if not config_output:
-            config_output = f"{file_stem}_validation.yaml"
-
-        # Performance advisory: Recommend Parquet if large CSV
-        advisor = get_performance_advisor()
-        analysis = advisor.analyze_file(file_path, operation='profile')
-        warnings_output = advisor.format_warnings_for_cli(analysis)
-        if warnings_output:
-            click.echo("")  # Blank line
-            for line in warnings_output:
-                click.echo(line)
-            click.echo("")  # Blank line
-
-        # Create profiler and run analysis
-        click.echo(f"🔍 Profiling {file_path}...")
         profiler = DataProfiler(chunk_size=chunk_size)
-        profile_result = profiler.profile_file(
-            file_path=file_path,
-            file_format=format
-        )
+
+        # DATABASE MODE
+        if database:
+            logger.info(f"Starting profile of database: {database}")
+
+            # Set default output paths based on table/query
+            source_name = table if table else "query_result"
+            if not html_output:
+                html_output = f"{source_name}_profile_report.html"
+            if not config_output:
+                config_output = f"{source_name}_validation.yaml"
+
+            click.echo(f"🗄️  Profiling database table: {table if table else 'custom query'}...")
+
+            # Create database loader
+            loader = LoaderFactory.create_database_loader(
+                connection_string=database,
+                table=table,
+                query=query,
+                chunk_size=chunk_size
+            )
+
+            # Get row count
+            row_count = loader.get_row_count()
+            click.echo(f"  • Detected {row_count:,} rows in {source_name}")
+
+            # Load sample data for profiling
+            click.echo(f"  • Loading sample data...")
+            sample_chunk = next(loader.load_chunks())
+
+            # Profile the sample
+            profile_result = profiler.profile_dataframe(sample_chunk, name=source_name)
+
+            # Update metadata for database source
+            profile_result.total_rows = row_count
+            profile_result.source_type = "database"
+            profile_result.file_name = f"{source_name} (Database)"
+
+        # FILE MODE
+        else:
+            logger.info(f"Starting profile of: {file_path}")
+
+            # Auto-detect format if not specified
+            if not format:
+                file_ext = Path(file_path).suffix.lower()
+                format_map = {
+                    '.csv': 'csv',
+                    '.xlsx': 'excel',
+                    '.xls': 'excel',
+                    '.json': 'json',
+                    '.jsonl': 'json',
+                    '.parquet': 'parquet'
+                }
+                format = format_map.get(file_ext, 'csv')
+                logger.info(f"Auto-detected format: {format}")
+
+            # Set default output paths
+            file_stem = Path(file_path).stem
+            if not html_output:
+                html_output = f"{file_stem}_profile_report.html"
+            if not config_output:
+                config_output = f"{file_stem}_validation.yaml"
+
+            # Performance advisory: Recommend Parquet if large CSV
+            advisor = get_performance_advisor()
+            analysis = advisor.analyze_file(file_path, operation='profile')
+            warnings_output = advisor.format_warnings_for_cli(analysis)
+            if warnings_output:
+                click.echo("")  # Blank line
+                for line in warnings_output:
+                    click.echo(line)
+                click.echo("")  # Blank line
+
+            # Create profiler and run analysis
+            click.echo(f"🔍 Profiling {file_path}...")
+            profile_result = profiler.profile_file(
+                file_path=file_path,
+                file_format=format
+            )
 
         # Format file size
         size_bytes = profile_result.file_size_bytes

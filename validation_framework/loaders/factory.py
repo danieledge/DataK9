@@ -200,7 +200,7 @@ class LoaderFactory:
         query: Optional[str] = None,
         table: Optional[str] = None,
         chunk_size: int = 10000,
-        db_type: str = "postgresql"
+        db_type: Optional[str] = None
     ) -> DatabaseLoader:
         """
         Create a database loader for validating data directly from databases.
@@ -219,8 +219,8 @@ class LoaderFactory:
             query (str, optional): SQL query to execute. Mutually exclusive with table.
             table (str, optional): Table name to read. Mutually exclusive with query.
             chunk_size (int): Number of rows to read per chunk (default: 10,000)
-            db_type (str): Database type (postgresql, mysql, mssql, oracle, sqlite)
-                         Default: postgresql
+            db_type (str, optional): Database type (postgresql, mysql, mssql, oracle, sqlite).
+                         If not provided, will be inferred from connection_string.
 
         Returns:
             DatabaseLoader: An instance of DatabaseLoader configured for the database

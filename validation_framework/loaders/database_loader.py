@@ -31,7 +31,7 @@ class DatabaseLoader:
         query: str = None,
         table: str = None,
         chunk_size: int = 10000,
-        db_type: str = "postgresql"
+        db_type: str = None
     ):
         """
         Initialize database loader.
@@ -47,13 +47,20 @@ class DatabaseLoader:
             query: SQL query to execute (alternative to table)
             table: Table name to read (alternative to query)
             chunk_size: Number of rows to read per chunk
-            db_type: Database type (postgresql, mysql, mssql, oracle, sqlite)
+            db_type: Database type (postgresql, mysql, mssql, oracle, sqlite).
+                     If not provided, will be inferred from connection_string.
         """
         self.connection_string = connection_string
         self.query = query
         self.table = table
         self.chunk_size = chunk_size
-        self.db_type = db_type.lower()
+
+        # Infer db_type from connection string if not provided
+        if db_type is None:
+            self.db_type = self._infer_db_type(connection_string)
+        else:
+            self.db_type = db_type.lower()
+
         self.connection = None
 
         # Validate that either query or table is provided
@@ -69,6 +76,33 @@ class DatabaseLoader:
                 SQLIdentifierValidator.validate_identifier(table, "table")
             except ValueError as e:
                 raise ValueError(f"Invalid table name: {str(e)}")
+
+    def _infer_db_type(self, connection_string: str) -> str:
+        """
+        Infer database type from connection string.
+
+        Args:
+            connection_string: Database connection string
+
+        Returns:
+            Database type string (postgresql, mysql, sqlite, mssql, oracle)
+        """
+        conn_lower = connection_string.lower()
+
+        if conn_lower.startswith("sqlite"):
+            return "sqlite"
+        elif conn_lower.startswith("postgresql") or conn_lower.startswith("postgres"):
+            return "postgresql"
+        elif conn_lower.startswith("mysql"):
+            return "mysql"
+        elif conn_lower.startswith("mssql") or conn_lower.startswith("sqlserver"):
+            return "mssql"
+        elif conn_lower.startswith("oracle"):
+            return "oracle"
+        else:
+            # Default to postgresql if can't determine
+            logger.warning(f"Could not infer database type from connection string: {connection_string[:30]}... Defaulting to postgresql")
+            return "postgresql"
 
     def load_chunks(self) -> Iterator[pd.DataFrame]:
         """
@@ -218,6 +252,33 @@ class DatabaseLoader:
         except Exception as e:
             logger.error(f"Error getting columns: {str(e)}")
             return []
+
+    def get_metadata(self) -> Dict[str, Any]:
+        """
+        Get metadata about the database source.
+
+        Returns:
+            Dictionary with metadata:
+            - row_count: Total number of rows
+            - columns: List of column names
+            - db_type: Database type
+            - source_type: 'database'
+            - table: Table name (if applicable)
+            - query: Query string (if applicable)
+        """
+        metadata = {
+            "source_type": "database",
+            "db_type": self.db_type,
+            "row_count": self.get_row_count(),
+            "columns": self.get_columns(),
+        }
+
+        if self.table:
+            metadata["table"] = self.table
+        if self.query:
+            metadata["query"] = self.query
+
+        return metadata
 
 
 def create_database_loader(config: Dict[str, Any]) -> DatabaseLoader:
