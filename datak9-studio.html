@@ -4146,7 +4146,7 @@ files:
                     // Project Settings Section
                     const projectName = this.config.validation_job?.name || 'Untitled Project';
                     const projectDescription = this.config.validation_job?.description || '';
-                    const settings = this.config.settings || {};
+                    const settings = this.config.validation_job?.settings || this.config.settings || {};
                     const settingsExpanded = this.projectSettingsExpanded || false;
 
                     html += `
@@ -4356,12 +4356,8 @@ files:
                 if (!this.config.validation_job.settings) {
                     this.config.validation_job.settings = {};
                 }
-                if (!this.config.settings) {
-                    this.config.settings = {};
-                }
-                // Update both locations to keep them in sync
+                // Update settings in correct location
                 this.config.validation_job.settings[key] = value;
-                this.config.settings[key] = value;
                 this.updateYAMLEditor();
                 this.markAsModified();
             },
