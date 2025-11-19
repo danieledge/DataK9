@@ -82,7 +82,7 @@ print_info() {
 }
 
 show_help() {
-    echo "Test Runner for Data Validation Framework"
+    echo "Test Runner for DataK9 Validation Framework"
     echo ""
     echo "Usage: $0 [OPTIONS]"
     echo ""
@@ -92,6 +92,9 @@ show_help() {
     echo "  --integration        Run integration tests only"
     echo "  --security           Run security tests only"
     echo "  --validations        Run all validation rule tests (34+ types)"
+    echo "  --regression         Run comprehensive regression tests (all 35 types + pos/neg cases)"
+    echo "  --database           Run database tests (integration, validation, profiling)"
+    echo "  --profiler           Run profiler tests (files and databases)"
     echo "  --cli                Run CLI tests only"
     echo "  --performance        Run performance tests only"
     echo "  --coverage           Run with coverage report"
@@ -173,6 +176,44 @@ run_validation_tests() {
     done
 
     run_tests "$test_paths -v" "Running All Validation Rule Tests (34+ validation types)"
+}
+
+run_comprehensive_regression() {
+    # Run comprehensive regression test suite (all 35 validation types)
+    run_tests "$TEST_DIR/test_comprehensive_regression.py -v" \
+        "Running Comprehensive Regression Tests (All 35 Validation Types + Positive/Negative Cases)"
+}
+
+run_database_tests() {
+    # Run all database-related tests
+    local database_test_files=(
+        "test_database_integration.py"
+        "test_database_validations.py"
+        "test_database_profiling_json.py"
+    )
+
+    local test_paths=""
+    for file in "${database_test_files[@]}"; do
+        test_paths="$test_paths $TEST_DIR/$file"
+    done
+
+    run_tests "$test_paths -v" "Running Database Tests (Integration, Validation, Profiling)"
+}
+
+run_profiler_tests() {
+    # Run all profiler-related tests
+    local profiler_test_files=(
+        "test_profiler.py"
+        "test_polars_profiler.py"
+        "test_database_profiling_json.py"
+    )
+
+    local test_paths=""
+    for file in "${profiler_test_files[@]}"; do
+        test_paths="$test_paths $TEST_DIR/$file"
+    done
+
+    run_tests "$test_paths -v" "Running Profiler Tests (Files + Databases)"
 }
 
 run_cli_tests() {
@@ -275,33 +316,42 @@ show_menu() {
     echo "  5) Run All Validation Rule Tests"
     echo "     → Test all 34+ validation types (~1-2 minutes)"
     echo ""
-    echo "  6) Run CLI Tests Only"
+    echo "  6) Run Comprehensive Regression Tests ⭐ NEW"
+    echo "     → All 35 validation types + positive/negative cases (~30 seconds)"
+    echo ""
+    echo "  7) Run Database Tests"
+    echo "     → Database integration, validation, and profiling tests"
+    echo ""
+    echo "  8) Run Profiler Tests"
+    echo "     → File and database profiling tests"
+    echo ""
+    echo "  9) Run CLI Tests Only"
     echo "     → Test command-line interface"
     echo ""
-    echo "  7) Run Performance Tests Only"
+    echo "  10) Run Performance Tests Only"
     echo "     → Test performance benchmarks"
     echo ""
-    echo "  8) Run Fast Tests (Skip Slow)"
+    echo "  11) Run Fast Tests (Skip Slow)"
     echo "     → Quick validation (skips performance tests)"
     echo ""
-    echo "  9) Run with Coverage Report"
+    echo "  12) Run with Coverage Report"
     echo "     → All tests + detailed coverage analysis (requires ≥43%)"
     echo ""
-    echo "  10) Run Specific Test File"
+    echo "  13) Run Specific Test File"
     echo "     → Run a single test file by path"
     echo ""
-    echo "  11) Run Tests in Parallel"
+    echo "  14) Run Tests in Parallel"
     echo "     → Faster execution using multiple cores"
     echo ""
-    echo "  12) View Test Statistics"
+    echo "  15) View Test Statistics"
     echo "     → Show test counts and file listing"
     echo ""
-    echo "  13) Clean Test Artifacts"
+    echo "  16) Clean Test Artifacts"
     echo "     → Remove coverage reports and cache files"
     echo ""
     echo "  0) Exit"
     echo ""
-    echo -n "Enter choice [0-13]: "
+    echo -n "Enter choice [0-16]: "
 }
 
 view_test_statistics() {
@@ -417,19 +467,22 @@ main() {
                 3) run_integration_tests ;;
                 4) run_security_tests ;;
                 5) run_validation_tests ;;
-                6) run_cli_tests ;;
-                7) run_performance_tests ;;
-                8) run_fast_tests ;;
-                9) run_with_coverage ;;
-                10)
+                6) run_comprehensive_regression ;;
+                7) run_database_tests ;;
+                8) run_profiler_tests ;;
+                9) run_cli_tests ;;
+                10) run_performance_tests ;;
+                11) run_fast_tests ;;
+                12) run_with_coverage ;;
+                13)
                     echo ""
                     echo -n "Enter test file path: "
                     read file_path
                     run_specific_file "$file_path"
                     ;;
-                11) run_parallel_tests ;;
-                12) view_test_statistics ;;
-                13) clean_test_artifacts ;;
+                14) run_parallel_tests ;;
+                15) view_test_statistics ;;
+                16) clean_test_artifacts ;;
                 0)
                     echo ""
                     print_info "Exiting test runner. Goodbye!"
@@ -460,6 +513,15 @@ main() {
                 ;;
             --validations)
                 run_validation_tests
+                ;;
+            --regression)
+                run_comprehensive_regression
+                ;;
+            --database)
+                run_database_tests
+                ;;
+            --profiler)
+                run_profiler_tests
                 ;;
             --cli)
                 run_cli_tests

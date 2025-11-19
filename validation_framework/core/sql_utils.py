@@ -121,6 +121,19 @@ class SQLIdentifierValidator:
         # Handle schema.table notation
         if '.' in identifier:
             parts = identifier.split('.')
+            # SECURITY: Validate each part before quoting to prevent bypass
+            for i, part in enumerate(parts):
+                try:
+                    SQLIdentifierValidator.validate_identifier(
+                        part,
+                        f"identifier part {i+1}"
+                    )
+                except ValueError:
+                    # If validation fails on individual parts,
+                    # try validating the full identifier (might be valid schema.table format)
+                    SQLIdentifierValidator.validate_identifier(identifier, "identifier")
+                    # If we get here, the full identifier is valid
+                    break
             quoted_parts = [SQLIdentifierValidator.quote_identifier(part, dialect) for part in parts]
             return '.'.join(quoted_parts)
 
