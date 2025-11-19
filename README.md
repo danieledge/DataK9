@@ -137,6 +137,8 @@ Professional IDE-style configuration builder with Monaco editor integration - no
 
 **💡 Cache Issue?** If you see an old version, hard refresh with **Ctrl+Shift+R** (or **Cmd+Shift+R** on Mac). Check the version badge in the top-right corner - should show **v2.3.0**.
 
+**🪟 Windows Users:** When opening the HTML file locally, use the included `launch-studio.bat` script to avoid CORS issues. See [WINDOWS-SETUP.md](WINDOWS-SETUP.md) for details.
+
 **Key Features:**
 - 🎯 **IDE-Style Interface** - Professional three-panel layout like VS Code
 - 🧙 **Validation Wizard** - Choose from 35 validation types organized in 10 color-coded categories
