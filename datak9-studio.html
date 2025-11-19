@@ -2858,12 +2858,12 @@ files:
                 if (!config || typeof config !== 'object') return false;
                 if (!config.validation_job || typeof config.validation_job !== 'object') return false;
                 if (!Array.isArray(config.files)) return false;
-                if (!config.settings || typeof config.settings !== 'object') return false;
+                if (!config.validation_job.settings || typeof config.validation_job.settings !== 'object') return false;
 
                 // Validate settings have required fields
                 const requiredSettings = ['chunk_size', 'max_sample_failures', 'log_level'];
                 for (const field of requiredSettings) {
-                    if (!(field in config.settings)) return false;
+                    if (!(field in config.validation_job.settings)) return false;
                 }
 
                 return true;
@@ -2891,14 +2891,14 @@ files:
             config: {
                 validation_job: {
                     name: '',
-                    description: ''
-                },
-                settings: {
-                    chunk_size: 50000,
-                    max_sample_failures: 100,
-                    fail_on_error: true,
-                    fail_on_warning: false,
-                    log_level: 'INFO'
+                    description: '',
+                    settings: {
+                        chunk_size: 50000,
+                        max_sample_failures: 100,
+                        fail_on_error: true,
+                        fail_on_warning: false,
+                        log_level: 'INFO'
+                    }
                 },
                 files: []
             },
@@ -4723,8 +4723,8 @@ params:
                ==================================================================== */
 
             startNewProject() {
-                // Phase 3: Check for unsaved changes before starting new project
-                if (!this.checkUnsavedChanges('start a new project')) {
+                // Phase 3: Check for unsaved changes before starting new project (only if project is open)
+                if (this.projectState.isOpen && !this.checkUnsavedChanges('start a new project')) {
                     return;
                 }
 
@@ -4937,11 +4937,11 @@ params:
                 this.config.validation_job.name = projectName;
                 this.config.validation_job.description = projectDescription;
 
-                this.config.settings.chunk_size = chunkSize;
-                this.config.settings.max_sample_failures = maxFailures;
-                this.config.settings.fail_on_error = document.getElementById('wizard-fail-error').checked;
-                this.config.settings.fail_on_warning = document.getElementById('wizard-fail-warning').checked;
-                this.config.settings.log_level = document.getElementById('wizard-log-level').value;
+                this.config.validation_job.settings.chunk_size = chunkSize;
+                this.config.validation_job.settings.max_sample_failures = maxFailures;
+                this.config.validation_job.settings.fail_on_error = document.getElementById('wizard-fail-error').checked;
+                this.config.validation_job.settings.fail_on_warning = document.getElementById('wizard-fail-warning').checked;
+                this.config.validation_job.settings.log_level = document.getElementById('wizard-log-level').value;
 
                 const fileName = document.getElementById('wizard-file-name').value.trim();
                 const filePath = document.getElementById('wizard-file-path').value.trim();
@@ -5007,8 +5007,8 @@ params:
                 // Chunk size recommendation
                 html += '<div style="margin-bottom: 12px;">';
                 html += '<div style="font-weight: 600; margin-bottom: 4px; font-size: 13px;">Recommended Chunk Size</div>';
-                html += `<div style="font-size: 13px; color: var(--text-secondary);">${chunkCalc.chunk_size.toLocaleString()} rows</div>`;
-                html += `<div style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">Estimated: ${chunkCalc.estimated_rows.toLocaleString()} total rows in ${chunkCalc.num_chunks} chunks</div>`;
+                html += `<div style="font-size: 13px; color: var(--text-secondary);">${chunkCalc.recommendedChunkSize.toLocaleString()} rows</div>`;
+                html += `<div style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">Estimated: ${chunkCalc.estimatedRows.toLocaleString()} total rows in ${chunkCalc.estimatedChunks} chunks</div>`;
                 html += '</div>';
 
                 // Parquet recommendation
