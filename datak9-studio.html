@@ -219,6 +219,11 @@
             cursor: default;
         }
 
+        /* Hide project-only menu items when no project is open */
+        .menu-dropdown-item.project-only {
+            display: none;
+        }
+
         .menu-dropdown-item .shortcut {
             color: var(--text-secondary);
             font-size: 11px;
@@ -1454,8 +1459,34 @@
 
         .sidebar.collapsed .sidebar-content,
         .sidebar.collapsed .sidebar-header h3,
-        .sidebar.collapsed .sidebar-header button {
+        .sidebar.collapsed .sidebar-header .collapse-btn {
             display: none;
+        }
+
+        .sidebar.collapsed .expand-btn {
+            display: flex !important;
+        }
+
+        .sidebar .expand-btn {
+            display: none;
+            position: absolute;
+            top: 8px;
+            left: 8px;
+            width: 24px;
+            height: 24px;
+            border: none;
+            background: transparent;
+            color: var(--text-primary);
+            cursor: pointer;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            z-index: 10;
+        }
+
+        .sidebar .expand-btn:hover {
+            background-color: var(--bg-hover);
+            border-radius: 4px;
         }
 
         .sidebar.collapsed .collapse-icon {
@@ -2068,14 +2099,14 @@
                         <span>Open Project...</span>
                         <span class="shortcut">Ctrl+O</span>
                     </div>
-                    <div class="menu-dropdown-item" onclick="event.stopPropagation(); app.closeAllMenus(); app.closeProject()">
+                    <div class="menu-dropdown-item project-only" id="menu-close-project" onclick="event.stopPropagation(); app.closeAllMenus(); app.closeProject()">
                         <span>Close Project</span>
                     </div>
-                    <div class="menu-dropdown-item separator"></div>
-                    <div class="menu-dropdown-item" onclick="event.stopPropagation(); app.closeAllMenus(); app.openExportDocsDialog()">
+                    <div class="menu-dropdown-item separator project-only" id="menu-separator-export"></div>
+                    <div class="menu-dropdown-item project-only" id="menu-export-docs" onclick="event.stopPropagation(); app.closeAllMenus(); app.openExportDocsDialog()">
                         <span>Export Documentation...</span>
                     </div>
-                    <div class="menu-dropdown-item" onclick="event.stopPropagation(); app.closeAllMenus(); app.exportYAML()">
+                    <div class="menu-dropdown-item project-only" id="menu-export-yaml" onclick="event.stopPropagation(); app.closeAllMenus(); app.exportYAML()">
                         <span>Export YAML (Project)</span>
                     </div>
                 </div>
@@ -2142,6 +2173,11 @@
 
             <!-- Left Sidebar -->
             <div class="sidebar" id="sidebar">
+                <!-- Expand button (visible when collapsed) -->
+                <button class="expand-btn" onclick="panelManager.togglePanel('sidebar')"
+                        aria-label="Expand sidebar (Ctrl+B)" title="Expand sidebar (Ctrl+B)">
+                    <span>▶</span>
+                </button>
                 <div class="sidebar-header">
                     <div class="panel-header-title">
                         <h3>Configuration</h3>
@@ -4073,11 +4109,24 @@ files:
                 this.updateYAMLEditor();
                 this.updateValidationSummary();
                 this.updateHelpPanel();
+                this.updateMenuState();
 
                 // Show/hide welcome screen vs editor
                 const hasProject = this.config.validation_job.name !== '';
                 document.getElementById('welcome-screen').classList.toggle('hidden', hasProject);
                 document.getElementById('editor-view').classList.toggle('hidden', !hasProject);
+            },
+
+            updateMenuState() {
+                // Show/hide project-only menu items based on project state
+                const projectMenuItems = document.querySelectorAll('.menu-dropdown-item.project-only');
+                projectMenuItems.forEach(item => {
+                    if (this.projectState.isOpen) {
+                        item.style.display = '';
+                    } else {
+                        item.style.display = 'none';
+                    }
+                });
             },
 
             renderFileTree() {
@@ -6052,6 +6101,7 @@ params:
                         this.renderFileTree();
                         this.updateYAMLEditor();
                         this.updateStatusBar();
+                        this.updateMenuState();
 
                         // Hide welcome screen, show editor
                         document.getElementById('welcome-screen').classList.add('hidden');
@@ -6116,6 +6166,7 @@ params:
                     this.renderFileTree();
                     this.updateYAMLEditor();
                     this.updateStatusBar();
+                    this.updateMenuState();
 
                     // Hide welcome screen, show editor
                     document.getElementById('welcome-screen').classList.add('hidden');
