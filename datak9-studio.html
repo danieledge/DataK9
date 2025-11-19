@@ -2425,7 +2425,7 @@
                     <div id="wizard-step-2" class="wizard-step-content hidden">
                         <div class="form-group">
                             <label class="form-label">Chunk Size</label>
-                            <input type="number" class="form-input" id="wizard-chunk-size" value="50000" min="1000" max="5000000">
+                            <input type="number" class="form-input" id="wizard-chunk-size" value="50000" min="1000" max="2000000">
                             <div class="form-help">Number of rows to process at once (default: 50,000). Will be automatically calculated based on your file details in the next step.</div>
                         </div>
                         <div class="form-group">
@@ -4923,8 +4923,8 @@ params:
                 }
 
                 const chunkSize = parseInt(document.getElementById('wizard-chunk-size').value);
-                if (isNaN(chunkSize) || chunkSize < 1000 || chunkSize > 5000000) {
-                    alert('Chunk size must be between 1,000 and 5,000,000');
+                if (isNaN(chunkSize) || chunkSize < 1000 || chunkSize > 2000000) {
+                    alert('Chunk size must be between 1,000 and 2,000,000');
                     return;
                 }
 
@@ -5077,17 +5077,14 @@ params:
                 } else if (fileSizeMB < 5000) {
                     recommendedChunkSize = 1000000;
                     complexity = 'moderate';
-                } else if (fileSizeMB < 10000) {
+                } else {
                     recommendedChunkSize = 2000000;
                     complexity = 'complex';
-                } else {
-                    recommendedChunkSize = 5000000;
-                    complexity = 'heavy';
                 }
 
                 // Adjust for format efficiency (Parquet is more efficient)
-                if (fileFormat === 'parquet' && recommendedChunkSize < 5000000) {
-                    recommendedChunkSize = Math.min(recommendedChunkSize * 2, 5000000);
+                if (fileFormat === 'parquet' && recommendedChunkSize < 2000000) {
+                    recommendedChunkSize = Math.min(recommendedChunkSize * 2, 2000000);
                 }
 
                 // Calculate estimated chunks
