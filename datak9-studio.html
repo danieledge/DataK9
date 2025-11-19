@@ -3993,6 +3993,13 @@ files:
                ==================================================================== */
 
             initMonacoEditor() {
+                // Check if require is defined (Monaco loader.js must be loaded first)
+                if (typeof require === 'undefined') {
+                    console.error('Monaco loader not loaded yet. Retrying in 100ms...');
+                    setTimeout(() => this.initMonacoEditor(), 100);
+                    return;
+                }
+
                 require.config({
                     paths: {
                         'vs': 'monaco-editor/min/vs'
