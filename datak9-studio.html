@@ -4127,6 +4127,7 @@ files:
             updateMenuState() {
                 // Show/hide project-only menu items based on project state
                 const projectMenuItems = document.querySelectorAll('.menu-dropdown-item.project-only');
+                console.log(`updateMenuState: projectState.isOpen=${this.projectState.isOpen}, found ${projectMenuItems.length} project-only menu items`);
                 projectMenuItems.forEach(item => {
                     if (this.projectState.isOpen) {
                         item.style.display = '';
