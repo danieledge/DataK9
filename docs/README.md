@@ -9,6 +9,27 @@ Welcome to **DataK9** - a production-grade data quality framework that guards yo
 
 ---
 
+## 🎯 Choose Your Data Source
+
+DataK9 validates both **files** and **databases**. Choose your path:
+
+### 📁 Validating Files (CSV, Excel, JSON, Parquet)
+**→ [File Validation Quick Start](FILE_QUICKSTART.md)**
+
+Quick start for CSV, Excel, JSON, and Parquet files. Learn format-specific options, common patterns, and performance optimization.
+
+### 🗄️ Validating Databases (PostgreSQL, MySQL, SQL Server, Oracle, SQLite)
+**→ [Database Validation Quick Start](DATABASE_QUICKSTART.md)**
+
+Quick start for direct database validation. Includes production safety features, filtered queries, and database-specific validations.
+
+### 📊 Which Validations Work Where?
+**→ [Validation Compatibility Matrix](VALIDATION_COMPATIBILITY.md)**
+
+Complete compatibility matrix showing which of the 35 validation types work with files vs databases.
+
+---
+
 ## 🎯 Choose Your Path
 
 ### 👥 Using DataK9
@@ -18,6 +39,7 @@ Whether you're a business analyst, data engineer, or QA professional, this guide
 
 **Start here:** [What is DataK9?](using-datak9/what-is-datak9.md)
 **Then:** [5-Minute Quickstart](getting-started/quickstart-5min.md)
+**Quick Starts:** [Files](FILE_QUICKSTART.md) | [Databases](DATABASE_QUICKSTART.md)
 **Optimize:** [Polars Backend Guide](POLARS_BACKEND_GUIDE.md) - High Performance ⚡
 **Configure:** [Configuration Guide](using-datak9/configuration-guide.md)
 **Reference:** [Validation Reference](reference/validation-reference.md) (35 validations)
@@ -43,19 +65,28 @@ Deep dive into DataK9's internals, create custom validations, and contribute to 
 
 | What do you need? | Go here |
 |-------------------|---------|
+| **Get Started** | |
 | Install DataK9 | [Installation Guide](getting-started/installation.md) |
+| Validate files (CSV, Excel, etc.) | [File Quick Start](FILE_QUICKSTART.md) 📁 |
+| Validate databases | [Database Quick Start](DATABASE_QUICKSTART.md) 🗄️ |
+| Production database safety | [Database Safety Guide](DATABASE_SAFETY.md) 🛡️ |
+| **Reference** | |
+| See all 35 validation types | [Validation Reference](reference/validation-reference.md) |
+| Validation compatibility (files vs DB) | [Compatibility Matrix](VALIDATION_COMPATIBILITY.md) |
+| **Performance** | |
 | High-performance validation | [Polars Backend Guide](POLARS_BACKEND_GUIDE.md) ⚡ |
 | Optimize large-scale validations | [Performance Optimization Guide](PERFORMANCE_OPTIMIZATION_GUIDE.md) 🚀 |
-| See all 34 validation types | [Validation Reference](reference/validation-reference.md) |
-| Real-world examples | [Examples & Recipes](examples/) |
-| Optimize performance | [Performance Tuning](using-datak9/performance-tuning.md) |
-| Troubleshoot an issue | [Troubleshooting Guide](using-datak9/troubleshooting.md) |
-| FAQ | [Frequently Asked Questions](using-datak9/faq.md) |
+| Performance tuning | [Performance Tuning](using-datak9/performance-tuning.md) |
+| **Tools & Integration** | |
 | DataK9 Studio IDE | [Studio Guide](using-datak9/studio-guide.md) |
 | Data Profiling | [Profiling Guide](using-datak9/data-profiling.md) |
-| Best Practices | [Best Practices](using-datak9/best-practices.md) |
 | AutoSys Integration | [AutoSys Integration](using-datak9/autosys-integration.md) |
 | CI/CD Integration | [CI/CD Integration](using-datak9/cicd-integration.md) |
+| **Support** | |
+| Real-world examples | [Examples & Recipes](examples/) |
+| Best Practices | [Best Practices](using-datak9/best-practices.md) |
+| Troubleshoot an issue | [Troubleshooting Guide](using-datak9/troubleshooting.md) |
+| FAQ | [Frequently Asked Questions](using-datak9/faq.md) |
 
 ---
 
