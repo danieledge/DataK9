@@ -280,14 +280,20 @@ class DatabaseLoader:
         # Validate connection string for security
         self._validate_connection_string()
 
-        # Create engine with timeouts and connection pool settings
-        engine = create_engine(
-            self.connection_string,
-            pool_pre_ping=True,  # Verify connections before using them
-            connect_args={
+        # Create engine with connection pool settings
+        # Note: connect_timeout only works with PostgreSQL, MySQL, and some other databases
+        # SQLite doesn't support it, so we configure it conditionally
+        engine_kwargs = {
+            'pool_pre_ping': True,  # Verify connections before using them
+        }
+
+        # Add timeout only for databases that support it (not SQLite)
+        if self.db_type in ['postgresql', 'mysql', 'mssql', 'oracle']:
+            engine_kwargs['connect_args'] = {
                 'connect_timeout': 30,  # 30 second connection timeout
             }
-        )
+
+        engine = create_engine(self.connection_string, **engine_kwargs)
 
         try:
             # Build query
