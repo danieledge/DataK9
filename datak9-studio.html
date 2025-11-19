@@ -5049,7 +5049,7 @@ params:
 
             /**
              * Calculate optimal chunk size based on file characteristics
-             * JavaScript port of chunk_size_calculator.py logic
+             * Uses preset-based recommendations from chunk_size_calculator.py
              */
             calculateChunkSize(fileSizeMB, fileFormat, numValidations = 10) {
                 // Constants from Python implementation
@@ -5060,45 +5060,42 @@ params:
                     'excel': 100
                 };
 
-                const VALIDATION_COMPLEXITY = {
-                    'simple': 1.0,
-                    'moderate': 2.0,
-                    'complex': 4.0,
-                    'heavy': 8.0
-                };
-
-                // Estimate available memory (assume 70% of 8GB = 5.6GB for safety)
-                const availableMemoryMB = 5600;
-                const targetMemoryMB = availableMemoryMB * 0.7;
-
                 // Estimate row count
                 const bytesPerRow = BYTES_PER_ROW[fileFormat] || 100;
                 const estimatedRows = (fileSizeMB * 1024 * 1024) / bytesPerRow;
 
-                // Determine complexity based on validation count
-                let complexity = 'simple';
-                if (numValidations > 20) complexity = 'heavy';
-                else if (numValidations > 15) complexity = 'complex';
-                else if (numValidations > 5) complexity = 'moderate';
+                // Use preset-based recommendations (matching Python implementation)
+                // get_preset_recommendation() from chunk_size_calculator.py
+                let recommendedChunkSize;
+                let complexity;
 
-                const complexityFactor = VALIDATION_COMPLEXITY[complexity];
+                if (fileSizeMB < 10) {
+                    recommendedChunkSize = 50000;
+                    complexity = 'simple';
+                } else if (fileSizeMB < 100) {
+                    recommendedChunkSize = 100000;
+                    complexity = 'simple';
+                } else if (fileSizeMB < 1000) {
+                    recommendedChunkSize = 500000;
+                    complexity = 'moderate';
+                } else if (fileSizeMB < 5000) {
+                    recommendedChunkSize = 1000000;
+                    complexity = 'moderate';
+                } else {
+                    recommendedChunkSize = 2000000;
+                    complexity = 'complex';
+                }
 
-                // Calculate memory per row with expansion (3x for pandas) and validation overhead
-                let memoryPerRow = bytesPerRow * 3.0 * complexityFactor;
-                memoryPerRow *= (1 + (numValidations * 0.1));
-
-                // Calculate optimal chunk size
-                const targetMemoryBytes = targetMemoryMB * 1024 * 1024;
-                let optimalChunkSize = Math.floor(targetMemoryBytes / memoryPerRow);
-
-                // Apply bounds: 10K min, 2M max
-                optimalChunkSize = Math.max(10000, Math.min(optimalChunkSize, 2000000));
+                // Adjust for format efficiency (Parquet is more efficient)
+                if (fileFormat === 'parquet' && recommendedChunkSize < 2000000) {
+                    recommendedChunkSize = Math.min(recommendedChunkSize * 2, 2000000);
+                }
 
                 // Calculate estimated chunks
-                const estimatedChunks = Math.ceil(estimatedRows / optimalChunkSize);
+                const estimatedChunks = Math.ceil(estimatedRows / recommendedChunkSize);
 
                 return {
-                    recommendedChunkSize: optimalChunkSize,
+                    recommendedChunkSize: recommendedChunkSize,
                     estimatedRows: Math.floor(estimatedRows),
                     estimatedChunks: estimatedChunks,
                     complexity: complexity
