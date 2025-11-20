@@ -190,7 +190,7 @@ self.chunk_size     # Number of rows per chunk (default: 50,000)
 
 ## Step-by-Step Tutorial
 
-Let's build a production-grade **Fixed-Width File Loader** that handles legacy mainframe data formats.
+Let's build a robust **Fixed-Width File Loader** that handles legacy mainframe data formats.
 
 ### Example File Format
 
@@ -545,7 +545,7 @@ python3 -m validation_framework.cli validate employee_config.yaml
 
 ## Testing Custom Loaders
 
-Testing is critical for production-grade loaders. Here's a comprehensive test suite.
+Testing is critical for robust loaders. Here's a comprehensive test suite.
 
 ### Test Template
 

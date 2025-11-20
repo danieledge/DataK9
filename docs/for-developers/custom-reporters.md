@@ -187,7 +187,7 @@ for file_report in report.file_reports:
 
 ## Step-by-Step Tutorial
 
-Let's build a production-grade **Markdown Reporter** that generates GitHub-flavored markdown reports perfect for version control and documentation.
+Let's build a robust **Markdown Reporter** that generates GitHub-flavored markdown reports perfect for version control and documentation.
 
 ### Step 1: Create the Reporter File
 

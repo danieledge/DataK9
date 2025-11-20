@@ -91,7 +91,7 @@ Connect DataK9 to your pipeline:
 4. **[AutoSys Integration](autosys-integration.md)** (10 min)
 5. **[Performance Tuning](performance-tuning.md)** (10 min)
 
-**Total: 60 minutes to production-ready**
+**Total: 60 minutes to get started**
 
 ### Workflow 3: Business Analyst
 
