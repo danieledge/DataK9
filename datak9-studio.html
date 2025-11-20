@@ -2673,18 +2673,83 @@ files:
                 </div>
                 <div class="form-group">
                     <label class="form-label form-label-required">File Format</label>
-                    <select class="form-select" id="add-file-format" onchange="app.updateFileRecommendations()">
+                    <select class="form-select" id="add-file-format" onchange="app.updateFileFormatFields()">
                         <option value="csv">CSV</option>
                         <option value="excel">Excel</option>
                         <option value="json">JSON</option>
                         <option value="parquet">Parquet</option>
+                        <option value="database">Database</option>
                     </select>
                 </div>
-                <div class="form-group">
+                <div class="form-group" id="file-size-group">
                     <label class="form-label">Estimated File Size (MB)</label>
                     <input type="number" class="form-input" id="add-file-size" placeholder="100" min="0" step="1" oninput="app.updateFileRecommendations()">
                     <div class="form-help">Optional: Helps calculate optimal chunk size and show format recommendations</div>
                 </div>
+
+                <!-- Database-specific fields (hidden by default) -->
+                <div id="database-fields" style="display: none;">
+                    <div class="form-group">
+                        <label class="form-label form-label-required">Connection String</label>
+                        <input type="text" class="form-input" id="add-file-connection-string" placeholder="postgresql://user:pass@host:5432/dbname">
+                        <div class="form-help">Database connection string (supports PostgreSQL, MySQL, SQLite, etc.)</div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Table Name</label>
+                        <input type="text" class="form-input" id="add-file-table" placeholder="customers">
+                        <div class="form-help">Table to validate (leave empty if using custom query)</div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Custom Query</label>
+                        <textarea class="form-input" id="add-file-query" rows="3" placeholder="SELECT * FROM customers WHERE created_date >= CURRENT_DATE - INTERVAL '7 days'"></textarea>
+                        <div class="form-help">Optional: Custom SQL query (overrides table name)</div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Max Rows</label>
+                        <input type="number" class="form-input" id="add-file-max-rows" value="5000" min="1" step="1000">
+                        <div class="form-help" style="color: var(--status-success);">
+                            <strong>SAFETY DEFAULT:</strong> Limited to 5,000 rows to prevent memory exhaustion and database overload
+                        </div>
+                        <div style="margin-top: 8px;">
+                            <label style="display: flex; align-items: center; cursor: pointer;">
+                                <input type="checkbox" id="add-file-unrestricted" onchange="app.toggleDatabaseUnrestricted()">
+                                <span style="margin-left: 8px;">No restriction (unrestricted query)</span>
+                            </label>
+                        </div>
+                        <div id="database-warning" style="display: none; margin-top: 12px; padding: 12px; background: rgba(244, 135, 113, 0.1); border-left: 3px solid var(--status-error); border-radius: 4px;">
+                            <div style="font-weight: bold; color: var(--status-error); margin-bottom: 4px;">⚠️ WARNING: PRODUCTION SAFETY RISK</div>
+                            <div style="color: var(--text-primary); font-size: 12px;">
+                                Unrestricted queries on large production tables can cause:
+                                <ul style="margin: 8px 0 0 20px; padding: 0;">
+                                    <li>Memory exhaustion and application crashes</li>
+                                    <li>Database server overload impacting other users</li>
+                                    <li>Network saturation from large data transfers</li>
+                                    <li>Excessive cloud database egress costs</li>
+                                </ul>
+                                <strong>Only use for small tables or with custom WHERE clauses.</strong>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Database Safety Tips -->
+                    <div style="margin-top: 16px; padding: 12px; background: var(--bg-panel); border-left: 3px solid var(--status-info); border-radius: 4px;">
+                        <div style="font-weight: bold; color: var(--status-info); margin-bottom: 8px;">💡 Database Safety Tips</div>
+                        <ul style="margin: 0; padding-left: 20px; font-size: 12px; color: var(--text-primary);">
+                            <li><strong>Use max_rows</strong> for production tables to limit query scope</li>
+                            <li><strong>Use custom queries</strong> with WHERE clauses to filter data at the database</li>
+                            <li><strong>Time-based filtering:</strong> Validate only recent data (last 7 days, etc.)</li>
+                            <li><strong>Test on dev first:</strong> Always test configurations on non-production databases</li>
+                            <li><strong>Monitor performance:</strong> Watch for slow queries and memory usage</li>
+                        </ul>
+                        <div style="margin-top: 8px; font-size: 12px;">
+                            📖 <a href="docs/DATABASE_SAFETY.md" target="_blank" style="color: var(--k9-blue);">Read full Database Safety Guide</a>
+                        </div>
+                    </div>
+                </div>
+
                 <div id="file-recommendations" style="display: none; margin-top: 16px; padding: 12px; background: var(--bg-panel); border-left: 3px solid var(--status-warning); border-radius: 4px;">
                     <!-- Recommendations will be shown here -->
                 </div>
@@ -2938,7 +3003,14 @@ files:
                This library is now loaded from validation_definitions.json at startup.
                This ensures the Studio stays in sync with the framework's validation types.
 
+               Total validations: 35 types across 10 categories
+               Database-compatible validations (marked with database_compatible: true):
+                 - DatabaseConstraintCheck
+                 - DatabaseReferentialIntegrityCheck
+                 - SQLCustomCheck
+
                Fallback definitions are maintained below for offline/error scenarios.
+               NOTE: Fallback contains 22 core validations. Full 35 loaded from JSON.
             */
             validationLibrary: {},  // Will be populated from JSON
 
@@ -3785,9 +3857,12 @@ files:
             transformDefinitionsToStudioFormat(jsonDefs) {
                 const library = {};
 
+                // Database-specific validations
+                const databaseValidations = ['DatabaseConstraintCheck', 'DatabaseReferentialIntegrityCheck', 'SQLCustomCheck'];
+
                 for (const [type, def] of Object.entries(jsonDefs)) {
-                    // Skip metadata entry
-                    if (type === '_metadata') continue;
+                    // Skip metadata and schema entries
+                    if (type === '_metadata' || type === '$schema') continue;
 
                     library[type] = {
                         icon: def.icon || '📋',
@@ -3798,7 +3873,8 @@ files:
                         params: this.transformParams(def.params || []),
                         examples: def.examples || '',
                         tips: def.tips || '',
-                        severity_recommendation: def.severity_recommendation
+                        severity_recommendation: def.severity_recommendation,
+                        database_compatible: databaseValidations.includes(type)
                     };
                 }
 
@@ -3813,11 +3889,15 @@ files:
             transformParams(params) {
                 return params.map(param => ({
                     name: param.name,
-                    label: this.formatParamLabel(param.name),
+                    label: param.label || this.formatParamLabel(param.name),
                     type: this.mapParamType(param.type),
                     required: param.required || false,
-                    help: param.description || '',
-                    default: param.default
+                    help: param.help || param.description || '',
+                    default: param.default,
+                    placeholder: param.placeholder,
+                    options: param.options,
+                    min: param.min,
+                    max: param.max
                 }));
             },
 
@@ -4403,6 +4483,7 @@ files:
                                     <option value="excel" ${file.format === 'excel' ? 'selected' : ''}>Excel</option>
                                     <option value="json" ${file.format === 'json' ? 'selected' : ''}>JSON</option>
                                     <option value="parquet" ${file.format === 'parquet' ? 'selected' : ''}>Parquet</option>
+                                    <option value="database" ${file.format === 'database' ? 'selected' : ''}>Database</option>
                                 </select>
                             </div>
                         </div>
@@ -5180,6 +5261,61 @@ params:
                 recommendationsDiv.style.display = 'block';
             },
 
+            /**
+             * Toggle database-specific fields based on format selection
+             */
+            updateFileFormatFields() {
+                const format = document.getElementById('add-file-format').value;
+                const databaseFields = document.getElementById('database-fields');
+                const fileSizeGroup = document.getElementById('file-size-group');
+
+                if (format === 'database') {
+                    // Show database fields, hide file size
+                    databaseFields.style.display = 'block';
+                    fileSizeGroup.style.display = 'none';
+
+                    // Set default max_rows if not already set
+                    const maxRowsInput = document.getElementById('add-file-max-rows');
+                    if (!maxRowsInput.value) {
+                        maxRowsInput.value = '5000';
+                    }
+                } else {
+                    // Hide database fields, show file size
+                    databaseFields.style.display = 'none';
+                    fileSizeGroup.style.display = 'block';
+
+                    // Update file recommendations for file-based formats
+                    this.updateFileRecommendations();
+                }
+            },
+
+            /**
+             * Toggle unrestricted database query mode with warning
+             */
+            toggleDatabaseUnrestricted() {
+                const unrestrictedCheckbox = document.getElementById('add-file-unrestricted');
+                const maxRowsInput = document.getElementById('add-file-max-rows');
+                const warningDiv = document.getElementById('database-warning');
+
+                if (unrestrictedCheckbox.checked) {
+                    // Disable and clear max_rows input
+                    maxRowsInput.disabled = true;
+                    maxRowsInput.value = '';
+                    maxRowsInput.style.opacity = '0.5';
+
+                    // Show safety warning
+                    warningDiv.style.display = 'block';
+                } else {
+                    // Re-enable max_rows with default
+                    maxRowsInput.disabled = false;
+                    maxRowsInput.value = '5000';
+                    maxRowsInput.style.opacity = '1';
+
+                    // Hide warning
+                    warningDiv.style.display = 'none';
+                }
+            },
+
             selectFile(index) {
                 this.selectedFile = index;
                 this.selectedValidation = null;
@@ -5197,6 +5333,16 @@ params:
                 document.getElementById('add-file-path').value = '';
                 document.getElementById('add-file-format').value = 'csv';
                 document.getElementById('add-file-size').value = '';
+
+                // Reset database fields
+                document.getElementById('add-file-connection-string').value = '';
+                document.getElementById('add-file-table').value = '';
+                document.getElementById('add-file-query').value = '';
+                document.getElementById('add-file-max-rows').value = '5000';
+                document.getElementById('add-file-unrestricted').checked = false;
+                document.getElementById('database-fields').style.display = 'none';
+                document.getElementById('database-warning').style.display = 'none';
+                document.getElementById('file-size-group').style.display = 'block';
 
                 // Hide recommendations initially
                 const recsEl = document.getElementById('file-recommendations');
@@ -5226,6 +5372,28 @@ params:
                     return;
                 }
 
+                // Database-specific validation
+                if (format === 'database') {
+                    const connectionString = document.getElementById('add-file-connection-string').value.trim();
+                    const table = document.getElementById('add-file-table').value.trim();
+                    const query = document.getElementById('add-file-query').value.trim();
+
+                    if (!connectionString) {
+                        alert('Please provide a database connection string');
+                        return;
+                    }
+
+                    if (!table && !query) {
+                        alert('Please provide either a table name or a custom query');
+                        return;
+                    }
+
+                    if (table && query) {
+                        alert('Please provide either a table name OR a custom query, not both');
+                        return;
+                    }
+                }
+
                 // Ensure config.files array exists
                 if (!this.config.files) {
                     this.config.files = [];
@@ -5237,12 +5405,39 @@ params:
                     return;
                 }
 
-                this.config.files.push({
+                // Build file object
+                const fileObj = {
                     name: name,
                     path: path,
                     format: format,
                     validations: []
-                });
+                };
+
+                // Add database-specific fields
+                if (format === 'database') {
+                    const connectionString = document.getElementById('add-file-connection-string').value.trim();
+                    const table = document.getElementById('add-file-table').value.trim();
+                    const query = document.getElementById('add-file-query').value.trim();
+                    const unrestricted = document.getElementById('add-file-unrestricted').checked;
+                    const maxRows = document.getElementById('add-file-max-rows').value;
+
+                    fileObj.connection_string = connectionString;
+
+                    if (table) {
+                        fileObj.table = table;
+                    }
+
+                    if (query) {
+                        fileObj.query = query;
+                    }
+
+                    // Only add max_rows if not unrestricted
+                    if (!unrestricted && maxRows) {
+                        fileObj.max_rows = parseInt(maxRows);
+                    }
+                }
+
+                this.config.files.push(fileObj);
 
                 // Clear input fields for next time
                 document.getElementById('add-file-name').value = '';
