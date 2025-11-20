@@ -7,8 +7,9 @@ Complete reference for all 35 validation types in DataK9 Data Quality Framework.
 ## 📑 Table of Contents
 
 - [Overview](#overview)
-- [Source Compatibility](#source-compatibility)
-- [Validation Categories](#validation-categories)
+- [Category Matrix](#category-matrix) - Quick visual overview
+- [Quick Reference Table](#quick-reference-table) - All 35 validations at a glance
+- [Detailed Validation Catalog](#detailed-validation-catalog) - Complete docs with examples
   - [File-Level Validations (3)](#file-level-validations)
   - [Schema Validations (2)](#schema-validations)
   - [Field-Level Validations (6)](#field-level-validations)
@@ -19,7 +20,6 @@ Complete reference for all 35 validation types in DataK9 Data Quality Framework.
   - [Database Validations (3)](#database-validations)
   - [Temporal Validations (2)](#temporal-validations)
   - [Statistical Validations (3)](#statistical-validations)
-- [Quick Reference Table](#quick-reference-table)
 
 ---
 
@@ -33,30 +33,87 @@ DataK9 provides **35 validation types** organized into **10 categories**. Each v
 
 ---
 
-## Source Compatibility
+## Category Matrix
 
-| Compatibility | Count | Description |
-|--------------|-------|-------------|
-| **File sources only** | 7 | EmptyFileCheck, RowCountRangeCheck, FileSizeCheck, plus all Cross-File and Temporal validations |
-| **Database sources only** | 3 | DatabaseConstraintCheck, DatabaseReferentialIntegrityCheck, SQLCustomCheck |
-| **Both file and database** | 25 | Most Field-Level, Schema, Record-Level, Advanced, and Statistical validations |
+Quick overview of all validation categories:
 
-**List validations by source:**
+| Category | Count | File | DB | Both | Common Use Cases |
+|----------|-------|------|----|----|------------------|
+| **File-Level** | 3 | 3 | 0 | 0 | File existence, size, row count validation |
+| **Schema** | 2 | 0 | 0 | 2 | Column structure, schema contracts |
+| **Field-Level** | 6 | 0 | 0 | 6 | Required fields, patterns, ranges, formats |
+| **Record-Level** | 3 | 0 | 0 | 3 | Duplicates, blank rows, unique keys |
+| **Advanced** | 9 | 0 | 0 | 9 | Outliers, freshness, completeness, precision |
+| **Cross-File** | 4 | 4 | 0 | 0 | Referential integrity between files |
+| **Conditional** | 1 | 0 | 0 | 1 | If-then-else validation logic |
+| **Database** | 3 | 0 | 3 | 0 | Database constraints, SQL queries |
+| **Temporal** | 2 | 2 | 0 | 0 | Baseline comparison, trend detection |
+| **Statistical** | 3 | 0 | 0 | 3 | Distributions, correlations, ML anomalies |
+| **TOTAL** | **35** | **9** | **3** | **23** | |
 
+**Legend:** File = File sources only | DB = Database sources only | Both = Works with both
+
+**Quick CLI Reference:**
 ```bash
-# Show file-compatible validations
-python3 -m validation_framework.cli list-validations --source file
+# List validations by category
+python3 -m validation_framework.cli list-validations --category field
 
-# Show database-compatible validations
+# List by source compatibility
 python3 -m validation_framework.cli list-validations --source database
 
-# Show compatibility for all validations
+# Show all with compatibility info
 python3 -m validation_framework.cli list-validations --show-compatibility
 ```
 
 ---
 
-## Validation Categories
+## Quick Reference Table
+
+All 35 validations at a glance - click validation name to jump to detailed documentation:
+
+| Validation | Category | File | DB | Description | Key Parameters |
+|------------|----------|------|-------|-------------|----------------|
+| [EmptyFileCheck](#1-emptyfilecheck) | File | ✅ | ❌ | Prevent empty files | check_data_rows |
+| [RowCountRangeCheck](#2-rowcountrangecheck) | File | ✅ | ❌ | Validate row volumes | min_rows, max_rows |
+| [FileSizeCheck](#3-filesizecheck) | File | ✅ | ❌ | Check file size limits | min_size_mb, max_size_gb |
+| [SchemaMatchCheck](#4-schemamatchcheck) | Schema | ✅ | ✅ | Enforce schema contracts | expected_columns, allow_extra |
+| [ColumnPresenceCheck](#5-columnpresencecheck) | Schema | ✅ | ✅ | Required columns exist | required_columns |
+| [MandatoryFieldCheck](#6-mandatoryfieldcheck) | Field | ✅ | ✅ | Required fields not null | fields |
+| [RegexCheck](#7-regexcheck) | Field | ✅ | ✅ | Pattern matching validation | field, pattern |
+| [ValidValuesCheck](#8-validvaluescheck) | Field | ✅ | ✅ | Whitelist/blacklist values | field, valid_values |
+| [RangeCheck](#9-rangecheck) | Field | ✅ | ✅ | Numeric/date ranges | field, min_value, max_value |
+| [DateFormatCheck](#10-dateformatcheck) | Field | ✅ | ✅ | Date format validation | field, format |
+| [InlineRegexCheck](#11-inlineregexcheck) | Field | ✅ | ✅ | Quick inline regex | field, pattern |
+| [DuplicateRowCheck](#12-duplicaterowcheck) | Record | ✅ | ✅ | Find duplicate records | key_fields |
+| [BlankRecordCheck](#13-blankrecordcheck) | Record | ✅ | ✅ | Detect empty rows | None |
+| [UniqueKeyCheck](#14-uniquekeycheck) | Record | ✅ | ✅ | Primary key uniqueness | key_fields |
+| [CompletenessCheck](#15-completenesscheck) | Advanced | ✅ | ✅ | Field completeness % | field, min_completeness |
+| [StatisticalOutlierCheck](#16-statisticaloutliercheck) | Advanced | ✅ | ✅ | Detect anomalies | field, method, threshold |
+| [CrossFieldComparisonCheck](#17-crossfieldcomparisoncheck) | Advanced | ✅ | ✅ | Field relationships | field_a, operator, field_b |
+| [FreshnessCheck](#18-freshnesscheck) | Advanced | ✅ | ✅ | Data recency validation | timestamp_field, max_age_hours |
+| [StringLengthCheck](#19-stringlengthcheck) | Advanced | ✅ | ✅ | String length constraints | field, min_length, max_length |
+| [NumericPrecisionCheck](#20-numericprecisioncheck) | Advanced | ✅ | ✅ | Decimal precision | field, max_decimals |
+| [InlineBusinessRuleCheck](#21-inlinebusinessrulecheck) | Advanced | ✅ | ✅ | Custom business rules | expression, message |
+| [InlineLookupCheck](#22-inlinelookupcheck) | Advanced | ✅ | ✅ | Inline reference data | field, lookup_values |
+| [ReferentialIntegrityCheck](#23-referentialintegritycheck) | Cross-File | ✅ | ❌ | Foreign key validation | local_field, reference_file |
+| [CrossFileComparisonCheck](#24-crossfilecomparisoncheck) | Cross-File | ✅ | ❌ | Compare metrics | metric, field, reference_file |
+| [CrossFileDuplicateCheck](#25-crossfileduplicatecheck) | Cross-File | ✅ | ❌ | Cross-file duplicates | key_fields, reference_files |
+| [CrossFileKeyCheck](#26-crossfilekeycheck) | Cross-File | ✅ | ❌ | Cross-file key analysis | foreign_key, reference_file |
+| [ConditionalValidation](#27-conditionalvalidation) | Conditional | ✅ | ✅ | If-then-else logic | condition, validations |
+| [DatabaseConstraintCheck](#28-databaseconstraintcheck) | Database | ❌ | ✅ | DB constraint validation | connection_string, constraints |
+| [DatabaseReferentialIntegrityCheck](#29-databasereferentialintegritycheck) | Database | ❌ | ✅ | DB foreign keys | connection_string, reference_table |
+| [SQLCustomCheck](#30-sqlcustomcheck) | Database | ❌ | ✅ | Custom SQL queries | connection_string, query |
+| [BaselineComparisonCheck](#31-baselinecomparisoncheck) | Temporal | ✅ | ❌ | Historical comparison | metric, baseline_file |
+| [TrendDetectionCheck](#32-trenddetectioncheck) | Temporal | ✅ | ❌ | Detect unusual trends | timestamp_field, value_field |
+| [DistributionCheck](#33-distributioncheck) | Statistical | ✅ | ✅ | Statistical distributions | field, distribution_type |
+| [CorrelationCheck](#34-correlationcheck) | Statistical | ✅ | ✅ | Field correlations | field_a, field_b, method |
+| [AdvancedAnomalyDetectionCheck](#35-advancedanomalydetectioncheck) | Statistical | ✅ | ✅ | ML-based anomaly detection | fields, method, contamination |
+
+---
+
+## Detailed Validation Catalog
+
+Complete documentation with parameters, YAML examples, use cases, and tips for each validation.
 
 ### File-Level Validations
 
@@ -1494,48 +1551,6 @@ Advanced statistical analysis and ML-based anomaly detection.
 - Isolation Forest recommended for most use cases
 - Adjust contamination based on expected outlier rate
 - Combine with StatisticalOutlierCheck for comprehensive outlier detection
-
----
-
-## Quick Reference Table
-
-| Validation | Category | File | DB | Key Parameters |
-|------------|----------|------|----|----|
-| EmptyFileCheck | File-Level | ✅ | ❌ | check_data_rows |
-| RowCountRangeCheck | File-Level | ✅ | ❌ | min_rows, max_rows |
-| FileSizeCheck | File-Level | ✅ | ❌ | min_size_mb, max_size_mb, max_size_gb |
-| SchemaMatchCheck | Schema | ✅ | ✅ | expected_columns, allow_extra, allow_missing |
-| ColumnPresenceCheck | Schema | ✅ | ✅ | required_columns, case_sensitive |
-| MandatoryFieldCheck | Field-Level | ✅ | ✅ | fields |
-| RegexCheck | Field-Level | ✅ | ✅ | field, pattern, invert |
-| ValidValuesCheck | Field-Level | ✅ | ✅ | field, valid_values, case_sensitive |
-| RangeCheck | Field-Level | ✅ | ✅ | field, min_value, max_value |
-| DateFormatCheck | Field-Level | ✅ | ✅ | field, format, allow_null |
-| InlineRegexCheck | Field-Level | ✅ | ✅ | field, pattern |
-| DuplicateRowCheck | Record-Level | ✅ | ✅ | key_fields |
-| BlankRecordCheck | Record-Level | ✅ | ✅ | None |
-| UniqueKeyCheck | Record-Level | ✅ | ✅ | key_fields |
-| CompletenessCheck | Advanced | ✅ | ✅ | field, min_completeness |
-| StatisticalOutlierCheck | Advanced | ✅ | ✅ | field, method, threshold |
-| CrossFieldComparisonCheck | Advanced | ✅ | ✅ | field_a, operator, field_b |
-| FreshnessCheck | Advanced | ✅ | ✅ | timestamp_field, max_age_hours |
-| StringLengthCheck | Advanced | ✅ | ✅ | field, min_length, max_length |
-| NumericPrecisionCheck | Advanced | ✅ | ✅ | field, max_decimals |
-| InlineBusinessRuleCheck | Advanced | ✅ | ✅ | expression, message |
-| InlineLookupCheck | Advanced | ✅ | ✅ | field, lookup_values |
-| ReferentialIntegrityCheck | Cross-File | ✅ | ❌ | local_field, reference_file, reference_field |
-| CrossFileComparisonCheck | Cross-File | ✅ | ❌ | metric, field, reference_file, tolerance_percent |
-| CrossFileDuplicateCheck | Cross-File | ✅ | ❌ | key_fields, reference_files |
-| CrossFileKeyCheck | Cross-File | ✅ | ❌ | foreign_key, reference_file, reference_key, check_mode |
-| ConditionalValidation | Conditional | ✅ | ✅ | condition, validations |
-| DatabaseConstraintCheck | Database | ❌ | ✅ | connection_string, table_name, constraints |
-| DatabaseReferentialIntegrityCheck | Database | ❌ | ✅ | connection_string, local_field, reference_table, reference_column |
-| SQLCustomCheck | Database | ❌ | ✅ | connection_string, query, expected_result |
-| BaselineComparisonCheck | Temporal | ✅ | ❌ | metric, field, baseline_file, tolerance_percent |
-| TrendDetectionCheck | Temporal | ✅ | ❌ | timestamp_field, value_field, trend_type, sensitivity |
-| DistributionCheck | Statistical | ✅ | ✅ | field, distribution_type, significance_level |
-| CorrelationCheck | Statistical | ✅ | ✅ | field_a, field_b, min_correlation, max_correlation, method |
-| AdvancedAnomalyDetectionCheck | Statistical | ✅ | ✅ | fields, method, contamination |
 
 ---
 
