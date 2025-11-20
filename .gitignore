@@ -129,6 +129,7 @@ test-data/ultimate/
 # Archive folders (keep structure, not content)
 archive/test-reports/
 archive/demo-examples/
+docs/archive/
 
 # OS
 Thumbs.db
