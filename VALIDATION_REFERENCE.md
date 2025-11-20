@@ -25,7 +25,7 @@ Complete reference for all 35 validation types in DataK9 Data Quality Framework.
 
 ## Overview
 
-DataK9 provides **35 production-ready validation types** organized into **10 categories**. Each validation can be configured with:
+DataK9 provides **35 validation types** organized into **10 categories**. Each validation can be configured with:
 
 - **Severity levels**: `ERROR` (fails validation) or `WARNING` (flags for review)
 - **Parameters**: Customize validation behavior

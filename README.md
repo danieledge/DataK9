@@ -5,7 +5,7 @@
 
   ## 🐕 Your K9 guardian for data quality
 
-  **Production-grade data validation with comprehensive testing across files and databases**
+  **Data validation framework with comprehensive testing across files and databases**
 </div>
 
 DataK9 is a robust, extensible Python framework for validating data quality before loading to databases, data warehouses, or analytics platforms. Like a well-trained K9 unit, DataK9 vigilantly guards your data, sniffing out quality issues before they become problems.
@@ -38,11 +38,11 @@ DataK9 is a robust, extensible Python framework for validating data quality befo
 
 ## 🐕 Why DataK9?
 
-### Built for Production
-- ✅ **Enterprise-scale** - Handles 200GB+ files, tested with 357M rows on Raspberry Pi 4
+### Built for Scale
+- ✅ **Large file support** - Handles 200GB+ files, tested with 357M rows on Raspberry Pi 4
 - ✅ **Memory-efficient** - Chunked processing with automatic disk spillover
 - ✅ **Fast with Polars** - 179M rows validated in 5 minutes
-- ✅ **Battle-tested** - 115+ tests, 48% coverage, production-ready error handling
+- ✅ **Well-tested** - 115+ tests, 48% coverage, comprehensive error handling
 
 ### Easy to Use
 - ✅ **No coding required** - Simple YAML configuration
@@ -168,11 +168,11 @@ Open `validation_report.html` to see:
 
 ### Visual Configuration
 
-**DataK9 Studio** - Professional IDE-style interface:
+**DataK9 Studio** - Visual IDE interface:
 - 🎨 Visual validation builder with 35 validation types
 - 💻 Monaco editor with YAML syntax highlighting
 - 📱 Mobile-responsive design
-- 🌙 Professional dark theme
+- 🌙 Modern dark theme
 - 🏢 Offline-ready (no external CDN dependencies)
 
 **→ [Launch DataK9 Studio](https://raw.githack.com/danieledge/data-validation-tool/main/datak9-studio.html)**
@@ -334,10 +334,10 @@ python3 -m validation_framework.cli profile \
 - **[Configuration Guide](docs/using-datak9/configuration-guide.md)** - YAML syntax and examples
 - **[Data Profiling](docs/using-datak9/data-profiling.md)** - Analyze data before validation
 - **[DataK9 Studio Guide](docs/using-datak9/studio-guide.md)** - Visual configuration IDE
-- **[Best Practices](docs/using-datak9/best-practices.md)** - Production patterns
+- **[Best Practices](docs/using-datak9/best-practices.md)** - Recommended patterns
 - **[Performance Tuning](docs/using-datak9/performance-tuning.md)** - Optimize for speed/memory
 - **[Large Files Guide](docs/using-datak9/large-files.md)** - Handle 200GB+ datasets
-- **[AutoSys Integration](docs/using-datak9/autosys-integration.md)** - Enterprise job scheduling
+- **[AutoSys Integration](docs/using-datak9/autosys-integration.md)** - Job scheduling integration
 - **[CI/CD Integration](docs/using-datak9/cicd-integration.md)** - GitHub Actions, GitLab, Jenkins
 
 ### For Developers
@@ -365,7 +365,7 @@ python3 -m validation_framework.cli profile \
 | 5.1 GB | Parquet | 179M | ~5 min | ~10 GB | Desktop |
 | **10.1 GB** | **Parquet** | **357M** | **~55 min** | **~3.5 GB** | **Raspberry Pi 4** |
 
-**Ultimate Showcase:** 357M rows, 30 comprehensive validations (cross-file, ML anomaly detection, statistical tests) on Raspberry Pi 4 with only 4GB RAM - proves enterprise validation on budget hardware.
+**Large-Scale Test:** 357M rows, 30 comprehensive validations (cross-file, ML anomaly detection, statistical tests) on Raspberry Pi 4 with only 4GB RAM - demonstrates validation capabilities on modest hardware.
 
 ### pandas Backend (Excel Compatibility)
 
