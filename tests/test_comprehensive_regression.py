@@ -3,11 +3,14 @@ Comprehensive Regression Test Suite for DataK9 Validation Framework
 
 Tests data structure and validation configuration for regression testing.
 Ensures test data and configuration files are properly structured.
+Also includes actual execution tests to verify validations run correctly.
 """
 
 import pytest
 import pandas as pd
 from pathlib import Path
+from validation_framework.core.config import ValidationConfig
+from validation_framework.core.engine import ValidationEngine
 
 
 class TestComprehensiveRegression:
@@ -130,6 +133,140 @@ class TestComprehensiveRegression:
 
         print(f"\n✓ Configuration covers {len(validation_types)} validation types")
         print(f"  - All major categories represented")
+
+
+class TestComprehensiveValidationExecution:
+    """Tests that actually RUN the comprehensive validation config end-to-end."""
+
+    @pytest.fixture
+    def comprehensive_config_path(self):
+        """Path to comprehensive test configuration."""
+        return Path(__file__).parent / "test_data" / "comprehensive_test_config.yaml"
+
+    @pytest.fixture
+    def comprehensive_data_path(self):
+        """Path to comprehensive test data."""
+        return Path(__file__).parent / "test_data" / "comprehensive_test_data.csv"
+
+    @pytest.mark.integration
+    def test_comprehensive_config_loads(self, comprehensive_config_path):
+        """Test that comprehensive config file loads without errors."""
+        assert comprehensive_config_path.exists(), "Comprehensive config file not found"
+
+        # Load config
+        config = ValidationConfig.from_yaml(str(comprehensive_config_path))
+
+        assert config.job_name == "Comprehensive Test Suite - All 34 Validation Types"
+        assert len(config.files) == 1
+        assert config.files[0]["name"] == "employees"
+        assert len(config.files[0]["validations"]) >= 30  # Should have 30 validations
+
+        print(f"\n✓ Comprehensive config loaded successfully:")
+        print(f"  - Job name: {config.job_name}")
+        print(f"  - Files: {len(config.files)}")
+        print(f"  - Validations: {len(config.files[0]['validations'])}")
+
+    @pytest.mark.integration
+    def test_comprehensive_validations_execute(self, comprehensive_config_path, comprehensive_data_path):
+        """Test that all validations in comprehensive config actually execute."""
+        assert comprehensive_config_path.exists(), "Comprehensive config not found"
+        assert comprehensive_data_path.exists(), "Comprehensive test data not found"
+
+        # Load config
+        config = ValidationConfig.from_yaml(str(comprehensive_config_path))
+
+        # Create engine and run validations
+        engine = ValidationEngine(config)
+        results = engine.run()
+
+        # Verify validations ran
+        assert results is not None, "Engine should return results"
+        assert len(results.file_reports) > 0, "Should have file reports"
+
+        file_report = results.file_reports[0]
+        assert len(file_report.validation_results) >= 30, f"Should have 30+ validation results, got {len(file_report.validation_results)}"
+
+        # Count validations by status
+        passed = sum(1 for r in file_report.validation_results if r.passed)
+        failed = sum(1 for r in file_report.validation_results if not r.passed)
+
+        print(f"\n✓ Comprehensive validations executed:")
+        print(f"  - Total validations run: {len(file_report.validation_results)}")
+        print(f"  - Passed: {passed}")
+        print(f"  - Failed: {failed}")
+        print(f"  - All validations executed successfully")
+
+        # Verify we actually tested different validation types
+        validation_types = set(r.rule_name for r in file_report.validation_results)
+        assert len(validation_types) >= 20, f"Should have 20+ different validation types, got {len(validation_types)}"
+
+    @pytest.mark.integration
+    def test_comprehensive_data_quality_issues_detected(self, comprehensive_config_path):
+        """Test that comprehensive config correctly detects designed quality issues."""
+        config = ValidationConfig.from_yaml(str(comprehensive_config_path))
+        engine = ValidationEngine(config)
+        results = engine.run()
+
+        file_report = results.file_reports[0]
+
+        # We designed quality issues into the test data, so some validations should fail
+        failed_validations = [r for r in file_report.validation_results if not r.passed]
+
+        assert len(failed_validations) > 0, "Should have at least some failed validations due to designed quality issues"
+
+        # Check that specific validation types we expect to fail actually failed
+        failed_types = {r.rule_name for r in failed_validations}
+
+        # These should fail based on our designed quality issues
+        expected_failures = {
+            'MandatoryFieldCheck',  # Employee 5 has missing first_name
+            'RegexCheck',            # Employee 10 has invalid email
+            'ValidValuesCheck',      # Employee 20 has invalid status
+            'RangeCheck',            # Employees 25, 30 have salary out of range
+            'DateFormatCheck',       # Employee 45 has invalid date
+            'DuplicateRowCheck',     # Employee 47-48 have duplicate IDs
+            'UniqueKeyCheck',        # Same duplicate
+        }
+
+        # At least some of these should have failed
+        detected_failures = expected_failures & failed_types
+        assert len(detected_failures) > 0, f"Should have detected some designed failures, got: {failed_types}"
+
+        print(f"\n✓ Quality issues detected as expected:")
+        print(f"  - Failed validations: {len(failed_validations)}")
+        print(f"  - Expected failures detected: {detected_failures}")
+
+    @pytest.mark.integration
+    def test_all_validation_categories_covered(self, comprehensive_config_path):
+        """Test that comprehensive config covers all major validation categories."""
+        config = ValidationConfig.from_yaml(str(comprehensive_config_path))
+        engine = ValidationEngine(config)
+        results = engine.run()
+
+        file_report = results.file_reports[0]
+        validation_names = [r.rule_name for r in file_report.validation_results]
+
+        # Check categories are covered
+        categories = {
+            'File-level': ['EmptyFileCheck', 'RowCountRangeCheck', 'FileSizeCheck'],
+            'Schema': ['SchemaMatchCheck', 'ColumnPresenceCheck'],
+            'Field-level': ['MandatoryFieldCheck', 'RegexCheck', 'ValidValuesCheck', 'RangeCheck', 'DateFormatCheck'],
+            'Record-level': ['DuplicateRowCheck', 'BlankRecordCheck', 'UniqueKeyCheck'],
+            'Advanced': ['StatisticalOutlierCheck', 'CompletenessCheck', 'StringLengthCheck', 'NumericPrecisionCheck'],
+            'Conditional': ['ConditionalValidation'],
+        }
+
+        coverage = {}
+        for category, expected_validations in categories.items():
+            found = [v for v in expected_validations if v in validation_names]
+            coverage[category] = len(found)
+
+        print(f"\n✓ Validation category coverage:")
+        for category, count in coverage.items():
+            print(f"  - {category}: {count} validation(s)")
+
+        # All categories should have at least one validation
+        assert all(count > 0 for count in coverage.values()), "All categories should be represented"
 
 
 if __name__ == "__main__":

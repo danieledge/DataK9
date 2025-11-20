@@ -171,21 +171,31 @@ class ValidationConfig:
         self.version: str = job_config.get("version", "1.0")
         self.description: Optional[str] = job_config.get("description", None)
 
-        # Files to validate
-        if "files" not in job_config or not job_config["files"]:
+        # Files to validate - support both nested and flat (backwards compat) structure
+        # NEW format: validation_job.files
+        # OLD format: files at root level (backwards compatibility)
+        if "files" in job_config:
+            files_list = job_config["files"]
+        elif "files" in self.raw_config:
+            # Backwards compatibility: files at root level
+            files_list = self.raw_config["files"]
+        else:
             raise ConfigError("Configuration must specify at least one file to validate")
 
-        self.files = self._parse_files(job_config["files"])
+        if not files_list:
+            raise ConfigError("Configuration must specify at least one file to validate")
 
-        # Output configuration
-        output_config = job_config.get("output", {})
+        self.files = self._parse_files(files_list)
+
+        # Output configuration - support both nested and flat structure
+        output_config = job_config.get("output", self.raw_config.get("output", {}))
         self.html_report_path = output_config.get("html_report", "validation_report.html")
         self.json_summary_path = output_config.get("json_summary", "validation_summary.json")
         self.fail_on_error = output_config.get("fail_on_error", True)
         self.fail_on_warning = output_config.get("fail_on_warning", False)
 
         # Processing options
-        processing = job_config.get("processing", {})
+        processing = job_config.get("processing", self.raw_config.get("processing", {}))
         self.chunk_size = processing.get("chunk_size", DEFAULT_CHUNK_SIZE)
         self.parallel_files = processing.get("parallel_files", False)
         self.max_sample_failures = processing.get("max_sample_failures", MAX_SAMPLE_FAILURES)
@@ -231,6 +241,8 @@ class ValidationConfig:
                     "table": file_config.get("table"),
                     "query": file_config.get("query"),
                     "db_type": file_config.get("db_type"),  # Optional, will auto-detect if not provided
+                    "max_rows": file_config.get("max_rows"),  # Production safety limit
+                    "sample_percent": file_config.get("sample_percent"),  # Sample validation
                 })
 
                 # Validate database configuration
@@ -263,11 +275,16 @@ class ValidationConfig:
             if "type" not in validation:
                 raise ConfigError("Validation must specify 'type'")
 
-            severity_str = validation.get("severity", "ERROR").upper()
-            try:
-                severity = Severity[severity_str]
-            except KeyError:
-                raise ConfigError(f"Invalid severity: {severity_str}. Must be ERROR or WARNING")
+            # Handle severity - may be string or already a Severity enum
+            severity_val = validation.get("severity", "ERROR")
+            if isinstance(severity_val, Severity):
+                severity = severity_val
+            else:
+                severity_str = severity_val.upper()
+                try:
+                    severity = Severity[severity_str]
+                except KeyError:
+                    raise ConfigError(f"Invalid severity: {severity_str}. Must be ERROR or WARNING")
 
             parsed_validation = {
                 "type": validation["type"],
@@ -276,6 +293,7 @@ class ValidationConfig:
                 "enabled": validation.get("enabled", True),
                 "description": validation.get("description", ""),
                 "condition": validation.get("condition", None),
+                "sampling": validation.get("sampling", {}),  # Preserve sampling configuration
             }
 
             parsed_validations.append(parsed_validation)

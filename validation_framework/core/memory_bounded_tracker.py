@@ -372,6 +372,9 @@ class MemoryBoundedTracker:
         Always call this method when done using the tracker to prevent
         resource leaks.
         """
+        # Get statistics BEFORE closing db connection
+        stats = self.get_statistics()
+
         if self.db_conn:
             self.db_conn.commit()
             self.db_conn.close()
@@ -395,8 +398,7 @@ class MemoryBoundedTracker:
         # Clear memory
         self.memory_keys.clear()
 
-        # Log final statistics
-        stats = self.get_statistics()
+        # Log final statistics (already retrieved before closing connection)
         logger.info(
             f"Tracker closed. Statistics: {stats['total_keys']:,} total keys, "
             f"{stats['total_lookups']:,} lookups, "

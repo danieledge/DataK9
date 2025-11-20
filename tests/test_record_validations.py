@@ -15,6 +15,7 @@ from validation_framework.validations.builtin.record_checks import (
     BlankRecordCheck,
     UniqueKeyCheck
 )
+from validation_framework.core.results import Severity
 from tests.conftest import create_data_iterator
 
 
@@ -33,8 +34,12 @@ class TestDuplicateRowCheck:
             "name": ["Alice", "Bob", "Charlie", "Diana", "Eve"],
             "value": [100, 200, 300, 400, 500]
         })
-        
-        validation = DuplicateRowCheck()
+
+        validation = DuplicateRowCheck(
+            name="DuplicateRowCheck",
+            severity=Severity.ERROR,
+            params={"consider_all_fields": True}
+        )
         result = validation.validate(create_data_iterator(df), {})
         
         assert result.passed is True
@@ -47,8 +52,12 @@ class TestDuplicateRowCheck:
             "name": ["Alice", "Bob", "Bob", "Charlie", "Charlie"],
             "value": [100, 200, 200, 300, 300]
         })
-        
-        validation = DuplicateRowCheck()
+
+        validation = DuplicateRowCheck(
+            name="DuplicateRowCheck",
+            severity=Severity.ERROR,
+            params={"consider_all_fields": True}
+        )
         result = validation.validate(create_data_iterator(df), {})
         
         assert result.passed is False
@@ -61,8 +70,12 @@ class TestDuplicateRowCheck:
             "name": ["Alice", "Bob", "Bob", "Charlie"],
             "timestamp": ["2025-01-01", "2025-01-02", "2025-01-03", "2025-01-04"]
         })
-        
-        validation = DuplicateRowCheck(subset=["id", "name"])
+
+        validation = DuplicateRowCheck(
+            name="DuplicateRowCheck",
+            severity=Severity.ERROR,
+            params={"key_fields": ["id", "name"]}
+        )
         result = validation.validate(create_data_iterator(df), {})
         
         assert result.passed is False
@@ -74,8 +87,12 @@ class TestDuplicateRowCheck:
             "name": ["Alice", "Bob", "Charlie", "Diana"],
             "value": [100, 100, 100, 100]  # Duplicates in value column
         })
-        
-        validation = DuplicateRowCheck(subset=["id"])
+
+        validation = DuplicateRowCheck(
+            name="DuplicateRowCheck",
+            severity=Severity.ERROR,
+            params={"key_fields": ["id"]}
+        )
         result = validation.validate(create_data_iterator(df), {})
         
         assert result.passed is True
@@ -96,8 +113,11 @@ class TestBlankRecordCheck:
             "name": ["Alice", "Bob", "Charlie"],
             "email": ["a@test.com", "b@test.com", "c@test.com"]
         })
-        
-        validation = BlankRecordCheck()
+
+        validation = BlankRecordCheck(
+            name="BlankRecordCheck",
+            severity=Severity.ERROR
+        )
         result = validation.validate(create_data_iterator(df), {})
         
         assert result.passed is True
@@ -109,8 +129,11 @@ class TestBlankRecordCheck:
             "name": ["Alice", None, "Charlie"],
             "email": ["a@test.com", None, "c@test.com"]
         })
-        
-        validation = BlankRecordCheck()
+
+        validation = BlankRecordCheck(
+            name="BlankRecordCheck",
+            severity=Severity.ERROR
+        )
         result = validation.validate(create_data_iterator(df), {})
         
         # Row 2 is completely blank
@@ -123,8 +146,11 @@ class TestBlankRecordCheck:
             "name": ["Alice", None, "Charlie"],  # Row 2 has some data
             "email": ["a@test.com", "b@test.com", "c@test.com"]
         })
-        
-        validation = BlankRecordCheck()
+
+        validation = BlankRecordCheck(
+            name="BlankRecordCheck",
+            severity=Severity.ERROR
+        )
         result = validation.validate(create_data_iterator(df), {})
         
         # Row 2 is not completely blank
@@ -137,8 +163,11 @@ class TestBlankRecordCheck:
             "name": ["Alice", "", "Charlie"],
             "email": ["a@test.com", "", "c@test.com"]
         })
-        
-        validation = BlankRecordCheck()
+
+        validation = BlankRecordCheck(
+            name="BlankRecordCheck",
+            severity=Severity.ERROR
+        )
         result = validation.validate(create_data_iterator(df), {})
         
         # Row 2 has only empty strings
@@ -159,8 +188,12 @@ class TestUniqueKeyCheck:
             "id": [1, 2, 3, 4, 5],
             "name": ["Alice", "Bob", "Charlie", "Diana", "Eve"]
         })
-        
-        validation = UniqueKeyCheck(key_fields=["id"])
+
+        validation = UniqueKeyCheck(
+            name="UniqueKeyCheck",
+            severity=Severity.ERROR,
+            params={"fields": ["id"]}
+        )
         result = validation.validate(create_data_iterator(df), {})
         
         assert result.passed is True
@@ -171,8 +204,12 @@ class TestUniqueKeyCheck:
             "id": [1, 2, 2, 3, 3],
             "name": ["Alice", "Bob", "Bob2", "Charlie", "Charlie2"]
         })
-        
-        validation = UniqueKeyCheck(key_fields=["id"])
+
+        validation = UniqueKeyCheck(
+            name="UniqueKeyCheck",
+            severity=Severity.ERROR,
+            params={"fields": ["id"]}
+        )
         result = validation.validate(create_data_iterator(df), {})
         
         assert result.passed is False
@@ -185,8 +222,12 @@ class TestUniqueKeyCheck:
             "last_name": ["Smith", "Doe", "Smith", "Doe"],
             "dob": ["1990-01-01", "1985-05-15", "1992-03-20", "1988-11-10"]
         })
-        
-        validation = UniqueKeyCheck(key_fields=["first_name", "last_name"])
+
+        validation = UniqueKeyCheck(
+            name="UniqueKeyCheck",
+            severity=Severity.ERROR,
+            params={"fields": ["first_name", "last_name"]}
+        )
         result = validation.validate(create_data_iterator(df), {})
         
         assert result.passed is True
@@ -198,8 +239,12 @@ class TestUniqueKeyCheck:
             "last_name": ["Smith", "Smith", "Doe"],
             "email": ["john1@test.com", "john2@test.com", "jane@test.com"]
         })
-        
-        validation = UniqueKeyCheck(key_fields=["first_name", "last_name"])
+
+        validation = UniqueKeyCheck(
+            name="UniqueKeyCheck",
+            severity=Severity.ERROR,
+            params={"fields": ["first_name", "last_name"]}
+        )
         result = validation.validate(create_data_iterator(df), {})
         
         assert result.passed is False
@@ -210,8 +255,12 @@ class TestUniqueKeyCheck:
             "id": [1, None, 3, None],
             "name": ["Alice", "Bob", "Charlie", "Diana"]
         })
-        
-        validation = UniqueKeyCheck(key_fields=["id"])
+
+        validation = UniqueKeyCheck(
+            name="UniqueKeyCheck",
+            severity=Severity.ERROR,
+            params={"fields": ["id"]}
+        )
         result = validation.validate(create_data_iterator(df), {})
         
         # Null keys should be detected as duplicates or handled appropriately
@@ -233,11 +282,22 @@ class TestRecordValidationsIntegration:
             "name": ["Alice", "Bob", "Charlie", "Diana", "Eve"],
             "email": ["a@test.com", "b@test.com", "c@test.com", "d@test.com", "e@test.com"]
         })
-        
+
         # Run all record validations
-        dup_check = DuplicateRowCheck()
-        blank_check = BlankRecordCheck()
-        unique_check = UniqueKeyCheck(key_fields=["id"])
+        dup_check = DuplicateRowCheck(
+            name="DuplicateRowCheck",
+            severity=Severity.ERROR,
+            params={"consider_all_fields": True}
+        )
+        blank_check = BlankRecordCheck(
+            name="BlankRecordCheck",
+            severity=Severity.ERROR
+        )
+        unique_check = UniqueKeyCheck(
+            name="UniqueKeyCheck",
+            severity=Severity.ERROR,
+            params={"fields": ["id"]}
+        )
         
         dup_result = dup_check.validate(create_data_iterator(df), {})
         blank_result = blank_check.validate(create_data_iterator(df), {})
@@ -255,11 +315,22 @@ class TestRecordValidationsIntegration:
             "name": ["Alice", "Bob", "Bob", None, "Eve"],
             "email": ["a@test.com", "b@test.com", "b@test.com", None, "e@test.com"]
         })
-        
+
         # Run validations
-        dup_check = DuplicateRowCheck()
-        blank_check = BlankRecordCheck()
-        unique_check = UniqueKeyCheck(key_fields=["id"])
+        dup_check = DuplicateRowCheck(
+            name="DuplicateRowCheck",
+            severity=Severity.ERROR,
+            params={"consider_all_fields": True}
+        )
+        blank_check = BlankRecordCheck(
+            name="BlankRecordCheck",
+            severity=Severity.ERROR
+        )
+        unique_check = UniqueKeyCheck(
+            name="UniqueKeyCheck",
+            severity=Severity.ERROR,
+            params={"fields": ["id"]}
+        )
         
         dup_result = dup_check.validate(create_data_iterator(df), {})
         blank_result = blank_check.validate(create_data_iterator(df), {})

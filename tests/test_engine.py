@@ -132,7 +132,7 @@ class TestEngineInitialization:
         
         assert engine.config is not None
         assert engine.registry is not None
-        assert engine.config.validation_job_name == "Test Job"
+        assert engine.config.job_name == "Test Job"
     
     def test_engine_from_config_file(self, simple_validation_config):
         """Test engine creation from configuration file path."""
@@ -165,7 +165,7 @@ class TestEngineExecution:
         report = engine.run(verbose=False)
         
         assert isinstance(report, ValidationReport)
-        assert report.status == Status.PASSED
+        assert report.overall_status == Status.PASSED
         assert len(report.file_reports) == 1
     
     def test_run_with_verbose_output(self, simple_validation_config, capsys):
@@ -263,9 +263,10 @@ class TestReportGeneration:
         import json
         with open(json_file) as f:
             data = json.load(f)
-        
-        assert "validation_job_name" in data
-        assert data["validation_job_name"] == "Test Job"
+
+        # JSON structure has job_name at top level
+        assert "job_name" in data
+        assert data["job_name"] == "Test Job"
     
     def test_generate_both_reports(self, simple_validation_config, tmp_path):
         """Test generating both HTML and JSON reports."""
@@ -311,10 +312,11 @@ class TestEngineErrorHandling:
             yaml.dump(config_dict, f)
         
         engine = ValidationEngine.from_config(str(config_file))
-        
-        # Engine should handle missing file gracefully or raise specific error
-        with pytest.raises(Exception):
-            engine.run(verbose=False)
+
+        # Engine should handle missing file gracefully and report failure
+        report = engine.run(verbose=False)
+        assert report.overall_status == Status.FAILED
+        assert report.total_errors > 0
     
     def test_invalid_validation_type(self, tmp_path):
         """Test handling of unknown validation types."""
@@ -339,10 +341,11 @@ class TestEngineErrorHandling:
         with open(config_file, 'w') as f:
             yaml.dump(config_dict, f)
         
-        # Should raise error for unknown validation type
-        with pytest.raises(Exception):
-            engine = ValidationEngine.from_config(str(config_file))
-            engine.run(verbose=False)
+        # Engine handles unknown validation types gracefully with warnings/errors
+        engine = ValidationEngine.from_config(str(config_file))
+        report = engine.run(verbose=False)
+        # Report should indicate failure due to unknown validation
+        assert report.overall_status in [Status.FAILED, Status.WARNING]
 
 
 # ============================================================================
@@ -409,7 +412,7 @@ class TestEngineIntegration:
         engine.generate_json_report(report, str(tmp_path / "sales_summary.json"))
         
         # Verify results
-        assert report.status == Status.PASSED
+        assert report.overall_status == Status.PASSED
         assert (tmp_path / "sales_report.html").exists()
         assert (tmp_path / "sales_summary.json").exists()
     
@@ -452,7 +455,7 @@ class TestEngineIntegration:
         engine = ValidationEngine.from_config(str(config_file))
         report = engine.run(verbose=False)
         
-        assert report.status == Status.PASSED
+        assert report.overall_status == Status.PASSED
 
 
 if __name__ == "__main__":

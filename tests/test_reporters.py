@@ -33,7 +33,7 @@ from validation_framework.core.results import (
 def sample_validation_result():
     """Create a sample validation result for testing."""
     return ValidationResult(
-        validation_name="MandatoryFieldCheck",
+        rule_name="MandatoryFieldCheck",
         passed=True,
         message="All mandatory fields present",
         severity=Severity.ERROR,
@@ -47,7 +47,7 @@ def sample_validation_result():
 def failed_validation_result():
     """Create a failed validation result with sample failures."""
     return ValidationResult(
-        validation_name="MandatoryFieldCheck",
+        rule_name="MandatoryFieldCheck",
         passed=False,
         message="Missing mandatory fields detected",
         severity=Severity.ERROR,
@@ -64,24 +64,31 @@ def failed_validation_result():
 @pytest.fixture
 def file_validation_report(sample_validation_result, failed_validation_result):
     """Create a file validation report with mixed results."""
-    return FileValidationReport(
+    report = FileValidationReport(
         file_name="test_data.csv",
         file_path="/path/to/test_data.csv",
         file_format="csv",
-        total_rows=100,
-        validations=[sample_validation_result, failed_validation_result]
+        status=Status.PASSED,
+        metadata={"total_rows": 100}
     )
+    report.add_result(sample_validation_result)
+    report.add_result(failed_validation_result)
+    report.update_status()
+    return report
 
 
 @pytest.fixture
 def validation_report(file_validation_report):
     """Create a complete validation report."""
-    return ValidationReport(
-        validation_job_name="Test Validation Job",
-        start_time=datetime(2025, 1, 1, 10, 0, 0),
-        end_time=datetime(2025, 1, 1, 10, 5, 0),
-        file_reports=[file_validation_report]
+    report = ValidationReport(
+        job_name="Test Validation Job",
+        execution_time=datetime(2025, 1, 1, 10, 0, 0),
+        duration_seconds=300.0,
+        overall_status=Status.PASSED
     )
+    report.add_file_report(file_validation_report)
+    report.update_overall_status()
+    return report
 
 
 # ============================================================================
@@ -143,7 +150,7 @@ class TestHTMLReporter:
         """Test HTML report for passed validations."""
         # Modify report to be all passing
         for file_report in validation_report.file_reports:
-            for validation in file_report.validations:
+            for validation in file_report.validation_results:
                 validation.passed = True
                 validation.failed_count = 0
         
@@ -161,8 +168,8 @@ class TestHTMLReporter:
         """Test HTML report for failed validations."""
         # Ensure report has failures
         for file_report in validation_report.file_reports:
-            file_report.validations[1].passed = False
-            file_report.validations[1].failed_count = 5
+            file_report.validation_results[1].passed = False
+            file_report.validation_results[1].failed_count = 5
         
         reporter = HTMLReporter()
         output_file = tmp_path / "failed_report.html"
@@ -238,8 +245,8 @@ class TestJSONReporter:
         with open(output_file) as f:
             data = json.load(f)
         
-        assert "validation_job_name" in data
-        assert data["validation_job_name"] == "Test Validation Job"
+        assert "job_name" in data
+        assert data["job_name"] == "Test Validation Job"
     
     def test_json_report_contains_status(self, validation_report, tmp_path):
         """Test that JSON report includes overall status."""
@@ -251,8 +258,8 @@ class TestJSONReporter:
         with open(output_file) as f:
             data = json.load(f)
         
-        assert "status" in data
-        assert data["status"] in ["PASSED", "FAILED", "WARNING"]
+        assert "overall_status" in data
+        assert data["overall_status"] in ["PASSED", "FAILED", "WARNING"]
     
     def test_json_report_contains_file_reports(self, validation_report, tmp_path):
         """Test that JSON report includes file-level reports."""
@@ -264,9 +271,9 @@ class TestJSONReporter:
         with open(output_file) as f:
             data = json.load(f)
         
-        assert "file_reports" in data
-        assert isinstance(data["file_reports"], list)
-        assert len(data["file_reports"]) == 1
+        assert "files" in data
+        assert isinstance(data["files"], list)
+        assert len(data["files"]) == 1
     
     def test_json_report_file_details(self, validation_report, tmp_path):
         """Test that JSON report includes detailed file information."""
@@ -278,11 +285,11 @@ class TestJSONReporter:
         with open(output_file) as f:
             data = json.load(f)
         
-        file_report = data["file_reports"][0]
+        file_report = data["files"][0]
         assert "file_name" in file_report
         assert file_report["file_name"] == "test_data.csv"
-        assert "total_rows" in file_report
-        assert file_report["total_rows"] == 100
+        assert "metadata" in file_report
+        assert file_report["metadata"]["total_rows"] == 100
     
     def test_json_report_validation_results(self, validation_report, tmp_path):
         """Test that JSON report includes validation results."""
@@ -294,13 +301,13 @@ class TestJSONReporter:
         with open(output_file) as f:
             data = json.load(f)
         
-        validations = data["file_reports"][0]["validations"]
+        validations = data["files"][0]["validation_results"]
         assert isinstance(validations, list)
         assert len(validations) == 2
         
         # Check validation structure
         validation = validations[0]
-        assert "validation_name" in validation
+        assert "rule_name" in validation
         assert "passed" in validation
         assert "message" in validation
         assert "severity" in validation
@@ -315,9 +322,8 @@ class TestJSONReporter:
         with open(output_file) as f:
             data = json.load(f)
         
-        assert "start_time" in data
-        assert "end_time" in data
-        assert "duration" in data
+        assert "execution_time" in data
+        assert "duration_seconds" in data
     
     def test_json_report_overwrite_existing(self, validation_report, tmp_path):
         """Test that JSON reporter can overwrite existing files."""
@@ -368,15 +374,15 @@ class TestReporterIntegration:
         # JSON should be parseable
         with open(json_file) as f:
             data = json.load(f)
-        assert data["validation_job_name"] == "Test Validation Job"
+        assert data["job_name"] == "Test Validation Job"
     
     def test_reports_with_empty_validations(self, tmp_path):
         """Test report generation with no validations."""
         empty_report = ValidationReport(
-            validation_job_name="Empty Test",
-            start_time=datetime.now(),
-            end_time=datetime.now(),
-            file_reports=[]
+            job_name="Empty Test",
+            execution_time=datetime.now(),
+            duration_seconds=0.0,
+            overall_status=Status.PASSED
         )
         
         html_reporter = HTMLReporter()
@@ -394,8 +400,8 @@ class TestReporterIntegration:
         # Verify JSON structure
         with open(json_file) as f:
             data = json.load(f)
-        assert data["validation_job_name"] == "Empty Test"
-        assert len(data["file_reports"]) == 0
+        assert data["job_name"] == "Empty Test"
+        assert len(data["files"]) == 0
 
 
 if __name__ == "__main__":

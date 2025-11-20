@@ -486,7 +486,7 @@ def profile(file_path, format, database, table, query, html_output, json_output,
 
             # Load sample data for profiling
             click.echo(f"  • Loading sample data...")
-            sample_chunk = next(loader.load_chunks())
+            sample_chunk = next(loader.load())
 
             # Profile the sample
             profile_result = profiler.profile_dataframe(sample_chunk, name=source_name)
