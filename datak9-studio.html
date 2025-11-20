@@ -4467,14 +4467,9 @@ files:
                         </div>
                         <div class="card-body">
                             <div class="form-group">
-                                <label class="form-label">File Name</label>
+                                <label class="form-label">${file.format === 'database' ? 'Source Name' : 'File Name'}</label>
                                 <input type="text" class="form-input" value="${this.escapeHtml(file.name)}"
                                        onchange="app.updateFileName(${this.selectedFile}, this.value)">
-                            </div>
-                            <div class="form-group">
-                                <label class="form-label">File Path</label>
-                                <input type="text" class="form-input" value="${this.escapeHtml(file.path)}"
-                                       onchange="app.updateFilePath(${this.selectedFile}, this.value)">
                             </div>
                             <div class="form-group">
                                 <label class="form-label">Format</label>
@@ -4486,6 +4481,52 @@ files:
                                     <option value="database" ${file.format === 'database' ? 'selected' : ''}>Database</option>
                                 </select>
                             </div>
+                            ${file.format === 'database' ? `
+                            <!-- Database-specific fields -->
+                            <div class="form-group">
+                                <label class="form-label">Connection String</label>
+                                <input type="text" class="form-input" value="${this.escapeHtml(file.connection_string || '')}"
+                                       onchange="app.updateFileProperty(${this.selectedFile}, 'connection_string', this.value)"
+                                       placeholder="postgresql://user:pass@host:5432/dbname">
+                                <div class="form-help">Database connection string (use ${DB_CONNECTION} for environment variable)</div>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Table Name</label>
+                                <input type="text" class="form-input" value="${this.escapeHtml(file.table_name || '')}"
+                                       onchange="app.updateFileProperty(${this.selectedFile}, 'table_name', this.value)"
+                                       placeholder="customers">
+                                <div class="form-help">Name of the database table to validate</div>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Custom Query (Optional)</label>
+                                <textarea class="form-input" rows="3"
+                                          onchange="app.updateFileProperty(${this.selectedFile}, 'custom_query', this.value)"
+                                          placeholder="SELECT * FROM customers WHERE status='active'">${this.escapeHtml(file.custom_query || '')}</textarea>
+                                <div class="form-help">Optional SQL query to filter data. Leave empty to validate entire table.</div>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Max Rows</label>
+                                <input type="number" class="form-input" value="${file.max_rows || 5000}"
+                                       onchange="app.updateFileProperty(${this.selectedFile}, 'max_rows', parseInt(this.value))"
+                                       min="0" step="1000">
+                                <div class="form-help">Maximum rows to load (default: 5,000 for safety). Set to 0 for unlimited.</div>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Sample Percent (Optional)</label>
+                                <input type="number" class="form-input" value="${file.sample_percent || ''}"
+                                       onchange="app.updateFileProperty(${this.selectedFile}, 'sample_percent', parseFloat(this.value))"
+                                       min="0" max="100" step="0.1" placeholder="10">
+                                <div class="form-help">Sample percentage (0-100). Leave empty to use max_rows limit.</div>
+                            </div>
+                            ` : `
+                            <!-- File-specific fields -->
+                            <div class="form-group">
+                                <label class="form-label">File Path</label>
+                                <input type="text" class="form-input" value="${this.escapeHtml(file.path || '')}"
+                                       onchange="app.updateFilePath(${this.selectedFile}, this.value)">
+                                <div class="form-help">Path to the data file</div>
+                            </div>
+                            `}
                         </div>
                     </div>
 
@@ -5479,6 +5520,12 @@ params:
 
             updateFileFormat(index, value) {
                 this.config.files[index].format = value;
+                this.saveToLocalStorage();
+                this.render();
+            },
+
+            updateFileProperty(index, property, value) {
+                this.config.files[index][property] = value;
                 this.saveToLocalStorage();
                 this.render();
             },
