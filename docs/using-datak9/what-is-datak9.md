@@ -1,6 +1,6 @@
 # What is DataK9?
 
-**DataK9** is a production-grade data quality framework that guards your data pipelines with vigilance and precision. Like a K9 unit that sniffs out problems before they escalate, DataK9 catches data quality issues before they reach production.
+**DataK9** is a data quality framework that guards your data pipelines with vigilance and precision. Like a K9 unit that sniffs out problems before they escalate, DataK9 catches data quality issues before they cause problems.
 
 ---
 
@@ -13,7 +13,7 @@ Just like security forces use K9 units for detection and protection, DataK9:
 - **Guards your pipelines** - Provides continuous protection for your data
 - **Stays vigilant** - Always alert, never misses a check
 - **Trains to your needs** - Configurable validation rules for your specific use case
-- **Loyal and reliable** - Production-grade, enterprise-ready framework
+- **Loyal and reliable** - Tested (115+ tests), extensible framework
 
 ---
 
@@ -135,7 +135,7 @@ DataK9 uses **chunked processing** to handle massive files:
 
 ---
 
-### Enterprise-Ready Features
+### Integration Features
 
 **AutoSys Integration:**
 - Proper exit codes (0=pass, 1=errors, 2=config error)
@@ -147,11 +147,11 @@ DataK9 uses **chunked processing** to handle massive files:
 - Works with Jenkins, GitLab CI, GitHub Actions
 - Fail build on validation errors
 
-**Production-Grade:**
+**Quality & Testing:**
 - Comprehensive error handling
 - Detailed logging
 - 115+ unit tests
-- Battle-tested with 200GB+ files
+- Tested with 200GB+ files
 
 ---
 

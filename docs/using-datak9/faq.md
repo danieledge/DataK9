@@ -8,7 +8,7 @@ Common questions about **DataK9** - your K9 guardian for data quality.
 
 ### Q: What is DataK9?
 
-**A:** DataK9 is a production-grade data quality framework that validates data files before they enter your data warehouse or analytics platform. It catches data quality issues early, preventing bad data from reaching production.
+**A:** DataK9 is a data quality framework that validates data files before they enter your data warehouse or analytics platform. It catches data quality issues early, preventing bad data from causing problems.
 
 **See also:** [What is DataK9?](what-is-datak9.md)
 
@@ -33,15 +33,15 @@ Most users work with YAML configs or DataK9 Studio and never write Python code.
 
 ---
 
-### Q: Is DataK9 production-ready?
+### Q: Is DataK9 ready for real-world use?
 
-**A:** Yes! DataK9 is used in production environments for:
-- Validating 200GB+ files daily
+**A:** DataK9 is actively used for:
+- Validating 200GB+ files
 - AutoSys batch job orchestration
 - CI/CD pipeline integration
-- Enterprise data warehouses (Snowflake, Redshift, BigQuery)
+- Data warehouse ETL processes (Snowflake, Redshift, BigQuery)
 
-It has 115+ unit tests and has been battle-tested with massive datasets.
+It has 115+ unit tests and has been tested with large datasets (357M rows, 200GB+ files).
 
 ---
 

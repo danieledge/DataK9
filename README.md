@@ -42,7 +42,7 @@ DataK9 is a robust, extensible Python framework for validating data quality befo
 - ✅ **Large file support** - Handles 200GB+ files, tested with 357M rows on Raspberry Pi 4
 - ✅ **Memory-efficient** - Chunked processing with automatic disk spillover
 - ✅ **Fast with Polars** - 179M rows validated in 5 minutes
-- ✅ **Well-tested** - 115+ tests, 48% coverage, comprehensive error handling
+- ✅ **Tested** - 115+ tests, 48% coverage (growing), comprehensive error handling
 
 ### Easy to Use
 - ✅ **No coding required** - Simple YAML configuration

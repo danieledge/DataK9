@@ -5,7 +5,7 @@
   ## 🐕 Your K9 guardian for data quality
 </div>
 
-Welcome to **DataK9** - a production-grade data quality framework that guards your data pipelines with vigilance and precision. Like a K9 unit sniffing out problems before they escalate, DataK9 catches data quality issues before they reach production.
+Welcome to **DataK9** - a data quality framework that guards your data pipelines with vigilance and precision. Like a K9 unit sniffing out problems before they escalate, DataK9 catches data quality issues before they cause problems.
 
 ---
 
@@ -92,7 +92,7 @@ Deep dive into DataK9's internals, create custom validations, and contribute to 
 
 ## 🐕 What is DataK9?
 
-DataK9 is a production-grade data quality framework that validates data before it enters your warehouse or analytics platform. It helps you:
+DataK9 is a data quality framework that validates data before it enters your warehouse or analytics platform. It helps you:
 
 - ✅ **Catch data quality issues early** - Before they reach production
 - ✅ **Define validation rules easily** - YAML configuration or visual IDE
