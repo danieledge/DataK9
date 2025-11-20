@@ -18,6 +18,8 @@ DataK9 supports the following database systems:
 
 ## Quick Start
 
+**Security First:** Before configuring database connections, review the **[Database Credentials Security Guide](DATABASE_CREDENTIALS_SECURITY.md)** for secure credential storage using environment variables, systemd credentials, HashiCorp Vault, or AWS Secrets Manager. Never commit credentials to version control.
+
 ### 1. Install Database Drivers
 
 ```bash
