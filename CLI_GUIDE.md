@@ -246,6 +246,8 @@ python3 -m validation_framework.cli profile \
   -o premium_users_profile.html
 ```
 
+**Security Note:** The examples below show credentials in connection strings for illustration purposes only. In production, use environment variables or secure credential storage. See **[Database Credentials Security Guide](docs/DATABASE_CREDENTIALS_SECURITY.md)** for best practices.
+
 **Database Connection Strings:**
 
 | Database | Format | Example |

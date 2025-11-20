@@ -228,6 +228,8 @@ pip install sqlalchemy psycopg2-binary pymysql
 pip install -r requirements-dev.txt
 ```
 
+**Security Note:** When using database validations, see **[Database Credentials Security Guide](docs/DATABASE_CREDENTIALS_SECURITY.md)** for secure credential storage using environment variables, systemd credentials, Vault, or AWS Secrets Manager.
+
 ---
 
 ## 🎯 Core Capabilities
@@ -334,6 +336,7 @@ python3 -m validation_framework.cli profile \
 - **[Configuration Guide](docs/using-datak9/configuration-guide.md)** - YAML syntax and examples
 - **[Data Profiling](docs/using-datak9/data-profiling.md)** - Analyze data before validation
 - **[DataK9 Studio Guide](docs/using-datak9/studio-guide.md)** - Visual configuration IDE
+- **[Database Credentials Security](docs/DATABASE_CREDENTIALS_SECURITY.md)** - Secure credential management ⚠️
 - **[Best Practices](docs/using-datak9/best-practices.md)** - Recommended patterns
 - **[Performance Tuning](docs/using-datak9/performance-tuning.md)** - Optimize for speed/memory
 - **[Large Files Guide](docs/using-datak9/large-files.md)** - Handle 200GB+ datasets
