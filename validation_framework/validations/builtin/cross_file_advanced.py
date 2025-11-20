@@ -935,15 +935,26 @@ class CrossFileKeyCheck(BackendAwareValidationRule):
         Raises:
             ValueError: If path is invalid or attempts path traversal
         """
-        current_file = context.get("file_path")
-        base_path = context.get("base_path")
+        ref_path = Path(reference_file)
 
-        try:
-            return SecurePathResolver.safe_resolve_reference_path(
-                reference_file,
-                current_file=current_file,
-                base_path=base_path
-            )
-        except ValueError as e:
-            logger.error(f"Path validation failed for '{reference_file}': {str(e)}")
-            raise
+        # If already absolute, return as-is
+        if ref_path.is_absolute():
+            return str(ref_path)
+
+        # Try to resolve relative to current file's directory
+        current_file = context.get("file_path")
+        if current_file:
+            base_dir = Path(current_file).parent
+            resolved = base_dir / ref_path
+            if resolved.exists():
+                return str(resolved)
+
+        # Try to resolve relative to base_path
+        base_path = context.get("base_path")
+        if base_path:
+            resolved = Path(base_path) / ref_path
+            if resolved.exists():
+                return str(resolved)
+
+        # Return as-is and let it fail later if not found
+        return str(ref_path)

@@ -200,7 +200,9 @@ class LoaderFactory:
         query: Optional[str] = None,
         table: Optional[str] = None,
         chunk_size: int = 10000,
-        db_type: Optional[str] = None
+        db_type: Optional[str] = None,
+        max_rows: Optional[int] = None,
+        sample_percent: Optional[float] = None
     ) -> DatabaseLoader:
         """
         Create a database loader for validating data directly from databases.
@@ -256,7 +258,9 @@ class LoaderFactory:
                 query=query,
                 table=table,
                 chunk_size=chunk_size,
-                db_type=db_type
+                db_type=db_type,
+                max_rows=max_rows,
+                sample_percent=sample_percent
             )
         except Exception as e:
             raise RuntimeError(

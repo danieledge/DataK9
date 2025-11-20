@@ -78,8 +78,11 @@ class ReservoirSampler:
         self.reservoir: List[Tuple[int, pd.Series]] = []  # (original_index, row)
         self.items_seen = 0
 
+        # Use instance-specific random generator for reproducibility
         if random_seed is not None:
-            np.random.seed(random_seed)
+            self.rng = np.random.RandomState(random_seed)
+        else:
+            self.rng = np.random.RandomState()
 
     def add_chunk(self, chunk: pd.DataFrame, offset: int = 0) -> None:
         """
@@ -97,7 +100,7 @@ class ReservoirSampler:
                 self.reservoir.append((offset + idx, row))
             else:
                 # Reservoir full - randomly replace with probability K/n
-                j = np.random.randint(0, self.items_seen)
+                j = self.rng.randint(0, self.items_seen)
                 if j < self.sample_size:
                     self.reservoir[j] = (offset + idx, row)
 
@@ -560,16 +563,9 @@ class OptimizedValidationEngine:
         """
         from validation_framework.core.engine import ValidationEngine
 
-        # Create a standard engine with single-file config
-        single_file_config = ValidationConfig(
-            job_name=f"{self.config.job_name} (Standard Mode)",
-            files=[file_config],
-            chunk_size=self.config.chunk_size,
-            max_sample_failures=self.config.max_sample_failures,
-            description=self.config.description,
-        )
-
-        standard_engine = ValidationEngine(single_file_config)
+        # Use standard engine with current config for backward compatibility
+        # The standard engine can handle individual file validation
+        standard_engine = ValidationEngine(self.config)
         return standard_engine._validate_file(file_config, verbose)
 
     def _print_summary(self, report: ValidationReport) -> None:

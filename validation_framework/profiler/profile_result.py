@@ -99,39 +99,40 @@ class ColumnStatistics:
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary representation."""
         result = {
-            "count": self.count,
-            "null_count": self.null_count,
-            "null_percentage": round(self.null_percentage, 2),
-            "unique_count": self.unique_count,
-            "unique_percentage": round(self.unique_percentage, 2),
-            "cardinality": round(self.cardinality, 3),
+            "count": int(self.count) if self.count is not None else 0,
+            "null_count": int(self.null_count) if self.null_count is not None else 0,
+            "null_percentage": round(float(self.null_percentage), 2),
+            "unique_count": int(self.unique_count) if self.unique_count is not None else 0,
+            "unique_percentage": round(float(self.unique_percentage), 2),
+            "cardinality": round(float(self.cardinality), 3),
         }
 
         # Add numeric statistics if present
         if self.mean is not None:
-            result["mean"] = round(self.mean, 3)
+            result["mean"] = round(float(self.mean), 3)
         if self.median is not None:
-            result["median"] = round(self.median, 3)
+            result["median"] = round(float(self.median), 3)
         if self.std_dev is not None:
-            result["std_dev"] = round(self.std_dev, 3)
+            result["std_dev"] = round(float(self.std_dev), 3)
         if self.min_value is not None:
             result["min_value"] = str(self.min_value)
         if self.max_value is not None:
             result["max_value"] = str(self.max_value)
         if self.quartiles:
-            result["quartiles"] = self.quartiles
+            # Convert quartiles dict values to native Python floats
+            result["quartiles"] = {k: round(float(v), 3) for k, v in self.quartiles.items()}
 
         # Add frequency statistics
         if self.mode is not None:
             result["mode"] = str(self.mode)
-            result["mode_frequency"] = self.mode_frequency
+            result["mode_frequency"] = int(self.mode_frequency) if self.mode_frequency is not None else 0
         result["top_values"] = self.top_values[:10]  # Limit to top 10
 
         # Add string statistics if present
         if self.min_length is not None:
-            result["min_length"] = self.min_length
-            result["max_length"] = self.max_length
-            result["avg_length"] = round(self.avg_length, 2) if self.avg_length else None
+            result["min_length"] = int(self.min_length)
+            result["max_length"] = int(self.max_length)
+            result["avg_length"] = round(float(self.avg_length), 2) if self.avg_length else None
 
         # Add pattern samples
         result["pattern_samples"] = self.pattern_samples[:10]

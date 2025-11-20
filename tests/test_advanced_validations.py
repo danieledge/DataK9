@@ -33,6 +33,7 @@ from validation_framework.validations.builtin.file_checks import FileSizeCheck
 from validation_framework.validations.builtin.schema_checks import ColumnPresenceCheck
 from validation_framework.validations.builtin.record_checks import BlankRecordCheck, UniqueKeyCheck
 from validation_framework.core.results import Severity
+from tests.conftest import create_data_iterator
 
 
 # ============================================================================
@@ -89,7 +90,7 @@ class TestStatisticalOutlierCheck:
             }
         )
 
-        result = validation.validate(iter([clean_dataframe]), {})
+        result = validation.validate(create_data_iterator(clean_dataframe), {})
 
         # Clean data should have no outliers
         assert result.passed is True or result.failed_count == 0

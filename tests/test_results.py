@@ -31,7 +31,7 @@ class TestValidationResult:
     def test_create_passing_result(self):
         """Test creating a passing validation result."""
         result = ValidationResult(
-            validation_name="TestCheck",
+            rule_name="TestCheck",
             passed=True,
             message="Validation passed",
             severity=Severity.ERROR,
@@ -40,7 +40,7 @@ class TestValidationResult:
             sample_failures=[]
         )
         
-        assert result.validation_name == "TestCheck"
+        assert result.rule_name == "TestCheck"
         assert result.passed is True
         assert result.failed_count == 0
         assert result.total_count == 100
@@ -54,7 +54,7 @@ class TestValidationResult:
         ]
         
         result = ValidationResult(
-            validation_name="MandatoryCheck",
+            rule_name="MandatoryCheck",
             passed=False,
             message="Validation failed",
             severity=Severity.ERROR,
@@ -70,7 +70,7 @@ class TestValidationResult:
     def test_result_with_warning_severity(self):
         """Test validation result with WARNING severity."""
         result = ValidationResult(
-            validation_name="WarningCheck",
+            rule_name="WarningCheck",
             passed=False,
             message="Warning detected",
             severity=Severity.WARNING,
@@ -85,7 +85,7 @@ class TestValidationResult:
     def test_result_serialization(self):
         """Test that ValidationResult can be converted to dict."""
         result = ValidationResult(
-            validation_name="SerializeTest",
+            rule_name="SerializeTest",
             passed=True,
             message="Test message",
             severity=Severity.ERROR,
@@ -95,9 +95,9 @@ class TestValidationResult:
         )
         
         result_dict = result.to_dict()
-        
+
         assert isinstance(result_dict, dict)
-        assert result_dict["validation_name"] == "SerializeTest"
+        assert result_dict["rule_name"] == "SerializeTest"
         assert result_dict["passed"] is True
         assert result_dict["failed_count"] == 0
         assert result_dict["total_count"] == 50
@@ -105,7 +105,7 @@ class TestValidationResult:
     def test_result_with_execution_time(self):
         """Test validation result with execution time."""
         result = ValidationResult(
-            validation_name="TimedCheck",
+            rule_name="TimedCheck",
             passed=True,
             message="Completed in 2.5s",
             severity=Severity.ERROR,
@@ -128,36 +128,34 @@ class TestFileValidationReport:
     
     def test_create_file_report(self):
         """Test creating a file validation report."""
-        validations = [
-            ValidationResult(
-                validation_name="Check1",
-                passed=True,
-                message="Pass",
-                severity=Severity.ERROR,
-                failed_count=0,
-                total_count=100,
-                sample_failures=[]
-            )
-        ]
-        
+        validation = ValidationResult(
+            rule_name="Check1",
+            passed=True,
+            message="Pass",
+            severity=Severity.ERROR,
+            failed_count=0,
+            total_count=100,
+            sample_failures=[]
+        )
+
         report = FileValidationReport(
             file_name="test.csv",
             file_path="/path/to/test.csv",
             file_format="csv",
-            total_rows=100,
-            validations=validations
+            status=Status.PASSED
         )
-        
+        report.add_result(validation)
+
         assert report.file_name == "test.csv"
         assert report.file_path == "/path/to/test.csv"
-        assert report.total_rows == 100
-        assert len(report.validations) == 1
+        assert report.metadata.get("total_rows", 0) == 0  # metadata is optional
+        assert len(report.validation_results) == 1
     
     def test_file_report_status_all_passed(self):
         """Test file report status when all validations passed."""
         validations = [
             ValidationResult(
-                validation_name=f"Check{i}",
+                rule_name=f"Check{i}",
                 passed=True,
                 message="Pass",
                 severity=Severity.ERROR,
@@ -167,22 +165,24 @@ class TestFileValidationReport:
             )
             for i in range(3)
         ]
-        
+
         report = FileValidationReport(
             file_name="test.csv",
             file_path="/path/to/test.csv",
             file_format="csv",
-            total_rows=100,
-            validations=validations
+            status=Status.PASSED
         )
-        
+        for validation in validations:
+            report.add_result(validation)
+        report.update_status()
+
         assert report.status == Status.PASSED
     
     def test_file_report_status_with_error(self):
         """Test file report status with ERROR failures."""
         validations = [
             ValidationResult(
-                validation_name="PassingCheck",
+                rule_name="PassingCheck",
                 passed=True,
                 message="Pass",
                 severity=Severity.ERROR,
@@ -191,7 +191,7 @@ class TestFileValidationReport:
                 sample_failures=[]
             ),
             ValidationResult(
-                validation_name="FailingCheck",
+                rule_name="FailingCheck",
                 passed=False,
                 message="Failed",
                 severity=Severity.ERROR,
@@ -200,22 +200,24 @@ class TestFileValidationReport:
                 sample_failures=[]
             )
         ]
-        
+
         report = FileValidationReport(
             file_name="test.csv",
             file_path="/path/to/test.csv",
             file_format="csv",
-            total_rows=100,
-            validations=validations
+            status=Status.PASSED
         )
-        
+        for validation in validations:
+            report.add_result(validation)
+        report.update_status()
+
         assert report.status == Status.FAILED
     
     def test_file_report_status_with_warning(self):
         """Test file report status with WARNING failures."""
         validations = [
             ValidationResult(
-                validation_name="PassingCheck",
+                rule_name="PassingCheck",
                 passed=True,
                 message="Pass",
                 severity=Severity.ERROR,
@@ -224,7 +226,7 @@ class TestFileValidationReport:
                 sample_failures=[]
             ),
             ValidationResult(
-                validation_name="WarningCheck",
+                rule_name="WarningCheck",
                 passed=False,
                 message="Warning",
                 severity=Severity.WARNING,
@@ -233,46 +235,47 @@ class TestFileValidationReport:
                 sample_failures=[]
             )
         ]
-        
+
         report = FileValidationReport(
             file_name="test.csv",
             file_path="/path/to/test.csv",
             file_format="csv",
-            total_rows=100,
-            validations=validations
+            status=Status.PASSED
         )
-        
+        for validation in validations:
+            report.add_result(validation)
+        report.update_status()
+
         assert report.status == Status.WARNING
     
     def test_file_report_serialization(self):
         """Test file report serialization to dict."""
-        validations = [
-            ValidationResult(
-                validation_name="TestCheck",
-                passed=True,
-                message="OK",
-                severity=Severity.ERROR,
-                failed_count=0,
-                total_count=50,
-                sample_failures=[]
-            )
-        ]
-        
+        validation = ValidationResult(
+            rule_name="TestCheck",
+            passed=True,
+            message="OK",
+            severity=Severity.ERROR,
+            failed_count=0,
+            total_count=50,
+            sample_failures=[]
+        )
+
         report = FileValidationReport(
             file_name="data.csv",
             file_path="/data.csv",
             file_format="csv",
-            total_rows=50,
-            validations=validations
+            status=Status.PASSED,
+            metadata={"total_rows": 50}
         )
-        
+        report.add_result(validation)
+
         report_dict = report.to_dict()
-        
+
         assert isinstance(report_dict, dict)
         assert report_dict["file_name"] == "data.csv"
-        assert report_dict["total_rows"] == 50
-        assert "validations" in report_dict
-        assert len(report_dict["validations"]) == 1
+        assert report_dict["metadata"]["total_rows"] == 50
+        assert "validation_results" in report_dict
+        assert len(report_dict["validation_results"]) == 1
 
 
 # ============================================================================
@@ -285,159 +288,165 @@ class TestValidationReport:
     
     def test_create_validation_report(self):
         """Test creating a validation report."""
-        start_time = datetime(2025, 1, 1, 10, 0, 0)
-        end_time = datetime(2025, 1, 1, 10, 5, 0)
-        
+        exec_time = datetime(2025, 1, 1, 10, 0, 0)
+
         report = ValidationReport(
-            validation_job_name="Test Job",
-            start_time=start_time,
-            end_time=end_time,
-            file_reports=[]
+            job_name="Test Job",
+            execution_time=exec_time,
+            duration_seconds=300.0,
+            overall_status=Status.PASSED
         )
-        
-        assert report.validation_job_name == "Test Job"
-        assert report.start_time == start_time
-        assert report.end_time == end_time
+
+        assert report.job_name == "Test Job"
+        assert report.execution_time == exec_time
+        assert report.duration_seconds == 300.0
         assert len(report.file_reports) == 0
     
     def test_validation_report_duration(self):
         """Test duration calculation in validation report."""
-        start_time = datetime(2025, 1, 1, 10, 0, 0)
-        end_time = datetime(2025, 1, 1, 10, 5, 30)
-        
+        exec_time = datetime(2025, 1, 1, 10, 0, 0)
+
         report = ValidationReport(
-            validation_job_name="Duration Test",
-            start_time=start_time,
-            end_time=end_time,
-            file_reports=[]
+            job_name="Duration Test",
+            execution_time=exec_time,
+            duration_seconds=330.0,
+            overall_status=Status.PASSED
         )
-        
-        assert report.duration == "5 minutes, 30 seconds" or "330" in report.duration
+
+        assert report.duration_seconds == 330.0
     
     def test_validation_report_status_all_passed(self):
         """Test overall status when all files passed."""
-        file_reports = [
-            FileValidationReport(
+        file_reports = []
+        for i in range(3):
+            validation = ValidationResult(
+                rule_name="TestCheck",
+                passed=True,
+                message="OK",
+                severity=Severity.ERROR,
+                failed_count=0,
+                total_count=100,
+                sample_failures=[]
+            )
+            file_report = FileValidationReport(
                 file_name=f"file{i}.csv",
                 file_path=f"/file{i}.csv",
                 file_format="csv",
-                total_rows=100,
-                validations=[
-                    ValidationResult(
-                        validation_name="TestCheck",
-                        passed=True,
-                        message="OK",
-                        severity=Severity.ERROR,
-                        failed_count=0,
-                        total_count=100,
-                        sample_failures=[]
-                    )
-                ]
+                status=Status.PASSED
             )
-            for i in range(3)
-        ]
-        
+            file_report.add_result(validation)
+            file_report.update_status()
+            file_reports.append(file_report)
+
         report = ValidationReport(
-            validation_job_name="All Passed",
-            start_time=datetime.now(),
-            end_time=datetime.now(),
-            file_reports=file_reports
+            job_name="All Passed",
+            execution_time=datetime.now(),
+            duration_seconds=10.0,
+            overall_status=Status.PASSED
         )
-        
-        assert report.status == Status.PASSED
+        for fr in file_reports:
+            report.add_file_report(fr)
+        report.update_overall_status()
+
+        assert report.overall_status == Status.PASSED
     
     def test_validation_report_status_with_failures(self):
         """Test overall status with some failures."""
+        # Create passing file report
+        pass_validation = ValidationResult(
+            rule_name="PassCheck",
+            passed=True,
+            message="OK",
+            severity=Severity.ERROR,
+            failed_count=0,
+            total_count=100,
+            sample_failures=[]
+        )
         passing_file = FileValidationReport(
             file_name="pass.csv",
             file_path="/pass.csv",
             file_format="csv",
-            total_rows=100,
-            validations=[
-                ValidationResult(
-                    validation_name="PassCheck",
-                    passed=True,
-                    message="OK",
-                    severity=Severity.ERROR,
-                    failed_count=0,
-                    total_count=100,
-                    sample_failures=[]
-                )
-            ]
+            status=Status.PASSED
         )
-        
+        passing_file.add_result(pass_validation)
+        passing_file.update_status()
+
+        # Create failing file report
+        fail_validation = ValidationResult(
+            rule_name="FailCheck",
+            passed=False,
+            message="Failed",
+            severity=Severity.ERROR,
+            failed_count=10,
+            total_count=100,
+            sample_failures=[]
+        )
         failing_file = FileValidationReport(
             file_name="fail.csv",
             file_path="/fail.csv",
             file_format="csv",
-            total_rows=100,
-            validations=[
-                ValidationResult(
-                    validation_name="FailCheck",
-                    passed=False,
-                    message="Failed",
-                    severity=Severity.ERROR,
-                    failed_count=10,
-                    total_count=100,
-                    sample_failures=[]
-                )
-            ]
+            status=Status.PASSED
         )
-        
+        failing_file.add_result(fail_validation)
+        failing_file.update_status()
+
         report = ValidationReport(
-            validation_job_name="Mixed Results",
-            start_time=datetime.now(),
-            end_time=datetime.now(),
-            file_reports=[passing_file, failing_file]
+            job_name="Mixed Results",
+            execution_time=datetime.now(),
+            duration_seconds=10.0,
+            overall_status=Status.PASSED
         )
-        
-        assert report.status == Status.FAILED
+        report.add_file_report(passing_file)
+        report.add_file_report(failing_file)
+        report.update_overall_status()
+
+        assert report.overall_status == Status.FAILED
     
     def test_validation_report_serialization(self):
         """Test validation report serialization to dict."""
+        validation = ValidationResult(
+            rule_name="TestCheck",
+            passed=True,
+            message="OK",
+            severity=Severity.ERROR,
+            failed_count=0,
+            total_count=50,
+            sample_failures=[]
+        )
         file_report = FileValidationReport(
             file_name="test.csv",
             file_path="/test.csv",
             file_format="csv",
-            total_rows=50,
-            validations=[
-                ValidationResult(
-                    validation_name="TestCheck",
-                    passed=True,
-                    message="OK",
-                    severity=Severity.ERROR,
-                    failed_count=0,
-                    total_count=50,
-                    sample_failures=[]
-                )
-            ]
+            status=Status.PASSED
         )
-        
+        file_report.add_result(validation)
+
         report = ValidationReport(
-            validation_job_name="Serialize Test",
-            start_time=datetime(2025, 1, 1, 10, 0, 0),
-            end_time=datetime(2025, 1, 1, 10, 5, 0),
-            file_reports=[file_report]
+            job_name="Serialize Test",
+            execution_time=datetime(2025, 1, 1, 10, 0, 0),
+            duration_seconds=300.0,
+            overall_status=Status.PASSED
         )
-        
+        report.add_file_report(file_report)
+
         report_dict = report.to_dict()
-        
+
         assert isinstance(report_dict, dict)
-        assert report_dict["validation_job_name"] == "Serialize Test"
-        assert "status" in report_dict
-        assert "file_reports" in report_dict
-        assert len(report_dict["file_reports"]) == 1
+        assert report_dict["job_name"] == "Serialize Test"
+        assert "overall_status" in report_dict
+        assert "files" in report_dict
+        assert len(report_dict["files"]) == 1
     
     def test_empty_validation_report(self):
         """Test validation report with no file reports."""
         report = ValidationReport(
-            validation_job_name="Empty Job",
-            start_time=datetime.now(),
-            end_time=datetime.now(),
-            file_reports=[]
+            job_name="Empty Job",
+            execution_time=datetime.now(),
+            duration_seconds=0.0,
+            overall_status=Status.PASSED
         )
-        
-        assert report.status == Status.PASSED  # Empty should be considered passed
+
+        assert report.overall_status == Status.PASSED  # Empty should be considered passed
         assert len(report.file_reports) == 0
 
 

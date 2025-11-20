@@ -268,6 +268,8 @@ class ValidationEngine:
                     query=file_config.get("query"),
                     chunk_size=self.config.chunk_size,
                     db_type=file_config.get("db_type"),
+                    max_rows=file_config.get("max_rows"),
+                    sample_percent=file_config.get("sample_percent"),
                 )
             else:
                 # File source

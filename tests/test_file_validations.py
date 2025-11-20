@@ -17,6 +17,7 @@ from validation_framework.validations.builtin.file_checks import (
     RowCountRangeCheck,
     FileSizeCheck
 )
+from validation_framework.core.results import Severity
 from tests.conftest import create_data_iterator
 
 
@@ -28,23 +29,34 @@ from tests.conftest import create_data_iterator
 class TestEmptyFileCheck:
     """Test EmptyFileCheck validation."""
     
-    def test_non_empty_file_passes(self):
+    def test_non_empty_file_passes(self, tmp_path):
         """Test validation passes for non-empty files."""
+        # Create a real test file
+        test_file = tmp_path / "test.csv"
         df = pd.DataFrame({
             "id": [1, 2, 3],
             "name": ["Alice", "Bob", "Charlie"]
         })
-        
-        validation = EmptyFileCheck()
-        result = validation.validate(create_data_iterator(df), {})
-        
+        df.to_csv(test_file, index=False)
+
+        validation = EmptyFileCheck(
+            name="EmptyFileCheck",
+            severity=Severity.ERROR,
+            params={}
+        )
+        result = validation.validate(create_data_iterator(df), {"file_path": str(test_file)})
+
         assert result.passed is True
     
     def test_empty_dataframe_fails(self):
         """Test validation fails for empty DataFrame."""
         df = pd.DataFrame()
         
-        validation = EmptyFileCheck()
+        validation = EmptyFileCheck(
+            name="EmptyFileCheck",
+            severity=Severity.ERROR,
+            params={}
+        )
         result = validation.validate(create_data_iterator(df), {})
         
         assert result.passed is False
@@ -53,21 +65,32 @@ class TestEmptyFileCheck:
         """Test validation fails when DataFrame has only headers but no data."""
         df = pd.DataFrame(columns=["id", "name", "email"])
         
-        validation = EmptyFileCheck()
+        validation = EmptyFileCheck(
+            name="EmptyFileCheck",
+            severity=Severity.ERROR,
+            params={}
+        )
         result = validation.validate(create_data_iterator(df), {})
         
         assert result.passed is False
     
-    def test_single_row_file_passes(self):
+    def test_single_row_file_passes(self, tmp_path):
         """Test validation passes for file with single row."""
+        # Create a real test file
+        test_file = tmp_path / "single_row.csv"
         df = pd.DataFrame({
             "id": [1],
             "name": ["Alice"]
         })
-        
-        validation = EmptyFileCheck()
-        result = validation.validate(create_data_iterator(df), {})
-        
+        df.to_csv(test_file, index=False)
+
+        validation = EmptyFileCheck(
+            name="EmptyFileCheck",
+            severity=Severity.ERROR,
+            params={}
+        )
+        result = validation.validate(create_data_iterator(df), {"file_path": str(test_file)})
+
         assert result.passed is True
 
 
@@ -85,10 +108,14 @@ class TestRowCountRangeCheck:
             "id": range(50),
             "value": range(100, 150)
         })
-        
-        validation = RowCountRangeCheck(min_rows=10, max_rows=100)
-        result = validation.validate(create_data_iterator(df), {})
-        
+
+        validation = RowCountRangeCheck(
+            name="RowCountRangeCheck",
+            severity=Severity.ERROR,
+            params={"min_rows": 10, "max_rows": 100}
+        )
+        result = validation.validate(create_data_iterator(df), {"total_rows": 50})
+
         assert result.passed is True
     
     def test_row_count_below_minimum(self):
@@ -98,7 +125,11 @@ class TestRowCountRangeCheck:
             "value": [10, 20, 30]
         })
         
-        validation = RowCountRangeCheck(min_rows=10, max_rows=100)
+        validation = RowCountRangeCheck(
+            name="RowCountRangeCheck",
+            severity=Severity.ERROR,
+            params={"min_rows": 10, "max_rows": 100}
+        )
         result = validation.validate(create_data_iterator(df), {})
         
         assert result.passed is False
@@ -110,7 +141,11 @@ class TestRowCountRangeCheck:
             "value": range(200, 350)
         })
         
-        validation = RowCountRangeCheck(min_rows=10, max_rows=100)
+        validation = RowCountRangeCheck(
+            name="RowCountRangeCheck",
+            severity=Severity.ERROR,
+            params={"min_rows": 10, "max_rows": 100}
+        )
         result = validation.validate(create_data_iterator(df), {})
         
         assert result.passed is False
@@ -122,20 +157,24 @@ class TestRowCountRangeCheck:
             "id": range(10),
             "value": range(10)
         })
-        
-        validation = RowCountRangeCheck(min_rows=10, max_rows=100)
-        result_min = validation.validate(create_data_iterator(df_min), {})
-        
+
+        validation = RowCountRangeCheck(
+            name="RowCountRangeCheck",
+            severity=Severity.ERROR,
+            params={"min_rows": 10, "max_rows": 100}
+        )
+        result_min = validation.validate(create_data_iterator(df_min), {"total_rows": 10})
+
         assert result_min.passed is True
-        
+
         # Test maximum boundary
         df_max = pd.DataFrame({
             "id": range(100),
             "value": range(100)
         })
-        
-        result_max = validation.validate(create_data_iterator(df_max), {})
-        
+
+        result_max = validation.validate(create_data_iterator(df_max), {"total_rows": 100})
+
         assert result_max.passed is True
     
     def test_min_rows_only(self):
@@ -144,10 +183,14 @@ class TestRowCountRangeCheck:
             "id": range(50),
             "value": range(50)
         })
-        
-        validation = RowCountRangeCheck(min_rows=10, max_rows=None)
-        result = validation.validate(create_data_iterator(df), {})
-        
+
+        validation = RowCountRangeCheck(
+            name="RowCountRangeCheck",
+            severity=Severity.ERROR,
+            params={"min_rows": 10}
+        )
+        result = validation.validate(create_data_iterator(df), {"total_rows": 50})
+
         assert result.passed is True
     
     def test_max_rows_only(self):
@@ -156,19 +199,27 @@ class TestRowCountRangeCheck:
             "id": range(50),
             "value": range(50)
         })
-        
-        validation = RowCountRangeCheck(min_rows=None, max_rows=100)
-        result = validation.validate(create_data_iterator(df), {})
-        
+
+        validation = RowCountRangeCheck(
+            name="RowCountRangeCheck",
+            severity=Severity.ERROR,
+            params={"max_rows": 100}
+        )
+        result = validation.validate(create_data_iterator(df), {"total_rows": 50})
+
         assert result.passed is True
     
     def test_empty_file_fails_min_rows(self):
         """Test that empty file fails minimum row check."""
         df = pd.DataFrame()
-        
-        validation = RowCountRangeCheck(min_rows=1, max_rows=None)
-        result = validation.validate(create_data_iterator(df), {})
-        
+
+        validation = RowCountRangeCheck(
+            name="RowCountRangeCheck",
+            severity=Severity.ERROR,
+            params={"min_rows": 1}
+        )
+        result = validation.validate(create_data_iterator(df), {"total_rows": 0})
+
         assert result.passed is False
 
 
@@ -189,17 +240,22 @@ class TestFileSizeCheck:
             "name": [f"Name{i}" for i in range(10)]
         })
         df.to_csv(test_file, index=False)
-        
-        # Get file size
-        file_size = test_file.stat().st_size
-        
-        # Validate with limit above file size
-        validation = FileSizeCheck(max_size_bytes=file_size * 2)
+
+        # Get file size in MB
+        file_size_bytes = test_file.stat().st_size
+        file_size_mb = file_size_bytes / (1024 * 1024)
+
+        # Validate with limit above file size (use MB)
+        validation = FileSizeCheck(
+            name="FileSizeCheck",
+            severity=Severity.ERROR,
+            params={"max_size_mb": file_size_mb * 2}
+        )
         result = validation.validate(
             create_data_iterator(df),
             {"file_path": str(test_file)}
         )
-        
+
         assert result.passed is True
     
     def test_file_size_exceeds_limit(self, tmp_path):
@@ -211,17 +267,22 @@ class TestFileSizeCheck:
             "data": [f"LongStringData{i}" * 10 for i in range(100)]
         })
         df.to_csv(test_file, index=False)
-        
-        # Get file size
-        file_size = test_file.stat().st_size
-        
-        # Validate with limit below file size
-        validation = FileSizeCheck(max_size_bytes=100)  # 100 bytes limit
+
+        # Get file size in MB
+        file_size_bytes = test_file.stat().st_size
+        file_size_mb = file_size_bytes / (1024 * 1024)
+
+        # Validate with limit well below file size (0.0001 MB is very small)
+        validation = FileSizeCheck(
+            name="FileSizeCheck",
+            severity=Severity.ERROR,
+            params={"max_size_mb": 0.0001}  # Very small limit to ensure failure
+        )
         result = validation.validate(
             create_data_iterator(df),
             {"file_path": str(test_file)}
         )
-        
+
         assert result.passed is False
     
     def test_file_size_megabytes(self, tmp_path):
@@ -234,7 +295,11 @@ class TestFileSizeCheck:
         df.to_csv(test_file, index=False)
         
         # 1 MB = 1,048,576 bytes
-        validation = FileSizeCheck(max_size_bytes=1048576)
+        validation = FileSizeCheck(
+            name="FileSizeCheck",
+            severity=Severity.ERROR,
+            params={"max_size_bytes": 1048576}
+        )
         result = validation.validate(
             create_data_iterator(df),
             {"file_path": str(test_file)}
@@ -248,7 +313,11 @@ class TestFileSizeCheck:
         test_file = tmp_path / "empty.csv"
         test_file.touch()  # Create empty file
         
-        validation = FileSizeCheck(max_size_bytes=1000)
+        validation = FileSizeCheck(
+            name="FileSizeCheck",
+            severity=Severity.ERROR,
+            params={"max_size_bytes": 1000}
+        )
         
         # Empty DataFrame
         df = pd.DataFrame()
@@ -283,14 +352,29 @@ class TestFileValidationsIntegration:
         context = {"file_path": str(test_file)}
         
         # Run all file validations
-        empty_check = EmptyFileCheck()
-        row_check = RowCountRangeCheck(min_rows=10, max_rows=100)
-        size_check = FileSizeCheck(max_size_bytes=1048576)
+        empty_check = EmptyFileCheck(
+            name="EmptyFileCheck",
+            severity=Severity.ERROR,
+            params={}
+        )
+        row_check = RowCountRangeCheck(
+            name="RowCountRangeCheck",
+            severity=Severity.ERROR,
+            params={"min_rows": 10, "max_rows": 100}
+        )
+        size_check = FileSizeCheck(
+            name="FileSizeCheck",
+            severity=Severity.ERROR,
+            params={"max_size_bytes": 1048576}
+        )
         
+        # Add total_rows to context for row count check
+        context_with_rows = {**context, "total_rows": 50}
+
         empty_result = empty_check.validate(create_data_iterator(df), context)
-        row_result = row_check.validate(create_data_iterator(df), context)
+        row_result = row_check.validate(create_data_iterator(df), context_with_rows)
         size_result = size_check.validate(create_data_iterator(df), context)
-        
+
         # All should pass
         assert empty_result.passed is True
         assert row_result.passed is True
@@ -306,12 +390,17 @@ class TestFileValidationsIntegration:
         })
         df.to_csv(test_file, index=False)
         
-        context = {"file_path": str(test_file)}
-        
+        # Add total_rows to context
+        context = {"file_path": str(test_file), "total_rows": 10000}
+
         # Validate row count
-        row_check = RowCountRangeCheck(min_rows=5000, max_rows=15000)
+        row_check = RowCountRangeCheck(
+            name="RowCountRangeCheck",
+            severity=Severity.ERROR,
+            params={"min_rows": 5000, "max_rows": 15000}
+        )
         result = row_check.validate(create_data_iterator(df), context)
-        
+
         assert result.passed is True
 
 

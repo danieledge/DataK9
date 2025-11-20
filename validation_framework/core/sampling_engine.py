@@ -68,8 +68,11 @@ class ReservoirSampler:
         self.reservoir: List[pd.Series] = []
         self.items_seen = 0
 
+        # Use instance-specific random generator for reproducibility
         if random_seed is not None:
-            np.random.seed(random_seed)
+            self.rng = np.random.RandomState(random_seed)
+        else:
+            self.rng = np.random.RandomState()
 
     def add_chunk(self, chunk: pd.DataFrame) -> None:
         """Add chunk to reservoir sample."""
@@ -81,7 +84,7 @@ class ReservoirSampler:
                 self.reservoir.append(row)
             else:
                 # Reservoir full - replace with probability K/n
-                j = np.random.randint(0, self.items_seen)
+                j = self.rng.randint(0, self.items_seen)
                 if j < self.sample_size:
                     self.reservoir[j] = row
 
