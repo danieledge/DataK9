@@ -340,33 +340,50 @@ python3 -m validation_framework.cli profile \
 
 ## 📚 Documentation
 
-### Getting Started
+**→ [Complete Documentation Index](docs/README.md)** - Full navigation with reading paths and task-based index
+
+### 🚀 Getting Started (Start Here!)
 - **[5-Minute Quickstart](docs/getting-started/quickstart-5min.md)** - Get running fast
 - **[Installation Guide](docs/getting-started/installation.md)** - Detailed setup
-- **[CLI Reference](CLI_GUIDE.md)** - Complete command-line guide ⭐
-- **[Validation Reference](VALIDATION_REFERENCE.md)** - All 35 validations ⭐
+- **[File Quick Start](docs/reference/quick-reference/FILE_QUICKSTART.md)** - CSV, Excel, JSON, Parquet 📁
+- **[Database Quick Start](docs/guides/database/DATABASE_QUICKSTART.md)** - PostgreSQL, MySQL, SQL Server 🗄️
 
-### Using DataK9
-- **[Configuration Guide](docs/using-datak9/configuration-guide.md)** - YAML syntax and examples
-- **[Data Profiling](docs/using-datak9/data-profiling.md)** - Analyze data before validation
-- **[DataK9 Studio Guide](docs/using-datak9/studio-guide.md)** - Visual configuration IDE
-- **[Database Credentials Security](docs/DATABASE_CREDENTIALS_SECURITY.md)** - Secure credential management ⚠️
+### 📖 Quick References
+- **[CLI Reference](CLI_GUIDE.md)** - All command-line options
+- **[Validation Reference](VALIDATION_REFERENCE.md)** - All 35 validation types
+- **[YAML Reference](docs/reference/yaml-reference.md)** - Config file syntax
+- **[Validation Compatibility](docs/reference/VALIDATION_COMPATIBILITY.md)** - Files vs databases
+
+### 🎯 Specialized Guides
+
+**Performance:** [Optimization Guide](docs/guides/performance/PERFORMANCE_OPTIMIZATION_GUIDE.md) • [Polars Backend](docs/guides/performance/POLARS_BACKEND_GUIDE.md) • [Chunk Sizing](docs/guides/performance/CHUNK_SIZE_GUIDE.md)
+
+**Database:** [Validation Guide](docs/guides/database/DATABASE_VALIDATION_GUIDE.md) • [Safety Features](docs/guides/database/DATABASE_SAFETY.md) • [Credential Security](docs/guides/database/DATABASE_CREDENTIALS_SECURITY.md)
+
+**Advanced:** [Cross-File Validation](docs/guides/advanced/CROSS_FILE_VALIDATION_QUICK_REFERENCE.md) • [CDA Gap Analysis](docs/guides/advanced/CDA_GAP_ANALYSIS_GUIDE.md)
+
+### 👥 Using DataK9
+- **[Configuration Guide](docs/using-datak9/configuration-guide.md)** - YAML syntax
+- **[Data Profiling](docs/using-datak9/data-profiling.md)** - Analyze data quality
+- **[DataK9 Studio](docs/using-datak9/studio-guide.md)** - Visual IDE
 - **[Best Practices](docs/using-datak9/best-practices.md)** - Recommended patterns
-- **[Performance Tuning](docs/using-datak9/performance-tuning.md)** - Optimize for speed/memory
-- **[Large Files Guide](docs/using-datak9/large-files.md)** - Handle 200GB+ datasets
-- **[AutoSys Integration](docs/using-datak9/autosys-integration.md)** - Job scheduling integration
-- **[CI/CD Integration](docs/using-datak9/cicd-integration.md)** - GitHub Actions, GitLab, Jenkins
+- **[Large Files](docs/using-datak9/large-files.md)** - Handle 200GB+ datasets
+- **[AutoSys Integration](docs/using-datak9/autosys-integration.md)** - Job scheduling
+- **[CI/CD Integration](docs/using-datak9/cicd-integration.md)** - GitHub Actions, GitLab
+- **[Troubleshooting](docs/using-datak9/troubleshooting.md)** - Common issues
+- **[FAQ](docs/using-datak9/faq.md)** - Frequently asked questions
 
-### For Developers
+### 💻 For Developers
 - **[Architecture](docs/for-developers/architecture.md)** - System design
 - **[Custom Validations](docs/for-developers/custom-validations.md)** - Build your own
 - **[API Reference](docs/for-developers/api-reference.md)** - Python API
-- **[Contributing Guide](docs/for-developers/contributing.md)** - Help improve DataK9
+- **[Testing Guide](docs/for-developers/testing-guide.md)** - Write tests
+- **[Contributing](docs/for-developers/contributing.md)** - Help improve DataK9
 
-### Examples
-- **[Finance](docs/examples/finance.md)** - Banking, trading, AML validation
-- **[Healthcare](docs/examples/healthcare.md)** - HIPAA-compliant patient data
-- **[E-Commerce](docs/examples/ecommerce.md)** - Customer, order, inventory
+### 🏢 Industry Examples
+- **[Finance](docs/examples/finance.md)** - Banking, AML validation
+- **[Healthcare](docs/examples/healthcare.md)** - HIPAA-compliant data
+- **[E-Commerce](docs/examples/ecommerce.md)** - Customer, orders, inventory
 
 ---
 
