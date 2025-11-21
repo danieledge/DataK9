@@ -8,7 +8,7 @@ from datetime import datetime
 from typing import List, Optional
 import html
 
-from .models import CDAGapResult, CDAAnalysisReport, CDATier, CDAFieldCoverage
+from .models import CDAGapResult, CDAAnalysisReport, CDAFieldCoverage
 
 
 class CDAReporter:
@@ -17,7 +17,6 @@ class CDAReporter:
 
     Creates professional, audit-ready reports showing:
     - Overall coverage metrics
-    - Tier-by-tier breakdown
     - Detailed field coverage
     - Recommendations for uncovered fields
     """
@@ -196,37 +195,6 @@ class CDAReporter:
         .coverage-badge.medium { background: #fef3c7; color: #92400e; }
         .coverage-badge.low { background: #fee2e2; color: #991b1b; }
 
-        .tier-grid {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 1px;
-            background: var(--border);
-            border-bottom: 1px solid var(--border);
-        }
-
-        .tier-box {
-            background: var(--card-bg);
-            padding: 16px;
-            text-align: center;
-        }
-
-        .tier-box .tier-name {
-            font-size: 12px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            color: #666;
-            margin-bottom: 4px;
-        }
-
-        .tier-box .tier-stat {
-            font-size: 20px;
-            font-weight: 600;
-        }
-
-        .tier-box.tier1 .tier-stat { color: var(--danger); }
-        .tier-box.tier2 .tier-stat { color: var(--warning); }
-        .tier-box.tier3 .tier-stat { color: var(--primary); }
-
         .field-table {
             width: 100%;
             border-collapse: collapse;
@@ -258,18 +226,6 @@ class CDAReporter:
 
         .status-icon.covered { color: var(--success); }
         .status-icon.gap { color: var(--danger); }
-
-        .tier-tag {
-            display: inline-block;
-            padding: 2px 8px;
-            border-radius: 4px;
-            font-size: 11px;
-            font-weight: 600;
-        }
-
-        .tier-tag.tier1 { background: #fee2e2; color: #991b1b; }
-        .tier-tag.tier2 { background: #fef3c7; color: #92400e; }
-        .tier-tag.tier3 { background: #dbeafe; color: #1e40af; }
 
         .validation-list {
             display: flex;
@@ -326,17 +282,7 @@ class CDAReporter:
 
         # Alert section
         alert_html = ""
-        if report.tier1_at_risk:
-            alert_html = """
-            <div class="alert alert-danger">
-                <span style="font-size: 24px">⚠️</span>
-                <div>
-                    <strong>AUDIT RISK:</strong> Tier 1 (Regulatory) Critical Data Attributes have gaps in validation coverage.
-                    Immediate action required to ensure compliance.
-                </div>
-            </div>
-            """
-        elif report.has_gaps:
+        if report.has_gaps:
             alert_html = """
             <div class="alert alert-warning">
                 <span style="font-size: 24px">⚠</span>
@@ -390,12 +336,9 @@ class CDAReporter:
         coverage_pct = result.coverage_percentage
         badge_class = 'high' if coverage_pct >= 90 else ('medium' if coverage_pct >= 70 else 'low')
 
-        # Tier breakdown
-        tier_html = self._render_tier_breakdown(result)
-
         # Field table
         field_rows = []
-        for fc in sorted(result.field_coverage, key=lambda x: (x.cda.tier.priority, not x.is_covered)):
+        for fc in sorted(result.field_coverage, key=lambda x: not x.is_covered):
             field_rows.append(self._render_field_row(fc))
 
         return f"""
@@ -404,13 +347,11 @@ class CDAReporter:
                 <h2>📄 {html.escape(result.file_name)}</h2>
                 <span class="coverage-badge {badge_class}">{coverage_pct:.0f}% Coverage</span>
             </div>
-            {tier_html}
             <table class="field-table">
                 <thead>
                     <tr>
                         <th style="width: 40px">Status</th>
                         <th>Field</th>
-                        <th style="width: 100px">Tier</th>
                         <th>Validation Coverage</th>
                         <th>Description</th>
                     </tr>
@@ -422,36 +363,10 @@ class CDAReporter:
         </div>
         """
 
-    def _render_tier_breakdown(self, result: CDAGapResult) -> str:
-        """Render tier-by-tier coverage breakdown."""
-        tier_boxes = []
-        for tier in [CDATier.TIER_1, CDATier.TIER_2, CDATier.TIER_3]:
-            stats = result.get_tier_coverage(tier)
-            total = stats['total']
-            covered = stats['covered']
-            gaps = stats['gaps']
-
-            if total == 0:
-                stat_text = "N/A"
-            else:
-                pct = (covered / total) * 100
-                stat_text = f"{covered}/{total} ({pct:.0f}%)"
-
-            tier_class = f"tier{tier.priority}"
-            tier_boxes.append(f"""
-            <div class="tier-box {tier_class}">
-                <div class="tier-name">{tier.display_name} (Tier {tier.priority})</div>
-                <div class="tier-stat">{stat_text}</div>
-            </div>
-            """)
-
-        return f"""<div class="tier-grid">{''.join(tier_boxes)}</div>"""
-
     def _render_field_row(self, fc: CDAFieldCoverage) -> str:
         """Render a single field row in the coverage table."""
         status_icon = "✓" if fc.is_covered else "✗"
         status_class = "covered" if fc.is_covered else "gap"
-        tier_class = f"tier{fc.cda.tier.priority}"
 
         if fc.is_covered:
             coverage_html = f"""
@@ -466,7 +381,6 @@ class CDAReporter:
         <tr>
             <td><span class="status-icon {status_class}">{status_icon}</span></td>
             <td><strong>{html.escape(fc.cda.field)}</strong></td>
-            <td><span class="tier-tag {tier_class}">{fc.cda.tier.display_name}</span></td>
             <td>{coverage_html}</td>
             <td>{html.escape(fc.cda.description)}</td>
         </tr>

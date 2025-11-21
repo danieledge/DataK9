@@ -1,46 +1,12 @@
 """
 CDA Data Models
 
-Defines data classes and enums for Critical Data Attribute tracking.
+Defines data classes for Critical Data Attribute tracking.
 """
 
 from dataclasses import dataclass, field
-from enum import Enum
 from typing import List, Dict, Optional
 from datetime import datetime
-
-
-class CDATier(Enum):
-    """
-    Classification tiers for Critical Data Attributes.
-
-    TIER_1: Regulatory - Fields required for regulatory compliance (highest priority)
-    TIER_2: Financial - Fields used in financial calculations and reporting
-    TIER_3: Operational - Fields important for business operations
-    """
-    TIER_1 = "TIER_1"  # Regulatory
-    TIER_2 = "TIER_2"  # Financial
-    TIER_3 = "TIER_3"  # Operational
-
-    @property
-    def display_name(self) -> str:
-        """Human-readable tier name."""
-        names = {
-            CDATier.TIER_1: "Regulatory",
-            CDATier.TIER_2: "Financial",
-            CDATier.TIER_3: "Operational"
-        }
-        return names.get(self, self.value)
-
-    @property
-    def priority(self) -> int:
-        """Priority level (1 = highest)."""
-        priorities = {
-            CDATier.TIER_1: 1,
-            CDATier.TIER_2: 2,
-            CDATier.TIER_3: 3
-        }
-        return priorities.get(self, 99)
 
 
 @dataclass
@@ -50,14 +16,12 @@ class CDADefinition:
 
     Attributes:
         field: Column/field name in the data source
-        tier: Classification tier (TIER_1, TIER_2, TIER_3)
         description: Human-readable description of the field's importance
         owner: Optional business owner responsible for the field
         data_steward: Optional data steward contact
         regulatory_reference: Optional regulatory requirement reference
     """
     field: str
-    tier: CDATier
     description: str = ""
     owner: str = ""
     data_steward: str = ""
@@ -66,15 +30,8 @@ class CDADefinition:
     @classmethod
     def from_dict(cls, data: Dict) -> 'CDADefinition':
         """Create CDADefinition from dictionary (YAML parsing)."""
-        tier_str = data.get('tier', 'TIER_3')
-        try:
-            tier = CDATier(tier_str)
-        except ValueError:
-            tier = CDATier.TIER_3
-
         return cls(
             field=data.get('field', ''),
-            tier=tier,
             description=data.get('description', ''),
             owner=data.get('owner', ''),
             data_steward=data.get('data_steward', ''),
@@ -125,7 +82,6 @@ class CDAGapResult:
         covered_cdas: Number of CDAs with validation coverage
         gap_cdas: Number of CDAs without validation coverage
         field_coverage: Detailed coverage for each CDA field
-        tier_coverage: Coverage breakdown by tier
         analysis_timestamp: When the analysis was performed
     """
     file_name: str
@@ -133,7 +89,6 @@ class CDAGapResult:
     covered_cdas: int = 0
     gap_cdas: int = 0
     field_coverage: List[CDAFieldCoverage] = field(default_factory=list)
-    tier_coverage: Dict[CDATier, Dict[str, int]] = field(default_factory=dict)
     analysis_timestamp: datetime = field(default_factory=datetime.now)
 
     @property
@@ -157,17 +112,6 @@ class CDAGapResult:
     def covered(self) -> List[CDAFieldCoverage]:
         """List of covered CDAs."""
         return [fc for fc in self.field_coverage if fc.is_covered]
-
-    def get_tier_coverage(self, tier: CDATier) -> Dict[str, int]:
-        """Get coverage stats for a specific tier."""
-        return self.tier_coverage.get(tier, {'total': 0, 'covered': 0, 'gaps': 0})
-
-    def get_tier_percentage(self, tier: CDATier) -> float:
-        """Get coverage percentage for a specific tier."""
-        stats = self.get_tier_coverage(tier)
-        if stats['total'] == 0:
-            return 100.0
-        return (stats['covered'] / stats['total']) * 100
 
 
 @dataclass
@@ -210,12 +154,3 @@ class CDAAnalysisReport:
     def has_gaps(self) -> bool:
         """Whether any gaps exist in any file."""
         return any(r.has_gaps for r in self.results)
-
-    @property
-    def tier1_at_risk(self) -> bool:
-        """Whether any TIER_1 (regulatory) CDAs have gaps."""
-        for result in self.results:
-            stats = result.get_tier_coverage(CDATier.TIER_1)
-            if stats['gaps'] > 0:
-                return True
-        return False

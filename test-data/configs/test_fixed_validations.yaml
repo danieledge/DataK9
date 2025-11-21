@@ -1,0 +1,99 @@
+validation_job:
+  name: "Test Fixed Validations"
+  description: |
+    Quick test of the 9 validations that were previously failing
+
+  files:
+    - name: "HI-Small Test"
+      path: "../../test-data/HI-Small_Trans.csv"
+      format: "csv"
+
+      validations:
+        # 1. DistributionCheck - FIXED
+        - type: "DistributionCheck"
+          severity: "WARNING"
+          enabled: true
+          params:
+            column: "Amount Received"
+            expected_distribution: "normal"
+            significance_level: 0.05
+
+        # 2. CorrelationCheck - FIXED
+        - type: "CorrelationCheck"
+          severity: "WARNING"
+          enabled: true
+          params:
+            column1: "Amount Received"
+            column2: "Amount Paid"
+            min_correlation: 0.7
+            max_correlation: 1.0
+
+        # 3. AdvancedAnomalyDetectionCheck - FIXED
+        - type: "AdvancedAnomalyDetectionCheck"
+          severity: "WARNING"
+          enabled: true
+          params:
+            column: "Amount Received"
+            method: "iqr"
+            threshold: 1.5
+            max_anomaly_pct: 5
+
+        # 4. BaselineComparisonCheck - FIXED
+        - type: "BaselineComparisonCheck"
+          severity: "WARNING"
+          enabled: true
+          params:
+            metric: "count"
+            baseline_file: "../../test-data/HI-Large_Trans_baseline.parquet"
+            tolerance_pct: 50
+
+        # 5. TrendDetectionCheck - FIXED
+        - type: "TrendDetectionCheck"
+          severity: "WARNING"
+          enabled: true
+          params:
+            metric: "count"
+            baseline_file: "../../test-data/HI-Large_Trans_daily.parquet"
+            max_growth_pct: 100
+            max_decline_pct: 100
+
+        # 6. ReferentialIntegrityCheck - FIXED
+        - type: "ReferentialIntegrityCheck"
+          severity: "ERROR"
+          enabled: true
+          params:
+            foreign_key: "From Bank"
+            reference_file: "../../test-data/HI-Small_Trans.csv"
+            reference_key: "From Bank"
+
+        # 7. CrossFileComparisonCheck - FIXED
+        - type: "CrossFileComparisonCheck"
+          severity: "WARNING"
+          enabled: true
+          params:
+            aggregation: "mean"
+            column: "Amount Received"
+            comparison: "=="
+            reference_file: "../../test-data/HI-Small_Trans.csv"
+            reference_aggregation: "mean"
+            reference_column: "Amount Received"
+            tolerance_pct: 1
+
+        # 8. CrossFileDuplicateCheck - FIXED
+        - type: "CrossFileDuplicateCheck"
+          severity: "WARNING"
+          enabled: true
+          params:
+            columns:
+              - "Timestamp"
+              - "From Bank"
+            reference_files:
+              - "../../test-data/LI-Small_Trans.csv"
+
+  processing:
+    chunk_size: 50000
+    max_sample_failures: 100
+
+  output:
+    html_report: "test_fixed_validations.html"
+    json_summary: "test_fixed_validations.json"

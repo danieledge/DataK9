@@ -45,8 +45,8 @@ validation_job:
   output:
     html_report: "demo-tmp/database_validation_report.html"
     json_summary: "demo-tmp/database_validation_summary.json"
-    fail_on_error: false
-    fail_on_warning: false
+    fail_on_error: true   # Exit code 1 when ERROR severity validations fail
+    fail_on_warning: false  # Don't fail on WARNING severity
 
   processing:
     chunk_size: 10000

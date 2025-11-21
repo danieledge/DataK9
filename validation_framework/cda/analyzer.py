@@ -9,7 +9,7 @@ from typing import Dict, List, Any, Set, Optional
 from datetime import datetime
 
 from .models import (
-    CDADefinition, CDATier, CDAFieldCoverage,
+    CDADefinition, CDAFieldCoverage,
     CDAGapResult, CDAAnalysisReport
 )
 
@@ -117,18 +117,10 @@ class CDAGapAnalyzer:
 
         # Analyze coverage for each CDA
         field_coverage = []
-        tier_stats = {tier: {'total': 0, 'covered': 0, 'gaps': 0} for tier in CDATier}
 
         for cda in cdas:
             coverage = self._check_field_coverage(cda, validated_fields)
             field_coverage.append(coverage)
-
-            # Update tier statistics
-            tier_stats[cda.tier]['total'] += 1
-            if coverage.is_covered:
-                tier_stats[cda.tier]['covered'] += 1
-            else:
-                tier_stats[cda.tier]['gaps'] += 1
 
         # Calculate totals
         total_cdas = len(cdas)
@@ -141,7 +133,6 @@ class CDAGapAnalyzer:
             covered_cdas=covered_cdas,
             gap_cdas=gap_cdas,
             field_coverage=field_coverage,
-            tier_coverage=tier_stats,
             analysis_timestamp=datetime.now()
         )
 
@@ -272,16 +263,11 @@ class CDAGapAnalyzer:
             cda = fc.cda
             rec = {
                 'field': cda.field,
-                'tier': cda.tier.value,
-                'tier_name': cda.tier.display_name,
                 'description': cda.description,
-                'suggested_validations': self._suggest_validations(cda),
-                'priority': cda.tier.priority
+                'suggested_validations': self._suggest_validations(cda)
             }
             recommendations.append(rec)
 
-        # Sort by priority (TIER_1 first)
-        recommendations.sort(key=lambda x: x['priority'])
         return recommendations
 
     def _suggest_validations(self, cda: CDADefinition) -> List[str]:
@@ -294,17 +280,7 @@ class CDAGapAnalyzer:
         Returns:
             List of suggested validation types
         """
-        suggestions = ['MandatoryFieldCheck']  # Always recommend mandatory check
-
-        # Add tier-specific suggestions
-        if cda.tier == CDATier.TIER_1:
-            # Regulatory fields need stricter validation
-            suggestions.extend(['RegexCheck', 'ValidValuesCheck'])
-        elif cda.tier == CDATier.TIER_2:
-            # Financial fields need range and format checks
-            suggestions.extend(['RangeCheck', 'NumericPrecisionCheck'])
-        else:
-            # Operational fields need basic validation
-            suggestions.append('ValidValuesCheck')
+        # Recommend basic validations for critical fields
+        suggestions = ['MandatoryFieldCheck', 'ValidValuesCheck']
 
         return suggestions

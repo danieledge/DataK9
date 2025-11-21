@@ -1,0 +1,74 @@
+validation_job:
+  name: "Production-Safe Database Validation Example"
+  version: "1.0"
+  description: |
+    Example showing production safety features:
+    - max_rows limit to prevent runaway queries
+    - Filtered query for recent data only
+    - Read-only credentials via environment variable
+    - Chunked processing for memory efficiency
+
+  files:
+    # Example 1: Using max_rows safety limit
+    - name: customers_with_limit
+      format: database
+      connection_string: "${DATABASE_URL}"  # Use environment variable
+      table: "customers"
+      max_rows: 50000  # Safety limit: only process first 50K rows
+      validations:
+        - type: MandatoryFieldCheck
+          params:
+            fields: [customer_id, email]
+          severity: ERROR
+
+        - type: RegexCheck
+          params:
+            field: email
+            pattern: "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
+          severity: ERROR
+
+    # Example 2: Using filtered query (recommended for production)
+    - name: recent_orders
+      format: database
+      connection_string: "${DATABASE_URL}"
+      query: |
+        SELECT *
+        FROM orders
+        WHERE order_date >= CURRENT_DATE - INTERVAL '7 days'
+        AND status IN ('pending', 'processing', 'shipped')
+      # No max_rows needed - query naturally limits data
+      validations:
+        - type: MandatoryFieldCheck
+          params:
+            fields: [order_id, customer_id]
+          severity: ERROR
+
+        - type: DateFormatCheck
+          params:
+            field: order_date
+            date_format: "%Y-%m-%d"
+          severity: ERROR
+
+  output:
+    html_report: "demo-tmp/safe_production_validation_report.html"
+    json_summary: "demo-tmp/safe_production_validation_summary.json"
+    fail_on_error: true
+    fail_on_warning: false
+
+  processing:
+    chunk_size: 10000  # Process in 10K row chunks (memory safe)
+    max_sample_failures: 100
+
+# Production Deployment Notes:
+# 1. Set environment variable before running:
+#    export DATABASE_URL="postgresql://readonly_user:pass@read-replica:5432/db"
+#
+# 2. Use read-only database credentials
+#
+# 3. Run against read replica if available
+#
+# 4. Schedule during off-peak hours (e.g., 2 AM cron job)
+#
+# 5. Monitor execution time and resource usage
+#
+# 6. See docs/DATABASE_SAFETY.md for complete production guide

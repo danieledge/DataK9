@@ -1,76 +1,58 @@
 # CDA (Critical Data Attribute) Validation Example
 # This demonstrates how to define and track Critical Data Attributes
-# and detect validation coverage gaps for audit compliance.
+# and detect validation coverage gaps.
 
 validation_job:
   name: "Financial Data Validation with CDA Tracking"
   version: "1.0"
-  description: "Example showing CDA gap analysis for audit compliance"
+  description: "Example showing CDA gap analysis"
 
   # Critical Data Attributes - defined at top level for visibility
-  # These are fields that require validation coverage for regulatory,
-  # financial, or operational reasons.
+  # These are fields that require validation coverage for audit/compliance.
   critical_data_attributes:
     # CDAs for customers file
     customers:
-      # TIER_1: Regulatory - Must be validated for compliance
       - field: "customer_id"
-        tier: "TIER_1"
-        description: "Primary customer identifier for regulatory reporting"
-        owner: "Compliance Team"
-        regulatory_reference: "KYC Regulation 4.2.1"
+        description: "Primary customer identifier"
+        owner: "Data Team"
 
       - field: "email"
-        tier: "TIER_1"
-        description: "Customer contact for compliance notifications"
-        owner: "Compliance Team"
-        regulatory_reference: "GDPR Article 7"
+        description: "Customer contact email"
+        owner: "Data Team"
 
       - field: "tax_id"
-        tier: "TIER_1"
-        description: "Tax identification number for regulatory filings"
+        description: "Tax identification number"
         owner: "Finance Team"
-        regulatory_reference: "IRS Form 1099"
 
-      # TIER_2: Financial - Important for financial calculations
       - field: "account_balance"
-        tier: "TIER_2"
-        description: "Current balance for risk calculations"
-        owner: "Risk Team"
+        description: "Current account balance"
+        owner: "Finance Team"
 
       - field: "credit_score"
-        tier: "TIER_2"
-        description: "Credit score for lending decisions"
+        description: "Credit score for risk assessment"
         owner: "Credit Team"
 
-      # TIER_3: Operational - Important for business operations
       - field: "phone"
-        tier: "TIER_3"
         description: "Customer contact number"
         owner: "Operations Team"
 
       - field: "registration_date"
-        tier: "TIER_3"
         description: "Customer onboarding date"
         owner: "Operations Team"
 
     # CDAs for transactions file
     transactions:
       - field: "transaction_id"
-        tier: "TIER_1"
-        description: "Unique transaction reference for audit trail"
+        description: "Unique transaction reference"
         owner: "Audit Team"
-        regulatory_reference: "SOX Section 404"
 
       - field: "amount"
-        tier: "TIER_2"
-        description: "Transaction value for financial reporting"
+        description: "Transaction value"
         owner: "Finance Team"
 
       - field: "transaction_date"
-        tier: "TIER_1"
-        description: "Transaction timestamp for regulatory reporting"
-        owner: "Compliance Team"
+        description: "Transaction timestamp"
+        owner: "Data Team"
 
   # File configurations with validations
   files:
@@ -163,11 +145,11 @@ validation_job:
 #
 # Expected output for this example:
 #   - customers: 5/7 covered (71%)
-#     - GAPS: tax_id (TIER_1), credit_score (TIER_2)
+#     - GAPS: tax_id, credit_score
 #   - transactions: 3/3 covered (100%)
 #
 # Options:
 #   --output FILE       Custom HTML output path
 #   --json-output FILE  Generate JSON report for automation
 #   --fail-on-gaps      Exit with error if any gaps (for CI/CD)
-#   --fail-on-tier1     Exit with error if TIER_1 gaps (default: true)
+#

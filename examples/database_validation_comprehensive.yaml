@@ -1,0 +1,664 @@
+validation_job:
+  name: "Comprehensive Database Validation Test Suite"
+  description: "Tests all 32 database-compatible validations on comprehensive test database"
+
+  files:
+    # ==================================================================
+    # EMPLOYEES TABLE - Field Validations, Schema, and Business Rules
+    # ==================================================================
+    - name: employees_validations
+      format: database
+      connection_string: "sqlite:///test_data_comprehensive.db"
+      table: "employees"
+      validations:
+        # Schema validation
+        - type: SchemaMatchCheck
+          params:
+            expected_schema:
+              employee_id: "integer"
+              dept_id: "integer"
+              email: "string"
+              phone: "string"
+              salary: "number"
+              hire_date: "date"
+              status: "string"
+              performance_score: "number"
+              years_experience: "integer"
+              manager_id: "integer"
+          severity: ERROR
+
+        # Mandatory field checks
+        - type: MandatoryFieldCheck
+          params:
+            fields:
+              - employee_id
+              - email
+          severity: ERROR
+
+        # Email validation
+        - type: RegexCheck
+          params:
+            field: email
+            pattern: "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
+          severity: ERROR
+
+        # Phone format validation
+        - type: RegexCheck
+          params:
+            field: phone
+            pattern: "^555-\\d{3}-\\d{4}$"
+          severity: WARNING
+
+        # Range check - salary
+        - type: RangeCheck
+          params:
+            field: salary
+            min: 0
+            max: 300000
+          severity: WARNING
+
+        # Range check - performance score
+        - type: RangeCheck
+          params:
+            field: performance_score
+            min: 0
+            max: 100
+          severity: ERROR
+
+        # Valid values - status
+        - type: ValidValuesCheck
+          params:
+            field: status
+            valid_values:
+              - Active
+              - Inactive
+              - On Leave
+              - Terminated
+          severity: WARNING
+
+        # Statistical outlier detection - salary
+        - type: StatisticalOutlierCheck
+          params:
+            field: salary
+            method: zscore
+            min_completeness: 3.0
+          severity: WARNING
+
+        # Completeness check
+        - type: CompletenessCheck
+          params:
+            field: email
+            min_completeness: 90.0
+          severity: WARNING
+
+        # Database referential integrity
+        - type: DatabaseReferentialIntegrityCheck
+          params:
+            foreign_key_field: dept_id
+            reference_table: departments
+            reference_field: dept_id
+          severity: ERROR
+
+    # ==================================================================
+    # CUSTOMERS TABLE - Data Quality and Format Validations
+    # ==================================================================
+    - name: customers_validations
+      format: database
+      connection_string: "sqlite:///test_data_comprehensive.db"
+      table: "customers"
+      validations:
+        # Mandatory fields
+        - type: MandatoryFieldCheck
+          params:
+            fields:
+              - customer_id
+              - email
+          severity: ERROR
+
+        # Unique key check
+        - type: UniqueKeyCheck
+          params:
+            key_fields:
+              - customer_id
+          severity: ERROR
+
+        # Email format
+        - type: RegexCheck
+          params:
+            field: email
+            pattern: "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
+          severity: ERROR
+
+        # Phone format
+        - type: RegexCheck
+          params:
+            field: phone
+            pattern: "^\\+1-555-\\d{3}-\\d{4}$"
+          severity: WARNING
+
+        # ZIP code validation (US format)
+        - type: StringLengthCheck
+          params:
+            field: zip_code
+            min_length: 5
+            max_length: 5
+          severity: WARNING
+
+        # Account balance range
+        - type: RangeCheck
+          params:
+            field: account_balance
+            min: 0
+          severity: ERROR
+
+        # Credit score validation
+        - type: RangeCheck
+          params:
+            field: credit_score
+            min: 300
+            max: 850
+          severity: ERROR
+
+        # Country code validation
+        - type: ValidValuesCheck
+          params:
+            field: country_code
+            valid_values:
+              - US
+              - CA
+              - GB
+              - AU
+              - DE
+          severity: WARNING
+
+        # Status validation
+        - type: ValidValuesCheck
+          params:
+            field: status
+            valid_values:
+              - Active
+              - Inactive
+              - Suspended
+              - Pending
+          severity: WARNING
+
+        # Date format check
+        - type: DateFormatCheck
+          params:
+            field: registration_date
+            date_format: "%Y-%m-%d"
+          severity: ERROR
+
+        # Row count range
+        - type: RowCountRangeCheck
+          params:
+            min_rows: 900
+            max_rows: 1100
+          severity: WARNING
+
+        # Referential integrity (file-based style for database)
+        - type: ReferentialIntegrityCheck
+          params:
+            foreign_key: customer_id
+            reference_file: orders
+            reference_key: customer_id
+          severity: WARNING
+
+        # Cross-file comparison
+        - type: CrossFileComparisonCheck
+          params:
+            aggregation: count
+            column: customer_id
+            comparison: ">="
+            reference_file: orders
+            reference_aggregation: count
+            reference_column: customer_id
+          severity: WARNING
+
+        # Cross-file duplicate check
+        - type: CrossFileDuplicateCheck
+          params:
+            columns:
+              - email
+            reference_files:
+              - employees
+          severity: WARNING
+
+    # ==================================================================
+    # PRODUCTS TABLE - Business Logic and Cross-Field Validations
+    # ==================================================================
+    - name: products_validations
+      format: database
+      connection_string: "sqlite:///test_data_comprehensive.db"
+      table: "products"
+      validations:
+        # Schema check
+        - type: ColumnPresenceCheck
+          params:
+            required_columns:
+              - product_id
+              - product_name
+              - price
+              - cost
+              - stock_quantity
+          severity: ERROR
+
+        # Mandatory fields
+        - type: MandatoryFieldCheck
+          params:
+            fields:
+              - product_id
+              - product_name
+          severity: ERROR
+
+        # Unique SKU
+        - type: UniqueKeyCheck
+          params:
+            key_fields:
+              - sku
+          severity: ERROR
+
+        # Price range
+        - type: RangeCheck
+          params:
+            field: price
+            min: 0
+          severity: ERROR
+
+        # Stock quantity range
+        - type: RangeCheck
+          params:
+            field: stock_quantity
+            min: 0
+          severity: WARNING
+
+        # Cross-field comparison: price > cost
+        - type: CrossFieldComparisonCheck
+          params:
+            field_a: price
+            field_b: cost
+            operator: ">"
+          severity: WARNING
+
+        # Category validation
+        - type: ValidValuesCheck
+          params:
+            field: category
+            valid_values:
+              - Electronics
+              - Clothing
+              - Home
+              - Sports
+              - Books
+              - Toys
+          severity: WARNING
+
+        # Numeric precision check
+        - type: NumericPrecisionCheck
+          params:
+            field: price
+            max_decimal_places: 2
+          severity: WARNING
+
+    # ==================================================================
+    # ORDERS TABLE - Date Logic and Business Rules
+    # ==================================================================
+    - name: orders_validations
+      format: database
+      connection_string: "sqlite:///test_data_comprehensive.db"
+      table: "orders"
+      validations:
+        # Mandatory fields
+        - type: MandatoryFieldCheck
+          params:
+            fields:
+              - order_id
+              - customer_id
+              - order_date
+          severity: ERROR
+
+        # Date format checks
+        - type: DateFormatCheck
+          params:
+            field: order_date
+            date_format: "%Y-%m-%d"
+          severity: ERROR
+
+        - type: DateFormatCheck
+          params:
+            field: ship_date
+            date_format: "%Y-%m-%d"
+          severity: ERROR
+
+        # Cross-field date comparison: ship_date >= order_date
+        - type: CrossFieldComparisonCheck
+          params:
+            field_a: ship_date
+            field_b: order_date
+            operator: ">="
+          severity: ERROR
+
+        # Cross-field comparison: tax_amount < total_amount
+        - type: CrossFieldComparisonCheck
+          params:
+            field_a: tax_amount
+            field_b: total_amount
+            operator: "<"
+          severity: ERROR
+
+        # Discount percentage range
+        - type: RangeCheck
+          params:
+            field: discount_percent
+            min: 0
+            max: 100
+          severity: ERROR
+
+        # Status validation
+        - type: ValidValuesCheck
+          params:
+            field: status
+            valid_values:
+              - Pending
+              - Processing
+              - Shipped
+              - Delivered
+              - Cancelled
+          severity: WARNING
+
+        # Referential integrity - customer
+        - type: DatabaseReferentialIntegrityCheck
+          params:
+            foreign_key_field: customer_id
+            reference_table: customers
+            reference_field: customer_id
+          severity: ERROR
+
+        # Row count check
+        - type: RowCountRangeCheck
+          params:
+            min_rows: 1900
+            max_rows: 2100
+          severity: WARNING
+
+    # ==================================================================
+    # ORDER_ITEMS TABLE - Cross-Field Calculation Validation
+    # ==================================================================
+    - name: order_items_validations
+      format: database
+      connection_string: "sqlite:///test_data_comprehensive.db"
+      table: "order_items"
+      validations:
+        # Mandatory fields
+        - type: MandatoryFieldCheck
+          params:
+            fields:
+              - item_id
+              - order_id
+              - product_id
+              - quantity
+              - unit_price
+          severity: ERROR
+
+        # Quantity range
+        - type: RangeCheck
+          params:
+            field: quantity
+            min: 1
+          severity: ERROR
+
+        # Unit price range
+        - type: RangeCheck
+          params:
+            field: unit_price
+            min: 0
+          severity: ERROR
+
+        # Discount validation
+        - type: CrossFieldComparisonCheck
+          params:
+            field_a: discount_applied
+            field_b: line_total
+            operator: "<="
+          severity: WARNING
+
+        # Referential integrity - order
+        - type: DatabaseReferentialIntegrityCheck
+          params:
+            foreign_key_field: order_id
+            reference_table: orders
+            reference_field: order_id
+          severity: ERROR
+
+        # Referential integrity - product
+        - type: DatabaseReferentialIntegrityCheck
+          params:
+            foreign_key_field: product_id
+            reference_table: products
+            reference_field: product_id
+          severity: ERROR
+
+        # SQL custom check: line_total calculation
+        - type: SQLCustomCheck
+          params:
+            query: |
+              SELECT item_id, quantity, unit_price, discount_applied, line_total,
+                     (quantity * unit_price - discount_applied) as expected_total,
+                     ABS(line_total - (quantity * unit_price - discount_applied)) as diff
+              FROM order_items
+              WHERE ABS(line_total - (quantity * unit_price - discount_applied)) > 0.01
+          severity: WARNING
+
+    # ==================================================================
+    # TRANSACTIONS TABLE - Anomaly and Trend Detection
+    # ==================================================================
+    - name: transactions_validations
+      format: database
+      connection_string: "sqlite:///test_data_comprehensive.db"
+      table: "transactions"
+      validations:
+        # Mandatory fields
+        - type: MandatoryFieldCheck
+          params:
+            fields:
+              - transaction_id
+              - customer_id
+              - transaction_date
+              - amount
+          severity: ERROR
+
+        # Amount range
+        - type: RangeCheck
+          params:
+            field: amount
+            min: 0
+          severity: WARNING
+
+        # Date format
+        - type: DateFormatCheck
+          params:
+            field: transaction_date
+            date_format: "%Y-%m-%d"
+          severity: ERROR
+
+        # Transaction type validation
+        - type: ValidValuesCheck
+          params:
+            field: transaction_type
+            valid_values:
+              - Purchase
+              - Refund
+              - Transfer
+              - Withdrawal
+              - Deposit
+          severity: WARNING
+
+        # Statistical outlier detection - amount
+        - type: StatisticalOutlierCheck
+          params:
+            field: amount
+            method: iqr
+            min_completeness: 3.0
+          severity: WARNING
+
+        # Advanced anomaly detection
+        - type: AdvancedAnomalyDetectionCheck
+          params:
+            field: amount
+            method: iqr
+            min_completeness: 3.0
+          severity: WARNING
+
+        # Referential integrity
+        - type: DatabaseReferentialIntegrityCheck
+          params:
+            foreign_key_field: customer_id
+            reference_table: customers
+            reference_field: customer_id
+          severity: ERROR
+
+        # Row count range
+        - type: RowCountRangeCheck
+          params:
+            min_rows: 9000
+            max_rows: 11000
+          severity: WARNING
+
+        # Removed TrendDetectionCheck and BaselineComparisonCheck
+        # These require baseline files which don't make sense for database demos
+        # Already have comprehensive statistical coverage with other checks
+
+        # Freshness check
+        - type: FreshnessCheck
+          params:
+            date_field: transaction_date
+            max_age_hours: 8760
+          severity: WARNING
+
+        # Conditional validation
+        - type: ConditionalValidation
+          params:
+            condition: "amount > 1000"
+            validation_type: "MandatoryFieldCheck"
+            validation_params:
+              fields:
+                - merchant
+          severity: WARNING
+
+    # ==================================================================
+    # DEPARTMENTS TABLE - Database Constraint Validation
+    # ==================================================================
+    - name: departments_validations
+      format: database
+      connection_string: "sqlite:///test_data_comprehensive.db"
+      table: "departments"
+      validations:
+        # Mandatory fields
+        - type: MandatoryFieldCheck
+          params:
+            fields:
+              - dept_id
+              - dept_name
+          severity: ERROR
+
+        # Unique department name
+        - type: UniqueKeyCheck
+          params:
+            key_fields:
+              - dept_name
+          severity: ERROR
+
+        # Budget range
+        - type: RangeCheck
+          params:
+            field: budget
+            min: 0
+          severity: WARNING
+
+        # Database constraint check
+        - type: DatabaseConstraintCheck
+          params:
+            constraint: "UNIQUE"
+            field: dept_name
+          severity: ERROR
+
+        # Date format
+        - type: DateFormatCheck
+          params:
+            field: created_date
+            date_format: "%Y-%m-%d"
+          severity: ERROR
+
+        # Row count
+        - type: RowCountRangeCheck
+          params:
+            min_rows: 5
+            max_rows: 5
+          severity: ERROR
+
+        # Blank record check
+        - type: BlankRecordCheck
+          severity: ERROR
+
+        # Duplicate row check
+        - type: DuplicateRowCheck
+          params:
+            key_fields:
+              - dept_id
+          severity: ERROR
+
+        # Correlation check
+        - type: CorrelationCheck
+          params:
+            field_a: dept_id
+            field_b: budget
+            min_correlation: 0.0
+          severity: WARNING
+
+        # Distribution check
+        - type: DistributionCheck
+          params:
+            column: budget
+            expected_distribution: normal
+          severity: WARNING
+
+        # Inline business rule
+        - type: InlineBusinessRuleCheck
+          params:
+            rule: "budget > 0"
+          severity: ERROR
+
+        # Inline lookup check
+        - type: InlineLookupCheck
+          params:
+            field: dept_name
+            lookup_values:
+              - Engineering
+              - Sales
+              - Marketing
+              - HR
+              - Finance
+          severity: ERROR
+
+        # Inline regex check
+        - type: InlineRegexCheck
+          params:
+            field: dept_name
+            pattern: "^[A-Z][a-z]+"
+          severity: WARNING
+
+  # ==================================================================
+  # OUTPUT CONFIGURATION
+  # ==================================================================
+  output:
+    html_report: "demo-tmp/comprehensive_validation_report.html"
+    json_summary: "demo-tmp/comprehensive_validation_summary.json"
+    fail_on_error: true   # Exit code 1 when ERROR severity validations fail
+    fail_on_warning: false  # Don't fail on WARNING severity
+
+  # ==================================================================
+  # PROCESSING CONFIGURATION
+  # ==================================================================
+  processing:
+    chunk_size: 10000
+    max_sample_failures: 100

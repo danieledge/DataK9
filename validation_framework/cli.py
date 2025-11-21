@@ -604,9 +604,7 @@ def profile(file_path, format, database, table, query, html_output, json_output,
 @click.option('--json-output', '-j', help='Path for JSON gap analysis output')
 @click.option('--fail-on-gaps', is_flag=True,
               help='Exit with error code if any gaps detected')
-@click.option('--fail-on-tier1', is_flag=True, default=True,
-              help='Exit with error code if Tier 1 (regulatory) gaps detected (default: True)')
-def cda_analysis(config_file, output, json_output, fail_on_gaps, fail_on_tier1):
+def cda_analysis(config_file, output, json_output, fail_on_gaps):
     """
     Analyze Critical Data Attribute (CDA) validation coverage.
 
@@ -657,7 +655,6 @@ def cda_analysis(config_file, output, json_output, fail_on_gaps, fail_on_tier1):
             po.info("  critical_data_attributes:")
             po.info("    customers:")
             po.info("      - field: customer_id")
-            po.info("        tier: TIER_1")
             po.info("        description: Primary identifier")
             sys.exit(0)
 
@@ -681,8 +678,7 @@ def cda_analysis(config_file, output, json_output, fail_on_gaps, fail_on_tier1):
 
             if result.has_gaps:
                 for fc in result.gaps:
-                    tier_str = f"[{fc.cda.tier.display_name}]"
-                    po.warning(f"    ✗ {fc.cda.field} {tier_str} - No validation coverage")
+                    po.warning(f"    ✗ {fc.cda.field} - No validation coverage")
 
         po.blank_line()
 
@@ -693,9 +689,6 @@ def cda_analysis(config_file, output, json_output, fail_on_gaps, fail_on_tier1):
             ("Gaps", str(report.total_gaps), "red" if report.total_gaps > 0 else "green"),
             ("Coverage", f"{report.overall_coverage:.0f}%", "green" if report.overall_coverage >= 90 else "yellow")
         ]
-
-        if report.tier1_at_risk:
-            summary_items.append(("TIER 1 Risk", "AUDIT ALERT", "red"))
 
         po.summary_box("CDA Coverage Summary", summary_items)
 
@@ -713,8 +706,7 @@ def cda_analysis(config_file, output, json_output, fail_on_gaps, fail_on_tier1):
                     'total_cdas': report.total_cdas,
                     'covered': report.total_covered,
                     'gaps': report.total_gaps,
-                    'coverage_percentage': report.overall_coverage,
-                    'tier1_at_risk': report.tier1_at_risk
+                    'coverage_percentage': report.overall_coverage
                 },
                 'files': []
             }
@@ -728,7 +720,6 @@ def cda_analysis(config_file, output, json_output, fail_on_gaps, fail_on_tier1):
                     'fields': [
                         {
                             'field': fc.cda.field,
-                            'tier': fc.cda.tier.value,
                             'is_covered': fc.is_covered,
                             'validations': fc.covering_validations,
                             'description': fc.cda.description
@@ -743,11 +734,6 @@ def cda_analysis(config_file, output, json_output, fail_on_gaps, fail_on_tier1):
             po.success(f"JSON report generated: {json_output}")
 
         # Determine exit code
-        if report.tier1_at_risk and fail_on_tier1:
-            po.blank_line()
-            po.error("TIER 1 (Regulatory) CDAs have validation gaps - AUDIT RISK")
-            sys.exit(1)
-
         if report.has_gaps and fail_on_gaps:
             po.blank_line()
             po.error("CDA gaps detected - failing as requested")
