@@ -450,8 +450,22 @@ class ValidationEngine:
             output_path: Path for output HTML file
         """
         from validation_framework.reporters.html_reporter import HTMLReporter
+
+        # Check for CDA definitions and run analysis if present
+        cda_report = None
+        if hasattr(self.config, 'raw_config'):
+            raw_config = self.config.raw_config
+            job_config = raw_config.get('validation_job', raw_config)
+            if job_config.get('critical_data_attributes'):
+                try:
+                    from validation_framework.cda import CDAGapAnalyzer
+                    analyzer = CDAGapAnalyzer()
+                    cda_report = analyzer.analyze(raw_config)
+                except Exception:
+                    pass  # CDA analysis is optional
+
         reporter = HTMLReporter()
-        reporter.generate(report, output_path)
+        reporter.generate(report, output_path, cda_report=cda_report)
 
     def generate_json_report(self, report: ValidationReport, output_path: str) -> None:
         """

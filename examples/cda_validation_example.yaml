@@ -1,0 +1,173 @@
+# CDA (Critical Data Attribute) Validation Example
+# This demonstrates how to define and track Critical Data Attributes
+# and detect validation coverage gaps for audit compliance.
+
+validation_job:
+  name: "Financial Data Validation with CDA Tracking"
+  version: "1.0"
+  description: "Example showing CDA gap analysis for audit compliance"
+
+  # Critical Data Attributes - defined at top level for visibility
+  # These are fields that require validation coverage for regulatory,
+  # financial, or operational reasons.
+  critical_data_attributes:
+    # CDAs for customers file
+    customers:
+      # TIER_1: Regulatory - Must be validated for compliance
+      - field: "customer_id"
+        tier: "TIER_1"
+        description: "Primary customer identifier for regulatory reporting"
+        owner: "Compliance Team"
+        regulatory_reference: "KYC Regulation 4.2.1"
+
+      - field: "email"
+        tier: "TIER_1"
+        description: "Customer contact for compliance notifications"
+        owner: "Compliance Team"
+        regulatory_reference: "GDPR Article 7"
+
+      - field: "tax_id"
+        tier: "TIER_1"
+        description: "Tax identification number for regulatory filings"
+        owner: "Finance Team"
+        regulatory_reference: "IRS Form 1099"
+
+      # TIER_2: Financial - Important for financial calculations
+      - field: "account_balance"
+        tier: "TIER_2"
+        description: "Current balance for risk calculations"
+        owner: "Risk Team"
+
+      - field: "credit_score"
+        tier: "TIER_2"
+        description: "Credit score for lending decisions"
+        owner: "Credit Team"
+
+      # TIER_3: Operational - Important for business operations
+      - field: "phone"
+        tier: "TIER_3"
+        description: "Customer contact number"
+        owner: "Operations Team"
+
+      - field: "registration_date"
+        tier: "TIER_3"
+        description: "Customer onboarding date"
+        owner: "Operations Team"
+
+    # CDAs for transactions file
+    transactions:
+      - field: "transaction_id"
+        tier: "TIER_1"
+        description: "Unique transaction reference for audit trail"
+        owner: "Audit Team"
+        regulatory_reference: "SOX Section 404"
+
+      - field: "amount"
+        tier: "TIER_2"
+        description: "Transaction value for financial reporting"
+        owner: "Finance Team"
+
+      - field: "transaction_date"
+        tier: "TIER_1"
+        description: "Transaction timestamp for regulatory reporting"
+        owner: "Compliance Team"
+
+  # File configurations with validations
+  files:
+    - name: "customers"
+      path: "examples/sample_data/customers.csv"
+      format: "csv"
+      delimiter: ","
+      encoding: "utf-8"
+
+      validations:
+        # These validations cover CDAs: customer_id, email
+        - type: "MandatoryFieldCheck"
+          severity: "ERROR"
+          params:
+            fields: ["customer_id", "email", "first_name", "last_name"]
+
+        # Covers CDA: email
+        - type: "RegexCheck"
+          severity: "ERROR"
+          params:
+            field: "email"
+            pattern: "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
+
+        # Covers CDA: account_balance
+        - type: "RangeCheck"
+          severity: "WARNING"
+          params:
+            field: "account_balance"
+            min_value: 0
+            max_value: 10000000
+
+        # Covers CDA: phone
+        - type: "RegexCheck"
+          severity: "WARNING"
+          params:
+            field: "phone"
+            pattern: "^\\+?[1-9]\\d{1,14}$"
+
+        # Covers CDA: registration_date
+        - type: "DateFormatCheck"
+          severity: "WARNING"
+          params:
+            field: "registration_date"
+            format: "%Y-%m-%d"
+
+        # NOTE: tax_id and credit_score are NOT validated
+        # This will be flagged as a GAP in CDA analysis
+
+    - name: "transactions"
+      path: "examples/sample_data/transactions.csv"
+      format: "csv"
+
+      validations:
+        # Covers CDAs: transaction_id, amount, transaction_date
+        - type: "MandatoryFieldCheck"
+          severity: "ERROR"
+          params:
+            fields: ["transaction_id", "customer_id", "amount", "transaction_date"]
+
+        # Covers CDA: transaction_id
+        - type: "UniqueKeyCheck"
+          severity: "ERROR"
+          params:
+            fields: ["transaction_id"]
+
+        # Covers CDA: amount
+        - type: "RangeCheck"
+          severity: "ERROR"
+          params:
+            field: "amount"
+            min_value: 0.01
+            max_value: 1000000
+
+  output:
+    html_report: "validation_report.html"
+    json_summary: "validation_summary.json"
+    fail_on_error: true
+
+# ============================================================
+# Running CDA Gap Analysis
+# ============================================================
+#
+# To analyze CDA coverage and detect gaps:
+#
+#   python3 -m validation_framework.cli cda-analysis examples/cda_validation_example.yaml
+#
+# This will generate:
+#   - Console output showing coverage summary
+#   - HTML report (cda_gap_analysis.html) with detailed breakdown
+#
+# Expected output for this example:
+#   - customers: 5/7 covered (71%)
+#     - GAPS: tax_id (TIER_1), credit_score (TIER_2)
+#   - transactions: 3/3 covered (100%)
+#
+# Options:
+#   --output FILE       Custom HTML output path
+#   --json-output FILE  Generate JSON report for automation
+#   --fail-on-gaps      Exit with error if any gaps (for CI/CD)
+#   --fail-on-tier1     Exit with error if TIER_1 gaps (default: true)

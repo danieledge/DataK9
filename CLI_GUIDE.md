@@ -11,6 +11,7 @@ Complete command-line reference for the DataK9 Data Quality Framework.
 - [CLI Commands](#cli-commands)
   - [validate](#validate---run-data-validation)
   - [profile](#profile---profile-data-files-and-databases)
+  - [cda-analysis](#cda-analysis---critical-data-attribute-gap-analysis)
   - [list-validations](#list-validations---list-available-validations)
   - [init-config](#init-config---generate-sample-configuration)
   - [version](#version---display-version-information)
@@ -299,6 +300,59 @@ files:
           field: "email"
           pattern: "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
 ```
+
+---
+
+### cda-analysis - Critical Data Attribute Gap Analysis
+
+Analyzes your validation configuration to detect gaps in Critical Data Attribute coverage. Essential for audit compliance.
+
+**Syntax:**
+```bash
+python3 -m validation_framework.cli cda-analysis <config_file> [options]
+```
+
+**Arguments:**
+- `config_file` (required) - Path to YAML configuration file with `critical_data_attributes` section
+
+**Options:**
+
+| Option | Short | Description | Default |
+|--------|-------|-------------|---------|
+| `--output` | `-o` | Path for HTML gap analysis report | `cda_gap_analysis.html` |
+| `--json-output` | `-j` | Path for JSON output (for automation) | None |
+| `--fail-on-gaps` | | Exit with error if any gaps detected | False |
+| `--fail-on-tier1` | | Exit with error if TIER_1 gaps detected | True |
+
+**Examples:**
+
+```bash
+# Basic CDA gap analysis
+python3 -m validation_framework.cli cda-analysis config.yaml
+
+# Custom output path
+python3 -m validation_framework.cli cda-analysis config.yaml -o gaps.html
+
+# Generate JSON for CI/CD integration
+python3 -m validation_framework.cli cda-analysis config.yaml -j gaps.json
+
+# Fail pipeline if any gaps detected
+python3 -m validation_framework.cli cda-analysis config.yaml --fail-on-gaps
+```
+
+**CDA Tiers:**
+
+| Tier | Name | Priority | Description |
+|------|------|----------|-------------|
+| TIER_1 | Regulatory | Highest | Fields required for regulatory compliance |
+| TIER_2 | Financial | High | Fields used in financial calculations |
+| TIER_3 | Operational | Normal | Fields important for business operations |
+
+**Exit Codes:**
+- `0` - Success (all CDAs covered or gaps acceptable)
+- `1` - TIER_1 gaps detected (with `--fail-on-tier1`) or any gaps (with `--fail-on-gaps`)
+
+**See also:** [CDA Gap Analysis Guide](docs/CDA_GAP_ANALYSIS_GUIDE.md) for complete documentation.
 
 ---
 

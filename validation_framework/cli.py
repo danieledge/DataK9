@@ -597,5 +597,181 @@ def profile(file_path, format, database, table, query, html_output, json_output,
         sys.exit(1)
 
 
+@cli.command('cda-analysis')
+@click.argument('config_file', type=click.Path(exists=True))
+@click.option('--output', '-o', default='cda_gap_analysis.html',
+              help='Path for HTML gap analysis report')
+@click.option('--json-output', '-j', help='Path for JSON gap analysis output')
+@click.option('--fail-on-gaps', is_flag=True,
+              help='Exit with error code if any gaps detected')
+@click.option('--fail-on-tier1', is_flag=True, default=True,
+              help='Exit with error code if Tier 1 (regulatory) gaps detected (default: True)')
+def cda_analysis(config_file, output, json_output, fail_on_gaps, fail_on_tier1):
+    """
+    Analyze Critical Data Attribute (CDA) validation coverage.
+
+    This command analyzes your validation configuration to detect gaps where
+    Critical Data Attributes lack validation coverage.
+
+    CONFIG_FILE: Path to YAML configuration file with critical_data_attributes defined
+
+    Examples:
+
+    \b
+    # Basic CDA gap analysis
+    python3 -m validation_framework.cli cda-analysis config.yaml
+
+    \b
+    # With custom output path
+    python3 -m validation_framework.cli cda-analysis config.yaml -o gaps.html
+
+    \b
+    # Fail CI/CD if any gaps detected
+    python3 -m validation_framework.cli cda-analysis config.yaml --fail-on-gaps
+
+    \b
+    # Generate JSON output for automation
+    python3 -m validation_framework.cli cda-analysis config.yaml -j gaps.json
+    """
+    import yaml
+    import json as json_module
+    from validation_framework.cda import CDAGapAnalyzer, CDAReporter
+
+    po.logo()
+    po.header("CDA Gap Analysis")
+
+    try:
+        # Load configuration
+        with open(config_file, 'r') as f:
+            config = yaml.safe_load(f)
+
+        # Check if CDAs are defined
+        job_config = config.get('validation_job', config)
+        cda_defs = job_config.get('critical_data_attributes', {})
+
+        if not cda_defs:
+            po.warning("No critical_data_attributes section found in configuration")
+            po.info("Add critical_data_attributes to your YAML to enable CDA gap analysis")
+            po.blank_line()
+            po.info("Example:")
+            po.info("  critical_data_attributes:")
+            po.info("    customers:")
+            po.info("      - field: customer_id")
+            po.info("        tier: TIER_1")
+            po.info("        description: Primary identifier")
+            sys.exit(0)
+
+        # Run analysis
+        analyzer = CDAGapAnalyzer()
+        report = analyzer.analyze(config)
+
+        # Display summary
+        po.section("Analysis Summary")
+        po.info(f"Job: {report.job_name}")
+        po.info(f"Files analyzed: {len(report.results)}")
+        po.blank_line()
+
+        # Show per-file results
+        for result in report.results:
+            coverage_pct = result.coverage_percentage
+            status = "✓" if not result.has_gaps else "✗"
+            status_color = "green" if not result.has_gaps else "red"
+
+            po.info(f"{status} {result.file_name}: {result.covered_cdas}/{result.total_cdas} covered ({coverage_pct:.0f}%)")
+
+            if result.has_gaps:
+                for fc in result.gaps:
+                    tier_str = f"[{fc.cda.tier.display_name}]"
+                    po.warning(f"    ✗ {fc.cda.field} {tier_str} - No validation coverage")
+
+        po.blank_line()
+
+        # Summary box - expects list of (key, value, color) tuples
+        summary_items = [
+            ("Total CDAs", str(report.total_cdas), "cyan"),
+            ("Covered", str(report.total_covered), "green"),
+            ("Gaps", str(report.total_gaps), "red" if report.total_gaps > 0 else "green"),
+            ("Coverage", f"{report.overall_coverage:.0f}%", "green" if report.overall_coverage >= 90 else "yellow")
+        ]
+
+        if report.tier1_at_risk:
+            summary_items.append(("TIER 1 Risk", "AUDIT ALERT", "red"))
+
+        po.summary_box("CDA Coverage Summary", summary_items)
+
+        # Generate HTML report
+        reporter = CDAReporter()
+        reporter.save_html(report, output)
+        po.success(f"HTML report generated: {output}")
+
+        # Generate JSON if requested
+        if json_output:
+            json_data = {
+                'job_name': report.job_name,
+                'timestamp': report.analysis_timestamp.isoformat(),
+                'summary': {
+                    'total_cdas': report.total_cdas,
+                    'covered': report.total_covered,
+                    'gaps': report.total_gaps,
+                    'coverage_percentage': report.overall_coverage,
+                    'tier1_at_risk': report.tier1_at_risk
+                },
+                'files': []
+            }
+            for result in report.results:
+                file_data = {
+                    'name': result.file_name,
+                    'total_cdas': result.total_cdas,
+                    'covered': result.covered_cdas,
+                    'gaps': result.gap_cdas,
+                    'coverage_percentage': result.coverage_percentage,
+                    'fields': [
+                        {
+                            'field': fc.cda.field,
+                            'tier': fc.cda.tier.value,
+                            'is_covered': fc.is_covered,
+                            'validations': fc.covering_validations,
+                            'description': fc.cda.description
+                        }
+                        for fc in result.field_coverage
+                    ]
+                }
+                json_data['files'].append(file_data)
+
+            with open(json_output, 'w') as f:
+                json_module.dump(json_data, f, indent=2)
+            po.success(f"JSON report generated: {json_output}")
+
+        # Determine exit code
+        if report.tier1_at_risk and fail_on_tier1:
+            po.blank_line()
+            po.error("TIER 1 (Regulatory) CDAs have validation gaps - AUDIT RISK")
+            sys.exit(1)
+
+        if report.has_gaps and fail_on_gaps:
+            po.blank_line()
+            po.error("CDA gaps detected - failing as requested")
+            sys.exit(1)
+
+        if report.has_gaps:
+            po.blank_line()
+            po.warning("CDA gaps detected - review recommended")
+            sys.exit(0)
+
+        po.blank_line()
+        po.success("All Critical Data Attributes have validation coverage")
+        sys.exit(0)
+
+    except FileNotFoundError as e:
+        po.error(f"File not found: {str(e)}")
+        sys.exit(1)
+
+    except Exception as e:
+        po.error(f"Error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
+
+
 if __name__ == '__main__':
     cli()
