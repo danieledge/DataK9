@@ -5,7 +5,7 @@
 
   ## 🐕 Your K9 guardian for data quality
 
-  **Production-grade data validation for files and databases**
+  **Data validation for files and databases**
 
   [![Version 0.2.0](https://img.shields.io/badge/version-0.2.0-blue.svg)](#changelog)
   [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
@@ -38,7 +38,7 @@ python3 -m validation_framework.cli validate config.yaml
 
 ## ✨ What is DataK9?
 
-DataK9 is a production-grade Python framework for validating data quality before loading to databases, data warehouses, or analytics platforms. Like a well-trained K9 unit, DataK9 vigilantly guards your data, sniffing out quality issues before they become problems.
+DataK9 is a Python framework for validating data quality before loading to databases, data warehouses, or analytics platforms. Like a well-trained K9 unit, DataK9 vigilantly guards your data, sniffing out quality issues before they become problems.
 
 ### Key Capabilities
 
@@ -125,7 +125,7 @@ DataK9 is a production-grade Python framework for validating data quality before
 <details>
 <summary><b>✅ 35 Built-In Validations</b></summary>
 
-DataK9 includes 35 production-ready validation types across 10 categories:
+DataK9 includes 35 built-in validation types across 10 categories:
 
 ### File-Level Validations
 - FileSizeCheck, RowCountCheck, FileExistsCheck, EncodingCheck
@@ -545,7 +545,7 @@ MIT License - see [LICENSE](LICENSE) file for details
 ## 📊 Project Status
 
 - **Version:** 0.2.0
-- **Status:** Production-ready
+- **Status:** Active development
 - **Tests:** 115+ passing (48% coverage, growing)
 - **Python:** 3.8+
 - **Production Tested:** 357M row dataset on Raspberry Pi 4
