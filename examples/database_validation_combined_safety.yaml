@@ -1,0 +1,142 @@
+validation_job:
+  name: "Combined Safety: Query Filters + max_rows Limit"
+  description: |
+    Defense-in-depth approach combining:
+    1. Query-level filtering (WHERE clauses)
+    2. max_rows safety limit (last line of defense)
+
+    This protects against:
+    - Incorrect date calculations
+    - Unexpected data growth
+    - Edge cases in query logic
+
+  files:
+    # Example 1: Recent data filter + safety limit
+    - name: recent_orders_with_safety_limit
+      format: database
+      connection_string: "${DATABASE_URL}"
+      query: |
+        SELECT *
+        FROM orders
+        WHERE order_date >= CURRENT_DATE - INTERVAL '30 days'
+      max_rows: 500000  # Safety net: even if 30 days has >500K orders, stop there
+      validations:
+        - type: MandatoryFieldCheck
+          params:
+            fields: [order_id, customer_id]
+          severity: ERROR
+
+    # Example 2: Complex join query + safety limit
+    - name: customer_orders_enriched
+      format: database
+      connection_string: "${DATABASE_URL}"
+      query: |
+        SELECT
+          c.customer_id,
+          c.email,
+          c.status as customer_status,
+          o.order_id,
+          o.total_amount,
+          o.order_date
+        FROM customers c
+        INNER JOIN orders o ON c.customer_id = o.customer_id
+        WHERE o.order_date >= '2024-01-01'
+        AND c.status = 'active'
+      max_rows: 1000000  # Safety: limit even if join produces unexpected row count
+      validations:
+        - type: RegexCheck
+          params:
+            field: email
+            pattern: "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
+          severity: ERROR
+
+        - type: RangeCheck
+          params:
+            field: total_amount
+            min: 0
+          severity: ERROR
+
+    # Example 3: Sampling query + safety limit
+    - name: sample_validation_with_limit
+      format: database
+      connection_string: "${DATABASE_URL}"
+      query: |
+        SELECT *
+        FROM large_transactions
+        WHERE RANDOM() < 0.05  -- Target 5% sample
+      max_rows: 100000  # But never process more than 100K rows
+      validations:
+        - type: StatisticalOutlierCheck
+          params:
+            field: amount
+            method: zscore
+            threshold: 3.0
+          severity: WARNING
+
+    # Example 4: Filtered query where max_rows acts as safety override
+    - name: suspicious_transactions
+      format: database
+      connection_string: "${DATABASE_URL}"
+      query: |
+        SELECT *
+        FROM transactions
+        WHERE amount > 10000
+        OR flagged_for_review = true
+        OR customer_risk_score > 80
+      max_rows: 50000  # If >50K suspicious transactions, investigate in batches
+      validations:
+        - type: MandatoryFieldCheck
+          params:
+            fields: [transaction_id, reviewed_by, reviewed_date]
+          severity: WARNING
+
+  output:
+    html_report: "demo-tmp/combined_safety_validation_report.html"
+    json_summary: "demo-tmp/combined_safety_validation_summary.json"
+    fail_on_error: true
+
+  processing:
+    chunk_size: 10000
+    max_sample_failures: 100
+
+# WHY COMBINE BOTH?
+#
+# Query filtering (WHERE clause):
+# - Primary data reduction mechanism
+# - Uses database indexes (fast)
+# - Filters at source (efficient)
+#
+# max_rows limit:
+# - Safety net / failsafe
+# - Protects against query logic errors
+# - Guards against unexpected data growth
+# - Prevents runaway queries if date math is wrong
+#
+# REAL-WORLD SCENARIOS WHERE THIS HELPS:
+#
+# 1. Date calculation errors:
+#    Query: WHERE created_date >= CURRENT_DATE - 30
+#    Problem: If date column has nulls or future dates, could return millions
+#    Solution: max_rows stops runaway query
+#
+# 2. Unexpected data growth:
+#    Query: WHERE status = 'pending'
+#    Problem: If bug causes all records to be marked pending, query explodes
+#    Solution: max_rows prevents memory exhaustion
+#
+# 3. Complex joins:
+#    Query: Multi-table joins
+#    Problem: Cartesian product if join logic has bug
+#    Solution: max_rows prevents catastrophic result set
+#
+# 4. Sampling variability:
+#    Query: RANDOM() sampling
+#    Problem: Random sampling might occasionally return way more rows
+#    Solution: max_rows ensures predictable upper bound
+#
+# BEST PRACTICE:
+# Set max_rows to 2-3x your expected query result size
+# - Expected: ~100K rows → max_rows: 250000
+# - Expected: ~1M rows → max_rows: 3000000
+#
+# This gives headroom for normal variance while preventing disasters.

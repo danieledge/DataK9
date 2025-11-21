@@ -1,0 +1,304 @@
+validation_job:
+  name: Comprehensive Test Suite - All 34 Validation Types
+
+files:
+  - name: employees
+    path: tests/test_data/comprehensive_test_data.csv
+    format: csv
+
+    validations:
+      # =============================================================================
+      # FILE-LEVEL VALIDATIONS (3 types)
+      # =============================================================================
+
+      - type: EmptyFileCheck
+        severity: ERROR
+        description: "Ensure file contains data rows"
+        params:
+          check_data_rows: true
+
+      - type: RowCountRangeCheck
+        severity: ERROR
+        description: "Validate row count is within expected range"
+        params:
+          min_rows: 10
+          max_rows: 1000
+
+      - type: FileSizeCheck
+        severity: WARNING
+        description: "Check file size is reasonable"
+        params:
+          min_size_bytes: 100
+          max_size_bytes: 10485760  # 10MB
+
+      # =============================================================================
+      # SCHEMA VALIDATIONS (2 types)
+      # =============================================================================
+
+      - type: SchemaMatchCheck
+        severity: ERROR
+        description: "Validate schema matches expected structure"
+        params:
+            expected_schema:
+              employee_id: "integer"
+              first_name: "string"
+              last_name: "string"
+              email: "string"
+              phone: "string"
+              department: "string"
+              salary: "float"
+              hire_date: "string"
+              status: "string"
+              performance_score: "float"
+              years_experience: "integer"
+              manager_id: "integer"
+              last_review_date: "string"
+              bonus: "float"
+              commission: "float"
+
+      - type: ColumnPresenceCheck
+        severity: ERROR
+        description: "Ensure required columns exist"
+        params:
+            required_columns:
+            - employee_id
+            - first_name
+            - last_name
+            - email
+            - salary
+
+      # =============================================================================
+      # FIELD-LEVEL VALIDATIONS (6 types)
+      # =============================================================================
+
+      - type: MandatoryFieldCheck
+        severity: ERROR
+        description: "Check mandatory fields are not null"
+        params:
+            fields:
+            - employee_id
+            - first_name
+            - last_name
+
+      - type: RegexCheck
+        severity: ERROR
+        description: "Validate email format using regex"
+        params:
+            field: email
+            pattern: "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
+
+      - type: ValidValuesCheck
+        severity: ERROR
+        description: "Validate status is in allowed set"
+        params:
+            field: status
+            valid_values:
+            - "active"
+            - "inactive"
+            - "probation"
+            - "terminated"
+            - "on_leave"
+
+      - type: RangeCheck
+        severity: ERROR
+        description: "Validate salary is within reasonable range"
+        params:
+            field: salary
+            min_value: 0
+            max_value: 500000
+
+      - type: DateFormatCheck
+        severity: ERROR
+        description: "Validate hire_date format"
+        params:
+            field: hire_date
+            format: "%Y-%m-%d"
+
+      - type: RangeCheck
+        severity: WARNING
+        description: "Validate performance score range"
+        params:
+            field: performance_score
+            min_value: 0.0
+            max_value: 5.0
+
+      # =============================================================================
+      # RECORD-LEVEL VALIDATIONS (3 types)
+      # =============================================================================
+
+      - type: DuplicateRowCheck
+        severity: ERROR
+        description: "Check for duplicate employee records"
+        params:
+            subset:
+            - employee_id
+            - email
+
+      - type: BlankRecordCheck
+        severity: WARNING
+        description: "Detect completely blank rows"
+
+      - type: UniqueKeyCheck
+        severity: ERROR
+        description: "Ensure employee_id is unique"
+        params:
+            key_columns:
+            - employee_id
+
+      # =============================================================================
+      # ADVANCED VALIDATIONS (9 types)
+      # =============================================================================
+
+      - type: StatisticalOutlierCheck
+        severity: WARNING
+        description: "Detect salary outliers using IQR method"
+        params:
+            field: salary
+            method: iqr
+            threshold: 1.5
+
+      - type: CrossFieldComparisonCheck
+        severity: ERROR
+        description: "Ensure salary > 0 for active employees"
+        params:
+            field1: salary
+            field2: status
+            operator: ">"
+            comparison_value: 0
+            condition: "status == 'active'"
+
+      - type: FreshnessCheck
+        severity: WARNING
+        description: "Check last_review_date is not too old"
+        params:
+            date_field: last_review_date
+            max_age_days: 365
+
+      - type: CompletenessCheck
+        severity: WARNING
+        description: "Check email completeness"
+        params:
+            field: email
+            min_completeness_pct: 90.0
+
+      - type: StringLengthCheck
+        severity: WARNING
+        description: "Validate phone number length"
+        params:
+            field: phone
+            min_length: 10
+            max_length: 15
+
+      - type: NumericPrecisionCheck
+        severity: ERROR
+        description: "Validate salary has max 2 decimal places"
+        params:
+            field: salary
+            max_decimal_places: 2
+
+      - type: InlineRegexCheck
+        severity: WARNING
+        description: "Quick inline regex for phone format"
+        params:
+            field: phone
+            pattern: "^\\d{3}-\\d{3}-\\d{4}$"
+
+      - type: InlineBusinessRuleCheck
+        severity: WARNING
+        description: "Manager must have higher salary than employees"
+        params:
+            rule: "manager_id is None or salary > 50000"
+
+      - type: InlineLookupCheck
+        severity: WARNING
+        description: "Department must be in valid list"
+        params:
+            field: department
+            reference_values:
+            - "Engineering"
+            - "Sales"
+            - "Marketing"
+            - "HR"
+            - "Finance"
+            - "Operations"
+
+      # =============================================================================
+      # CONDITIONAL VALIDATION (1 type)
+      # =============================================================================
+
+      - type: ConditionalValidation
+        severity: WARNING
+        description: "Active employees must have recent performance review"
+        params:
+            condition: "status == 'active'"
+            then_validate:
+      - type: FreshnessCheck
+        params:
+              date_field: last_review_date
+              max_age_days: 180
+
+      # =============================================================================
+      # CROSS-FILE VALIDATIONS (3 types - requires multiple files)
+      # These will be tested separately with multi-file configs
+      # =============================================================================
+      # - ReferentialIntegrityCheck
+      # - CrossFileComparisonCheck
+      # - CrossFileDuplicateCheck
+
+      # =============================================================================
+      # DATABASE-ONLY VALIDATIONS (3 types - requires database connection)
+      # These will be tested separately with database configs
+      # =============================================================================
+      # - SQLCustomCheck
+      # - DatabaseReferentialIntegrityCheck
+      # - DatabaseConstraintCheck
+
+      # =============================================================================
+      # ADDITIONAL VALIDATIONS (4 types)
+      # =============================================================================
+
+      - type: BaselineComparisonCheck
+        severity: WARNING
+        description: "Compare current salary stats to baseline"
+        params:
+            field: salary
+            baseline_value: 75000
+            comparison_type: mean
+            threshold_pct: 20.0
+
+      - type: CorrelationCheck
+        severity: WARNING
+        description: "Check correlation between experience and salary"
+        params:
+            field1: years_experience
+            field2: salary
+            min_correlation: 0.3
+
+      - type: DistributionCheck
+        severity: WARNING
+        description: "Check if performance scores follow normal distribution"
+        params:
+            field: performance_score
+            expected_distribution: normal
+            significance_level: 0.05
+
+      - type: TrendDetectionCheck
+        severity: WARNING
+        description: "Detect hiring trends over time"
+        params:
+            date_field: hire_date
+            metric_field: employee_id
+            window_size: 90
+
+      - type: AdvancedAnomalyDetectionCheck
+        severity: WARNING
+        description: "Advanced anomaly detection for salary"
+        params:
+            field: salary
+            method: isolation_forest
+            contamination: 0.1
+
+output:
+  html_report: tests/test_data/comprehensive_report.html
+  json_summary: tests/test_data/comprehensive_summary.json
+  fail_on_error: false

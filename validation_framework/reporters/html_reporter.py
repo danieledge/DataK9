@@ -796,11 +796,7 @@ HTML_TEMPLATE = """
         <div style="background: var(--bg-secondary); padding: 1.5rem; border-radius: 8px; border: 1px solid var(--border); margin-bottom: 2rem;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 1rem;">
                 <h3 style="color: var(--text-primary); margin: 0;">🛡️ Critical Data Attribute Coverage</h3>
-                {% if cda_report.has_tier1_gaps %}
-                <span style="background: var(--error); color: white; padding: 0.375rem 0.75rem; border-radius: 4px; font-size: 0.813rem; font-weight: 600;">
-                    ⚠️ TIER_1 GAPS DETECTED
-                </span>
-                {% elif cda_report.total_gaps > 0 %}
+                {% if cda_report.total_gaps > 0 %}
                 <span style="background: var(--warning); color: #1a1b26; padding: 0.375rem 0.75rem; border-radius: 4px; font-size: 0.813rem; font-weight: 600;">
                     ⚠️ Coverage Gaps
                 </span>
@@ -851,7 +847,6 @@ HTML_TEMPLATE = """
                         <span style="color: var(--error);">✗</span>
                         {% endif %}
                         <span style="color: var(--text-secondary);">{{ field_cov.cda.field }}</span>
-                        <span style="color: var(--text-muted); font-size: 0.688rem;">{{ field_cov.cda.tier.value }}</span>
                     </span>
                     {% endfor %}
                 </div>
@@ -860,7 +855,7 @@ HTML_TEMPLATE = """
             {% endfor %}
 
             <p style="margin: 0; color: var(--text-muted); font-size: 0.813rem; font-style: italic;">
-                CDAs are Critical Data Attributes requiring validation coverage for regulatory compliance. Run <code style="background: var(--bg-tertiary); padding: 0.125rem 0.375rem; border-radius: 3px;">cda-analysis</code> for detailed gap report.
+                CDAs are Critical Data Attributes requiring validation coverage. Run <code style="background: var(--bg-tertiary); padding: 0.125rem 0.375rem; border-radius: 3px;">cda-analysis</code> for detailed gap report.
             </p>
         </div>
         {% endif %}

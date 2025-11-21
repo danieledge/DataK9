@@ -66,7 +66,7 @@ validation_job:
   output:
     html_report: "database_validation_report.html"
     json_summary: "database_validation_summary.json"
-    fail_on_error: false
+    fail_on_error: true  # Exit code 1 when ERROR severity validations fail
     fail_on_warning: false
 
   processing:

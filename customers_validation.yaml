@@ -1,0 +1,123 @@
+# Auto-generated validation configuration
+# Generated from profile of: customers
+# Generated at: 2025-11-19 20:55:29
+# File size: 0.0 MB, Rows: 1,020
+# Recommended chunk size: 2,000,000 rows (Using maximum chunk size (2,000,000). Sufficient memory available.)
+
+validation_job:
+  name: "Validation for customers"
+  description: "Auto-generated from data profile"
+
+settings:
+  chunk_size: 2000000  # Optimized for database format, 13 validations (complex complexity)
+  max_sample_failures: 100
+
+files:
+  - name: "customers"
+    path: ""
+    format: "database"
+
+    validations:
+      - type: "EmptyFileCheck"
+        severity: "ERROR"
+        # Prevent empty file loads
+
+      - type: "UniqueKeyCheck"
+        severity: "ERROR"
+        params:
+          fields:
+            - "first_name"
+        # Field appears to be a unique identifier
+
+      - type: "UniqueKeyCheck"
+        severity: "ERROR"
+        params:
+          fields:
+            - "last_name"
+        # Field appears to be a unique identifier
+
+      - type: "UniqueKeyCheck"
+        severity: "ERROR"
+        params:
+          fields:
+            - "email"
+        # Field appears to be a unique identifier
+
+      - type: "UniqueKeyCheck"
+        severity: "ERROR"
+        params:
+          fields:
+            - "phone"
+        # Field appears to be a unique identifier
+
+      - type: "UniqueKeyCheck"
+        severity: "ERROR"
+        params:
+          fields:
+            - "account_balance"
+        # Field appears to be a unique identifier
+
+      - type: "MandatoryFieldCheck"
+        severity: "ERROR"
+        params:
+          fields:
+            - "customer_id"
+            - "first_name"
+            - "last_name"
+            - "email"
+            - "phone"
+            - "account_balance"
+            - "registration_date"
+            - "status"
+        # 8 fields have >95% completeness
+
+      - type: "RangeCheck"
+        severity: "WARNING"
+        params:
+          field: "customer_id"
+          min_value: 1.0
+          max_value: 1000.0
+        # Values range from 1.0 to 1000.0
+
+      - type: "RangeCheck"
+        severity: "WARNING"
+        params:
+          field: "phone"
+          min_value: 11010435729.0
+          max_value: 19982859166.0
+        # Values range from 11010435729.0 to 19982859166.0
+
+      - type: "RangeCheck"
+        severity: "WARNING"
+        params:
+          field: "account_balance"
+          min_value: 53.08
+          max_value: 13664904.57
+        # Values range from 53.08 to 13664904.57
+
+      - type: "ValidValuesCheck"
+        severity: "ERROR"
+        params:
+          field: "status"
+          valid_values:
+            - "INACTIVE"
+            - "SUSPENDED"
+            - "ACTIVE"
+            - "PENDING"
+            - "UNKNOWN"
+            - "DELETED"
+        # Low cardinality field with 6 unique values
+
+      - type: "RowCountRangeCheck"
+        severity: "WARNING"
+        params:
+          min_rows: 510
+          max_rows: 2040
+        # Expect approximately 1020 rows based on profile
+
+      - type: "DateFormatCheck"
+        severity: "ERROR"
+        params:
+          field: "registration_date"
+          format: "%Y-%m-%d"
+        # Detected date format: %Y-%m-%d

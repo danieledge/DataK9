@@ -193,7 +193,7 @@ validation_job:
   output:
     html_report: "advanced_validation_report.html"
     json_summary: "advanced_validation_summary.json"
-    fail_on_error: false  # Generate report even with errors
+    fail_on_error: true  # Exit code 1 when ERROR severity validations fail
 
 # ============================================================================
 # VALIDATION TYPE REFERENCE
