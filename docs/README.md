@@ -73,8 +73,9 @@ Validate data directly from databases:
 #### Advanced Features
 Power user features and complex scenarios:
 
+- **[Understanding CDAs](guides/advanced/UNDERSTANDING_CDAS.md)** - What are Critical Data Attributes and why track them?
+- **[CDA Gap Analysis Guide](guides/advanced/CDA_GAP_ANALYSIS_GUIDE.md)** - Technical guide for CDA gap detection
 - **[Cross-File Validation Quick Reference](guides/advanced/CROSS_FILE_VALIDATION_QUICK_REFERENCE.md)** - Validate across multiple files
-- **[CDA Gap Analysis Guide](guides/advanced/CDA_GAP_ANALYSIS_GUIDE.md)** - Critical Data Attribute tracking
 - **[Profiler Enhanced Features](guides/advanced/PROFILER_ENHANCED_FEATURES.md)** - Advanced profiling capabilities
 
 ---
@@ -157,8 +158,9 @@ Real-world validation configurations:
 | Error messages | [Error Codes](reference/error-codes.md) |
 | FAQ | [FAQ](using-datak9/faq.md) |
 | **Advanced** |
+| Understand Critical Data Attributes | [Understanding CDAs](guides/advanced/UNDERSTANDING_CDAS.md) |
+| Track CDA validation coverage | [CDA Gap Analysis](guides/advanced/CDA_GAP_ANALYSIS_GUIDE.md) |
 | Cross-file validation | [Cross-File Quick Reference](guides/advanced/CROSS_FILE_VALIDATION_QUICK_REFERENCE.md) |
-| CDA gap analysis | [CDA Gap Analysis](guides/advanced/CDA_GAP_ANALYSIS_GUIDE.md) |
 | Custom validations | [Custom Validations](for-developers/custom-validations.md) |
 
 ---

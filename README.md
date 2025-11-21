@@ -189,7 +189,7 @@ Comprehensive data analysis with:
 
 ### CDA Gap Analysis
 
-Track Critical Data Attributes for audit compliance:
+Track **Critical Data Attributes** (fields essential for regulatory compliance, financial accuracy, or business operations):
 - Define critical fields inline with file configurations
 - Detect validation coverage gaps automatically
 - Generate audit-ready HTML reports
@@ -199,7 +199,8 @@ Track Critical Data Attributes for audit compliance:
 python3 -m validation_framework.cli cda-analysis config.yaml
 ```
 
-**→ [CDA Gap Analysis Guide](docs/guides/advanced/CDA_GAP_ANALYSIS_GUIDE.md)**
+**→ [Understanding CDAs - What & Why](docs/guides/advanced/UNDERSTANDING_CDAS.md)**
+**→ [CDA Gap Analysis Guide - How](docs/guides/advanced/CDA_GAP_ANALYSIS_GUIDE.md)**
 
 ---
 
