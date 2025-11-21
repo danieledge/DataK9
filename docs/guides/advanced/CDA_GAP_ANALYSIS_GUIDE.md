@@ -10,47 +10,37 @@ Organizations face audit requirements to demonstrate that critical data has appr
 
 - **Identifies gaps** - Detects critical fields lacking validation coverage
 - **Supports audits** - Provides evidence of data quality controls
-- **Prioritizes by tier** - Focuses attention on regulatory (TIER_1) fields first
+- **Prioritizes work** - Shows which critical fields need validation
 - **Generates reports** - Creates audit-ready HTML reports
-
-## CDA Tiers
-
-Critical Data Attributes are classified into three tiers:
-
-| Tier | Name | Priority | Description |
-|------|------|----------|-------------|
-| **TIER_1** | Regulatory | Highest | Fields required for regulatory compliance (KYC, GDPR, SOX, etc.) |
-| **TIER_2** | Financial | High | Fields used in financial calculations and reporting |
-| **TIER_3** | Operational | Normal | Fields important for business operations |
 
 ## Quick Start
 
 ### 1. Add CDAs to Your YAML Config
 
-Add a `critical_data_attributes` section at the top level of your validation config:
+Define Critical Data Attributes **inline** with each file configuration:
 
 ```yaml
 validation_job:
   name: "Customer Data Validation"
 
-  # Define Critical Data Attributes at top level
-  critical_data_attributes:
-    customers:  # Maps to file name
-      - field: "customer_id"
-        tier: "TIER_1"
-        description: "Unique customer identifier for regulatory reporting"
-
-      - field: "email"
-        tier: "TIER_1"
-        description: "Customer contact for compliance notifications"
-
-      - field: "account_balance"
-        tier: "TIER_2"
-        description: "Current balance for risk calculations"
-
   files:
     - name: "customers"
       path: "customers.csv"
+
+      # Define Critical Data Attributes inline
+      critical_data_attributes:
+        - field: "customer_id"
+          description: "Unique customer identifier for regulatory reporting"
+          owner: "Data Team"
+
+        - field: "email"
+          description: "Customer contact for compliance notifications"
+          owner: "Compliance Team"
+
+        - field: "account_balance"
+          description: "Current balance for risk calculations"
+          owner: "Finance Team"
+
       validations:
         - type: "MandatoryFieldCheck"
           params:
@@ -72,17 +62,23 @@ The command outputs:
 
 ## YAML Schema
 
-### Critical Data Attribute Definition
+### Critical Data Attribute Definition (Inline - Recommended)
 
 ```yaml
-critical_data_attributes:
-  <file_name>:                    # Must match file name in files section
-    - field: "field_name"         # Required: Column/field name
-      tier: "TIER_1"              # Required: TIER_1, TIER_2, or TIER_3
-      description: "text"         # Optional: Human-readable description
-      owner: "Team Name"          # Optional: Business owner
-      data_steward: "Person"      # Optional: Data steward contact
-      regulatory_reference: "ref" # Optional: Regulatory requirement reference
+files:
+  - name: "<file_name>"
+    path: "path/to/file.csv"
+
+    # Define CDAs inline with the file
+    critical_data_attributes:
+      - field: "field_name"            # Required: Column/field name
+        description: "text"             # Optional: Human-readable description
+        owner: "Team Name"              # Optional: Business owner
+        data_steward: "Person"          # Optional: Data steward contact
+        regulatory_reference: "ref"     # Optional: Regulatory requirement reference
+
+    validations:
+      # Your validations here
 ```
 
 ### Complete Example
@@ -92,34 +88,25 @@ validation_job:
   name: "Financial Data Validation"
   version: "1.0"
 
-  critical_data_attributes:
-    customers:
-      - field: "customer_id"
-        tier: "TIER_1"
-        description: "Primary customer identifier"
-        owner: "Compliance Team"
-        regulatory_reference: "KYC Regulation 4.2.1"
-
-      - field: "tax_id"
-        tier: "TIER_1"
-        description: "Tax identification number"
-        owner: "Finance Team"
-        regulatory_reference: "IRS Form 1099"
-
-      - field: "balance"
-        tier: "TIER_2"
-        description: "Account balance"
-        owner: "Risk Team"
-
-    transactions:
-      - field: "transaction_id"
-        tier: "TIER_1"
-        description: "Unique transaction reference"
-        regulatory_reference: "SOX Section 404"
-
   files:
     - name: "customers"
       path: "customers.csv"
+
+      critical_data_attributes:
+        - field: "customer_id"
+          description: "Primary customer identifier"
+          owner: "Compliance Team"
+          regulatory_reference: "KYC Regulation 4.2.1"
+
+        - field: "tax_id"
+          description: "Tax identification number"
+          owner: "Finance Team"
+          regulatory_reference: "IRS Form 1099"
+
+        - field: "balance"
+          description: "Account balance"
+          owner: "Risk Team"
+
       validations:
         - type: "MandatoryFieldCheck"
           params:
@@ -127,6 +114,12 @@ validation_job:
 
     - name: "transactions"
       path: "transactions.csv"
+
+      critical_data_attributes:
+        - field: "transaction_id"
+          description: "Unique transaction reference"
+          regulatory_reference: "SOX Section 404"
+
       validations:
         - type: "UniqueKeyCheck"
           params:
@@ -148,127 +141,301 @@ python3 -m validation_framework.cli cda-analysis config.yaml -o gaps.html
 python3 -m validation_framework.cli cda-analysis config.yaml -j gaps.json
 ```
 
-### Options
+### CI/CD Integration
 
-| Option | Description |
-|--------|-------------|
-| `-o, --output FILE` | HTML report output path (default: `cda_gap_analysis.html`) |
-| `-j, --json-output FILE` | Generate JSON report for automation |
-| `--fail-on-gaps` | Exit with error code if any gaps detected |
-| `--fail-on-tier1` | Exit with error if TIER_1 gaps detected (default: true) |
+```bash
+# Fail build if any CDA gaps detected
+python3 -m validation_framework.cli cda-analysis config.yaml --fail-on-gaps
+
+# In GitHub Actions
+- name: CDA Gap Analysis
+  run: |
+    python3 -m validation_framework.cli cda-analysis config.yaml --fail-on-gaps
+    if [ $? -ne 0 ]; then
+      echo "CDA gaps detected - blocking deployment"
+      exit 1
+    fi
+```
 
 ### Exit Codes
 
-| Code | Meaning |
-|------|---------|
-| 0 | Success (or gaps exist but not failing on them) |
-| 1 | TIER_1 gaps detected (with `--fail-on-tier1`) or any gaps (with `--fail-on-gaps`) |
+- `0` - No gaps detected (all CDAs covered)
+- `1` - Gaps detected (when using `--fail-on-gaps`)
+- `2` - Command error (bad config, file not found)
 
-## CI/CD Integration
+## Understanding the Report
 
-### GitHub Actions
+### Console Output
+
+```
+╔══════════════════════════════════════════════════════════════╗
+║         CDA Gap Analysis: Financial Data Validation          ║
+╚══════════════════════════════════════════════════════════════╝
+
+📊 File: customers
+   Total CDAs: 3
+   ✓ Covered: 1 (33%)
+   ✗ Gaps: 2 (67%)
+
+   ✓ COVERED FIELDS:
+     • customer_id - Primary customer identifier
+       Validated by: MandatoryFieldCheck
+
+   ✗ GAP FIELDS (need validation):
+     • tax_id - Tax identification number
+     • balance - Account balance
+
+📊 File: transactions
+   Total CDAs: 1
+   ✓ Covered: 1 (100%)
+   ✗ Gaps: 0 (0%)
+
+╔══════════════════════════════════════════════════════════════╗
+║                        Overall Summary                        ║
+╠══════════════════════════════════════════════════════════════╣
+║  Total CDAs:      4                                          ║
+║  Covered:         2 (50%)                                    ║
+║  Gaps:            2 (50%)                                    ║
+╚══════════════════════════════════════════════════════════════╝
+
+⚠️  ATTENTION: 2 critical fields lack validation coverage
+```
+
+### HTML Report Features
+
+- **Coverage summary** - Visual progress bars and percentages
+- **Gap details** - Uncovered fields with descriptions and owners
+- **Validation coverage** - Which validations cover each CDA
+- **Recommendations** - Suggested validations for gaps
+- **Audit-ready** - Formatted for compliance documentation
+
+## CDA Field Metadata
+
+### Required Fields
+
+- `field` - The column/field name (required)
+
+### Optional Fields
+
+- `description` - Human-readable description of field importance
+- `owner` - Business team or person responsible for the field
+- `data_steward` - Data quality steward contact
+- `regulatory_reference` - Regulatory requirement (e.g., "GDPR Article 15", "SOX Section 404")
+
+### Example with Full Metadata
 
 ```yaml
-- name: CDA Gap Analysis
-  run: |
-    python3 -m validation_framework.cli cda-analysis config.yaml \
-      -o cda_report.html \
-      -j cda_results.json
-
-- name: Upload CDA Report
-  uses: actions/upload-artifact@v3
-  with:
-    name: cda-gap-report
-    path: cda_report.html
+critical_data_attributes:
+  - field: "ssn"
+    description: "Social Security Number for tax reporting"
+    owner: "HR Department"
+    data_steward: "Jane Smith (jane@company.com)"
+    regulatory_reference: "IRS Publication 1179"
 ```
 
-### Fail Pipeline on Gaps
+## Legacy Syntax (Still Supported)
+
+For backwards compatibility, the old top-level syntax is still supported:
 
 ```yaml
-- name: CDA Compliance Check
-  run: |
-    python3 -m validation_framework.cli cda-analysis config.yaml --fail-on-gaps
+validation_job:
+  name: "Customer Data Validation"
+
+  # Legacy: Top-level CDAs keyed by file name
+  critical_data_attributes:
+    customers:  # Must match file name below
+      - field: "customer_id"
+        description: "Primary identifier"
+
+  files:
+    - name: "customers"  # Must match key above
+      path: "customers.csv"
+      validations: [...]
 ```
 
-## Report Output
-
-### HTML Report Includes
-
-- **Summary metrics** - Total CDAs, covered, gaps, coverage percentage
-- **Tier breakdown** - Coverage by tier with visual indicators
-- **Audit alerts** - Prominent warnings for TIER_1 gaps
-- **Field details** - Each CDA with coverage status and validations
-- **Printable** - Clean print layout for audit evidence
-
-### JSON Output Structure
-
-```json
-{
-  "job_name": "Financial Data Validation",
-  "timestamp": "2024-01-15T10:30:00",
-  "summary": {
-    "total_cdas": 10,
-    "covered": 8,
-    "gaps": 2,
-    "coverage_percentage": 80.0,
-    "tier1_at_risk": true
-  },
-  "files": [
-    {
-      "name": "customers",
-      "total_cdas": 5,
-      "covered": 4,
-      "gaps": 1,
-      "fields": [
-        {
-          "field": "customer_id",
-          "tier": "TIER_1",
-          "is_covered": true,
-          "validations": ["MandatoryFieldCheck", "UniqueKeyCheck"]
-        }
-      ]
-    }
-  ]
-}
-```
+**Note:** The inline syntax (recommended above) is preferred as it's more intuitive and keeps CDAs with their files.
 
 ## Best Practices
 
-### 1. Define CDAs First
+### 1. Focus on High-Impact Fields
 
-Define critical data attributes before writing validations. This ensures you design validations to cover all critical fields.
+Prioritize CDAs that are:
+- Required for regulatory compliance (KYC, GDPR, SOX, HIPAA)
+- Used in financial calculations
+- Critical for business operations
+- Subject to audit requirements
 
-### 2. Prioritize TIER_1 Coverage
+### 2. Document Clearly
 
-Focus on achieving 100% coverage for TIER_1 (regulatory) fields first. These represent the highest compliance risk.
+Always include:
+- **Description** - Why this field is critical
+- **Owner** - Who is responsible for data quality
+- **Regulatory reference** - Specific compliance requirement
 
-### 3. Document Business Owners
+### 3. Start Small
 
-Include `owner` and `regulatory_reference` fields to create an audit trail showing who is responsible for each critical field.
+Begin with regulatory-required fields, then expand to financial and operational CDAs.
 
-### 4. Run in CI/CD
+### 4. Integrate with CI/CD
 
-Integrate CDA analysis into your CI/CD pipeline to catch coverage gaps before deployment.
+Use `--fail-on-gaps` to prevent deployments when critical fields lack validation:
 
-### 5. Review Regularly
+```yaml
+# .github/workflows/validation.yml
+- name: CDA Gap Analysis
+  run: |
+    python3 -m validation_framework.cli cda-analysis config.yaml \
+      --fail-on-gaps \
+      -o cda_gaps.html
+```
 
-Run CDA analysis when:
-- Adding new data sources
-- Modifying validation configs
-- Preparing for audits
-- Onboarding new data contracts
+### 5. Regular Reviews
 
-## Backwards Compatibility
+Review CDA coverage quarterly:
+- Are all critical fields still relevant?
+- Do new regulatory requirements add CDAs?
+- Are validations comprehensive enough?
 
-The `critical_data_attributes` section is optional. Existing YAML configs without CDAs continue to work normally. CDA analysis simply reports "No CDAs defined" if the section is absent.
+## Common Validation Types for CDAs
 
-## Example Files
+| CDA Type | Recommended Validations |
+|----------|------------------------|
+| Identifiers (customer_id, transaction_id) | MandatoryFieldCheck, UniqueKeyCheck |
+| Email addresses | MandatoryFieldCheck, RegexCheck |
+| Dates (transaction_date, registration_date) | MandatoryFieldCheck, DateFormatCheck, FreshnessCheck |
+| Amounts (balance, transaction_amount) | MandatoryFieldCheck, RangeCheck, NumericPrecisionCheck |
+| Tax IDs, SSNs | MandatoryFieldCheck, RegexCheck, StringLengthCheck |
+| Status fields | MandatoryFieldCheck, ValidValuesCheck |
+| Phone numbers | RegexCheck |
 
-- `examples/cda_validation_example.yaml` - Complete CDA configuration example
-- `examples/sample_config.yaml` - Standard validation (no CDAs)
+## Troubleshooting
 
-## See Also
+### "No critical_data_attributes defined"
 
-- [CLI Guide](../CLI_GUIDE.md) - Complete CLI reference
-- [Configuration Guide](using-datak9/configuration-guide.md) - YAML syntax
-- [Validation Reference](../VALIDATION_REFERENCE.md) - All validation types
+**Cause:** No CDAs found in configuration
+
+**Solution:** Add `critical_data_attributes` list to at least one file config
+
+### Field showing as gap but is validated
+
+**Cause:** Field name mismatch between CDA and validation
+
+**Solution:** Ensure exact field name match (case-sensitive):
+
+```yaml
+critical_data_attributes:
+  - field: "customer_id"  # Exact name
+
+validations:
+  - type: "MandatoryFieldCheck"
+    params:
+      fields: ["customer_id"]  # Must match exactly
+```
+
+### Want to exclude some files from CDA tracking
+
+**Solution:** Simply don't define `critical_data_attributes` for files that don't need tracking
+
+## Example: Full Financial Compliance Config
+
+```yaml
+validation_job:
+  name: "Financial Compliance Validation"
+  version: "1.0"
+
+  files:
+    - name: "customer_accounts"
+      path: "data/accounts.csv"
+
+      critical_data_attributes:
+        # Regulatory - KYC Requirements
+        - field: "customer_id"
+          description: "Unique customer identifier"
+          owner: "Compliance Team"
+          regulatory_reference: "KYC Regulation 4.2.1"
+
+        - field: "tax_id"
+          description: "Tax identification number"
+          owner: "Finance Team"
+          regulatory_reference: "IRS Form 1099"
+
+        # Financial - Risk Calculations
+        - field: "account_balance"
+          description: "Current account balance"
+          owner: "Risk Management"
+          regulatory_reference: "Basel III Capital Requirements"
+
+        - field: "credit_limit"
+          description: "Approved credit limit"
+          owner: "Credit Department"
+
+        # Operational - Contact Requirements
+        - field: "email"
+          description: "Primary contact email"
+          owner: "Customer Service"
+          regulatory_reference: "GDPR Article 13"
+
+      validations:
+        # Identity validation
+        - type: "MandatoryFieldCheck"
+          severity: "ERROR"
+          params:
+            fields: ["customer_id", "tax_id", "email"]
+
+        - type: "UniqueKeyCheck"
+          severity: "ERROR"
+          params:
+            fields: ["customer_id"]
+
+        - type: "RegexCheck"
+          severity: "ERROR"
+          params:
+            field: "tax_id"
+            pattern: "^\\d{2}-\\d{7}$"
+
+        # Financial validation
+        - type: "RangeCheck"
+          severity: "WARNING"
+          params:
+            field: "account_balance"
+            min_value: 0
+            max_value: 10000000
+
+        - type: "RangeCheck"
+          severity: "WARNING"
+          params:
+            field: "credit_limit"
+            min_value: 0
+            max_value: 1000000
+
+        # Contact validation
+        - type: "RegexCheck"
+          severity: "ERROR"
+          params:
+            field: "email"
+            pattern: "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
+```
+
+---
+
+## Summary
+
+CDA Gap Analysis helps you:
+1. **Define** critical fields inline with each file
+2. **Track** which critical fields have validation coverage
+3. **Report** gaps for audit and compliance
+4. **Automate** gap detection in CI/CD pipelines
+
+**Next Steps:**
+- Review your data files and identify critical fields
+- Add `critical_data_attributes` to your configs
+- Run `cda-analysis` to detect gaps
+- Add validations to close gaps
+- Integrate with CI/CD using `--fail-on-gaps`
+
+---
+
+**See also:**
+- [Validation Reference](../../reference/validation-reference.md) - All validation types
+- [Configuration Guide](../../using-datak9/configuration-guide.md) - YAML syntax
+- [CI/CD Integration](../../using-datak9/cicd-integration.md) - Pipeline integration

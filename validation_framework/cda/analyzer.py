@@ -57,6 +57,10 @@ class CDAGapAnalyzer:
         """
         Analyze a complete validation configuration for CDA coverage gaps.
 
+        Supports two CDA definition syntaxes:
+        1. Inline: CDAs defined directly in each file config (recommended)
+        2. Top-level: CDAs defined at top-level keyed by file name (legacy)
+
         Args:
             config: Parsed YAML configuration dictionary
 
@@ -66,12 +70,8 @@ class CDAGapAnalyzer:
         job_config = config.get('validation_job', config)
         job_name = job_config.get('name', 'Unnamed Job')
 
-        # Get CDA definitions from top-level
-        cda_definitions = job_config.get('critical_data_attributes', {})
-
-        if not cda_definitions:
-            self.logger.info("No critical_data_attributes defined - skipping CDA analysis")
-            return CDAAnalysisReport(job_name=job_name)
+        # Get CDA definitions from top-level (legacy syntax)
+        top_level_cdas = job_config.get('critical_data_attributes', {})
 
         files = job_config.get('files', [])
         results = []
@@ -79,12 +79,20 @@ class CDAGapAnalyzer:
         for file_config in files:
             file_name = file_config.get('name', 'unnamed')
 
-            # Get CDAs for this specific file
-            file_cdas = cda_definitions.get(file_name, [])
+            # Check for inline CDAs first (new syntax - preferred)
+            file_cdas = file_config.get('critical_data_attributes', [])
+
+            # Fall back to top-level CDAs if no inline CDAs (legacy syntax)
+            if not file_cdas and top_level_cdas:
+                file_cdas = top_level_cdas.get(file_name, [])
 
             if file_cdas:
                 result = self._analyze_file(file_name, file_cdas, file_config)
                 results.append(result)
+
+        # Log if no CDAs found anywhere
+        if not results:
+            self.logger.info("No critical_data_attributes defined - skipping CDA analysis")
 
         return CDAAnalysisReport(
             job_name=job_name,
