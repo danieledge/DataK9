@@ -187,6 +187,20 @@ Comprehensive data analysis with:
 - PII detection
 - Auto-generated validation configs
 
+### CDA Gap Analysis
+
+Track Critical Data Attributes for audit compliance:
+- Define critical fields with TIER_1/2/3 classification
+- Detect validation coverage gaps automatically
+- Generate audit-ready HTML reports
+- CI/CD integration with `--fail-on-tier1`
+
+```bash
+python3 -m validation_framework.cli cda-analysis config.yaml
+```
+
+**→ [CDA Gap Analysis Guide](docs/CDA_GAP_ANALYSIS_GUIDE.md)**
+
 ---
 
 ## 🔧 Installation

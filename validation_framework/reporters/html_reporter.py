@@ -28,20 +28,21 @@ class HTMLReporter(Reporter):
     - Interactive filtering and sorting
     """
 
-    def generate(self, report: ValidationReport, output_path: str):
+    def generate(self, report: ValidationReport, output_path: str, cda_report=None):
         """
         Generate HTML report from validation results.
 
         Args:
             report: ValidationReport with validation results
             output_path: Path where HTML file should be written
+            cda_report: Optional CDA gap analysis report
 
         Raises:
             IOError: If unable to write report file
         """
         try:
             # Prepare template data
-            template_data = self._prepare_template_data(report)
+            template_data = self._prepare_template_data(report, cda_report)
 
             # Render HTML
             html_content = self._render_html(template_data)
@@ -59,12 +60,13 @@ class HTMLReporter(Reporter):
         except Exception as e:
             raise IOError(f"Error generating HTML report: {str(e)}")
 
-    def _prepare_template_data(self, report: ValidationReport) -> dict:
+    def _prepare_template_data(self, report: ValidationReport, cda_report=None) -> dict:
         """
         Prepare data for template rendering.
 
         Args:
             report: ValidationReport to extract data from
+            cda_report: Optional CDA gap analysis report
 
         Returns:
             Dictionary with template data
@@ -78,6 +80,7 @@ class HTMLReporter(Reporter):
             "total_validations": total_validations,
             "passed_validations": passed_validations,
             "Status": Status,
+            "cda_report": cda_report,
         }
 
     def _render_html(self, template_data: dict) -> str:
@@ -787,6 +790,80 @@ HTML_TEMPLATE = """
                 <div class="value">{{ report.file_reports|length }}</div>
             </div>
         </div>
+
+        {% if cda_report %}
+        <!-- CDA Coverage Section -->
+        <div style="background: var(--bg-secondary); padding: 1.5rem; border-radius: 8px; border: 1px solid var(--border); margin-bottom: 2rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 1rem;">
+                <h3 style="color: var(--text-primary); margin: 0;">🛡️ Critical Data Attribute Coverage</h3>
+                {% if cda_report.has_tier1_gaps %}
+                <span style="background: var(--error); color: white; padding: 0.375rem 0.75rem; border-radius: 4px; font-size: 0.813rem; font-weight: 600;">
+                    ⚠️ TIER_1 GAPS DETECTED
+                </span>
+                {% elif cda_report.total_gaps > 0 %}
+                <span style="background: var(--warning); color: #1a1b26; padding: 0.375rem 0.75rem; border-radius: 4px; font-size: 0.813rem; font-weight: 600;">
+                    ⚠️ Coverage Gaps
+                </span>
+                {% else %}
+                <span style="background: var(--success); color: #1a1b26; padding: 0.375rem 0.75rem; border-radius: 4px; font-size: 0.813rem; font-weight: 600;">
+                    ✓ Full Coverage
+                </span>
+                {% endif %}
+            </div>
+
+            <!-- CDA Summary Metrics -->
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+                <div style="text-align: center; padding: 1rem; background: var(--bg-primary); border-radius: 6px;">
+                    <div style="font-size: 1.5rem; font-weight: 700; color: var(--info);">{{ cda_report.total_cdas }}</div>
+                    <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Total CDAs</div>
+                </div>
+                <div style="text-align: center; padding: 1rem; background: var(--bg-primary); border-radius: 6px;">
+                    <div style="font-size: 1.5rem; font-weight: 700; color: var(--success);">{{ cda_report.total_covered }}</div>
+                    <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Covered</div>
+                </div>
+                <div style="text-align: center; padding: 1rem; background: var(--bg-primary); border-radius: 6px;">
+                    <div style="font-size: 1.5rem; font-weight: 700; color: {% if cda_report.total_gaps > 0 %}var(--error){% else %}var(--success){% endif %};">{{ cda_report.total_gaps }}</div>
+                    <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Gaps</div>
+                </div>
+                <div style="text-align: center; padding: 1rem; background: var(--bg-primary); border-radius: 6px;">
+                    <div style="font-size: 1.5rem; font-weight: 700; color: {% if cda_report.overall_coverage >= 90 %}var(--success){% elif cda_report.overall_coverage >= 70 %}var(--warning){% else %}var(--error){% endif %};">{{ "%.0f"|format(cda_report.overall_coverage) }}%</div>
+                    <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Coverage</div>
+                </div>
+            </div>
+
+            <!-- Per-File CDA Coverage -->
+            {% for file_result in cda_report.file_results %}
+            <div style="margin-bottom: 1rem; padding: 1rem; background: var(--bg-primary); border-radius: 6px; border-left: 3px solid {% if file_result.gap_cdas > 0 %}var(--warning){% else %}var(--success){% endif %};">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                    <strong style="color: var(--text-primary);">{{ file_result.file_name }}</strong>
+                    <span style="font-size: 0.875rem; color: {% if file_result.gap_cdas > 0 %}var(--warning){% else %}var(--success){% endif %};">
+                        {{ file_result.covered_cdas }}/{{ file_result.total_cdas }} covered
+                    </span>
+                </div>
+
+                {% if file_result.field_coverage %}
+                <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+                    {% for field_cov in file_result.field_coverage %}
+                    <span style="display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.25rem 0.5rem; background: var(--bg-secondary); border-radius: 4px; font-size: 0.75rem; border: 1px solid {% if field_cov.is_covered %}var(--success){% else %}var(--error){% endif %};">
+                        {% if field_cov.is_covered %}
+                        <span style="color: var(--success);">✓</span>
+                        {% else %}
+                        <span style="color: var(--error);">✗</span>
+                        {% endif %}
+                        <span style="color: var(--text-secondary);">{{ field_cov.cda.field }}</span>
+                        <span style="color: var(--text-muted); font-size: 0.688rem;">{{ field_cov.cda.tier.value }}</span>
+                    </span>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+
+            <p style="margin: 0; color: var(--text-muted); font-size: 0.813rem; font-style: italic;">
+                CDAs are Critical Data Attributes requiring validation coverage for regulatory compliance. Run <code style="background: var(--bg-tertiary); padding: 0.125rem 0.375rem; border-radius: 3px;">cda-analysis</code> for detailed gap report.
+            </p>
+        </div>
+        {% endif %}
 
         <!-- Status Legend -->
         <div style="background: var(--bg-secondary); padding: 1.5rem; border-radius: 8px; border: 1px solid var(--border); margin-bottom: 2rem;">
