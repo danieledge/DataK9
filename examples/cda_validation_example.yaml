@@ -1,66 +1,50 @@
 # CDA (Critical Data Attribute) Validation Example
-# This demonstrates how to define and track Critical Data Attributes
-# and detect validation coverage gaps.
+# This demonstrates how to define and track Critical Data Attributes inline
+# with each file configuration for intuitive CDA gap analysis.
 
 validation_job:
   name: "Financial Data Validation with CDA Tracking"
   version: "1.0"
-  description: "Example showing CDA gap analysis"
+  description: "Example showing inline CDA gap analysis"
 
-  # Critical Data Attributes - defined at top level for visibility
-  # These are fields that require validation coverage for audit/compliance.
-  critical_data_attributes:
-    # CDAs for customers file
-    customers:
-      - field: "customer_id"
-        description: "Primary customer identifier"
-        owner: "Data Team"
-
-      - field: "email"
-        description: "Customer contact email"
-        owner: "Data Team"
-
-      - field: "tax_id"
-        description: "Tax identification number"
-        owner: "Finance Team"
-
-      - field: "account_balance"
-        description: "Current account balance"
-        owner: "Finance Team"
-
-      - field: "credit_score"
-        description: "Credit score for risk assessment"
-        owner: "Credit Team"
-
-      - field: "phone"
-        description: "Customer contact number"
-        owner: "Operations Team"
-
-      - field: "registration_date"
-        description: "Customer onboarding date"
-        owner: "Operations Team"
-
-    # CDAs for transactions file
-    transactions:
-      - field: "transaction_id"
-        description: "Unique transaction reference"
-        owner: "Audit Team"
-
-      - field: "amount"
-        description: "Transaction value"
-        owner: "Finance Team"
-
-      - field: "transaction_date"
-        description: "Transaction timestamp"
-        owner: "Data Team"
-
-  # File configurations with validations
+  # File configurations with inline CDAs
   files:
     - name: "customers"
       path: "examples/sample_data/customers.csv"
       format: "csv"
       delimiter: ","
       encoding: "utf-8"
+
+      # Define Critical Data Attributes inline with the file
+      # These are fields that require validation coverage for audit/compliance
+      critical_data_attributes:
+        - field: "customer_id"
+          description: "Primary customer identifier"
+          owner: "Data Team"
+
+        - field: "email"
+          description: "Customer contact email"
+          owner: "Data Team"
+
+        - field: "tax_id"
+          description: "Tax identification number"
+          owner: "Finance Team"
+
+        - field: "account_balance"
+          description: "Current account balance"
+          owner: "Finance Team"
+
+        - field: "credit_score"
+          description: "Credit score for risk assessment"
+          owner: "Credit Team"
+
+        - field: "phone"
+          description: "Customer contact number"
+          owner: "Operations Team"
+
+        - field: "registration_date"
+          description: "Customer onboarding date"
+          owner: "Operations Team"
 
       validations:
         # These validations cover CDAs: customer_id, email
@@ -104,6 +88,20 @@ validation_job:
     - name: "transactions"
       path: "examples/sample_data/transactions.csv"
       format: "csv"
+
+      # CDAs for transactions file
+      critical_data_attributes:
+        - field: "transaction_id"
+          description: "Unique transaction reference"
+          owner: "Audit Team"
+
+        - field: "amount"
+          description: "Transaction value"
+          owner: "Finance Team"
+
+        - field: "transaction_date"
+          description: "Transaction timestamp"
+          owner: "Data Team"
 
       validations:
         # Covers CDAs: transaction_id, amount, transaction_date

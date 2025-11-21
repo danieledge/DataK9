@@ -5,32 +5,10 @@ Unit tests for CDA (Critical Data Attribute) gap analysis module.
 import pytest
 from datetime import datetime
 from validation_framework.cda import (
-    CDADefinition, CDATier, CDAFieldCoverage,
+    CDADefinition, CDAFieldCoverage,
     CDAGapResult, CDAGapAnalyzer, CDAReporter
 )
 from validation_framework.cda.models import CDAAnalysisReport
-
-
-class TestCDATier:
-    """Tests for CDATier enum."""
-
-    def test_tier_values(self):
-        """Test tier enum values."""
-        assert CDATier.TIER_1.value == "TIER_1"
-        assert CDATier.TIER_2.value == "TIER_2"
-        assert CDATier.TIER_3.value == "TIER_3"
-
-    def test_tier_display_names(self):
-        """Test tier display names."""
-        assert CDATier.TIER_1.display_name == "Regulatory"
-        assert CDATier.TIER_2.display_name == "Financial"
-        assert CDATier.TIER_3.display_name == "Operational"
-
-    def test_tier_priorities(self):
-        """Test tier priorities (1 = highest)."""
-        assert CDATier.TIER_1.priority == 1
-        assert CDATier.TIER_2.priority == 2
-        assert CDATier.TIER_3.priority == 3
 
 
 class TestCDADefinition:
@@ -40,20 +18,17 @@ class TestCDADefinition:
         """Test creating CDA from dict with basic fields."""
         data = {
             'field': 'customer_id',
-            'tier': 'TIER_1',
             'description': 'Customer identifier'
         }
         cda = CDADefinition.from_dict(data)
 
         assert cda.field == 'customer_id'
-        assert cda.tier == CDATier.TIER_1
         assert cda.description == 'Customer identifier'
 
     def test_from_dict_full(self):
         """Test creating CDA from dict with all fields."""
         data = {
             'field': 'tax_id',
-            'tier': 'TIER_1',
             'description': 'Tax identification number',
             'owner': 'Finance Team',
             'data_steward': 'John Smith',
@@ -66,16 +41,6 @@ class TestCDADefinition:
         assert cda.data_steward == 'John Smith'
         assert cda.regulatory_reference == 'IRS Form 1099'
 
-    def test_from_dict_invalid_tier(self):
-        """Test that invalid tier defaults to TIER_3."""
-        data = {
-            'field': 'some_field',
-            'tier': 'INVALID_TIER'
-        }
-        cda = CDADefinition.from_dict(data)
-
-        assert cda.tier == CDATier.TIER_3
-
 
 class TestCDAFieldCoverage:
     """Tests for CDAFieldCoverage model."""
@@ -84,7 +49,6 @@ class TestCDAFieldCoverage:
         """Test coverage tracking for covered field."""
         cda = CDADefinition(
             field='email',
-            tier=CDATier.TIER_1,
             description='Email address'
         )
         coverage = CDAFieldCoverage(
@@ -102,7 +66,6 @@ class TestCDAFieldCoverage:
         """Test coverage tracking for uncovered field."""
         cda = CDADefinition(
             field='tax_id',
-            tier=CDATier.TIER_1,
             description='Tax ID'
         )
         coverage = CDAFieldCoverage(
@@ -150,36 +113,55 @@ class TestCDAGapResult:
         assert with_gaps.has_gaps
         assert not without_gaps.has_gaps
 
-    def test_tier_coverage(self):
-        """Test tier coverage statistics."""
-        result = CDAGapResult(
-            file_name='customers',
-            tier_coverage={
-                CDATier.TIER_1: {'total': 3, 'covered': 2, 'gaps': 1},
-                CDATier.TIER_2: {'total': 2, 'covered': 2, 'gaps': 0}
-            }
-        )
-
-        tier1_stats = result.get_tier_coverage(CDATier.TIER_1)
-        assert tier1_stats['total'] == 3
-        assert tier1_stats['gaps'] == 1
-
-        assert result.get_tier_percentage(CDATier.TIER_1) == pytest.approx(66.67, rel=0.01)
-        assert result.get_tier_percentage(CDATier.TIER_2) == 100.0
-
 
 class TestCDAGapAnalyzer:
     """Tests for CDAGapAnalyzer."""
 
-    def test_analyze_basic_config(self):
-        """Test analyzing a basic config with CDAs."""
+    def test_analyze_inline_cdas(self):
+        """Test analyzing config with inline CDAs (new syntax)."""
+        config = {
+            'validation_job': {
+                'name': 'Test Job',
+                'files': [
+                    {
+                        'name': 'customers',
+                        'path': 'customers.csv',
+                        'critical_data_attributes': [
+                            {'field': 'customer_id', 'description': 'ID'},
+                            {'field': 'email', 'description': 'Email'}
+                        ],
+                        'validations': [
+                            {
+                                'type': 'MandatoryFieldCheck',
+                                'params': {'fields': ['customer_id']}
+                            }
+                        ]
+                    }
+                ]
+            }
+        }
+
+        analyzer = CDAGapAnalyzer()
+        report = analyzer.analyze(config)
+
+        assert report.job_name == 'Test Job'
+        assert len(report.results) == 1
+
+        result = report.results[0]
+        assert result.file_name == 'customers'
+        assert result.total_cdas == 2
+        assert result.covered_cdas == 1  # customer_id covered
+        assert result.gap_cdas == 1  # email not covered
+
+    def test_analyze_legacy_top_level_cdas(self):
+        """Test analyzing config with top-level CDAs (legacy syntax)."""
         config = {
             'validation_job': {
                 'name': 'Test Job',
                 'critical_data_attributes': {
                     'customers': [
-                        {'field': 'customer_id', 'tier': 'TIER_1', 'description': 'ID'},
-                        {'field': 'email', 'tier': 'TIER_1', 'description': 'Email'}
+                        {'field': 'customer_id', 'description': 'ID'},
+                        {'field': 'email', 'description': 'Email'}
                     ]
                 },
                 'files': [
@@ -209,6 +191,37 @@ class TestCDAGapAnalyzer:
         assert result.covered_cdas == 1  # customer_id covered
         assert result.gap_cdas == 1  # email not covered
 
+    def test_analyze_inline_overrides_top_level(self):
+        """Test that inline CDAs take precedence over top-level."""
+        config = {
+            'validation_job': {
+                'name': 'Priority Test',
+                'critical_data_attributes': {
+                    'customers': [
+                        {'field': 'should_be_ignored', 'description': 'Top level'}
+                    ]
+                },
+                'files': [
+                    {
+                        'name': 'customers',
+                        'critical_data_attributes': [
+                            {'field': 'inline_field', 'description': 'Inline'}
+                        ],
+                        'validations': [
+                            {'type': 'MandatoryFieldCheck', 'params': {'fields': ['inline_field']}}
+                        ]
+                    }
+                ]
+            }
+        }
+
+        analyzer = CDAGapAnalyzer()
+        report = analyzer.analyze(config)
+
+        result = report.results[0]
+        assert result.total_cdas == 1
+        assert result.field_coverage[0].cda.field == 'inline_field'
+
     def test_analyze_no_cdas(self):
         """Test analyzing config without CDAs."""
         config = {
@@ -231,15 +244,13 @@ class TestCDAGapAnalyzer:
         config = {
             'validation_job': {
                 'name': 'Full Coverage',
-                'critical_data_attributes': {
-                    'data': [
-                        {'field': 'id', 'tier': 'TIER_1', 'description': 'ID'},
-                        {'field': 'value', 'tier': 'TIER_2', 'description': 'Value'}
-                    ]
-                },
                 'files': [
                     {
                         'name': 'data',
+                        'critical_data_attributes': [
+                            {'field': 'id', 'description': 'ID'},
+                            {'field': 'value', 'description': 'Value'}
+                        ],
                         'validations': [
                             {'type': 'MandatoryFieldCheck', 'params': {'fields': ['id', 'value']}}
                         ]
@@ -261,14 +272,12 @@ class TestCDAGapAnalyzer:
         config = {
             'validation_job': {
                 'name': 'Multi-validation',
-                'critical_data_attributes': {
-                    'users': [
-                        {'field': 'email', 'tier': 'TIER_1', 'description': 'Email'}
-                    ]
-                },
                 'files': [
                     {
                         'name': 'users',
+                        'critical_data_attributes': [
+                            {'field': 'email', 'description': 'Email'}
+                        ],
                         'validations': [
                             {'type': 'MandatoryFieldCheck', 'params': {'fields': ['email']}},
                             {'type': 'RegexCheck', 'params': {'field': 'email', 'pattern': '.*@.*'}}
@@ -289,46 +298,21 @@ class TestCDAGapAnalyzer:
         assert 'MandatoryFieldCheck' in email_coverage.covering_validations
         assert 'RegexCheck' in email_coverage.covering_validations
 
-    def test_tier1_at_risk(self):
-        """Test detection of TIER_1 gaps."""
-        config = {
-            'validation_job': {
-                'name': 'Tier 1 Risk',
-                'critical_data_attributes': {
-                    'accounts': [
-                        {'field': 'tax_id', 'tier': 'TIER_1', 'description': 'Tax ID'},
-                        {'field': 'balance', 'tier': 'TIER_2', 'description': 'Balance'}
-                    ]
-                },
-                'files': [
-                    {
-                        'name': 'accounts',
-                        'validations': [
-                            {'type': 'RangeCheck', 'params': {'field': 'balance', 'min_value': 0}}
-                        ]
-                    }
-                ]
-            }
-        }
-
-        analyzer = CDAGapAnalyzer()
-        report = analyzer.analyze(config)
-
-        # tax_id (TIER_1) is not covered
-        assert report.tier1_at_risk
-
     def test_recommendations(self):
         """Test recommendation generation for gaps."""
         config = {
             'validation_job': {
                 'name': 'Test',
-                'critical_data_attributes': {
-                    'data': [
-                        {'field': 'reg_field', 'tier': 'TIER_1', 'description': 'Regulatory'},
-                        {'field': 'fin_field', 'tier': 'TIER_2', 'description': 'Financial'}
-                    ]
-                },
-                'files': [{'name': 'data', 'validations': []}]
+                'files': [
+                    {
+                        'name': 'data',
+                        'critical_data_attributes': [
+                            {'field': 'reg_field', 'description': 'Regulatory'},
+                            {'field': 'fin_field', 'description': 'Financial'}
+                        ],
+                        'validations': []
+                    }
+                ]
             }
         }
 
@@ -339,9 +323,6 @@ class TestCDAGapAnalyzer:
         recommendations = analyzer.get_recommendations(result)
 
         assert len(recommendations) == 2
-        # Should be sorted by priority (TIER_1 first)
-        assert recommendations[0]['tier'] == 'TIER_1'
-        assert recommendations[1]['tier'] == 'TIER_2'
         assert 'MandatoryFieldCheck' in recommendations[0]['suggested_validations']
 
 
@@ -372,7 +353,7 @@ class TestCDAReporter:
 
     def test_generate_html_with_gaps(self):
         """Test HTML report includes gap alerts."""
-        cda = CDADefinition(field='tax_id', tier=CDATier.TIER_1, description='Tax ID')
+        cda = CDADefinition(field='tax_id', description='Tax ID')
         coverage = CDAFieldCoverage(cda=cda, is_covered=False)
 
         report = CDAAnalysisReport(
@@ -383,8 +364,7 @@ class TestCDAReporter:
                     total_cdas=1,
                     covered_cdas=0,
                     gap_cdas=1,
-                    field_coverage=[coverage],
-                    tier_coverage={CDATier.TIER_1: {'total': 1, 'covered': 0, 'gaps': 1}}
+                    field_coverage=[coverage]
                 )
             ]
         )
@@ -392,34 +372,30 @@ class TestCDAReporter:
         reporter = CDAReporter()
         html = reporter.generate_html(report)
 
-        assert 'AUDIT RISK' in html
         assert 'tax_id' in html
-        assert 'No validation coverage' in html
 
 
 class TestCDAIntegration:
     """Integration tests for CDA analysis."""
 
     def test_full_analysis_workflow(self):
-        """Test complete analysis workflow."""
+        """Test complete analysis workflow with inline CDAs."""
         # Simulate a realistic config
         config = {
             'validation_job': {
                 'name': 'Financial Data Validation',
-                'critical_data_attributes': {
-                    'customers': [
-                        {'field': 'customer_id', 'tier': 'TIER_1', 'description': 'Primary ID'},
-                        {'field': 'email', 'tier': 'TIER_1', 'description': 'Contact email'},
-                        {'field': 'tax_id', 'tier': 'TIER_1', 'description': 'Tax number'},
-                        {'field': 'balance', 'tier': 'TIER_2', 'description': 'Account balance'},
-                        {'field': 'phone', 'tier': 'TIER_3', 'description': 'Phone number'}
-                    ]
-                },
                 'files': [
                     {
                         'name': 'customers',
                         'path': 'customers.csv',
                         'format': 'csv',
+                        'critical_data_attributes': [
+                            {'field': 'customer_id', 'description': 'Primary ID'},
+                            {'field': 'email', 'description': 'Contact email'},
+                            {'field': 'tax_id', 'description': 'Tax number'},
+                            {'field': 'balance', 'description': 'Account balance'},
+                            {'field': 'phone', 'description': 'Phone number'}
+                        ],
                         'validations': [
                             {'type': 'MandatoryFieldCheck', 'params': {'fields': ['customer_id', 'email']}},
                             {'type': 'RegexCheck', 'params': {'field': 'email', 'pattern': '.*@.*'}},
@@ -442,9 +418,6 @@ class TestCDAIntegration:
         assert result.total_cdas == 5
         assert result.covered_cdas == 3  # customer_id, email, balance
         assert result.gap_cdas == 2  # tax_id, phone
-
-        # tax_id is TIER_1 gap
-        assert report.tier1_at_risk
 
         # Generate HTML report
         reporter = CDAReporter()
