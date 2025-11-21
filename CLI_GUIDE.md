@@ -305,7 +305,9 @@ files:
 
 ### cda-analysis - Critical Data Attribute Gap Analysis
 
-Analyzes your validation configuration to detect gaps in Critical Data Attribute coverage. Essential for audit compliance.
+Analyzes your validation configuration to detect gaps in Critical Data Attribute coverage. Essential for audit compliance and demonstrating data quality controls.
+
+**What are CDAs?** Critical Data Attributes are fields essential for regulatory compliance, financial accuracy, or business operations (e.g., SSN, transaction IDs, account balances).
 
 **Syntax:**
 ```bash
@@ -313,7 +315,7 @@ python3 -m validation_framework.cli cda-analysis <config_file> [options]
 ```
 
 **Arguments:**
-- `config_file` (required) - Path to YAML configuration file with `critical_data_attributes` section
+- `config_file` (required) - Path to YAML configuration file with `critical_data_attributes` defined
 
 **Options:**
 
@@ -322,9 +324,8 @@ python3 -m validation_framework.cli cda-analysis <config_file> [options]
 | `--output` | `-o` | Path for HTML gap analysis report | `cda_gap_analysis.html` |
 | `--json-output` | `-j` | Path for JSON output (for automation) | None |
 | `--fail-on-gaps` | | Exit with error if any gaps detected | False |
-| `--fail-on-tier1` | | Exit with error if TIER_1 gaps detected | True |
 
-**Examples:**
+**Basic Examples:**
 
 ```bash
 # Basic CDA gap analysis
@@ -336,23 +337,106 @@ python3 -m validation_framework.cli cda-analysis config.yaml -o gaps.html
 # Generate JSON for CI/CD integration
 python3 -m validation_framework.cli cda-analysis config.yaml -j gaps.json
 
-# Fail pipeline if any gaps detected
+# Fail pipeline if any gaps detected (recommended for CI/CD)
 python3 -m validation_framework.cli cda-analysis config.yaml --fail-on-gaps
 ```
 
-**CDA Tiers:**
+**Example Configuration with CDAs:**
 
-| Tier | Name | Priority | Description |
-|------|------|----------|-------------|
-| TIER_1 | Regulatory | Highest | Fields required for regulatory compliance |
-| TIER_2 | Financial | High | Fields used in financial calculations |
-| TIER_3 | Operational | Normal | Fields important for business operations |
+```yaml
+validation_job:
+  name: "Financial Data Validation"
+
+  files:
+    - name: "transactions"
+      path: "transactions.csv"
+
+      # Define Critical Data Attributes inline
+      critical_data_attributes:
+        - field: "transaction_id"
+          description: "Unique transaction identifier"
+          owner: "Compliance Team"
+          regulatory_reference: "SOX Section 404"
+
+        - field: "amount"
+          description: "Transaction amount"
+          owner: "Finance Team"
+
+        - field: "customer_id"
+          description: "Customer identifier for KYC"
+          owner: "Compliance Team"
+          regulatory_reference: "KYC Regulation 4.2.1"
+
+      validations:
+        # transaction_id and customer_id covered
+        - type: "MandatoryFieldCheck"
+          params:
+            fields: ["transaction_id", "customer_id"]
+
+        # amount not validated - will be flagged as GAP!
+```
+
+**Console Output Example:**
+
+```
+╔══════════════════════════════════════════════════════════════╗
+║         CDA Gap Analysis: Financial Data Validation          ║
+╚══════════════════════════════════════════════════════════════╝
+
+📊 File: transactions
+   Total CDAs: 3
+   ✓ Covered: 2 (67%)
+   ✗ Gaps: 1 (33%)
+
+   ✓ COVERED FIELDS:
+     • transaction_id - Unique transaction identifier
+       Validated by: MandatoryFieldCheck
+     • customer_id - Customer identifier for KYC
+       Validated by: MandatoryFieldCheck
+
+   ✗ GAP FIELDS (need validation):
+     • amount - Transaction amount
+       Owner: Finance Team
+       RECOMMENDATION: Add RangeCheck or MandatoryFieldCheck
+
+╔══════════════════════════════════════════════════════════════╗
+║                        Overall Summary                        ║
+╠══════════════════════════════════════════════════════════════╣
+║  Total CDAs:      3                                          ║
+║  Covered:         2 (67%)                                    ║
+║  Gaps:            1 (33%)                                    ║
+╚══════════════════════════════════════════════════════════════╝
+
+⚠️  ATTENTION: 1 critical field lacks validation coverage
+```
 
 **Exit Codes:**
-- `0` - Success (all CDAs covered or gaps acceptable)
-- `1` - TIER_1 gaps detected (with `--fail-on-tier1`) or any gaps (with `--fail-on-gaps`)
+- `0` - Success (all CDAs covered)
+- `1` - Gaps detected (with `--fail-on-gaps`)
+- `2` - Command error (bad config, file not found)
 
-**See also:** [CDA Gap Analysis Guide](docs/CDA_GAP_ANALYSIS_GUIDE.md) for complete documentation.
+**Integration with CI/CD:**
+
+```yaml
+# GitHub Actions example
+- name: CDA Gap Analysis
+  run: |
+    python3 -m validation_framework.cli cda-analysis config.yaml \
+      --fail-on-gaps \
+      -j cda_gaps.json \
+      -o cda_report.html
+
+- name: Upload CDA Report
+  if: failure()
+  uses: actions/upload-artifact@v3
+  with:
+    name: cda-gap-report
+    path: cda_report.html
+```
+
+**See also:**
+- **[Understanding CDAs Guide](docs/guides/advanced/UNDERSTANDING_CDAS.md)** - What, why, and how to use CDAs
+- **[CDA Gap Analysis Guide](docs/guides/advanced/CDA_GAP_ANALYSIS_GUIDE.md)** - Complete technical documentation
 
 ---
 
