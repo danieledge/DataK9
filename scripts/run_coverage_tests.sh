@@ -29,7 +29,7 @@ NC='\033[0m' # No Color
 # Configuration
 TEST_DIR="tests"
 COVERAGE_DIR="htmlcov"
-MIN_COVERAGE=75  # Target minimum coverage percentage
+MIN_COVERAGE=48  # Minimum coverage percentage required (matches pytest.ini)
 TIMEOUT=300  # Test timeout in seconds
 
 ################################################################################
