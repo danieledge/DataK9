@@ -31,7 +31,7 @@ WHITE='\033[1;37m'
 NC='\033[0m' # No Color
 
 # Test configuration
-MIN_COVERAGE=43  # Minimum coverage percentage required
+MIN_COVERAGE=48  # Minimum coverage percentage required (matches pytest.ini)
 TEST_DIR="tests"
 COVERAGE_DIR="htmlcov"
 COVERAGE_REPORT="coverage_report.txt"
@@ -335,7 +335,7 @@ show_menu() {
     echo "     → Quick validation (skips performance tests)"
     echo ""
     echo "  12) Run with Coverage Report"
-    echo "     → All tests + detailed coverage analysis (requires ≥43%)"
+    echo "     → All tests + detailed coverage analysis (requires ≥48%)"
     echo ""
     echo "  13) Run Specific Test File"
     echo "     → Run a single test file by path"
