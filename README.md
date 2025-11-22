@@ -54,7 +54,7 @@ DataK9 is a Python framework for validating data quality before loading to datab
 ## 📚 Documentation
 
 <details>
-<summary><b>📖 Complete Documentation Index</b> (click to expand)</summary>
+<summary><b>📖 Complete Documentation Index</b> ▸ <i>Click to expand</i></summary>
 
 ### 🚀 Getting Started
 - **[5-Minute Quickstart](docs/getting-started/quickstart-5min.md)** - Get running fast
@@ -103,7 +103,7 @@ DataK9 is a Python framework for validating data quality before loading to datab
 ## 🎯 Key Features
 
 <details>
-<summary><b>📁 File & Database Validation</b></summary>
+<summary><b>📁 File & Database Validation</b> ▸ <i>Click to expand</i></summary>
 
 ### File Formats Supported
 - **CSV** - Any delimiter, custom encoding, headers
@@ -123,7 +123,7 @@ DataK9 is a Python framework for validating data quality before loading to datab
 </details>
 
 <details>
-<summary><b>✅ 35 Built-In Validations</b></summary>
+<summary><b>✅ 35 Built-In Validations</b> ▸ <i>Click to expand</i></summary>
 
 DataK9 includes 35 built-in validation types across 10 categories:
 
@@ -162,7 +162,7 @@ DataK9 includes 35 built-in validation types across 10 categories:
 </details>
 
 <details>
-<summary><b>📊 Data Profiling</b></summary>
+<summary><b>📊 Data Profiling</b> ▸ <i>Click to expand</i></summary>
 
 Automatically analyze your data and generate validation configurations:
 
@@ -187,7 +187,7 @@ python3 -m validation_framework.cli profile data.csv
 </details>
 
 <details>
-<summary><b>🎨 DataK9 Studio (Visual IDE)</b></summary>
+<summary><b>🎨 DataK9 Studio (Visual IDE)</b> ▸ <i>Click to expand</i></summary>
 
 Point-and-click configuration builder with no coding required:
 
@@ -206,7 +206,7 @@ Point-and-click configuration builder with no coding required:
 </details>
 
 <details>
-<summary><b>🔍 CDA Gap Analysis</b></summary>
+<summary><b>🔍 CDA Gap Analysis</b> ▸ <i>Click to expand</i></summary>
 
 Track **Critical Data Attributes** (fields essential for regulatory compliance, financial accuracy, or business operations):
 
@@ -249,7 +249,7 @@ files:
 ## 🚀 Performance
 
 <details>
-<summary><b>⚡ Benchmarks (Polars Backend - Recommended)</b></summary>
+<summary><b>⚡ Benchmarks (Polars Backend - Recommended)</b> ▸ <i>Click to expand</i></summary>
 
 | File Size | Format | Rows | Time | Memory | Platform |
 |-----------|--------|------|------|--------|----------|
@@ -289,7 +289,7 @@ files:
 ## 🔌 Integration
 
 <details>
-<summary><b>🔄 AutoSys Job Scheduling</b></summary>
+<summary><b>🔄 AutoSys Job Scheduling</b> ▸ <i>Click to expand</i></summary>
 
 ```bash
 # AutoSys JIL Definition
@@ -310,7 +310,7 @@ condition: success(VALIDATE_DATA)
 </details>
 
 <details>
-<summary><b>🔧 CI/CD Pipelines</b></summary>
+<summary><b>🔧 CI/CD Pipelines</b> ▸ <i>Click to expand</i></summary>
 
 ### GitHub Actions
 
@@ -359,7 +359,7 @@ jobs:
 ## 📦 Installation
 
 <details>
-<summary><b>Installation Instructions</b></summary>
+<summary><b>Installation Instructions</b> ▸ <i>Click to expand</i></summary>
 
 ### Basic Installation
 
@@ -406,7 +406,7 @@ pip install cx_Oracle
 ## 💡 Examples
 
 <details>
-<summary><b>Quick Examples</b></summary>
+<summary><b>Quick Examples</b> ▸ <i>Click to expand</i></summary>
 
 ### Basic File Validation
 
@@ -466,7 +466,7 @@ database:
 ## 🛠️ CLI Commands
 
 <details>
-<summary><b>Common Commands</b></summary>
+<summary><b>Common Commands</b> ▸ <i>Click to expand</i></summary>
 
 ### Validate Data
 
