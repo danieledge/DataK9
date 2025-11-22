@@ -127,9 +127,8 @@ test-data/ultimate/
 ../test-data/*.zip
 ../test-data/README.md
 
-# Archive folders (keep structure, not content)
-archive/test-reports/
-archive/demo-examples/
+# Archive folders (entire folders ignored)
+archive/
 docs/archive/
 
 # OS
