@@ -1,1 +1,1 @@
-scripts/run_tests.sh
+scripts/test_runner.sh

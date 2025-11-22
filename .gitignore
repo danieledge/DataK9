@@ -51,6 +51,7 @@ coverage_report.txt
 .hypothesis/
 test-results/
 test_results/
+test-reports/
 junit.xml
 pytest.xml
 nosetests.xml
