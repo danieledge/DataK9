@@ -214,6 +214,21 @@ class PIIDetector:
         # Pattern-based detection (value analysis)
         pattern_matches = self._check_value_patterns(sample_values)
 
+        # CRITICAL FIX: Prevent credit card detection when column semantics indicate non-card ID
+        # Addresses ChatGPT review: "Account" fields should never be flagged as PCI-DSS credit cards
+        if semantic_match and semantic_match.get("pii_type") in ["account_number", "customer_id", "user_id"]:
+            # Remove any credit_card matches from pattern detection
+            original_count = len(pattern_matches)
+            pattern_matches = [
+                m for m in pattern_matches
+                if m.get("pii_type") != "credit_card"
+            ]
+            if len(pattern_matches) < original_count:
+                self.logger.debug(
+                    f"Credit card detection blocked for '{column_name}': "
+                    f"Column semantically identified as {semantic_match.get('pii_type')}"
+                )
+
         # Combine results
         all_matches = []
 
@@ -314,38 +329,53 @@ class PIIDetector:
         for pii_type, pattern_re in self.compiled_patterns.items():
             match_count = 0
             matched_values = []
+            all_matched_values = []  # Store all matches for Luhn validation
 
             for value in samples:
                 if pattern_re.search(value):
                     match_count += 1
-                    if len(matched_values) < 5:  # Keep up to 5 examples
+                    all_matched_values.append(value)
+                    if len(matched_values) < 5:  # Keep up to 5 examples for display
                         matched_values.append(value)
 
             if match_count > 0:
                 # Calculate confidence based on match percentage
                 confidence = match_count / len(samples)
 
-                # CRITICAL FIX: Special validation for credit cards (Luhn algorithm)
-                # Reject patterns that contain letters (e.g., "AAA999999" is NOT a credit card)
+                # CRITICAL FIX: Enhanced credit card validation (Luhn algorithm on large sample)
+                # Addresses ChatGPT review: Sample 100+ values, require 80%+ Luhn pass rate
                 if pii_type == 'credit_card':
                     # First check: Do any values contain letters? If so, NOT credit cards
                     contains_letters = any(
                         any(c.isalpha() for c in str(v))
-                        for v in matched_values
+                        for v in all_matched_values[:100]  # Check first 100 matches
                     )
 
                     if contains_letters:
                         # Contains letters - definitely not credit cards, skip this detection
                         continue
 
-                    # Second check: Luhn algorithm validation
-                    valid_cc_count = sum(
-                        1 for v in matched_values
+                    # Second check: Luhn algorithm validation on larger sample
+                    # Sample up to 100 matched values for Luhn validation
+                    luhn_sample = all_matched_values[:100]
+                    luhn_valid_count = sum(
+                        1 for v in luhn_sample
                         if self._validate_credit_card_luhn(v)
                     )
-                    if valid_cc_count == 0:
-                        # No valid credit cards found via Luhn, reduce confidence significantly
-                        confidence *= 0.1  # Reduced from 0.3 to 0.1 to be more strict
+
+                    # Calculate Luhn pass ratio
+                    luhn_ratio = luhn_valid_count / len(luhn_sample) if luhn_sample else 0.0
+
+                    # Require strong Luhn support: at least 80% of samples must pass
+                    # This prevents random numeric IDs (~10% Luhn pass rate) from being flagged
+                    if luhn_ratio < 0.80:
+                        # Not a true credit card column - skip this detection
+                        self.logger.debug(
+                            f"Credit card detection rejected for pattern match: "
+                            f"Luhn pass rate {luhn_ratio:.1%} below 80% threshold "
+                            f"({luhn_valid_count}/{len(luhn_sample)} samples)"
+                        )
+                        continue
 
                 # Only report if confidence meets threshold
                 if confidence >= self.min_confidence:
