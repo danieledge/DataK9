@@ -1281,6 +1281,52 @@ class DataProfiler:
                         confidence=80.0
                     ))
 
+            # Semantic pattern-based suggestions
+            from .semantic_patterns import SemanticPatternDetector
+
+            if col.type_info.sample_values:
+                # Detect semantic patterns in the data
+                patterns = SemanticPatternDetector.detect_patterns(
+                    col.type_info.sample_values,
+                    min_confidence=0.30  # 30% threshold for suggestions
+                )
+
+                # Add suggestions for detected patterns
+                for pattern_type, pattern_match in patterns.items():
+                    pattern_suggestion = SemanticPatternDetector.suggest_validation(pattern_type)
+                    if pattern_suggestion:
+                        # Adjust confidence based on match percentage
+                        adjusted_confidence = pattern_match.confidence * 100
+
+                        suggestions.append(ValidationSuggestion(
+                            validation_type=pattern_suggestion['validation_type'],
+                            severity=pattern_suggestion['severity'],
+                            params={
+                                **pattern_suggestion['params'],
+                                'field': col.name
+                            },
+                            reason=f"{pattern_suggestion['reason']} ({pattern_match.confidence*100:.1f}% of samples match)",
+                            confidence=adjusted_confidence
+                        ))
+
+            # Semantic type-aware suggestions (based on column semantics)
+            semantic_type = getattr(col.statistics, 'semantic_type', None)
+
+            if semantic_type == 'amount' or 'amount' in col.name.lower() or 'price' in col.name.lower():
+                # Amount fields should be non-negative
+                if col.type_info.inferred_type in ['integer', 'float']:
+                    suggestions.append(ValidationSuggestion(
+                        validation_type="RangeCheck",
+                        severity="ERROR",
+                        params={
+                            "field": col.name,
+                            "min_value": 0,
+                            "max_value": col.statistics.max_value if col.statistics.max_value else 999999999
+                        },
+                        reason="Amount fields should be non-negative",
+                        confidence=85.0
+                    ))
+
         # Add mandatory field check if any mandatory fields found
         if mandatory_fields:
             suggestions.append(ValidationSuggestion(
