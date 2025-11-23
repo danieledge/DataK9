@@ -521,6 +521,191 @@ class ProfileHTMLReporter:
             color: white;
         }}
 
+        /* Validation Coverage Card */
+        .validation-coverage-card {{
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 25px;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+        }}
+
+        .coverage-metrics {{
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }}
+
+        .metric {{
+            background: rgba(255, 255, 255, 0.1);
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+            backdrop-filter: blur(10px);
+        }}
+
+        .metric.highlight-new {{
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.3) 0%, rgba(236, 72, 153, 0.3) 100%);
+            border: 2px solid #bb9af7;
+        }}
+
+        .metric-value {{
+            font-size: 2em;
+            font-weight: bold;
+            color: #ffffff;
+            line-height: 1;
+            margin-bottom: 5px;
+        }}
+
+        .metric-label {{
+            font-size: 0.75em;
+            color: #e0e0e0;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }}
+
+        .metric-sub {{
+            font-size: 0.65em;
+            color: #cbd5e0;
+            margin-top: 3px;
+        }}
+
+        .coverage-bar-mini {{
+            height: 6px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 3px;
+            margin-top: 8px;
+            overflow: hidden;
+        }}
+
+        .coverage-fill {{
+            height: 100%;
+            background: linear-gradient(90deg, #10b981 0%, #3b82f6 100%);
+            border-radius: 3px;
+            transition: width 0.5s ease;
+        }}
+
+        /* Suggestion Categories */
+        .suggestion-category {{
+            margin-bottom: 20px;
+        }}
+
+        .category-header {{
+            background: #3d3d5c;
+            padding: 15px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: background 0.3s;
+        }}
+
+        .category-header:hover {{
+            background: #4a4a6a;
+        }}
+
+        .category-header h3 {{
+            margin: 0;
+            color: #ffffff;
+            font-size: 1.1em;
+        }}
+
+        .category-count {{
+            color: #a0aec0;
+            font-weight: normal;
+            font-size: 0.9em;
+        }}
+
+        .category-content {{
+            padding: 15px 0;
+        }}
+
+        .toggle-icon {{
+            color: #cbd5e0;
+            transition: transform 0.3s;
+        }}
+
+        .toggle-icon.rotated {{
+            transform: rotate(180deg);
+        }}
+
+        /* New Validation Badge */
+        .new-badge {{
+            background: linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%);
+            color: white;
+            font-size: 0.6em;
+            padding: 3px 8px;
+            border-radius: 4px;
+            margin-left: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            display: inline-block;
+            vertical-align: middle;
+        }}
+
+        /* Suggestion Actions */
+        .suggestion-actions {{
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }}
+
+        .copy-validation-btn {{
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 0.75em;
+            font-weight: 600;
+            transition: all 0.3s;
+        }}
+
+        .copy-validation-btn:hover {{
+            background: #5a67d8;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(102, 126, 234, 0.4);
+        }}
+
+        .copy-validation-btn:active {{
+            transform: translateY(0);
+        }}
+
+        /* Confidence Bar */
+        .confidence-container {{
+            margin-top: 12px;
+            padding-top: 10px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }}
+
+        .confidence-label {{
+            color: #a0aec0;
+            font-size: 0.75em;
+            margin-bottom: 5px;
+        }}
+
+        .confidence-bar {{
+            height: 6px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+            overflow: hidden;
+        }}
+
+        .confidence-fill {{
+            height: 100%;
+            border-radius: 3px;
+            transition: width 0.5s ease;
+        }}
+
+        .validation-yaml {{
+            display: none;
+        }}
+
         .config-section {{
             background: #2d2d44;
             padding: 25px;
@@ -1165,6 +1350,38 @@ class ProfileHTMLReporter:
             }}
         }});
 
+        // Toggle category function
+        function toggleCategory(categoryId) {{
+            const content = document.getElementById('category-' + categoryId);
+            const icon = document.getElementById('toggle-' + categoryId);
+
+            if (content.style.display === 'none') {{
+                content.style.display = 'block';
+                icon.classList.remove('rotated');
+            }} else {{
+                content.style.display = 'none';
+                icon.classList.add('rotated');
+            }}
+        }}
+
+        // Copy validation YAML function
+        function copyValidation(yamlId) {{
+            const yamlText = document.getElementById(yamlId).textContent;
+            navigator.clipboard.writeText(yamlText).then(() => {{
+                const btn = event.target;
+                const originalText = btn.textContent;
+                btn.textContent = '✓ Copied!';
+                btn.style.background = '#48bb78';
+                setTimeout(() => {{
+                    btn.textContent = originalText;
+                    btn.style.background = '#667eea';
+                }}, 2000);
+            }}).catch(err => {{
+                console.error('Failed to copy:', err);
+                alert('Failed to copy to clipboard');
+            }});
+        }}
+
         // Copy config function
         function copyConfig() {{
             const configText = document.getElementById('configYaml').textContent;
@@ -1563,32 +1780,185 @@ class ProfileHTMLReporter:
             </div>
         """
 
-    def _generate_suggestions(self, suggestions: List) -> str:
-        """Generate HTML for validation suggestions."""
-        html_parts = []
+    def _categorize_suggestions(self, suggestions: List) -> dict:
+        """Categorize validation suggestions by type."""
+        # Define validation categories
+        categories = {
+            'file': {'name': '📋 File-Level Validations', 'validations': ['EmptyFileCheck', 'RowCountRangeCheck'], 'suggestions': []},
+            'uniqueness': {'name': '🔑 Uniqueness & Identity', 'validations': ['UniqueKeyCheck', 'DuplicateCheck'], 'suggestions': []},
+            'temporal': {'name': '📅 Temporal Validations', 'validations': ['DateRangeCheck', 'DateSequenceCheck', 'DateGapCheck'], 'suggestions': []},
+            'statistical': {'name': '📈 Statistical Validations', 'validations': ['OutlierDetectionCheck', 'DistributionCheck'], 'suggestions': []},
+            'pattern': {'name': '📐 String & Pattern Validations', 'validations': ['StringLengthCheck', 'FormatCheck', 'RegexPatternCheck'], 'suggestions': []},
+            'range': {'name': '📊 Data Range & Boundaries', 'validations': ['RangeCheck', 'NumericRangeCheck'], 'suggestions': []},
+            'completeness': {'name': '✓ Data Completeness', 'validations': ['MandatoryFieldCheck', 'NullCheck'], 'suggestions': []},
+            'values': {'name': '🎯 Value Constraints', 'validations': ['ValidValuesCheck', 'EnumCheck'], 'suggestions': []},
+        }
 
+        # Categorize each suggestion
         for sugg in suggestions:
-            severity_class = "severity-error" if sugg.severity == "ERROR" else "severity-warning"
+            categorized = False
+            for cat_key, cat_data in categories.items():
+                if sugg.validation_type in cat_data['validations']:
+                    cat_data['suggestions'].append(sugg)
+                    categorized = True
+                    break
 
-            params_html = ""
-            if sugg.params:
-                param_items = [f"<strong>{k}:</strong> {v}" for k, v in sugg.params.items()]
-                params_html = "<br/>".join(param_items)
+            # If not categorized, add to a misc category
+            if not categorized:
+                if 'other' not in categories:
+                    categories['other'] = {'name': '⚙️ Other Validations', 'validations': [], 'suggestions': []}
+                categories['other']['suggestions'].append(sugg)
 
-            html_parts.append(f"""
-                <div class="suggestion-card">
-                    <div class="suggestion-header">
-                        <div class="validation-type">{sugg.validation_type}</div>
-                        <div class="severity-badge {severity_class}">Severity: {sugg.severity}</div>
-                    </div>
-                    <div style="color: #cbd5e0; margin-bottom: 10px;">
-                        {sugg.reason}
-                    </div>
-                    {f'<div style="color: #a0aec0; font-size: 0.85em; margin-top: 10px;">{params_html}</div>' if params_html else ''}
-                    <div style="color: #718096; font-size: 0.8em; margin-top: 10px;">
-                        Confidence: {sugg.confidence:.0f}%
+        # Remove empty categories
+        return {k: v for k, v in categories.items() if v['suggestions']}
+
+    def _is_new_validation_type(self, validation_type: str) -> bool:
+        """Check if validation type is newly added from intelligence enhancements."""
+        NEW_TYPES = {'DateRangeCheck', 'DateSequenceCheck', 'DateGapCheck',
+                     'OutlierDetectionCheck', 'StringLengthCheck'}
+        return validation_type in NEW_TYPES
+
+    def _generate_coverage_summary(self, suggestions: List) -> str:
+        """Generate validation coverage summary card."""
+        total_suggestions = len(suggestions)
+        unique_types = len(set(sugg.validation_type for sugg in suggestions))
+        new_suggestions = sum(1 for sugg in suggestions if self._is_new_validation_type(sugg.validation_type))
+
+        # Estimate coverage (35 total validation types in framework)
+        coverage_pct = min(100, (unique_types / 35.0) * 100)
+
+        return f"""
+        <div class="validation-coverage-card">
+            <h3 style="color: #ffffff; margin-bottom: 15px;">🎯 Validation Coverage Analysis</h3>
+            <div class="coverage-metrics">
+                <div class="metric">
+                    <div class="metric-value">{total_suggestions}</div>
+                    <div class="metric-label">Total Suggestions</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-value">{unique_types}/35</div>
+                    <div class="metric-label">Validation Types</div>
+                </div>
+                <div class="metric highlight-new">
+                    <div class="metric-value" style="color: #bb9af7;">+{new_suggestions}</div>
+                    <div class="metric-label">Intelligent Suggestions</div>
+                    <div class="metric-sub">Temporal, Statistical, Pattern</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-value" style="color: {'#10b981' if coverage_pct >= 40 else '#f59e0b' if coverage_pct >= 20 else '#ef4444'};">{coverage_pct:.0f}%</div>
+                    <div class="metric-label">Coverage</div>
+                    <div class="coverage-bar-mini">
+                        <div class="coverage-fill" style="width: {coverage_pct:.0f}%;"></div>
                     </div>
                 </div>
+            </div>
+        </div>
+        """
+
+    def _generate_suggestion_yaml(self, sugg, suggestion_id: int) -> str:
+        """Generate YAML snippet for a validation suggestion."""
+        params_yaml = ""
+        if sugg.params:
+            params_lines = []
+            for k, v in sugg.params.items():
+                if isinstance(v, str):
+                    params_lines.append(f'          {k}: "{v}"')
+                elif isinstance(v, list):
+                    params_lines.append(f'          {k}:')
+                    for item in v:
+                        if isinstance(item, str):
+                            params_lines.append(f'            - "{item}"')
+                        else:
+                            params_lines.append(f'            - {item}')
+                else:
+                    params_lines.append(f'          {k}: {v}')
+            params_yaml = "\n        params:\n" + "\n".join(params_lines)
+
+        return f"""      - type: "{sugg.validation_type}"
+        severity: "{sugg.severity}"{params_yaml}"""
+
+    def _generate_suggestions(self, suggestions: List) -> str:
+        """Generate enhanced HTML for validation suggestions with categorization."""
+        if not suggestions:
+            return "<p style='color: #9ca3af;'>No validation suggestions generated.</p>"
+
+        # Generate coverage summary
+        coverage_html = self._generate_coverage_summary(suggestions)
+
+        # Categorize suggestions
+        categorized = self._categorize_suggestions(suggestions)
+
+        html_parts = [coverage_html]
+        suggestion_counter = 0
+
+        # Generate HTML for each category
+        for cat_key, cat_data in categorized.items():
+            cat_name = cat_data['name']
+            cat_suggestions = cat_data['suggestions']
+
+            html_parts.append(f"""
+            <div class="suggestion-category">
+                <div class="category-header" onclick="toggleCategory('{cat_key}')">
+                    <h3>{cat_name} <span class="category-count">({len(cat_suggestions)})</span></h3>
+                    <span class="toggle-icon" id="toggle-{cat_key}">▼</span>
+                </div>
+                <div class="category-content" id="category-{cat_key}">
+            """)
+
+            for sugg in cat_suggestions:
+                suggestion_counter += 1
+                severity_class = "severity-error" if sugg.severity == "ERROR" else "severity-warning"
+                is_new = self._is_new_validation_type(sugg.validation_type)
+                new_badge = '<span class="new-badge">✨ NEW</span>' if is_new else ''
+
+                # Confidence bar color
+                confidence = sugg.confidence
+                if confidence >= 80:
+                    conf_color = '#10b981'
+                elif confidence >= 50:
+                    conf_color = '#f59e0b'
+                else:
+                    conf_color = '#ef4444'
+
+                params_html = ""
+                if sugg.params:
+                    param_items = [f"<strong>{k}:</strong> {v}" for k, v in sugg.params.items()]
+                    params_html = "<br/>".join(param_items)
+
+                # Generate YAML for copy button
+                yaml_snippet = self._generate_suggestion_yaml(sugg, suggestion_counter)
+
+                html_parts.append(f"""
+                    <div class="suggestion-card">
+                        <div class="suggestion-header">
+                            <div class="validation-type">
+                                {sugg.validation_type}
+                                {new_badge}
+                            </div>
+                            <div class="suggestion-actions">
+                                <button class="copy-validation-btn" onclick="copyValidation('yaml-{suggestion_counter}')" title="Copy YAML snippet">
+                                    📋 Copy YAML
+                                </button>
+                                <div class="severity-badge {severity_class}">{sugg.severity}</div>
+                            </div>
+                        </div>
+                        <div style="color: #cbd5e0; margin-bottom: 10px;">
+                            {sugg.reason}
+                        </div>
+                        {f'<div style="color: #a0aec0; font-size: 0.85em; margin-top: 10px;">{params_html}</div>' if params_html else ''}
+                        <div class="confidence-container">
+                            <div class="confidence-label">Confidence: {confidence:.0f}%</div>
+                            <div class="confidence-bar">
+                                <div class="confidence-fill" style="width: {confidence:.0f}%; background: {conf_color};"></div>
+                            </div>
+                        </div>
+                        <pre id="yaml-{suggestion_counter}" class="validation-yaml" style="display:none;">{yaml_snippet}</pre>
+                    </div>
+                """)
+
+            html_parts.append("""
+                </div>
+            </div>
             """)
 
         return "".join(html_parts)
