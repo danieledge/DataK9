@@ -1232,31 +1232,52 @@ class DataProfiler:
 
     def _should_suggest_range_check(self, col: ColumnProfile, row_count: int) -> bool:
         """
-        Smart pattern-based detection: Is this field an identifier or a measurement?
+        Smart pattern-based detection: Should this field have a RangeCheck validation?
 
-        Uses data characteristics instead of hardcoded keywords.
-        Returns True if range validation makes sense, False for identifiers/categories.
+        Uses data characteristics and semantic understanding instead of hardcoded keywords.
+
+        Returns False for:
+        - Identifiers (IDs, keys, codes)
+        - Categories (low cardinality enums)
+        - Amounts/prices/money (unbounded by nature)
+        - Boolean flags
+
+        Returns True for:
+        - Measurements with natural bounds (age, percentage, count)
+        - Metrics with expected ranges
         """
+        col_name_lower = col.name.lower()
+
         # 1. Check semantic type (if profiler already determined it)
         semantic_type = getattr(col.statistics, 'semantic_type', None)
         if semantic_type in ['id', 'identifier', 'key', 'category']:
             return False
-        if semantic_type in ['amount', 'measurement', 'metric']:
-            return True
 
-        # 2. Boolean/flag fields (only 2 unique values) - use ValidValuesCheck instead
+        # 2. Detect amount/money/price fields - these are UNBOUNDED and should NOT have range checks
+        # Financial amounts can grow infinitely and historical max is not a valid upper bound
+        amount_keywords = ['amount', 'price', 'cost', 'fee', 'payment', 'balance',
+                          'total', 'sum', 'value', 'paid', 'received', 'revenue',
+                          'income', 'expense', 'transaction', 'salary', 'wage']
+
+        is_amount_field = any(kw in col_name_lower for kw in amount_keywords)
+
+        if is_amount_field and col.type_info.inferred_type in ['float', 'integer']:
+            # Amount fields should use non-negative check, not range check
+            return False
+
+        # 3. Boolean/flag fields (only 2 unique values) - use ValidValuesCheck instead
         if col.statistics.unique_count == 2:
             return False
 
-        # 3. High cardinality (>80% unique) = likely identifier, not measurement
+        # 4. High cardinality (>80% unique) = likely identifier, not measurement
         if col.statistics.cardinality > 0.8:
             return False
 
-        # 4. Low cardinality (<5%, <20 values) = categorical, will get ValidValuesCheck
+        # 5. Low cardinality (<5%, <20 values) = categorical, will get ValidValuesCheck
         if col.statistics.cardinality < 0.05 and col.statistics.unique_count < 20:
             return False
 
-        # 5. Check if numeric values look like IDs (large sparse range)
+        # 6. Check if numeric values look like IDs (large sparse range)
         if col.statistics.min_value is not None and col.statistics.max_value is not None:
             value_range = col.statistics.max_value - col.statistics.min_value
 
@@ -1270,8 +1291,7 @@ class DataProfiler:
                 if col.statistics.min_value > 1000000000:  # Unix timestamp range or large ID
                     return False
 
-        # 6. Column name hint (weak signal) + data validation (strong signal)
-        col_name_lower = col.name.lower()
+        # 7. Column name hint for identifiers (weak signal) + data validation (strong signal)
         name_suggests_id = any(kw in col_name_lower for kw in
                               ['id', 'key', 'code', 'number', 'account', 'bank', 'reference', 'ref'])
 
@@ -1279,7 +1299,7 @@ class DataProfiler:
         if name_suggests_id and col.statistics.cardinality > 0.5:
             return False
 
-        # Default: suggest range check for numeric measurements
+        # Default: suggest range check for numeric measurements with natural bounds
         return True
 
     def _generate_validation_suggestions(
@@ -1410,30 +1430,9 @@ class DataProfiler:
                         ))
 
             # Semantic type-aware suggestions (based on column semantics)
-            semantic_type = getattr(col.statistics, 'semantic_type', None)
-
-            if semantic_type == 'amount' or 'amount' in col.name.lower() or 'price' in col.name.lower():
-                # Amount fields should be non-negative
-                # NOTE: Only add this if we didn't already add a generic RangeCheck above
-                if col.type_info.inferred_type in ['integer', 'float']:
-                    # Check if we already added a RangeCheck for this field
-                    already_has_range_check = any(
-                        s.validation_type == "RangeCheck" and s.params.get("field") == col.name
-                        for s in suggestions
-                    )
-
-                    if not already_has_range_check:
-                        suggestions.append(ValidationSuggestion(
-                            validation_type="RangeCheck",
-                            severity="ERROR",
-                            params={
-                                "field": col.name,
-                                "min_value": 0,
-                                "max_value": col.statistics.max_value if col.statistics.max_value else 999999999
-                            },
-                            reason="Amount fields should be non-negative",
-                            confidence=85.0
-                        ))
+            # NOTE: Amount/price fields are REMOVED from range validation
+            # Financial amounts are unbounded - historical max is not a valid upper bound
+            # The _should_suggest_range_check() method already excludes amount fields
 
         # Add mandatory field check if any mandatory fields found
         if mandatory_fields:
