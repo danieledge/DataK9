@@ -1188,13 +1188,17 @@ class DataProfiler:
             return correlations
 
         try:
-            # Create DataFrame for correlation
+            # Create DataFrame for correlation using sampled data (NOT full row_count!)
+            # Find the maximum sample length across all columns
+            max_sample_length = max(len(numeric_data[col]) for col in numeric_columns) if numeric_columns else 0
+
             df_dict = {}
             for col in numeric_columns:
-                # Ensure same length by padding/truncating
-                values = numeric_data[col][:row_count]
-                if len(values) < row_count:
-                    values.extend([np.nan] * (row_count - len(values)))
+                # Ensure same length by padding/truncating to max_sample_length (NOT row_count!)
+                values = numeric_data[col][:max_sample_length]
+                if len(values) < max_sample_length:
+                    # Pad with NaN to match longest sample (typically 100K, not 179M!)
+                    values = values + [np.nan] * (max_sample_length - len(values))
                 df_dict[col] = values
 
             df = pd.DataFrame(df_dict)
