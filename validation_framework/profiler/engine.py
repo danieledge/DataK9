@@ -1230,6 +1230,58 @@ class DataProfiler:
 
         return sorted(correlations, key=lambda x: abs(x.correlation), reverse=True)
 
+    def _should_suggest_range_check(self, col: ColumnProfile, row_count: int) -> bool:
+        """
+        Smart pattern-based detection: Is this field an identifier or a measurement?
+
+        Uses data characteristics instead of hardcoded keywords.
+        Returns True if range validation makes sense, False for identifiers/categories.
+        """
+        # 1. Check semantic type (if profiler already determined it)
+        semantic_type = getattr(col.statistics, 'semantic_type', None)
+        if semantic_type in ['id', 'identifier', 'key', 'category']:
+            return False
+        if semantic_type in ['amount', 'measurement', 'metric']:
+            return True
+
+        # 2. Boolean/flag fields (only 2 unique values) - use ValidValuesCheck instead
+        if col.statistics.unique_count == 2:
+            return False
+
+        # 3. High cardinality (>80% unique) = likely identifier, not measurement
+        if col.statistics.cardinality > 0.8:
+            return False
+
+        # 4. Low cardinality (<5%, <20 values) = categorical, will get ValidValuesCheck
+        if col.statistics.cardinality < 0.05 and col.statistics.unique_count < 20:
+            return False
+
+        # 5. Check if numeric values look like IDs (large sparse range)
+        if col.statistics.min_value is not None and col.statistics.max_value is not None:
+            value_range = col.statistics.max_value - col.statistics.min_value
+
+            # If range is >> row count, likely sequential/sparse IDs
+            if row_count > 0 and value_range > row_count * 10:
+                return False
+
+            # If min is very large (like timestamps or large IDs), probably not a measurement
+            if col.type_info.inferred_type == "integer" and col.statistics.min_value > 100000:
+                # Exception: if it looks like a timestamp or very large ID
+                if col.statistics.min_value > 1000000000:  # Unix timestamp range or large ID
+                    return False
+
+        # 6. Column name hint (weak signal) + data validation (strong signal)
+        col_name_lower = col.name.lower()
+        name_suggests_id = any(kw in col_name_lower for kw in
+                              ['id', 'key', 'code', 'number', 'account', 'bank', 'reference', 'ref'])
+
+        # If name suggests ID AND cardinality is moderate-high, probably an identifier
+        if name_suggests_id and col.statistics.cardinality > 0.5:
+            return False
+
+        # Default: suggest range check for numeric measurements
+        return True
+
     def _generate_validation_suggestions(
         self,
         columns: List[ColumnProfile],
@@ -1269,20 +1321,11 @@ class DataProfiler:
             # Range check for numeric fields
             # ONLY suggest range checks for actual measurements/amounts, NOT identifiers
             if col.type_info.inferred_type in ["integer", "float"]:
-                col_name_lower = col.name.lower()
-
-                # Exclude identifiers, IDs, codes, keys from range validation
-                identifier_keywords = ['id', 'key', 'code', 'number', 'account', 'bank', 'reference', 'ref']
-                is_likely_identifier = any(keyword in col_name_lower for keyword in identifier_keywords)
-
-                # Exclude boolean/flag fields (only 2 unique values)
-                is_boolean_flag = col.statistics.unique_count == 2
-
-                # Exclude if already covered by ValidValuesCheck (low cardinality)
-                will_have_valid_values = col.statistics.cardinality < 0.05 and col.statistics.unique_count < 20
+                # Smart pattern-based detection instead of hardcoded keywords
+                should_suggest_range = self._should_suggest_range_check(col, row_count)
 
                 # Only suggest range check for actual numeric measurements
-                if not is_likely_identifier and not is_boolean_flag and not will_have_valid_values:
+                if should_suggest_range:
                     if col.statistics.min_value is not None and col.statistics.max_value is not None:
                         suggestions.append(ValidationSuggestion(
                             validation_type="RangeCheck",
