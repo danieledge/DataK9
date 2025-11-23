@@ -1267,19 +1267,34 @@ class DataProfiler:
                 mandatory_fields.append(col.name)
 
             # Range check for numeric fields
+            # ONLY suggest range checks for actual measurements/amounts, NOT identifiers
             if col.type_info.inferred_type in ["integer", "float"]:
-                if col.statistics.min_value is not None and col.statistics.max_value is not None:
-                    suggestions.append(ValidationSuggestion(
-                        validation_type="RangeCheck",
-                        severity="WARNING",
-                        params={
-                            "field": col.name,
-                            "min_value": col.statistics.min_value,
-                            "max_value": col.statistics.max_value
-                        },
-                        reason=f"Values range from {col.statistics.min_value} to {col.statistics.max_value}",
-                        confidence=90.0
-                    ))
+                col_name_lower = col.name.lower()
+
+                # Exclude identifiers, IDs, codes, keys from range validation
+                identifier_keywords = ['id', 'key', 'code', 'number', 'account', 'bank', 'reference', 'ref']
+                is_likely_identifier = any(keyword in col_name_lower for keyword in identifier_keywords)
+
+                # Exclude boolean/flag fields (only 2 unique values)
+                is_boolean_flag = col.statistics.unique_count == 2
+
+                # Exclude if already covered by ValidValuesCheck (low cardinality)
+                will_have_valid_values = col.statistics.cardinality < 0.05 and col.statistics.unique_count < 20
+
+                # Only suggest range check for actual numeric measurements
+                if not is_likely_identifier and not is_boolean_flag and not will_have_valid_values:
+                    if col.statistics.min_value is not None and col.statistics.max_value is not None:
+                        suggestions.append(ValidationSuggestion(
+                            validation_type="RangeCheck",
+                            severity="WARNING",
+                            params={
+                                "field": col.name,
+                                "min_value": col.statistics.min_value,
+                                "max_value": col.statistics.max_value
+                            },
+                            reason=f"Values range from {col.statistics.min_value} to {col.statistics.max_value}",
+                            confidence=90.0
+                        ))
 
             # Valid values for low cardinality
             if col.statistics.cardinality < 0.05 and col.statistics.unique_count < 20:
@@ -1356,18 +1371,26 @@ class DataProfiler:
 
             if semantic_type == 'amount' or 'amount' in col.name.lower() or 'price' in col.name.lower():
                 # Amount fields should be non-negative
+                # NOTE: Only add this if we didn't already add a generic RangeCheck above
                 if col.type_info.inferred_type in ['integer', 'float']:
-                    suggestions.append(ValidationSuggestion(
-                        validation_type="RangeCheck",
-                        severity="ERROR",
-                        params={
-                            "field": col.name,
-                            "min_value": 0,
-                            "max_value": col.statistics.max_value if col.statistics.max_value else 999999999
-                        },
-                        reason="Amount fields should be non-negative",
-                        confidence=85.0
-                    ))
+                    # Check if we already added a RangeCheck for this field
+                    already_has_range_check = any(
+                        s.validation_type == "RangeCheck" and s.params.get("field") == col.name
+                        for s in suggestions
+                    )
+
+                    if not already_has_range_check:
+                        suggestions.append(ValidationSuggestion(
+                            validation_type="RangeCheck",
+                            severity="ERROR",
+                            params={
+                                "field": col.name,
+                                "min_value": 0,
+                                "max_value": col.statistics.max_value if col.statistics.max_value else 999999999
+                            },
+                            reason="Amount fields should be non-negative",
+                            confidence=85.0
+                        ))
 
         # Add mandatory field check if any mandatory fields found
         if mandatory_fields:
