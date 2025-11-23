@@ -13,13 +13,38 @@ from typing import Dict, List, Any, Optional, Iterator
 import re
 import time
 import logging
+import psutil
+import os
 
 from validation_framework.profiler.profile_result import (
     ProfileResult, ColumnProfile, TypeInference, ColumnStatistics,
     QualityMetrics, CorrelationResult, ValidationSuggestion
 )
+from validation_framework.profiler.column_intelligence import SmartColumnAnalyzer
 from validation_framework.loaders.factory import LoaderFactory
 from validation_framework.utils.chunk_size_calculator import ChunkSizeCalculator
+
+# Phase 1 Profiler Enhancements
+try:
+    from validation_framework.profiler.temporal_analysis import TemporalAnalyzer
+    TEMPORAL_ANALYSIS_AVAILABLE = True
+except ImportError:
+    TEMPORAL_ANALYSIS_AVAILABLE = False
+    logger.warning("Temporal analysis not available - statsmodels may be missing")
+
+try:
+    from validation_framework.profiler.pii_detector import PIIDetector
+    PII_DETECTION_AVAILABLE = True
+except ImportError:
+    PII_DETECTION_AVAILABLE = False
+    logger.warning("PII detection not available")
+
+try:
+    from validation_framework.profiler.enhanced_correlation import EnhancedCorrelationAnalyzer
+    ENHANCED_CORRELATION_AVAILABLE = True
+except ImportError:
+    ENHANCED_CORRELATION_AVAILABLE = False
+    logger.warning("Enhanced correlation not available")
 
 logger = logging.getLogger(__name__)
 
@@ -37,16 +62,94 @@ class DataProfiler:
     - Auto-generated validation configuration
     """
 
-    def __init__(self, chunk_size: int = 50000, max_correlation_columns: int = 20):
+    def __init__(
+        self,
+        chunk_size: Optional[int] = None,
+        max_correlation_columns: int = 20,
+        enable_temporal_analysis: bool = True,
+        enable_pii_detection: bool = True,
+        enable_enhanced_correlation: bool = True
+    ):
         """
         Initialize data profiler.
 
         Args:
-            chunk_size: Number of rows to process per chunk
+            chunk_size: Number of rows to process per chunk (None = auto-calculate based on available memory)
             max_correlation_columns: Maximum columns for correlation analysis
+            enable_temporal_analysis: Enable Phase 1 temporal analysis (default: True)
+            enable_pii_detection: Enable Phase 1 PII detection (default: True)
+            enable_enhanced_correlation: Enable Phase 1 enhanced correlation (default: True)
         """
-        self.chunk_size = chunk_size
+        self.chunk_size = chunk_size  # None means auto-calculate
         self.max_correlation_columns = max_correlation_columns
+
+        # Phase 1 enhancement flags
+        self.enable_temporal_analysis = enable_temporal_analysis and TEMPORAL_ANALYSIS_AVAILABLE
+        self.enable_pii_detection = enable_pii_detection and PII_DETECTION_AVAILABLE
+        self.enable_enhanced_correlation = enable_enhanced_correlation and ENHANCED_CORRELATION_AVAILABLE
+
+        # Initialize Phase 1 analyzers if enabled
+        self.temporal_analyzer = TemporalAnalyzer() if self.enable_temporal_analysis else None
+        self.pii_detector = PIIDetector() if self.enable_pii_detection else None
+        self.enhanced_correlation_analyzer = EnhancedCorrelationAnalyzer() if self.enable_enhanced_correlation else None
+
+        # Memory safety configuration
+        self.memory_check_interval = 10  # Check memory every N chunks
+        self.memory_warning_threshold = 75  # Warn at 75% memory usage
+        self.memory_critical_threshold = 85  # Terminate at 85% memory usage
+
+    def _check_memory_safety(self, chunk_idx: int, row_count: int) -> bool:
+        """
+        Check system memory usage and terminate if critical threshold exceeded.
+
+        Args:
+            chunk_idx: Current chunk index
+            row_count: Total rows processed so far
+
+        Returns:
+            True if safe to continue, False if critical threshold exceeded
+
+        Raises:
+            MemoryError: If memory usage exceeds critical threshold
+        """
+        # Only check every N chunks to minimize overhead
+        if chunk_idx % self.memory_check_interval != 0:
+            return True
+
+        try:
+            # Get current process memory info
+            process = psutil.Process(os.getpid())
+            process_memory_mb = process.memory_info().rss / 1024 / 1024
+
+            # Get system memory info
+            system_memory = psutil.virtual_memory()
+            memory_percent = system_memory.percent
+
+            # Log memory usage
+            logger.debug(f"💾 Memory check at chunk {chunk_idx + 1}: Process={process_memory_mb:.1f}MB, System={memory_percent:.1f}%")
+
+            # Check warning threshold
+            if memory_percent >= self.memory_warning_threshold and memory_percent < self.memory_critical_threshold:
+                logger.warning(f"⚠️  High memory usage: {memory_percent:.1f}% (threshold: {self.memory_warning_threshold}%)")
+                logger.warning(f"⚠️  Process using {process_memory_mb:.1f}MB, {row_count:,} rows processed")
+
+            # Check critical threshold
+            if memory_percent >= self.memory_critical_threshold:
+                available_mb = system_memory.available / 1024 / 1024
+                logger.error(f"🚨 CRITICAL: Memory usage {memory_percent:.1f}% exceeds threshold {self.memory_critical_threshold}%")
+                logger.error(f"🚨 Process: {process_memory_mb:.1f}MB, Available: {available_mb:.1f}MB")
+                logger.error(f"🚨 Terminating profiler to prevent system instability at {row_count:,} rows")
+                raise MemoryError(
+                    f"Profiler terminated: Memory usage {memory_percent:.1f}% exceeded critical threshold {self.memory_critical_threshold}%. "
+                    f"Processed {row_count:,} rows before termination. "
+                    f"Consider using --sample flag to profile a subset of data, or increase available system memory."
+                )
+
+            return True
+
+        except psutil.Error as e:
+            logger.warning(f"Could not check memory usage: {e}")
+            return True  # Continue if we can't check memory
 
     def profile_dataframe(
         self,
@@ -74,6 +177,10 @@ class DataProfiler:
         column_profiles: Dict[str, Dict[str, Any]] = {}
         numeric_data: Dict[str, List[float]] = {}
 
+        # Phase 1 enhancement accumulators
+        datetime_data: Dict[str, List] = {}
+        all_column_data: Dict[str, List] = {}
+
         for col in df.columns:
             column_profiles[col] = self._initialize_column_profile(col, declared_schema)
 
@@ -81,10 +188,9 @@ class DataProfiler:
         for col in df.columns:
             self._update_column_profile(column_profiles[col], df[col], 0)
 
-            # Collect numeric data for correlations
-            if column_profiles[col]["inferred_type"] in ["integer", "float"]:
-                numeric_values = pd.to_numeric(df[col], errors='coerce').dropna()
-                numeric_data[col] = numeric_values.tolist()
+            # Collect sample data for PII detection (Phase 1) - limit to 1000 samples
+            if self.enable_pii_detection:
+                all_column_data[col] = df[col].dropna().head(1000).tolist()
 
         # Finalize column profiles
         columns = []
@@ -92,8 +198,107 @@ class DataProfiler:
             column_profile = self._finalize_column_profile(col_name, profile_data, row_count)
             columns.append(column_profile)
 
+        # Collect numeric and datetime data AFTER type finalization (Phase 1)
+        for column in columns:
+            # Collect numeric data for correlations
+            if column.type_info.inferred_type in ["integer", "float"]:
+                try:
+                    numeric_values = pd.to_numeric(df[column.name], errors='coerce').dropna()
+                    numeric_data[column.name] = numeric_values.tolist()
+                    logger.debug(f"Collected {len(numeric_values)} numeric values for {column.name}")
+                except Exception as e:
+                    logger.warning(f"Failed to collect numeric data for {column.name}: {e}")
+
+            # Collect datetime data for temporal analysis
+            if self.enable_temporal_analysis and column.type_info.inferred_type in ["datetime", "date"]:
+                try:
+                    dt_values = pd.to_datetime(df[column.name], errors='coerce').dropna()
+                    datetime_data[column.name] = dt_values.tolist()
+                    logger.debug(f"Collected {len(dt_values)} datetime values for {column.name}")
+                except Exception as e:
+                    logger.warning(f"Failed to collect datetime data for {column.name}: {e}")
+
+        # Phase 1: Apply temporal analysis to datetime columns
+        if self.enable_temporal_analysis:
+            logger.info("Running temporal analysis on datetime columns...")
+            for column in columns:
+                if column.name in datetime_data and len(datetime_data[column.name]) > 0:
+                    try:
+                        temporal_result = self.temporal_analyzer.analyze_temporal_column(
+                            pd.Series(datetime_data[column.name]),
+                            column_name=column.name
+                        )
+                        column.temporal_analysis = temporal_result
+                        logger.debug(f"Temporal analysis completed for column: {column.name}")
+                    except Exception as e:
+                        logger.warning(f"Temporal analysis failed for column {column.name}: {e}")
+
+        # Phase 1: Apply PII detection to all columns
+        pii_columns = []
+        if self.enable_pii_detection:
+            logger.info("Running PII detection on all columns...")
+            for column in columns:
+                if column.name in all_column_data and len(all_column_data[column.name]) > 0:
+                    try:
+                        pii_result = self.pii_detector.detect_pii_in_column(
+                            column.name,
+                            all_column_data[column.name],
+                            total_rows=row_count
+                        )
+                        column.pii_info = pii_result
+                        if pii_result.get("detected"):
+                            pii_columns.append(pii_result)
+                        logger.debug(f"PII detection completed for column: {column.name}")
+                    except Exception as e:
+                        logger.warning(f"PII detection failed for column {column.name}: {e}")
+            phase_timings['pii_detection'] = time.time() - pii_start
+            logger.info(f"⏱  PII detection completed in {phase_timings['pii_detection']:.2f}s")
+
         # Calculate correlations
+        correlation_start = time.time()
         correlations = self._calculate_correlations(numeric_data, row_count)
+        phase_timings['basic_correlation'] = time.time() - correlation_start
+
+        # Phase 1: Calculate enhanced correlations
+        enhanced_correlations = None
+        if self.enable_enhanced_correlation and len(numeric_data) >= 2:
+            enhanced_corr_start = time.time()
+            logger.info("Running enhanced correlation analysis...")
+            try:
+                enhanced_correlations = self.enhanced_correlation_analyzer.calculate_correlations_multi_method(
+                    numeric_data,
+                    row_count=row_count,
+                    methods=['pearson', 'spearman']
+                )
+                # Update correlations list with enhanced correlation info
+                for pair in enhanced_correlations.get('correlation_pairs', []):
+                    correlations.append(CorrelationResult(
+                        column1=pair['column1'],
+                        column2=pair['column2'],
+                        correlation=pair['correlation'],
+                        type=pair['method'],
+                        strength=pair.get('strength'),
+                        direction=pair.get('direction'),
+                        p_value=pair.get('p_value'),
+                        is_significant=pair.get('is_significant')
+                    ))
+                logger.info(f"Enhanced correlation analysis found {len(enhanced_correlations.get('correlation_pairs', []))} significant correlations")
+            except Exception as e:
+                logger.warning(f"Enhanced correlation analysis failed: {e}")
+
+        # Phase 1: Calculate dataset-level privacy risk
+        dataset_privacy_risk = None
+        if self.enable_pii_detection and pii_columns:
+            logger.info("Calculating dataset-level privacy risk...")
+            try:
+                dataset_privacy_risk = self.pii_detector.calculate_dataset_privacy_risk(
+                    pii_columns=pii_columns,
+                    total_columns=len(columns),
+                    total_rows=row_count
+                )
+                logger.info(f"Dataset privacy risk: {dataset_privacy_risk.get('risk_level', 'unknown').upper()} ({dataset_privacy_risk.get('risk_score', 0)}/100)")
+            except Exception as e:
+                logger.warning(f"Dataset privacy risk calculation failed: {e}")
 
         # Generate validation suggestions
         suggested_validations = self._generate_validation_suggestions(columns, row_count)
@@ -123,7 +328,9 @@ class DataProfiler:
             suggested_validations=suggested_validations,
             overall_quality_score=overall_quality,
             generated_config_yaml=config_yaml,
-            generated_config_command=config_command
+            generated_config_command=config_command,
+            enhanced_correlations=enhanced_correlations,
+            dataset_privacy_risk=dataset_privacy_risk
         )
 
     def profile_file(
@@ -148,16 +355,40 @@ class DataProfiler:
         start_time = time.time()
         logger.info(f"Starting profile of {file_path}")
 
+        # Track timing for each phase
+        phase_timings = {}
+
+        # Track sampling for memory efficiency
+        MAX_CORRELATION_SAMPLES = 100_000  # Limit numeric samples for correlation analysis
+        MAX_TEMPORAL_SAMPLES = 50_000      # Limit datetime samples for temporal analysis
+        sampling_triggered = {}  # Track which columns hit sampling limit
+
         # Get file metadata
         file_path_obj = Path(file_path)
         file_size = file_path_obj.stat().st_size
         file_name = file_path_obj.name
 
+        # Auto-calculate chunk size if not specified
+        chunk_size = self.chunk_size
+        if chunk_size is None:
+            calculator = ChunkSizeCalculator()
+            calc_result = calculator.calculate_optimal_chunk_size(
+                file_path=file_path,
+                file_format=file_format,
+                num_validations=0,  # Profiling only
+                validation_complexity="simple"
+            )
+            chunk_size = calc_result['recommended_chunk_size']
+            logger.info(f"🎯 Auto-calculated chunk size: {chunk_size:,} rows (based on {calc_result['available_memory_mb']:,}MB available memory)")
+            logger.info(f"   Estimated chunks: {calc_result['estimated_chunks']:,} | Peak memory: ~{calc_result['estimated_memory_mb']:,}MB")
+        else:
+            logger.info(f"📊 Using specified chunk size: {chunk_size:,} rows")
+
         # Load data iterator
         loader = LoaderFactory.create_loader(
             file_format=file_format,
             file_path=file_path,
-            chunk_size=self.chunk_size,
+            chunk_size=chunk_size,
             **loader_kwargs
         )
 
@@ -166,10 +397,53 @@ class DataProfiler:
         column_profiles: Dict[str, Dict[str, Any]] = {}
         numeric_data: Dict[str, List[float]] = {}  # For correlation analysis
 
+        # Phase 1 enhancement accumulators
+        datetime_data: Dict[str, List] = {}  # For temporal analysis
+        all_column_data: Dict[str, List] = {}  # For PII detection (sample-based)
+
+        # Try to get metadata for enhanced profiling (works for Parquet and other formats)
+        total_chunks_str = "?"
+        file_metadata = {}
+        try:
+            if hasattr(loader, 'get_metadata'):
+                file_metadata = loader.get_metadata()
+
+                # Log Parquet-specific metadata if available
+                if file_metadata.get('total_rows'):
+                    total_rows = file_metadata['total_rows']
+                    import math
+                    total_chunks = math.ceil(total_rows / self.chunk_size)
+                    total_chunks_str = str(total_chunks)
+
+                    # Build info message with metadata
+                    info_parts = [f"{total_rows:,} rows"]
+                    if file_metadata.get('compression'):
+                        info_parts.append(f"{file_metadata['compression']} compression")
+                    if file_metadata.get('num_row_groups'):
+                        info_parts.append(f"{file_metadata['num_row_groups']} row groups")
+
+                    logger.info(f"📋 File: {', '.join(info_parts)} ({total_chunks} chunks of {self.chunk_size:,})")
+            elif hasattr(loader, 'get_row_count'):
+                # Fallback to just row count
+                total_rows = loader.get_row_count()
+                import math
+                total_chunks = math.ceil(total_rows / self.chunk_size)
+                total_chunks_str = str(total_chunks)
+                logger.info(f"📋 File contains {total_rows:,} rows ({total_chunks} chunks of {self.chunk_size:,})")
+        except Exception as e:
+            # If we can't get metadata, just show "?" - not a critical failure
+            logger.debug(f"Could not read file metadata: {e}")
+            pass
+
         # Process data in chunks
+        chunk_processing_start = time.time()
         for chunk_idx, chunk in enumerate(loader.load()):
-            logger.debug(f"Processing chunk {chunk_idx}, rows: {len(chunk)}")
             row_count += len(chunk)
+            logger.info(f"📊 Processing chunk {chunk_idx + 1}/{total_chunks_str} ({len(chunk):,} rows) - Total: {row_count:,} rows")
+            logger.debug(f"Processing chunk {chunk_idx}, rows: {len(chunk)}")
+
+            # Memory safety check - will raise MemoryError if critical threshold exceeded
+            self._check_memory_safety(chunk_idx, row_count)
 
             # Initialize column profiles on first chunk
             if chunk_idx == 0:
@@ -184,36 +458,202 @@ class DataProfiler:
                     column_profiles[col], chunk[col], chunk_idx
                 )
 
-                # Collect numeric data for correlations
+                # Collect numeric data for correlations with memory-efficient sampling
+                # Limit to MAX_CORRELATION_SAMPLES per column to prevent memory exhaustion with very large datasets
                 if column_profiles[col]["inferred_type"] in ["integer", "float"]:
                     if col not in numeric_data:
                         numeric_data[col] = []
-                    # Convert to numeric, handling errors
-                    numeric_values = pd.to_numeric(chunk[col], errors='coerce').dropna()
-                    numeric_data[col].extend(numeric_values.tolist())
+
+                    # Only collect if we haven't reached the limit
+                    current_count = len(numeric_data[col])
+                    if current_count < MAX_CORRELATION_SAMPLES:
+                        # Convert to numeric, handling errors
+                        numeric_values = pd.to_numeric(chunk[col], errors='coerce').dropna()
+
+                        # Calculate how many samples to take from this chunk
+                        samples_needed = MAX_CORRELATION_SAMPLES - current_count
+
+                        # Use simple random sampling if chunk is larger than samples needed
+                        if len(numeric_values) > samples_needed:
+                            import random
+                            sampled_values = random.sample(numeric_values.tolist(), samples_needed)
+                            numeric_data[col].extend(sampled_values)
+                            # Log when we hit the limit
+                            if col not in sampling_triggered:
+                                sampling_triggered[col] = row_count
+                                logger.info(f"💾 Memory optimization: Column '{col}' sampling limit reached at {row_count:,} rows (using {MAX_CORRELATION_SAMPLES:,} samples for correlation)")
+                        else:
+                            numeric_data[col].extend(numeric_values.tolist())
+
+                # Collect datetime data for temporal analysis with memory-efficient sampling
+                if self.enable_temporal_analysis:
+                    try:
+                        # Try to convert to datetime
+                        dt_values = pd.to_datetime(chunk[col], errors='coerce')
+                        # Only keep if at least 50% of non-null values converted successfully
+                        non_null_count = chunk[col].notna().sum()
+                        if non_null_count > 0:
+                            converted_count = dt_values.notna().sum()
+                            if converted_count / non_null_count >= 0.5:
+                                if col not in datetime_data:
+                                    datetime_data[col] = []
+
+                                # Only collect if we haven't reached the limit
+                                current_count = len(datetime_data[col])
+                                if current_count < MAX_TEMPORAL_SAMPLES:
+                                    dt_list = dt_values.dropna().tolist()
+                                    samples_needed = MAX_TEMPORAL_SAMPLES - current_count
+
+                                    # Use sampling if chunk has more than needed
+                                    if len(dt_list) > samples_needed:
+                                        import random
+                                        datetime_data[col].extend(random.sample(dt_list, samples_needed))
+                                        if col not in sampling_triggered:
+                                            sampling_triggered[col] = row_count
+                                            logger.info(f"💾 Memory optimization: Column '{col}' temporal sampling limit reached at {row_count:,} rows (using {MAX_TEMPORAL_SAMPLES:,} samples)")
+                                    else:
+                                        datetime_data[col].extend(dt_list)
+                    except Exception:
+                        pass
+
+                # Collect sample data for PII detection (Phase 1) - limit to 1000 samples per column
+                if self.enable_pii_detection:
+                    if col not in all_column_data:
+                        all_column_data[col] = []
+                    if len(all_column_data[col]) < 1000:
+                        samples_needed = 1000 - len(all_column_data[col])
+                        all_column_data[col].extend(chunk[col].dropna().head(samples_needed).tolist())
+
+        # Record chunk processing time
+        phase_timings['chunk_processing'] = time.time() - chunk_processing_start
+        logger.info(f"⏱  Chunk processing completed in {phase_timings['chunk_processing']:.2f}s")
+
+        # Log memory optimization summary
+        if sampling_triggered:
+            logger.info(f"💾 Memory optimization: Sampled {len(sampling_triggered)} numeric columns (max {MAX_CORRELATION_SAMPLES:,} values each)")
+            total_samples = sum(len(values) for values in numeric_data.values())
+            logger.info(f"💾 Total correlation samples in memory: {total_samples:,} values (vs {row_count:,} total rows)")
 
         # Finalize column profiles
+        finalize_start = time.time()
         columns = []
         for col_name, profile_data in column_profiles.items():
             column_profile = self._finalize_column_profile(col_name, profile_data, row_count)
             columns.append(column_profile)
+        phase_timings['finalize_profiles'] = time.time() - finalize_start
+        logger.info(f"⏱  Profile finalization completed in {phase_timings['finalize_profiles']:.2f}s")
+
+        # Phase 1: Apply temporal analysis to datetime columns
+        if self.enable_temporal_analysis:
+            temporal_start = time.time()
+            logger.info("Running temporal analysis on datetime columns...")
+            for column in columns:
+                if column.name in datetime_data and len(datetime_data[column.name]) > 0:
+                    try:
+                        temporal_result = self.temporal_analyzer.analyze_temporal_column(
+                            pd.Series(datetime_data[column.name]),
+                            column_name=column.name
+                        )
+                        column.temporal_analysis = temporal_result
+                        logger.debug(f"Temporal analysis completed for column: {column.name}")
+                    except Exception as e:
+                        logger.warning(f"Temporal analysis failed for column {column.name}: {e}")
+            phase_timings['temporal_analysis'] = time.time() - temporal_start
+            logger.info(f"⏱  Temporal analysis completed in {phase_timings['temporal_analysis']:.2f}s")
+
+        # Phase 1: Apply PII detection to all columns
+        pii_columns = []
+        if self.enable_pii_detection:
+            pii_start = time.time()
+            logger.info("Running PII detection on all columns...")
+            for column in columns:
+                if column.name in all_column_data and len(all_column_data[column.name]) > 0:
+                    try:
+                        pii_result = self.pii_detector.detect_pii_in_column(
+                            column.name,
+                            all_column_data[column.name],
+                            total_rows=row_count
+                        )
+                        column.pii_info = pii_result
+                        if pii_result.get("detected"):
+                            pii_columns.append(pii_result)
+                        logger.debug(f"PII detection completed for column: {column.name}")
+                    except Exception as e:
+                        logger.warning(f"PII detection failed for column {column.name}: {e}")
+            phase_timings['pii_detection'] = time.time() - pii_start
+            logger.info(f"⏱  PII detection completed in {phase_timings['pii_detection']:.2f}s")
 
         # Calculate correlations
+        correlation_start = time.time()
         correlations = self._calculate_correlations(numeric_data, row_count)
+        phase_timings['basic_correlation'] = time.time() - correlation_start
+
+        # Phase 1: Calculate enhanced correlations
+        enhanced_correlations = None
+        if self.enable_enhanced_correlation and len(numeric_data) >= 2:
+            enhanced_corr_start = time.time()
+            logger.info("Running enhanced correlation analysis...")
+            try:
+                enhanced_correlations = self.enhanced_correlation_analyzer.calculate_correlations_multi_method(
+                    numeric_data,
+                    row_count=row_count,
+                    methods=['pearson', 'spearman']
+                )
+                # Update correlations list with enhanced correlation info
+                for pair in enhanced_correlations.get('correlation_pairs', []):
+                    correlations.append(CorrelationResult(
+                        column1=pair['column1'],
+                        column2=pair['column2'],
+                        correlation=pair['correlation'],
+                        type=pair['method'],
+                        strength=pair.get('strength'),
+                        direction=pair.get('direction'),
+                        p_value=pair.get('p_value'),
+                        is_significant=pair.get('is_significant')
+                    ))
+                logger.info(f"Enhanced correlation analysis found {len(enhanced_correlations.get('correlation_pairs', []))} significant correlations")
+            except Exception as e:
+                logger.warning(f"Enhanced correlation analysis failed: {e}")
+
+        # Phase 1: Calculate dataset-level privacy risk
+        dataset_privacy_risk = None
+        if self.enable_pii_detection and pii_columns:
+            logger.info("Calculating dataset-level privacy risk...")
+            try:
+                dataset_privacy_risk = self.pii_detector.calculate_dataset_privacy_risk(
+                    pii_columns=pii_columns,
+                    total_columns=len(columns),
+                    total_rows=row_count
+                )
+                logger.info(f"Dataset privacy risk: {dataset_privacy_risk.get('risk_level', 'unknown').upper()} ({dataset_privacy_risk.get('risk_score', 0)}/100)")
+            except Exception as e:
+                logger.warning(f"Dataset privacy risk calculation failed: {e}")
 
         # Generate validation suggestions
+        suggestions_start = time.time()
         suggested_validations = self._generate_validation_suggestions(columns, row_count)
+        phase_timings['generate_suggestions'] = time.time() - suggestions_start
 
         # Calculate overall quality score
+        quality_start = time.time()
         overall_quality = self._calculate_overall_quality(columns)
+        phase_timings['quality_score'] = time.time() - quality_start
 
         # Generate validation configuration
+        config_start = time.time()
         config_yaml, config_command = self._generate_validation_config(
             file_name, file_path, file_format, file_size, row_count, columns, suggested_validations
         )
+        phase_timings['generate_config'] = time.time() - config_start
 
         processing_time = time.time() - start_time
-        logger.info(f"Profile completed in {processing_time:.2f} seconds")
+        logger.info(f"⏱  Profile completed in {processing_time:.2f} seconds")
+
+        # Log timing breakdown
+        logger.info("⏱  Timing breakdown:")
+        for phase, duration in phase_timings.items():
+            percentage = (duration / processing_time * 100) if processing_time > 0 else 0
+            logger.info(f"   {phase}: {duration:.2f}s ({percentage:.1f}%)")
 
         return ProfileResult(
             file_name=file_name,
@@ -229,7 +669,10 @@ class DataProfiler:
             suggested_validations=suggested_validations,
             overall_quality_score=overall_quality,
             generated_config_yaml=config_yaml,
-            generated_config_command=config_command
+            generated_config_command=config_command,
+            enhanced_correlations=enhanced_correlations,
+            dataset_privacy_risk=dataset_privacy_risk,
+            file_metadata=file_metadata if file_metadata else None
         )
 
     def _initialize_column_profile(
@@ -245,6 +688,7 @@ class DataProfiler:
             "declared_type": declared_type,
             "sample_values": [],
             "type_counts": {},  # Count of each detected type
+            "type_sampled_count": 0,  # Track how many rows we sampled for type detection
             "null_count": 0,
             "value_counts": {},  # Frequency distribution
             "numeric_values": [],  # For statistics
@@ -275,10 +719,36 @@ class DataProfiler:
             samples = non_null_series.head(100 - len(profile["sample_values"])).tolist()
             profile["sample_values"].extend(samples)
 
-        # Type detection
-        for value in non_null_series:
-            detected_type = self._detect_type(value)
-            profile["type_counts"][detected_type] = profile["type_counts"].get(detected_type, 0) + 1
+        # Type detection (sample-based for performance)
+        # Only detect types on first chunk and sample of subsequent chunks
+        if chunk_idx == 0:
+            # First chunk: detect all types
+            # Track unexpected types for debugging (limit to first 10 occurrences)
+            unexpected_types_logged = 0
+            for value in non_null_series:
+                detected_type = self._detect_type(value)
+                profile["type_counts"][detected_type] = profile["type_counts"].get(detected_type, 0) + 1
+
+                # Debug logging for type mismatches (first chunk only, limit output)
+                # Look for common patterns that might indicate issues
+                if unexpected_types_logged < 10:
+                    # If column name suggests it should be string but we detect numeric/other
+                    col_lower = profile["column_name"].lower()
+                    is_account_like = any(keyword in col_lower for keyword in ['account', 'id', 'code', 'reference', 'number'])
+                    if is_account_like and detected_type in ['integer', 'float', 'boolean', 'date']:
+                        logger.debug(f"🔍 Type mismatch in '{profile['column_name']}': value='{value}' → detected as '{detected_type}' (expected string)")
+                        unexpected_types_logged += 1
+
+            profile["type_sampled_count"] += len(non_null_series)
+        elif chunk_idx % 10 == 0:
+            # Every 10th chunk: sample 1000 values for type refinement
+            sample_size = min(1000, len(non_null_series))
+            import random
+            sampled_values = random.sample(list(non_null_series), sample_size) if len(non_null_series) > sample_size else list(non_null_series)
+            for value in sampled_values:
+                detected_type = self._detect_type(value)
+                profile["type_counts"][detected_type] = profile["type_counts"].get(detected_type, 0) + 1
+            profile["type_sampled_count"] += len(sampled_values)
 
         # Value frequency (limit to prevent memory issues)
         if len(profile["value_counts"]) < 10000:
@@ -286,15 +756,43 @@ class DataProfiler:
             for val, count in value_freq.items():
                 profile["value_counts"][val] = profile["value_counts"].get(val, 0) + count
 
-        # Numeric analysis
+        # Numeric analysis (memory-efficient sampling for statistics)
+        # Use intelligent sampling based on column semantics
+        intelligence = SmartColumnAnalyzer.analyze_column(profile["column_name"])
+        MAX_NUMERIC_SAMPLES = intelligence.recommended_sample_size
+
+        # Log intelligent sampling decision on first chunk
+        if chunk_idx == 0 and intelligence.semantic_type != 'unknown':
+            logger.debug(f"🧠 Intelligent sampling for '{profile['column_name']}': {intelligence.semantic_type} → {MAX_NUMERIC_SAMPLES:,} samples ({intelligence.reasoning})")
+
         numeric_series = pd.to_numeric(non_null_series, errors='coerce').dropna()
         if len(numeric_series) > 0:
-            profile["numeric_values"].extend(numeric_series.tolist())
+            current_count = len(profile["numeric_values"])
+            if current_count < MAX_NUMERIC_SAMPLES:
+                samples_needed = MAX_NUMERIC_SAMPLES - current_count
+                if len(numeric_series) > samples_needed:
+                    # Random sample
+                    import random
+                    profile["numeric_values"].extend(random.sample(numeric_series.tolist(), samples_needed))
+                else:
+                    profile["numeric_values"].extend(numeric_series.tolist())
 
-        # String analysis
+        # String analysis (memory-efficient sampling for length statistics)
+        # Use intelligent sampling based on column semantics (reuse intelligence from above)
+        MAX_STRING_LENGTH_SAMPLES = intelligence.recommended_sample_size
+
         string_series = non_null_series.astype(str)
         lengths = string_series.str.len()
-        profile["string_lengths"].extend(lengths.tolist())
+        current_count = len(profile["string_lengths"])
+        if current_count < MAX_STRING_LENGTH_SAMPLES:
+            samples_needed = MAX_STRING_LENGTH_SAMPLES - current_count
+            length_list = lengths.tolist()
+            if len(length_list) > samples_needed:
+                # Random sample
+                import random
+                profile["string_lengths"].extend(random.sample(length_list, samples_needed))
+            else:
+                profile["string_lengths"].extend(length_list)
 
         # Pattern detection (sample only)
         if chunk_idx == 0:
@@ -438,20 +936,35 @@ class DataProfiler:
             is_known = True
             inferred = declared_type
         else:
-            # Confidence = percentage of values matching primary type
-            confidence = primary_count / non_null_count if non_null_count > 0 else 0.0
+            # Confidence = percentage of SAMPLED values matching primary type
+            # Use type_sampled_count instead of total rows for accurate confidence with sampling
+            type_sampled_count = profile_data.get("type_sampled_count", non_null_count)
+            confidence = primary_count / type_sampled_count if type_sampled_count > 0 else 0.0
             is_known = False
             inferred = primary_type
 
         # Detect type conflicts
         conflicts = []
+        type_sampled_count_for_conflicts = profile_data.get("type_sampled_count", non_null_count)
         for typ, count in sorted_types[1:4]:  # Top 3 conflicts
-            if count > non_null_count * 0.01:  # At least 1% of data
+            if count > type_sampled_count_for_conflicts * 0.01:  # At least 1% of sampled data
                 conflicts.append({
                     "type": typ,
                     "count": count,
-                    "percentage": round(100 * count / non_null_count, 2)
+                    "percentage": round(100 * count / type_sampled_count_for_conflicts, 2)
                 })
+
+        # Log type inference summary with conflicts (DEBUG level)
+        col_name = profile_data.get("column_name", "unknown")
+        if conflicts and confidence < 0.95:
+            # Log when confidence is low due to type conflicts
+            conflict_summary = ", ".join([f"{c['type']} ({c['percentage']}%)" for c in conflicts])
+            logger.debug(
+                f"🔍 Type inference for '{col_name}': "
+                f"primary={inferred} ({confidence*100:.1f}% confidence), "
+                f"conflicts=[{conflict_summary}], "
+                f"sampled={type_sampled_count_for_conflicts:,} values"
+            )
 
         return TypeInference(
             declared_type=declared_type,
@@ -474,10 +987,21 @@ class DataProfiler:
         string_lengths = profile_data["string_lengths"]
         patterns = profile_data["patterns"]
 
+        # Use intelligent sampling to determine optimal sample size
+        column_name = profile_data["column_name"]
+        intelligence = SmartColumnAnalyzer.analyze_column(column_name)
+
         stats = ColumnStatistics()
         stats.count = total_rows
         stats.null_count = null_count
         stats.null_percentage = 100 * null_count / total_rows if total_rows > 0 else 0
+
+        # Add intelligent sampling metadata for transparency
+        stats.semantic_type = intelligence.semantic_type
+        stats.sample_size = min(len(numeric_values) if numeric_values else len(value_counts), intelligence.recommended_sample_size)
+        stats.sampling_strategy = SmartColumnAnalyzer.get_sampling_summary(
+            column_name, total_rows, intelligence
+        )
 
         # Unique counts
         stats.unique_count = len(value_counts)
@@ -554,37 +1078,50 @@ class DataProfiler:
         """Calculate data quality metrics."""
         quality = QualityMetrics()
         issues = []
+        observations = []  # General informational insights
 
         # Completeness: % of non-null values
         quality.completeness = 100 - statistics.null_percentage
-
+        completeness_note = None
         if quality.completeness < 50:
-            issues.append(f"Low completeness: {quality.completeness:.1f}% non-null")
+            completeness_note = f"Low completeness: {quality.completeness:.1f}% non-null"
+            issues.append(completeness_note)
         elif quality.completeness < 90:
-            issues.append(f"Moderate completeness: {quality.completeness:.1f}% non-null")
+            completeness_note = f"Moderate completeness: {quality.completeness:.1f}% non-null"
+            issues.append(completeness_note)
 
         # Validity: % matching inferred type
         quality.validity = type_info.confidence * 100
-
+        validity_note = None
         if quality.validity < 95:
-            issues.append(f"Type inconsistency: {quality.validity:.1f}% match inferred type")
+            validity_note = f"Type inconsistency: {quality.validity:.1f}% match inferred type"
+            issues.append(validity_note)
 
         # Uniqueness: cardinality
         quality.uniqueness = statistics.cardinality * 100
-
+        uniqueness_note = None
         if statistics.cardinality == 1.0 and total_rows > 1:
-            issues.append("All values are unique (potential key field)")
-        elif statistics.cardinality < 0.01 and total_rows > 100:
-            issues.append(f"Very low cardinality: {statistics.unique_count} unique values")
+            # This is an observation about uniqueness - informational
+            uniqueness_note = "All values are unique (potential key field)"
+            observations.append(uniqueness_note)
+        elif statistics.cardinality < 0.01 and statistics.unique_count < 100 and total_rows > 100:
+            # Very low cardinality is only an issue when there are actually few unique values
+            # Example: 100 rows with 5 unique values = problem
+            # NOT a problem: 1M rows with 5K unique values (0.5% cardinality but not "very low")
+            uniqueness_note = f"Very low cardinality: {statistics.unique_count} unique values"
+            issues.append(uniqueness_note)
 
         # Consistency: pattern matching
+        consistency_note = None
         if statistics.pattern_samples:
             # If top pattern covers >80% of data, high consistency
             top_pattern_pct = statistics.pattern_samples[0]["percentage"]
             quality.consistency = top_pattern_pct
 
             if quality.consistency < 50:
-                issues.append(f"Low consistency: {len(statistics.pattern_samples)} different patterns")
+                # Pattern diversity is informational
+                consistency_note = f"{len(statistics.pattern_samples)} different patterns detected"
+                observations.append(consistency_note)
         else:
             quality.consistency = 100.0
 
@@ -597,6 +1134,7 @@ class DataProfiler:
         )
 
         quality.issues = issues
+        quality.observations = observations
 
         return quality
 
