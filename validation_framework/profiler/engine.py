@@ -491,13 +491,13 @@ class DataProfiler:
                 if self.enable_temporal_analysis:
                     # Skip datetime conversion for obviously non-datetime columns
                     col_lower = col.lower()
+                    name_suggests_datetime = any(keyword in col_lower for keyword in ['date', 'time', 'timestamp', 'datetime', 'created', 'updated', 'modified'])
+
                     is_likely_datetime = (
-                        # Column name suggests datetime
-                        any(keyword in col_lower for keyword in ['date', 'time', 'timestamp', 'datetime', 'created', 'updated', 'modified']) or
-                        # Column is string type (datetime might be stored as string)
-                        chunk[col].dtype == 'object' or
-                        # Column is already datetime type
-                        pd.api.types.is_datetime64_any_dtype(chunk[col])
+                        # Column is already datetime type - always try to analyze
+                        pd.api.types.is_datetime64_any_dtype(chunk[col]) or
+                        # Column name suggests datetime - try conversion even if string type
+                        name_suggests_datetime
                     )
 
                     if is_likely_datetime:

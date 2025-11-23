@@ -1,0 +1,144 @@
+# Auto-generated validation configuration
+# Generated from profile of: HI-Large_Trans.parquet
+# Generated at: 2025-11-22 16:44:28
+# File size: 5195.0 MB, Rows: 179,702,229
+# Recommended chunk size: 2,000,000 rows (Using maximum chunk size (2,000,000). Sufficient memory available.)
+
+validation_job:
+  name: "Validation for HI-Large_Trans.parquet"
+  description: "Auto-generated from data profile"
+
+settings:
+  chunk_size: 2000000  # Optimized for parquet format, 12 validations (simple complexity)
+  max_sample_failures: 100
+
+files:
+  - name: "HI-Large_Trans"
+    path: "/home/daniel/www/test-data/HI-Large_Trans.parquet"
+    format: "parquet"
+
+    validations:
+      - type: "EmptyFileCheck"
+        severity: "ERROR"
+        # Prevent empty file loads
+
+      - type: "MandatoryFieldCheck"
+        severity: "ERROR"
+        params:
+          fields:
+            - "Timestamp"
+            - "From Bank"
+            - "Account"
+            - "To Bank"
+            - "Account.1"
+            - "Amount Received"
+            - "Receiving Currency"
+            - "Amount Paid"
+            - "Payment Currency"
+            - "Payment Format"
+            - "Is Laundering"
+        # 11 fields have >95% completeness
+
+      - type: "RangeCheck"
+        severity: "WARNING"
+        params:
+          field: "From Bank"
+          min_value: 0.0
+          max_value: 315170.0
+        # Values range from 0.0 to 315170.0
+
+      - type: "RangeCheck"
+        severity: "WARNING"
+        params:
+          field: "To Bank"
+          min_value: 0.0
+          max_value: 2216644.0
+        # Values range from 0.0 to 2216644.0
+
+      - type: "RangeCheck"
+        severity: "WARNING"
+        params:
+          field: "Amount Received"
+          min_value: 0.01
+          max_value: 814183242.8
+        # Values range from 0.01 to 814183242.8
+
+      - type: "RangeCheck"
+        severity: "WARNING"
+        params:
+          field: "Amount Paid"
+          min_value: 0.01
+          max_value: 1135980504.84
+        # Values range from 0.01 to 1135980504.84
+
+      - type: "RangeCheck"
+        severity: "WARNING"
+        params:
+          field: "Is Laundering"
+          min_value: 0.0
+          max_value: 0.0
+        # Values range from 0.0 to 0.0
+
+      - type: "ValidValuesCheck"
+        severity: "ERROR"
+        params:
+          field: "Receiving Currency"
+          valid_values:
+            - "US Dollar"
+            - "Euro"
+            - "Yuan"
+            - "Shekel"
+            - "Canadian Dollar"
+            - "UK Pound"
+            - "Ruble"
+            - "Australian Dollar"
+            - "Yen"
+            - "Swiss Franc"
+        # Low cardinality field with 15 unique values
+
+      - type: "ValidValuesCheck"
+        severity: "ERROR"
+        params:
+          field: "Payment Currency"
+          valid_values:
+            - "US Dollar"
+            - "Euro"
+            - "Yuan"
+            - "Shekel"
+            - "Canadian Dollar"
+            - "UK Pound"
+            - "Ruble"
+            - "Australian Dollar"
+            - "Yen"
+            - "Swiss Franc"
+        # Low cardinality field with 15 unique values
+
+      - type: "ValidValuesCheck"
+        severity: "ERROR"
+        params:
+          field: "Payment Format"
+          valid_values:
+            - "Cheque"
+            - "Credit Card"
+            - "ACH"
+            - "Cash"
+            - "Reinvestment"
+            - "Wire"
+            - "Bitcoin"
+        # Low cardinality field with 7 unique values
+
+      - type: "ValidValuesCheck"
+        severity: "ERROR"
+        params:
+          field: "Is Laundering"
+          valid_values:
+            - "0"
+            - "1"
+        # Low cardinality field with 2 unique values
+
+      - type: "RowCountRangeCheck"
+        severity: "WARNING"
+        params:
+          min_rows: 89851114
+          max_rows: 359404458
+        # Expect approximately 179702229 rows based on profile

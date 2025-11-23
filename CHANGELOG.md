@@ -5,6 +5,36 @@ All notable changes to the DataK9 Data Validation Framework will be documented i
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **Date/Time Pattern Support** - Output filenames now support automatic date/time pattern substitution
+  - Patterns: `{date}`, `{time}`, `{timestamp}`, `{datetime}`, `{job_name}`, `{file_name}`, `{table_name}`
+  - Works in CLI arguments (`-o`, `-j`, `-c`, `--log-file`) and YAML config (`output.html_report`, `output.json_summary`)
+  - Example: `reports/{date}/validation_{job_name}_{time}.html` → `reports/2025-11-22/validation_My_Job_14-30-45.html`
+  - Prevents file overwrites with automatic timestamping
+  - Automatic directory creation for nested paths
+  - Filename sanitization for cross-platform compatibility
+  - Consistent timestamps across all outputs in a single run
+  - See [CLI_GUIDE.md](CLI_GUIDE.md) for complete documentation
+- **New utility module**: `validation_framework.utils.path_patterns.PathPatternExpander`
+- **Example config**: `examples/configs/validation_with_datetime_patterns.yaml`
+- **Comprehensive tests**: 40+ unit tests and integration tests for pattern expansion
+
+### Changed
+- **Default filenames** now include timestamps to prevent overwrites:
+  - Profile: `{file_name}_profile_report_{date}.html` (was `{file_name}_profile_report.html`)
+  - Profile config: `{file_name}_validation_{timestamp}.yaml` (was `{file_name}_validation.yaml`)
+  - CDA analysis: `cda_gap_analysis_{timestamp}.html` (was `cda_gap_analysis.html`)
+- **CLI help text** updated with pattern documentation and examples
+
+### Migration Guide
+- **Backward Compatible**: Existing configs without patterns work unchanged
+- **To adopt patterns**: Add patterns to your YAML config's `output` section or use in CLI arguments
+- **Shell script wrappers**: Can now be replaced with built-in pattern support
+
+---
+
 ## [0.2.0] - 2025-11-16
 
 ### Added - Major Performance Optimization Release (Polars Migration)

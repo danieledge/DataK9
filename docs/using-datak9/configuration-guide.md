@@ -101,6 +101,13 @@ files:
         severity: "ERROR"
         params:
           fields: ["customer_id", "email"]
+
+# Output configuration (supports date/time patterns)
+output:
+  html_report: "reports/{date}/validation_{job_name}_{time}.html"
+  json_summary: "results/{job_name}_{timestamp}.json"
+  fail_on_error: true
+  fail_on_warning: false
 ```
 
 ### YAML Basics
@@ -490,6 +497,68 @@ For complex scenarios with different validations:
 
 ---
 
+## Output Configuration
+
+### Date/Time Patterns in Output Paths
+
+Output filenames support automatic date/time pattern substitution to prevent overwrites and improve audit trails:
+
+```yaml
+validation_job:
+  name: "Customer Data Validation"
+
+output:
+  # Use patterns for automatic timestamping
+  html_report: "reports/{date}/validation_{job_name}_{time}.html"
+  json_summary: "results/{job_name}_{timestamp}.json"
+```
+
+**Result:**
+```
+reports/2025-11-22/validation_Customer_Data_Validation_14-30-45.html
+results/Customer_Data_Validation_20251122_143045.json
+```
+
+**Available Patterns:**
+
+| Pattern | Example | Use Case |
+|---------|---------|----------|
+| `{date}` | `2025-11-22` | Daily reports, date-based organization |
+| `{time}` | `14-30-45` | Multiple runs per day |
+| `{timestamp}` | `20251122_143045` | Unique per run (recommended) |
+| `{datetime}` | `2025-11-22_14-30-45` | Combined date and time |
+| `{job_name}` | `Customer_Data_Validation` | Organization by job |
+
+**Benefits:**
+- ✅ No file overwrites (each run gets unique filename)
+- ✅ Better audit trails (timestamp shows when validation ran)
+- ✅ Organized outputs (automatic directory structures like `reports/{date}/`)
+- ✅ Backward compatible (paths without patterns work unchanged)
+
+**Basic Output Configuration:**
+
+Without patterns (simple, may overwrite):
+```yaml
+output:
+  html_report: "validation_report.html"
+  json_summary: "validation_summary.json"
+  fail_on_error: true
+  fail_on_warning: false
+```
+
+With patterns (recommended for production):
+```yaml
+output:
+  html_report: "reports/{date}/{job_name}_{time}.html"
+  json_summary: "results/{job_name}_{timestamp}.json"
+  fail_on_error: true
+  fail_on_warning: false
+```
+
+**See:** [CLI Guide](../../CLI_GUIDE.md#datetimepatterns) for using patterns in CLI arguments.
+
+---
+
 ## Running Validations
 
 ### Basic Command
@@ -501,21 +570,37 @@ python3 -m validation_framework.cli validate my_config.yaml
 ### Generate HTML Report
 
 ```bash
+# Simple filename
 python3 -m validation_framework.cli validate my_config.yaml --html report.html
+
+# With date/time patterns (prevents overwrites)
+python3 -m validation_framework.cli validate my_config.yaml \
+  --html "reports/{date}/validation_{time}.html"
 ```
 
 ### Generate JSON Report
 
 ```bash
+# Simple filename
 python3 -m validation_framework.cli validate my_config.yaml --json results.json
+
+# With timestamp pattern (recommended)
+python3 -m validation_framework.cli validate my_config.yaml \
+  --json "results/validation_{timestamp}.json"
 ```
 
 ### Generate Both Reports
 
 ```bash
+# Without patterns
 python3 -m validation_framework.cli validate my_config.yaml \
   --html report.html \
   --json results.json
+
+# With patterns (recommended for production)
+python3 -m validation_framework.cli validate my_config.yaml \
+  --html "reports/{date}/{job_name}_{time}.html" \
+  --json "results/{job_name}_{timestamp}.json"
 ```
 
 ### Verbose Output

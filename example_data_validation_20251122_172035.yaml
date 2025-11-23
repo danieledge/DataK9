@@ -1,0 +1,84 @@
+# Auto-generated validation configuration
+# Generated from profile of: example_data.csv
+# Generated at: 2025-11-22 17:20:35
+# File size: 0.0 MB, Rows: 30
+# Recommended chunk size: 2,000,000 rows (Using maximum chunk size (2,000,000). Sufficient memory available.)
+
+validation_job:
+  name: "Validation for example_data.csv"
+  description: "Auto-generated from data profile"
+
+settings:
+  chunk_size: 2000000  # Optimized for csv format, 8 validations (simple complexity)
+  max_sample_failures: 100
+
+files:
+  - name: "example_data"
+    path: "/home/daniel/www/old-dqa/zzzdeprecated/test-data/example_data.csv"
+    format: "csv"
+
+    validations:
+      - type: "EmptyFileCheck"
+        severity: "ERROR"
+        # Prevent empty file loads
+
+      - type: "MandatoryFieldCheck"
+        severity: "ERROR"
+        params:
+          fields:
+            - "order_id"
+            - "customer_name"
+            - "order_date"
+            - "amount"
+            - "status"
+            - "quantity"
+            - "product_category"
+            - "shipping_country"
+            - "discount_pct"
+        # 9 fields have >95% completeness
+
+      - type: "RangeCheck"
+        severity: "WARNING"
+        params:
+          field: "order_id"
+          min_value: 10001.0
+          max_value: 10030.0
+        # Values range from 10001.0 to 10030.0
+
+      - type: "RangeCheck"
+        severity: "WARNING"
+        params:
+          field: "amount"
+          min_value: 290.0
+          max_value: 3200.0
+        # Values range from 290.0 to 3200.0
+
+      - type: "RangeCheck"
+        severity: "WARNING"
+        params:
+          field: "quantity"
+          min_value: 1.0
+          max_value: 10.0
+        # Values range from 1.0 to 10.0
+
+      - type: "RangeCheck"
+        severity: "WARNING"
+        params:
+          field: "discount_pct"
+          min_value: 0.0
+          max_value: 20.0
+        # Values range from 0.0 to 20.0
+
+      - type: "RowCountRangeCheck"
+        severity: "WARNING"
+        params:
+          min_rows: 15
+          max_rows: 60
+        # Expect approximately 30 rows based on profile
+
+      - type: "DateFormatCheck"
+        severity: "ERROR"
+        params:
+          field: "order_date"
+          format: "%Y-%m-%d"
+        # Detected date format: %Y-%m-%d

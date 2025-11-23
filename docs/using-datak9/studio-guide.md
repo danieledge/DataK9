@@ -17,11 +17,13 @@ DataK9 Studio is a professional, IDE-style interface for creating validation con
 3. [The Interface](#the-interface)
 4. [Creating Projects](#creating-projects)
 5. [Adding Validations](#adding-validations)
-6. [YAML Editor](#yaml-editor)
-7. [Export and Import](#export-and-import)
-8. [Best Practices](#best-practices)
-9. [Keyboard Shortcuts](#keyboard-shortcuts)
-10. [Troubleshooting](#troubleshooting)
+6. [Critical Data Attributes (CDAs)](#critical-data-attributes-cdas)
+7. [Output Configuration](#output-configuration)
+8. [YAML Editor](#yaml-editor)
+9. [Export and Import](#export-and-import)
+10. [Best Practices](#best-practices)
+11. [Keyboard Shortcuts](#keyboard-shortcuts)
+12. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -461,6 +463,212 @@ condition: "(status == 'active') & (balance > 0)"
 
 ---
 
+## Critical Data Attributes (CDAs)
+
+Critical Data Attributes identify fields that require special handling for regulatory compliance (GDPR, SOX, HIPAA, PCI-DSS, etc.).
+
+### What are CDAs?
+
+CDAs mark fields that:
+- Are subject to regulatory requirements
+- Require special security handling
+- Need audit trails
+- Have compliance obligations
+- Are considered sensitive or critical
+
+### Adding CDAs in Studio
+
+When you select a file in the sidebar, scroll down to see the **⭐ Critical Data Attributes** card in the visual editor.
+
+**Step 1: Add a New CDA**
+
+1. Click **+ Add CDA** button
+2. A new CDA form appears
+
+**Step 2: Fill in CDA Details**
+
+- **Field Name** (required): The column name (e.g., `customer_id`, `ssn`, `account_number`)
+- **Description**: What this field represents and why it's critical
+- **Owner/Team**: Who owns or manages this data (e.g., "Compliance Team", "Finance Department")
+- **Regulatory Reference**: The specific regulation (e.g., "SOX Section 404", "GDPR Article 6", "HIPAA §164.514")
+
+**Step 3: Auto-Save**
+
+Changes are automatically saved to YAML as you type.
+
+### CDA Examples
+
+**Financial Services (SOX Compliance)**:
+```yaml
+critical_data_attributes:
+  - field: "transaction_id"
+    description: "Unique transaction identifier for audit trail"
+    owner: "Finance Team"
+    regulatory_reference: "SOX Section 404"
+
+  - field: "account_balance"
+    description: "Customer account balance - financial reporting"
+    owner: "Accounting Department"
+    regulatory_reference: "SOX Section 302"
+```
+
+**Healthcare (HIPAA Compliance)**:
+```yaml
+critical_data_attributes:
+  - field: "patient_id"
+    description: "Protected health information identifier"
+    owner: "Privacy Office"
+    regulatory_reference: "HIPAA §164.514"
+
+  - field: "diagnosis_code"
+    description: "Medical diagnosis - PHI"
+    owner: "Medical Records"
+    regulatory_reference: "HIPAA §164.501"
+```
+
+**E-Commerce (PCI-DSS & GDPR)**:
+```yaml
+critical_data_attributes:
+  - field: "credit_card_number"
+    description: "Payment card data - must be encrypted"
+    owner: "Security Team"
+    regulatory_reference: "PCI-DSS Requirement 3"
+
+  - field: "email_address"
+    description: "Personal identifier - GDPR protected"
+    owner: "Data Protection Officer"
+    regulatory_reference: "GDPR Article 6"
+```
+
+### CDA Gap Analysis
+
+DataK9 can detect CDAs that don't have validation coverage:
+
+```bash
+# Check for CDAs without validations
+python3 -m validation_framework.cli cda-analysis config.yaml
+
+# Fail if gaps found (CI/CD integration)
+python3 -m validation_framework.cli cda-analysis config.yaml --fail-on-gaps
+```
+
+**Output Example**:
+```
+⚠ CDA Gap Analysis Results:
+
+Critical Data Attributes without validation coverage:
+  - customer_ssn (Owner: Compliance Team, Ref: GDPR Article 6)
+  - account_number (Owner: Finance Team, Ref: SOX Section 404)
+
+Recommendation: Add validations for these fields or remove CDA designation.
+```
+
+### Best Practices for CDAs
+
+1. **Define CDAs Early**: Mark critical fields at project start
+2. **Document Regulations**: Always include regulatory_reference
+3. **Assign Ownership**: Specify who's responsible
+4. **Validate CDAs**: Ensure every CDA has at least one validation
+5. **Review Regularly**: Update as regulations change
+
+---
+
+## Output Configuration
+
+Control where validation reports are saved and how they're named using date/time patterns.
+
+### Accessing Output Configuration
+
+In the sidebar, expand **📤 Output Configuration** to configure:
+- HTML report path
+- JSON summary path
+- Fail on ERROR/WARNING options
+
+### Date/Time Patterns
+
+Click the 🔖 (bookmark) button next to the path field to open the pattern picker modal.
+
+**Available Patterns**:
+
+| Pattern | Example | Description | Use Case |
+|---------|---------|-------------|----------|
+| `{date}` | `2025-11-22` | ISO date (YYYY-MM-DD) | Daily reports |
+| `{time}` | `14-30-45` | Time (HH-MM-SS) | Multiple runs per day |
+| `{timestamp}` | `20251122_143045` | Compact timestamp | **Recommended** - unique per run |
+| `{datetime}` | `2025-11-22_14-30-45` | Combined date & time | Detailed timestamping |
+| `{job_name}` | `Customer_Validation` | Sanitized job name | Organization by job |
+
+### Using the Pattern Picker
+
+1. Click in the HTML Report Path or JSON Summary Path field
+2. Click the 🔖 button
+3. Select a pattern from the modal
+4. Pattern is inserted at cursor position
+5. Live preview shows expanded pattern
+
+### Example Configurations
+
+**Simple (overwrites each run)**:
+```yaml
+output:
+  html_report: "validation_report.html"
+  json_summary: "validation_summary.json"
+  fail_on_error: true
+  fail_on_warning: false
+```
+
+**Timestamped (never overwrites)**:
+```yaml
+output:
+  html_report: "reports/{job_name}_{timestamp}.html"
+  json_summary: "results/{job_name}_{timestamp}.json"
+  fail_on_error: true
+  fail_on_warning: false
+```
+
+**Organized by Date**:
+```yaml
+output:
+  html_report: "reports/{date}/{job_name}_{time}.html"
+  json_summary: "results/{date}/{job_name}_{time}.json"
+```
+
+**Multiple Jobs with Timestamps**:
+```yaml
+output:
+  html_report: "validation_{job_name}_{timestamp}.html"
+  json_summary: "summary_{job_name}_{timestamp}.json"
+```
+
+### Fail Options
+
+Configure how validation results affect exit codes (important for CI/CD):
+
+- ✅ **Fail on ERROR severity**: Exit code 1 if any ERROR-level failures (recommended)
+- ☐ **Fail on WARNING severity**: Exit code 1 if any WARNING-level failures (strict mode)
+
+**CI/CD Example**:
+```yaml
+output:
+  html_report: "ci-reports/{job_name}_{timestamp}.html"
+  json_summary: "ci-results/{job_name}_{timestamp}.json"
+  fail_on_error: true    # Fail CI build on errors
+  fail_on_warning: false # Allow warnings
+```
+
+### Pattern Preview
+
+The live preview shows what your path will look like with current date/time:
+
+```
+Input:  reports/{date}/{job_name}_{time}.html
+Preview: reports/2025-11-22/Customer_Validation_14-30-45.html
+```
+
+**Tip**: Use `{timestamp}` for unique filenames that never overwrite previous runs.
+
+---
+
 ## YAML Editor
 
 ### Monaco Editor Features
@@ -662,6 +870,7 @@ Don't create 20 validations then test - debug incrementally!
 | `Ctrl+O` / `Cmd+O` | Import YAML |
 | `Ctrl+S` / `Cmd+S` | Export YAML |
 | `Ctrl+E` / `Cmd+E` | Export YAML (alternative) |
+| `Escape` | Close modal dialogs |
 
 ### Panel Toggles
 
@@ -670,6 +879,13 @@ Don't create 20 validations then test - debug incrementally!
 | `Ctrl+B` / `Cmd+B` | Toggle sidebar |
 | `Ctrl+H` / `Cmd+H` | Toggle help panel |
 | `Ctrl+J` / `Cmd+J` | Toggle bottom panel |
+
+### File Tree Navigation
+
+| Shortcut | Action |
+|----------|--------|
+| `↑` Arrow Up | Select previous file |
+| `↓` Arrow Down | Select next file |
 
 ### Monaco Editor
 

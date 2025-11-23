@@ -8,6 +8,35 @@ including schema, statistics, quality metrics, and suggestions.
 from dataclasses import dataclass, field
 from typing import Dict, List, Any, Optional
 from datetime import datetime
+import numpy as np
+
+
+def convert_numpy_types(obj):
+    """
+    Recursively convert numpy types to Python native types for JSON serialization.
+
+    Args:
+        obj: Any object that might contain numpy types
+
+    Returns:
+        Object with numpy types converted to Python types
+    """
+    if isinstance(obj, np.bool_):
+        return bool(obj)
+    elif isinstance(obj, (np.integer, np.int64, np.int32)):
+        return int(obj)
+    elif isinstance(obj, (np.floating, np.float64, np.float32)):
+        return float(obj)
+    elif isinstance(obj, np.ndarray):
+        return obj.tolist()
+    elif isinstance(obj, dict):
+        return {key: convert_numpy_types(value) for key, value in obj.items()}
+    elif isinstance(obj, list):
+        return [convert_numpy_types(item) for item in obj]
+    elif isinstance(obj, tuple):
+        return tuple(convert_numpy_types(item) for item in obj)
+    else:
+        return obj
 
 
 @dataclass
@@ -35,8 +64,8 @@ class TypeInference:
         return {
             "declared_type": self.declared_type,
             "inferred_type": self.inferred_type,
-            "confidence": round(self.confidence, 3),
-            "is_known": self.is_known,
+            "confidence": round(float(self.confidence), 3),
+            "is_known": bool(self.is_known),
             "type_conflicts": self.type_conflicts,
             "sample_values": self.sample_values[:10]  # Limit samples
         }
@@ -96,6 +125,11 @@ class ColumnStatistics:
     # Pattern analysis
     pattern_samples: List[Dict[str, Any]] = field(default_factory=list)
 
+    # Sampling metadata for transparency
+    semantic_type: Optional[str] = None  # Detected semantic type (id, date, amount, etc.)
+    sample_size: Optional[int] = None  # Number of rows sampled for statistics
+    sampling_strategy: Optional[str] = None  # Description of sampling approach
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary representation."""
         result = {
@@ -137,6 +171,14 @@ class ColumnStatistics:
         # Add pattern samples
         result["pattern_samples"] = self.pattern_samples[:10]
 
+        # Add sampling metadata for transparency
+        if self.semantic_type:
+            result["semantic_type"] = self.semantic_type
+        if self.sample_size is not None:
+            result["sample_size"] = int(self.sample_size)
+        if self.sampling_strategy:
+            result["sampling_strategy"] = self.sampling_strategy
+
         return result
 
 
@@ -151,7 +193,8 @@ class QualityMetrics:
         uniqueness: Percentage of unique values (0-100)
         consistency: Consistency score based on pattern matching (0-100)
         overall_score: Overall quality score (0-100)
-        issues: List of detected quality issues
+        issues: List of detected quality issues (actual problems)
+        observations: List of informational insights (not problems)
     """
     completeness: float = 0.0
     validity: float = 0.0
@@ -159,6 +202,7 @@ class QualityMetrics:
     consistency: float = 0.0
     overall_score: float = 0.0
     issues: List[str] = field(default_factory=list)
+    observations: List[str] = field(default_factory=list)
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary representation."""
@@ -168,7 +212,8 @@ class QualityMetrics:
             "uniqueness": round(self.uniqueness, 2),
             "consistency": round(self.consistency, 2),
             "overall_score": round(self.overall_score, 2),
-            "issues": self.issues
+            "issues": self.issues,
+            "observations": self.observations
         }
 
 
@@ -182,20 +227,32 @@ class ColumnProfile:
         type_info: Type inference information
         statistics: Statistical information
         quality: Quality metrics
+        temporal_analysis: Temporal analysis results (for datetime columns)
+        pii_info: PII detection results
     """
     name: str
     type_info: TypeInference
     statistics: ColumnStatistics
     quality: QualityMetrics
+    temporal_analysis: Optional[Dict[str, Any]] = None
+    pii_info: Optional[Dict[str, Any]] = None
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary representation."""
-        return {
+        result = {
             "name": self.name,
             "type_info": self.type_info.to_dict(),
             "statistics": self.statistics.to_dict(),
             "quality": self.quality.to_dict()
         }
+
+        # Add Phase 1 enhancements if present (convert numpy types for JSON)
+        if self.temporal_analysis:
+            result["temporal_analysis"] = convert_numpy_types(self.temporal_analysis)
+        if self.pii_info:
+            result["pii_info"] = convert_numpy_types(self.pii_info)
+
+        return result
 
 
 @dataclass
@@ -208,20 +265,40 @@ class CorrelationResult:
         column2: Second column name
         correlation: Correlation coefficient (-1 to 1)
         type: Type of correlation (pearson, spearman, etc.)
+        strength: Correlation strength classification (weak, moderate, strong, very strong)
+        direction: Correlation direction (positive, negative, none)
+        p_value: Statistical significance p-value
+        is_significant: Whether correlation is statistically significant
     """
     column1: str
     column2: str
     correlation: float
     type: str = "pearson"
+    strength: Optional[str] = None
+    direction: Optional[str] = None
+    p_value: Optional[float] = None
+    is_significant: Optional[bool] = None
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary representation."""
-        return {
+        result = {
             "column1": self.column1,
             "column2": self.column2,
             "correlation": round(self.correlation, 3),
             "type": self.type
         }
+
+        # Add enhanced correlation fields if present
+        if self.strength:
+            result["strength"] = self.strength
+        if self.direction:
+            result["direction"] = self.direction
+        if self.p_value is not None:
+            result["p_value"] = round(float(self.p_value), 6)
+        if self.is_significant is not None:
+            result["is_significant"] = bool(self.is_significant)  # Convert numpy bool to Python bool
+
+        return result
 
 
 @dataclass
@@ -273,6 +350,9 @@ class ProfileResult:
         overall_quality_score: Overall data quality score (0-100)
         generated_config_yaml: Auto-generated validation config
         generated_config_command: CLI command to run the generated config
+        enhanced_correlations: Enhanced multi-method correlation analysis results
+        dataset_privacy_risk: Dataset-level privacy risk assessment
+        file_metadata: Additional file metadata (compression, row groups, etc.)
     """
     file_name: str
     file_path: str
@@ -288,10 +368,13 @@ class ProfileResult:
     overall_quality_score: float = 0.0
     generated_config_yaml: Optional[str] = None
     generated_config_command: Optional[str] = None
+    enhanced_correlations: Optional[Dict[str, Any]] = None
+    dataset_privacy_risk: Optional[Dict[str, Any]] = None
+    file_metadata: Optional[Dict[str, Any]] = None
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary representation."""
-        return {
+        result = {
             "file_name": self.file_name,
             "file_path": self.file_path,
             "file_size_mb": round(self.file_size_bytes / (1024 * 1024), 2),
@@ -307,3 +390,13 @@ class ProfileResult:
             "generated_config_yaml": self.generated_config_yaml,
             "generated_config_command": self.generated_config_command
         }
+
+        # Add Phase 1 enhancements if present (convert numpy types for JSON)
+        if self.enhanced_correlations:
+            result["enhanced_correlations"] = convert_numpy_types(self.enhanced_correlations)
+        if self.dataset_privacy_risk:
+            result["dataset_privacy_risk"] = convert_numpy_types(self.dataset_privacy_risk)
+        if self.file_metadata:
+            result["file_metadata"] = convert_numpy_types(self.file_metadata)
+
+        return result

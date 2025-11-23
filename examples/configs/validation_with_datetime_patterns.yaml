@@ -1,0 +1,81 @@
+# DataK9 Validation Configuration with Date/Time Patterns
+# Example showing automatic timestamping to prevent file overwrites
+
+validation_job:
+  name: "Customer Data Validation"
+  version: "1.0"
+  description: "Daily validation of customer data with timestamped outputs"
+
+  files:
+    - name: "customers"
+      path: "examples/sample_data/customers.csv"
+      format: "csv"
+      delimiter: ","
+      encoding: "utf-8"
+
+      validations:
+        # File-level validations
+        - type: "EmptyFileCheck"
+          severity: "ERROR"
+
+        - type: "RowCountRangeCheck"
+          severity: "WARNING"
+          params:
+            min_rows: 100
+            max_rows: 1000000
+
+        # Schema validation
+        - type: "SchemaMatchCheck"
+          severity: "ERROR"
+          params:
+            expected_schema:
+              customer_id: "integer"
+              name: "string"
+              email: "string"
+              phone: "string"
+              created_date: "date"
+
+        # Field-level validations
+        - type: "MandatoryFieldCheck"
+          severity: "ERROR"
+          params:
+            fields: ["customer_id", "name", "email"]
+
+        - type: "RegexCheck"
+          severity: "ERROR"
+          params:
+            field: "email"
+            pattern: "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
+            message: "Invalid email format"
+
+        - type: "DuplicateRowCheck"
+          severity: "ERROR"
+          params:
+            key_fields: ["customer_id"]
+
+  # Output configuration with date/time patterns
+  output:
+    # Organized by date with timestamped filename
+    html_report: "reports/{date}/validation_{job_name}_{time}.html"
+
+    # Unique JSON summary for each run
+    json_summary: "results/{job_name}_{timestamp}.json"
+
+    fail_on_error: true
+    fail_on_warning: false
+
+  # Processing options
+  processing:
+    chunk_size: 50000
+    parallel_files: false
+    max_sample_failures: 100
+
+# Example output paths generated:
+# reports/2025-11-22/validation_Customer_Data_Validation_14-30-45.html
+# results/Customer_Data_Validation_20251122_143045.json
+#
+# Benefits:
+# - No file overwrites (each run gets unique timestamp)
+# - Easy to find reports by date
+# - Audit trail of validation history
+# - Clean organization with job name and date

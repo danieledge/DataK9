@@ -2071,6 +2071,302 @@
         .validation-action-btn.delete-btn:hover {
             color: var(--status-error);
         }
+
+        /* ============================================================================
+           Pattern Picker and Modal Styles
+           ============================================================================ */
+
+        .pattern-helper-btn {
+            margin-left: 8px;
+            padding: 2px 6px;
+            font-size: 11px;
+            background: var(--bg-input);
+            border: 1px solid var(--border-main);
+            border-radius: 3px;
+            cursor: pointer;
+            color: var(--text-primary);
+        }
+
+        .pattern-helper-btn:hover {
+            background: var(--k9-blue);
+            border-color: var(--k9-blue);
+        }
+
+        .field-hint {
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
+
+        .pattern-preview {
+            font-size: 11px;
+            color: var(--status-info);
+            margin-top: 4px;
+            font-family: var(--font-mono);
+        }
+
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+        }
+
+        .modal-dialog {
+            background: var(--bg-panel);
+            border: 1px solid var(--border-main);
+            border-radius: 8px;
+            max-width: 600px;
+            width: 90%;
+            max-height: 80vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .modal-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border-main);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-header h3 {
+            margin: 0;
+            font-size: 16px;
+            color: var(--text-primary);
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            font-size: 24px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            padding: 0;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 4px;
+        }
+
+        .close-btn:hover {
+            background: var(--bg-panel-hover);
+            color: var(--text-primary);
+        }
+
+        .modal-body {
+            padding: 20px;
+            overflow-y: auto;
+        }
+
+        .modal-footer {
+            padding: 16px 20px;
+            border-top: 1px solid var(--border-main);
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+        }
+
+        .pattern-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .pattern-item {
+            padding: 12px;
+            background: var(--bg-input);
+            border: 1px solid var(--border-main);
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .pattern-item:hover {
+            background: var(--bg-panel-hover);
+            border-color: var(--k9-blue);
+        }
+
+        .pattern-name {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 4px;
+        }
+
+        .pattern-name code {
+            background: var(--bg-dark);
+            padding: 2px 8px;
+            border-radius: 3px;
+            font-family: var(--font-mono);
+            color: var(--k9-blue);
+            font-size: 13px;
+        }
+
+        .pattern-example {
+            font-size: 12px;
+            color: var(--text-secondary);
+            font-family: var(--font-mono);
+        }
+
+        .pattern-description {
+            font-size: 12px;
+            color: var(--text-primary);
+            margin-bottom: 2px;
+        }
+
+        .pattern-use-case {
+            font-size: 11px;
+            color: var(--text-muted);
+            font-style: italic;
+        }
+
+        /* ============================================================================
+           Accessibility Styles
+           ============================================================================ */
+
+        /* Focus visible indicators */
+        *:focus-visible {
+            outline: 2px solid var(--k9-blue);
+            outline-offset: 2px;
+        }
+
+        /* Skip to content link (for screen readers) */
+        .skip-to-content {
+            position: absolute;
+            left: -9999px;
+            z-index: 999;
+            padding: 1em;
+            background-color: var(--bg-panel);
+            color: var(--text-primary);
+            text-decoration: none;
+        }
+
+        .skip-to-content:focus {
+            left: 50%;
+            transform: translateX(-50%);
+            top: 10px;
+        }
+
+        /* High contrast mode support */
+        @media (prefers-contrast: high) {
+            :root {
+                --border-main: #FFFFFF;
+                --text-primary: #FFFFFF;
+                --bg-dark: #000000;
+            }
+        }
+
+        /* Reduced motion support */
+        @media (prefers-reduced-motion: reduce) {
+            * {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+            }
+        }
+
+        /* ============================================================================
+           CDA (Critical Data Attributes) Styles
+           ============================================================================ */
+
+        .cda-item {
+            background: var(--bg-input);
+            border: 1px solid var(--border-main);
+            border-radius: 4px;
+            padding: 16px;
+            margin-bottom: 12px;
+        }
+
+        .cda-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid var(--border-main);
+        }
+
+        .cda-field-name {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+        }
+
+        .cda-icon {
+            font-size: 16px;
+        }
+
+        .cda-form {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .form-field {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .form-field label {
+            font-size: 12px;
+            font-weight: 500;
+            color: var(--text-secondary);
+        }
+
+        .form-field input,
+        .form-field textarea {
+            background: var(--bg-dark);
+            border: 1px solid var(--border-main);
+            border-radius: 3px;
+            padding: 8px;
+            color: var(--text-primary);
+            font-size: 13px;
+            font-family: var(--font-sans);
+        }
+
+        .form-field input:focus,
+        .form-field textarea:focus {
+            outline: none;
+            border-color: var(--k9-blue);
+        }
+
+        .form-field textarea {
+            resize: vertical;
+            min-height: 50px;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        .btn-icon-small {
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 4px;
+            font-size: 16px;
+            opacity: 0.6;
+            transition: opacity 0.2s;
+        }
+
+        .btn-icon-small:hover {
+            opacity: 1;
+        }
     </style>
 </head>
 <body>
@@ -4279,13 +4575,103 @@ files:
                     `;
                 }
 
+                // OUTPUT CONFIGURATION SECTION
+                if (this.projectState.isOpen) {
+                    const output = this.config.output || {
+                        html_report: 'validation_report.html',
+                        json_summary: 'validation_summary.json',
+                        fail_on_error: true,
+                        fail_on_warning: false
+                    };
+
+                    const outputExpanded = this.outputConfigExpanded || false;
+
+                    html += `
+                        <div class="config-section">
+                            <div class="project-settings-item">
+                                <div class="project-settings-header" onclick="app.toggleOutputConfig()">
+                                    <div class="project-settings-info">
+                                        <span class="project-settings-icon">📤</span>
+                                        <span class="project-settings-title">Output Configuration</span>
+                                    </div>
+                                    <span style="font-size: 12px;">${outputExpanded ? '▼' : '▶'}</span>
+                                </div>
+                                <div class="project-settings-content ${outputExpanded ? 'expanded' : ''}">
+
+                                    <!-- HTML Report Path -->
+                                    <div class="settings-field">
+                                        <label for="html-report-input">
+                                            HTML Report Path
+                                            <button class="pattern-helper-btn" onclick="event.stopPropagation(); app.showPatternPicker('html')" title="Insert Pattern">
+                                                🔖
+                                            </button>
+                                        </label>
+                                        <input type="text"
+                                               id="html-report-input"
+                                               value="${this.escapeHtml(output.html_report || '')}"
+                                               oninput="app.updateOutput('html_report', this.value)"
+                                               placeholder="reports/{date}/validation_{time}.html">
+                                        <div class="field-hint">
+                                            Use patterns: {date}, {time}, {timestamp}, {job_name}
+                                        </div>
+                                        <div class="pattern-preview" id="html-preview">
+                                            Preview: ${this.expandPatternPreview(output.html_report || '')}
+                                        </div>
+                                    </div>
+
+                                    <!-- JSON Summary Path -->
+                                    <div class="settings-field">
+                                        <label for="json-summary-input">
+                                            JSON Summary Path
+                                            <button class="pattern-helper-btn" onclick="event.stopPropagation(); app.showPatternPicker('json')" title="Insert Pattern">
+                                                🔖
+                                            </button>
+                                        </label>
+                                        <input type="text"
+                                               id="json-summary-input"
+                                               value="${this.escapeHtml(output.json_summary || '')}"
+                                               oninput="app.updateOutput('json_summary', this.value)"
+                                               placeholder="results/{job_name}_{timestamp}.json">
+                                        <div class="field-hint">
+                                            Use patterns for automatic timestamping
+                                        </div>
+                                        <div class="pattern-preview" id="json-preview">
+                                            Preview: ${this.expandPatternPreview(output.json_summary || '')}
+                                        </div>
+                                    </div>
+
+                                    <!-- Fail Options -->
+                                    <div class="settings-grid">
+                                        <div class="settings-field">
+                                            <label>
+                                                <input type="checkbox"
+                                                       ${output.fail_on_error !== false ? 'checked' : ''}
+                                                       onchange="app.updateOutput('fail_on_error', this.checked)">
+                                                Fail on ERROR severity
+                                            </label>
+                                        </div>
+                                        <div class="settings-field">
+                                            <label>
+                                                <input type="checkbox"
+                                                       ${output.fail_on_warning === true ? 'checked' : ''}
+                                                       onchange="app.updateOutput('fail_on_warning', this.checked)">
+                                                Fail on WARNING severity
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
+
                 // Data Files Section (only show if project is open)
                 if (this.projectState.isOpen) {
                 html += `
                     <div class="config-section">
                         <div class="config-section-header">
                             <span>📁 Data Files (${this.config.files.length})</span>
-                            <button class="btn btn-primary btn-small" onclick="app.addFile()" style="padding: 2px 8px; font-size: 11px;">
+                            <button class="btn btn-primary btn-small" onclick="app.addFile()" style="padding: 2px 8px; font-size: 11px;" aria-label="Add new file to validation configuration">
                                 + Add
                             </button>
                         </div>
@@ -4300,6 +4686,10 @@ files:
 
                     html += `
                         <div class="file-item ${isExpanded ? 'expanded' : ''}"
+                             role="treeitem"
+                             aria-label="File: ${this.escapeHtml(file.name || 'Unnamed')}"
+                             aria-selected="${isSelected}"
+                             tabindex="${isSelected ? 0 : -1}"
                              draggable="true"
                              data-file-index="${fileIndex}"
                              ondragstart="app.handleFileDragStart(event, ${fileIndex})"
@@ -4314,10 +4704,10 @@ files:
                                     <span class="file-format-badge">${this.escapeHtml(file.format || 'csv').toUpperCase()}</span>
                                 </div>
                                 <div class="file-actions">
-                                    <button class="file-action-btn" onclick="event.stopPropagation(); app.addValidationToFile(${fileIndex})" title="Add Validation">
+                                    <button class="file-action-btn" onclick="event.stopPropagation(); app.addValidationToFile(${fileIndex})" title="Add Validation" aria-label="Add validation to ${this.escapeHtml(file.name || 'file')}">
                                         +
                                     </button>
-                                    <button class="file-action-btn" onclick="event.stopPropagation(); app.deleteFile(${fileIndex})" title="Delete File">
+                                    <button class="file-action-btn" onclick="event.stopPropagation(); app.deleteFile(${fileIndex})" title="Delete File" aria-label="Delete ${this.escapeHtml(file.name || 'file')}">
                                         🗑️
                                     </button>
                                 </div>
@@ -4440,6 +4830,266 @@ files:
                 this.config.validation_job.settings[key] = value;
                 this.updateYAMLEditor();
                 this.markAsModified();
+            },
+
+            /**
+             * Toggle Output Configuration panel
+             */
+            toggleOutputConfig() {
+                this.outputConfigExpanded = !this.outputConfigExpanded;
+                this.renderFileTree();
+            },
+
+            /**
+             * Update output configuration
+             */
+            updateOutput(key, value) {
+                if (!this.config.output) {
+                    this.config.output = {};
+                }
+                this.config.output[key] = value;
+
+                // Update preview
+                if (key === 'html_report') {
+                    const preview = document.getElementById('html-preview');
+                    if (preview) {
+                        preview.textContent = 'Preview: ' + this.expandPatternPreview(value);
+                    }
+                } else if (key === 'json_summary') {
+                    const preview = document.getElementById('json-preview');
+                    if (preview) {
+                        preview.textContent = 'Preview: ' + this.expandPatternPreview(value);
+                    }
+                }
+
+                this.updateYAMLEditor();
+                this.saveToLocalStorage();
+            },
+
+            /**
+             * Expand pattern for preview
+             */
+            expandPatternPreview(template) {
+                if (!template) return '';
+
+                const now = new Date();
+                const jobName = this.config.validation_job?.name || 'Job_Name';
+
+                const patterns = {
+                    '{date}': now.toISOString().split('T')[0],
+                    '{time}': now.toTimeString().split(' ')[0].replace(/:/g, '-'),
+                    '{timestamp}': now.toISOString().replace(/[-:]/g, '').replace('T', '_').split('.')[0],
+                    '{datetime}': now.toISOString().split('.')[0].replace('T', '_').replace(/:/g, '-'),
+                    '{job_name}': jobName.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_-]/g, '')
+                };
+
+                let expanded = template;
+                for (const [pattern, value] of Object.entries(patterns)) {
+                    expanded = expanded.replace(new RegExp(pattern.replace(/[{}]/g, '\\$&'), 'g'), value);
+                }
+
+                return expanded;
+            },
+
+            /**
+             * Show pattern picker modal
+             */
+            showPatternPicker(type) {
+                const patterns = [
+                    {
+                        pattern: '{date}',
+                        description: 'ISO date (YYYY-MM-DD)',
+                        example: '2025-11-22',
+                        useCase: 'Daily reports, date-based organization'
+                    },
+                    {
+                        pattern: '{time}',
+                        description: 'Time (HH-MM-SS)',
+                        example: '14-30-45',
+                        useCase: 'Multiple runs per day'
+                    },
+                    {
+                        pattern: '{timestamp}',
+                        description: 'Compact timestamp (YYYYMMDD_HHMMSS)',
+                        example: '20251122_143045',
+                        useCase: 'Unique per run (recommended)'
+                    },
+                    {
+                        pattern: '{datetime}',
+                        description: 'Combined date and time',
+                        example: '2025-11-22_14-30-45',
+                        useCase: 'Detailed timestamping'
+                    },
+                    {
+                        pattern: '{job_name}',
+                        description: 'Job name from config (sanitized)',
+                        example: 'Customer_Data_Validation',
+                        useCase: 'Organization by job'
+                    }
+                ];
+
+                let html = `
+                    <div class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-title" onclick="app.closeModal()">
+                        <div class="modal-dialog" onclick="event.stopPropagation()">
+                            <div class="modal-header">
+                                <h3 id="modal-title">Insert Date/Time Pattern</h3>
+                                <button class="close-btn" onclick="app.closeModal()" aria-label="Close dialog">×</button>
+                            </div>
+                            <div class="modal-body">
+                                <p style="margin-bottom: 16px; color: var(--text-secondary);">
+                                    Click a pattern to insert it at the cursor position:
+                                </p>
+                                <div class="pattern-list">
+                `;
+
+                patterns.forEach(p => {
+                    html += `
+                        <div class="pattern-item" onclick="app.insertPattern('${type}', '${p.pattern}')">
+                            <div class="pattern-name">
+                                <code>${p.pattern}</code>
+                                <span class="pattern-example">${p.example}</span>
+                            </div>
+                            <div class="pattern-description">${p.description}</div>
+                            <div class="pattern-use-case">${p.useCase}</div>
+                        </div>
+                    `;
+                });
+
+                html += `
+                                </div>
+                                <div style="margin-top: 16px; padding: 12px; background: var(--bg-input); border-radius: 4px; font-size: 12px;">
+                                    <strong>💡 Tip:</strong> Patterns prevent file overwrites and improve audit trails.
+                                    Recommended: <code>{job_name}_{timestamp}.html</code>
+                                </div>
+                            </div>
+                            <div class="modal-footer">
+                                <button class="btn btn-secondary" onclick="app.closeModal()">Cancel</button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+                document.body.insertAdjacentHTML('beforeend', html);
+            },
+
+            /**
+             * Insert pattern at cursor position
+             */
+            insertPattern(type, pattern) {
+                const inputId = type === 'html' ? 'html-report-input' : 'json-summary-input';
+                const input = document.getElementById(inputId);
+
+                if (input) {
+                    const start = input.selectionStart;
+                    const end = input.selectionEnd;
+                    const text = input.value;
+
+                    const newText = text.substring(0, start) + pattern + text.substring(end);
+                    input.value = newText;
+
+                    // Trigger update
+                    const event = new Event('input', { bubbles: true });
+                    input.dispatchEvent(event);
+
+                    // Set cursor position after inserted pattern
+                    input.focus();
+                    input.setSelectionRange(start + pattern.length, start + pattern.length);
+                }
+
+                this.closeModal();
+            },
+
+            /**
+             * Close modal
+             */
+            closeModal() {
+                const modal = document.querySelector('.modal-overlay');
+                if (modal) {
+                    modal.remove();
+                }
+            },
+
+            /**
+             * Select next file (keyboard navigation)
+             */
+            selectNextFile() {
+                if (this.selectedFile === null) {
+                    if (this.config.files.length > 0) {
+                        this.selectedFile = 0;
+                    }
+                } else if (this.selectedFile < this.config.files.length - 1) {
+                    this.selectedFile++;
+                }
+                this.render();
+            },
+
+            /**
+             * Select previous file (keyboard navigation)
+             */
+            selectPreviousFile() {
+                if (this.selectedFile === null) {
+                    if (this.config.files.length > 0) {
+                        this.selectedFile = this.config.files.length - 1;
+                    }
+                } else if (this.selectedFile > 0) {
+                    this.selectedFile--;
+                }
+                this.render();
+            },
+
+            /**
+             * Add new Critical Data Attribute
+             */
+            addCDA() {
+                if (this.selectedFile === null) return;
+
+                const file = this.config.files[this.selectedFile];
+                if (!file.critical_data_attributes) {
+                    file.critical_data_attributes = [];
+                }
+
+                file.critical_data_attributes.push({
+                    field: '',
+                    description: '',
+                    owner: '',
+                    regulatory_reference: ''
+                });
+
+                this.updateYAMLEditor();
+                this.saveToLocalStorage();
+                this.renderVisualEditor();
+            },
+
+            /**
+             * Update Critical Data Attribute field
+             */
+            updateCDA(index, key, value) {
+                if (this.selectedFile === null) return;
+
+                const file = this.config.files[this.selectedFile];
+                if (!file.critical_data_attributes || !file.critical_data_attributes[index]) return;
+
+                file.critical_data_attributes[index][key] = value;
+
+                this.updateYAMLEditor();
+                this.saveToLocalStorage();
+            },
+
+            /**
+             * Remove Critical Data Attribute
+             */
+            removeCDA(index) {
+                if (this.selectedFile === null) return;
+                if (!confirm('Remove this Critical Data Attribute?')) return;
+
+                const file = this.config.files[this.selectedFile];
+                if (!file.critical_data_attributes) return;
+
+                file.critical_data_attributes.splice(index, 1);
+
+                this.updateYAMLEditor();
+                this.saveToLocalStorage();
+                this.renderVisualEditor();
             },
 
             renderVisualEditor() {
@@ -4634,6 +5284,97 @@ files:
                         `;
                     }
                 }
+
+                // Critical Data Attributes Section
+                const cdas = file.critical_data_attributes || [];
+                html += `
+                    <div class="card">
+                        <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+                            <h3>⭐ Critical Data Attributes (${cdas.length})</h3>
+                            <button class="btn btn-primary btn-small" onclick="app.addCDA()" aria-label="Add Critical Data Attribute">
+                                + Add CDA
+                            </button>
+                        </div>
+                        <div class="card-body">
+                            <div class="field-hint" style="margin-bottom: 16px;">
+                                Define critical data attributes for regulatory compliance and data governance (GDPR, SOX, HIPAA, etc.).
+                            </div>
+                `;
+
+                if (cdas.length === 0) {
+                    html += `
+                        <div style="padding: 40px; text-align: center; color: var(--text-muted);">
+                            <div style="font-size: 48px; margin-bottom: 16px;">⭐</div>
+                            <div style="font-size: 14px; margin-bottom: 8px;">No Critical Data Attributes defined</div>
+                            <div style="font-size: 12px; margin-bottom: 16px;">
+                                CDAs help identify fields requiring special handling for compliance (SOX, GDPR, HIPAA, etc.)
+                            </div>
+                            <button class="btn btn-primary" onclick="app.addCDA()">+ Add First CDA</button>
+                        </div>
+                    `;
+                } else {
+                    cdas.forEach((cda, index) => {
+                        html += `
+                            <div class="cda-item">
+                                <div class="cda-header">
+                                    <div class="cda-field-name">
+                                        <span class="cda-icon">⭐</span>
+                                        <strong>${this.escapeHtml(cda.field || '(unnamed field)')}</strong>
+                                    </div>
+                                    <button class="btn-icon-small" onclick="app.removeCDA(${index})" title="Remove CDA" aria-label="Remove Critical Data Attribute">
+                                        🗑️
+                                    </button>
+                                </div>
+
+                                <div class="cda-form">
+                                    <div class="form-field">
+                                        <label>Field Name</label>
+                                        <input type="text"
+                                               value="${this.escapeHtml(cda.field || '')}"
+                                               oninput="app.updateCDA(${index}, 'field', this.value)"
+                                               placeholder="e.g., customer_id"
+                                               aria-label="CDA field name"
+                                               required>
+                                    </div>
+
+                                    <div class="form-field">
+                                        <label>Description</label>
+                                        <textarea
+                                            oninput="app.updateCDA(${index}, 'description', this.value)"
+                                            placeholder="What does this field represent?"
+                                            aria-label="CDA description"
+                                            rows="2">${this.escapeHtml(cda.description || '')}</textarea>
+                                    </div>
+
+                                    <div class="form-row">
+                                        <div class="form-field">
+                                            <label>Owner / Team</label>
+                                            <input type="text"
+                                                   value="${this.escapeHtml(cda.owner || '')}"
+                                                   oninput="app.updateCDA(${index}, 'owner', this.value)"
+                                                   placeholder="e.g., Compliance Team"
+                                                   aria-label="CDA owner">
+                                        </div>
+
+                                        <div class="form-field">
+                                            <label>Regulatory Reference</label>
+                                            <input type="text"
+                                                   value="${this.escapeHtml(cda.regulatory_reference || '')}"
+                                                   oninput="app.updateCDA(${index}, 'regulatory_reference', this.value)"
+                                                   placeholder="e.g., SOX Section 404"
+                                                   aria-label="Regulatory reference">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    });
+                }
+
+                html += `
+                        </div>
+                    </div>
+                `;
 
                 container.innerHTML = html;
             },
@@ -8114,6 +8855,50 @@ params:
                 }
             }
         };
+
+        // Keyboard navigation
+        document.addEventListener('keydown', (e) => {
+            // Escape key - close modals
+            if (e.key === 'Escape') {
+                app.closeModal();
+            }
+
+            // Ctrl/Cmd + S - Save (export)
+            if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+                e.preventDefault();
+                app.exportYAML();
+            }
+
+            // Ctrl/Cmd + N - New project
+            if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
+                e.preventDefault();
+                app.newProject();
+            }
+
+            // Ctrl/Cmd + O - Open file
+            if ((e.ctrlKey || e.metaKey) && e.key === 'o') {
+                e.preventDefault();
+                const fileInput = document.getElementById('file-input');
+                if (fileInput) fileInput.click();
+            }
+
+            // Ctrl/Cmd + B - Toggle sidebar
+            if ((e.ctrlKey || e.metaKey) && e.key === 'b') {
+                e.preventDefault();
+                panelManager.toggleMobileSidebar();
+            }
+
+            // Arrow keys for navigation (when in file tree)
+            if (document.activeElement && document.activeElement.closest('.file-tree')) {
+                if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    app.selectNextFile();
+                } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    app.selectPreviousFile();
+                }
+            }
+        });
 
         // Initialize the application when DOM is ready
         document.addEventListener('DOMContentLoaded', () => {

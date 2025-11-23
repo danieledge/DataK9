@@ -205,20 +205,20 @@ run_tests() {
 
 # Category: All Tests
 run_all_tests() {
-    run_tests "$TEST_DIR/ -v" "Running All Tests"
+    run_tests "$TEST_DIR -v" "Running All Tests"
 }
 
 # Category: Test Types
 run_unit_tests() {
-    run_tests "$TEST_DIR/ -v -m unit" "Running Unit Tests"
+    run_tests "$TEST_DIR -v -m unit" "Running Unit Tests"
 }
 
 run_integration_tests() {
-    run_tests "$TEST_DIR/ -v -m integration" "Running Integration Tests"
+    run_tests "$TEST_DIR -v -m integration" "Running Integration Tests"
 }
 
 run_security_tests() {
-    run_tests "$TEST_DIR/ -v -m security" "Running Security Tests"
+    run_tests "$TEST_DIR -v -m security" "Running Security Tests"
 }
 
 # Category: Validation Tests
@@ -279,6 +279,9 @@ run_profiler_tests() {
         "test_profiler.py"
         "test_polars_profiler.py"
         "test_database_profiling_json.py"
+        "profiler/test_temporal_analysis.py"
+        "profiler/test_pii_detector.py"
+        "profiler/test_enhanced_correlation.py"
     )
 
     local test_paths=""
@@ -288,20 +291,120 @@ run_profiler_tests() {
         fi
     done
 
-    run_tests "$test_paths -v" "Running Profiler Tests"
+    run_tests "$test_paths -v" "Running Profiler Tests (Including Enhancements)"
+}
+
+run_profiler_enhancements_only() {
+    local enhancement_test_files=(
+        "profiler/test_temporal_analysis.py"
+        "profiler/test_pii_detector.py"
+        "profiler/test_enhanced_correlation.py"
+    )
+
+    local test_paths=""
+    for file in "${enhancement_test_files[@]}"; do
+        if [ -f "$TEST_DIR/$file" ]; then
+            test_paths="$test_paths $TEST_DIR/$file"
+        fi
+    done
+
+    if [ -z "$test_paths" ]; then
+        print_warning "No profiler enhancement tests found yet"
+        echo ""
+        print_info "Test files expected at:"
+        for file in "${enhancement_test_files[@]}"; do
+            echo "  - $TEST_DIR/$file"
+        done
+        echo ""
+        print_info "Test data available at: tests/profiler/test_data/"
+        echo ""
+        read -p "Press Enter to continue..."
+        return 1
+    fi
+
+    run_tests "$test_paths -v" "Running Profiler Enhancement Tests (Phase 1)"
+}
+
+run_profiler_demo() {
+    print_section "DataK9 Profiler Phase 2 Demo"
+
+    # Check if test data exists
+    if [ ! -f "../test-data/ecommerce_transactions.parquet" ]; then
+        print_error "Test data not found: ../test-data/ecommerce_transactions.parquet"
+        print_info "Please ensure test data is available"
+        return 1
+    fi
+
+    print_info "Running comprehensive profiler demo with Phase 2 enhancements..."
+    print_info "Features: Temporal Analysis, PII Detection, Enhanced Correlation"
+    echo ""
+
+    cd "$PROJECT_ROOT"
+
+    # Create demo output directory
+    DEMO_DIR="$PROJECT_ROOT/demo-tmp/profiler-phase2"
+    mkdir -p "$DEMO_DIR"
+
+    print_info "Profiling ecommerce_transactions.parquet (100K rows, 22 columns)..."
+    print_info "Generating: HTML report + JSON output + Config YAML"
+    echo ""
+
+    # Run profiler with all Phase 2 enhancements
+    python3 -m validation_framework.cli profile \
+        ../test-data/ecommerce_transactions.parquet \
+        --profiler-enhancements \
+        -o "$DEMO_DIR/phase2_demo_report.html" \
+        -j "$DEMO_DIR/phase2_demo_profile.json" \
+        -c "$DEMO_DIR/phase2_demo_config.yaml" \
+        --log-level INFO
+
+    if [ $? -eq 0 ]; then
+        print_success "Profiler demo completed successfully!"
+        echo ""
+        print_info "Generated files:"
+        echo "  📊 HTML Report:  $DEMO_DIR/phase2_demo_report.html"
+        echo "  📄 JSON Profile: $DEMO_DIR/phase2_demo_profile.json"
+        echo "  ⚙️  Config YAML:  $DEMO_DIR/phase2_demo_config.yaml"
+        echo ""
+
+        # Show Phase 2 feature summary
+        print_info "Phase 2 Features Detected:"
+        TEMPORAL_COUNT=$(grep -c "TEMPORAL ANALYSIS" "$DEMO_DIR/phase2_demo_report.html" 2>/dev/null || echo "0")
+        PII_COUNT=$(grep -c "PII DETECTED" "$DEMO_DIR/phase2_demo_report.html" 2>/dev/null || echo "0")
+        echo "  📅 Temporal Analysis: $TEMPORAL_COUNT columns"
+        echo "  🔒 PII Detection:     $PII_COUNT columns"
+        echo ""
+
+        # Offer to open HTML report
+        read -p "Open HTML report in browser? (y/n): " -n 1 -r
+        echo ""
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            if command -v xdg-open &> /dev/null; then
+                xdg-open "$DEMO_DIR/phase2_demo_report.html"
+            elif command -v open &> /dev/null; then
+                open "$DEMO_DIR/phase2_demo_report.html"
+            else
+                print_warning "Could not detect browser command. Please open manually:"
+                echo "  $DEMO_DIR/phase2_demo_report.html"
+            fi
+        fi
+    else
+        print_error "Profiler demo failed"
+        return 1
+    fi
 }
 
 run_cli_tests() {
-    run_tests "$TEST_DIR/ -v -m cli" "Running CLI Tests"
+    run_tests "$TEST_DIR -v -m cli" "Running CLI Tests"
 }
 
 run_performance_tests() {
-    run_tests "$TEST_DIR/ -v -m performance" "Running Performance Tests"
+    run_tests "$TEST_DIR -v -m performance" "Running Performance Tests"
 }
 
 # Category: Special Test Modes
 run_fast_tests() {
-    run_tests "$TEST_DIR/ -v -m 'not slow'" "Running Fast Tests (Excluding Slow)"
+    run_tests "$TEST_DIR -v -m \"not slow\"" "Running Fast Tests (Excluding Slow)"
 }
 
 run_parallel_tests() {
@@ -629,32 +732,34 @@ show_menu() {
 
     echo -e "${YELLOW}▶ COMPONENT TESTS${NC}"
     echo "  9) Database Tests             - DB integration & validation"
-    echo "  10) Profiler Tests            - File & database profiling"
-    echo "  11) CLI Tests                 - Command-line interface"
-    echo "  12) Performance Tests         - Performance benchmarks"
+    echo "  10) Profiler Tests            - File & database profiling (all)"
+    echo "  11) Profiler Enhancements     - Phase 1 enhancements (temporal, PII, correlation)"
+    echo "  12) CLI Tests                 - Command-line interface"
+    echo "  13) Performance Tests         - Performance benchmarks"
     echo ""
 
     echo -e "${YELLOW}▶ COVERAGE & REPORTS${NC}"
-    echo "  13) Full Coverage Report      - All tests with detailed coverage"
-    echo "  14) Coverage Statistics       - View current coverage stats"
-    echo "  15) Open Coverage Report      - Open HTML report in browser"
+    echo "  14) Full Coverage Report      - All tests with detailed coverage"
+    echo "  15) Coverage Statistics       - View current coverage stats"
+    echo "  16) Open Coverage Report      - Open HTML report in browser"
     echo ""
 
     echo -e "${YELLOW}▶ ADVANCED${NC}"
-    echo "  16) Parallel Execution        - Run tests using multiple cores"
-    echo "  17) Specific Test File        - Run a single test file"
+    echo "  17) Parallel Execution        - Run tests using multiple cores"
+    echo "  18) Specific Test File        - Run a single test file"
     echo ""
 
     echo -e "${YELLOW}▶ UTILITIES${NC}"
-    echo "  18) Test Statistics           - View test counts and files"
-    echo "  19) Check Environment         - Validate test setup"
-    echo "  20) Clean Artifacts           - Remove reports and cache"
+    echo "  19) Test Statistics           - View test counts and files"
+    echo "  20) Check Environment         - Validate test setup"
+    echo "  21) Clean Artifacts           - Remove reports and cache"
+    echo "  22) Profiler Phase 2 Demo     - Showcase profiler enhancements (HTML + JSON)"
     echo ""
 
     echo "  0) Exit"
     echo ""
     echo -e "${WHITE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -n "Enter choice [0-20]: "
+    echo -n "Enter choice [0-22]: "
 }
 
 ################################################################################
@@ -675,7 +780,8 @@ show_help() {
     echo "  --validations        Run all validation rule tests"
     echo "  --regression         Run comprehensive regression tests"
     echo "  --database           Run database tests"
-    echo "  --profiler           Run profiler tests"
+    echo "  --profiler           Run profiler tests (all)"
+    echo "  --profiler-enhancements  Run profiler enhancements only (Phase 1)"
     echo "  --cli                Run CLI tests only"
     echo "  --performance        Run performance tests only"
     echo "  --coverage           Run with full coverage report"
@@ -726,21 +832,23 @@ main() {
                 8) run_comprehensive_regression ;;
                 9) run_database_tests ;;
                 10) run_profiler_tests ;;
-                11) run_cli_tests ;;
-                12) run_performance_tests ;;
-                13) run_with_coverage ;;
-                14) show_coverage_stats ;;
-                15) open_coverage_report ;;
-                16) run_parallel_tests ;;
-                17)
+                11) run_profiler_enhancements_only ;;
+                12) run_cli_tests ;;
+                13) run_performance_tests ;;
+                14) run_with_coverage ;;
+                15) show_coverage_stats ;;
+                16) open_coverage_report ;;
+                17) run_parallel_tests ;;
+                18)
                     echo ""
                     echo -n "Enter test file path: "
                     read file_path
                     run_specific_file "$file_path"
                     ;;
-                18) view_test_statistics ;;
-                19) check_test_environment ;;
-                20) clean_test_artifacts ;;
+                19) view_test_statistics ;;
+                20) check_test_environment ;;
+                21) clean_test_artifacts ;;
+                22) run_profiler_demo ;;
                 0)
                     echo ""
                     print_info "Exiting test runner. Goodbye!"
@@ -781,6 +889,9 @@ main() {
                 ;;
             --profiler)
                 run_profiler_tests
+                ;;
+            --profiler-enhancements)
+                run_profiler_enhancements_only
                 ;;
             --cli)
                 run_cli_tests

@@ -1,0 +1,49 @@
+# Auto-generated validation configuration
+# Generated from profile of: HI-Large_accounts.parquet
+# Generated at: 2025-11-23 11:35:22
+# File size: 66.7 MB, Rows: 2,126,855
+# Recommended chunk size: 2,000,000 rows (Using maximum chunk size (2,000,000). Sufficient memory available.)
+
+validation_job:
+  name: "Validation for HI-Large_accounts.parquet"
+  description: "Auto-generated from data profile"
+
+settings:
+  chunk_size: 2000000  # Optimized for parquet format, 4 validations (simple complexity)
+  max_sample_failures: 100
+
+files:
+  - name: "HI-Large_accounts"
+    path: "/home/daniel/www/test-data/HI-Large_accounts.parquet"
+    format: "parquet"
+
+    validations:
+      - type: "EmptyFileCheck"
+        severity: "ERROR"
+        # Prevent empty file loads
+
+      - type: "MandatoryFieldCheck"
+        severity: "ERROR"
+        params:
+          fields:
+            - "Bank Name"
+            - "Bank ID"
+            - "Account Number"
+            - "Entity ID"
+            - "Entity Name"
+        # 5 fields have >95% completeness
+
+      - type: "RangeCheck"
+        severity: "WARNING"
+        params:
+          field: "Bank ID"
+          min_value: 0.0
+          max_value: 3225399.0
+        # Values range from 0.0 to 3225399.0
+
+      - type: "RowCountRangeCheck"
+        severity: "WARNING"
+        params:
+          min_rows: 1063427
+          max_rows: 4253710
+        # Expect approximately 2126855 rows based on profile
