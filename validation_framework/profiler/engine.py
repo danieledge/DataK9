@@ -1561,12 +1561,25 @@ class DataProfiler:
             return suggestions
 
         # OutlierDetectionCheck - based on std_dev relative to mean
+        # FIX: Skip binary and low-cardinality categorical fields - CV is meaningless for these
+        # Binary fields (e.g., 0/1 flags) always have high CV but this is expected, not anomalous
         if hasattr(col.statistics, 'mean') and hasattr(col.statistics, 'std_dev'):
             mean = col.statistics.mean
             std_dev = col.statistics.std_dev
 
-            # High variability indicator (std_dev > 50% of mean)
-            if mean and std_dev and mean != 0:
+            # Check if this is a binary or low-cardinality categorical field
+            unique_count = col.statistics.unique_count if hasattr(col.statistics, 'unique_count') else None
+            cardinality = col.statistics.cardinality if hasattr(col.statistics, 'cardinality') else None
+
+            # Skip if binary field (2 unique values) or low-cardinality categorical (<=10 unique values or <10% cardinality)
+            is_binary = unique_count == 2
+            is_low_cardinality_categorical = (
+                unique_count and unique_count <= 10 or
+                cardinality and cardinality < 0.10
+            )
+
+            # Only suggest OutlierDetectionCheck for continuous numeric fields with high variability
+            if mean and std_dev and mean != 0 and not is_binary and not is_low_cardinality_categorical:
                 coefficient_of_variation = (std_dev / abs(mean)) * 100
 
                 if coefficient_of_variation > 50:
@@ -1581,6 +1594,9 @@ class DataProfiler:
                         reason=f"High variability detected (CV={coefficient_of_variation:.1f}%)",
                         confidence=75.0
                     ))
+            elif is_binary or is_low_cardinality_categorical:
+                card_str = f"{cardinality:.2f}" if cardinality is not None else "N/A"
+                logger.debug(f"Skipping OutlierDetectionCheck for '{col.name}' - detected as binary/categorical field (unique_count={unique_count}, cardinality={card_str})")
 
         return suggestions
 
@@ -1698,22 +1714,29 @@ class DataProfiler:
                 ))
 
             # Unique key check for high cardinality
-            # CRITICAL FIX: Exclude amount/count/measurement fields from UniqueKeyCheck
+            # CRITICAL FIX: Exclude amount/count/measurement/temporal fields from UniqueKeyCheck
             # High cardinality in these fields is expected behavior, not indication of unique key
             if col.statistics.cardinality > 0.99 and row_count > 100:
                 semantic_type = getattr(col.statistics, 'semantic_type', None)
 
                 # Exclude semantic types that naturally have high cardinality
-                exclude_types = {'amount', 'count', 'measurement', 'float', 'decimal'}
+                # FIX: Added datetime/timestamp/date - timestamps are naturally unique but NOT primary keys
+                exclude_types = {'amount', 'count', 'measurement', 'float', 'decimal',
+                                'datetime', 'timestamp', 'date'}
 
-                # Also exclude fields with names suggesting measurements (case-insensitive)
+                # Also check inferred_type for temporal fields
+                inferred_type = col.type_info.inferred_type
+                is_temporal = inferred_type == 'date' or getattr(col.type_info, 'is_temporal', False)
+
+                # Also exclude fields with names suggesting measurements or timestamps (case-insensitive)
                 measurement_keywords = ['amount', 'price', 'cost', 'value', 'balance', 'total',
-                                       'sum', 'count', 'quantity', 'measure', 'metric']
+                                       'sum', 'count', 'quantity', 'measure', 'metric',
+                                       'timestamp', 'datetime', 'time', 'date']
                 field_name_lower = col.name.lower()
                 is_measurement_field = any(keyword in field_name_lower for keyword in measurement_keywords)
 
-                # Only suggest UniqueKeyCheck if NOT a measurement field
-                if semantic_type not in exclude_types and not is_measurement_field:
+                # Only suggest UniqueKeyCheck if NOT a measurement/temporal field
+                if semantic_type not in exclude_types and not is_measurement_field and not is_temporal:
                     suggestions.append(ValidationSuggestion(
                         validation_type="UniqueKeyCheck",
                         severity="ERROR",
@@ -1724,7 +1747,7 @@ class DataProfiler:
                         confidence=95.0
                     ))
                 else:
-                    logger.debug(f"Skipping UniqueKeyCheck for '{col.name}' - detected as measurement field (semantic_type={semantic_type})")
+                    logger.debug(f"Skipping UniqueKeyCheck for '{col.name}' - detected as measurement/temporal field (semantic_type={semantic_type}, is_temporal={is_temporal})")
 
             # Date format check
             if col.type_info.inferred_type == "date":
