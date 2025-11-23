@@ -1560,6 +1560,17 @@ class DataProfiler:
         if col.type_info.inferred_type not in ['integer', 'float', 'decimal']:
             return suggestions
 
+        # CRITICAL FIX: Skip ID/code fields - CV analysis is meaningless for identifiers
+        # Addresses ChatGPT review: Bank IDs (1-99), Account numbers shouldn't trigger outlier warnings
+        field_name_lower = col.name.lower().replace(' ', '_').replace('-', '_')
+        id_keywords = ['id', '_id', 'code', 'from_bank', 'to_bank', 'account', 'acct',
+                       'customer', 'user', 'client', 'member', 'number', 'num', 'no', 'bank']
+        is_id_or_code_field = any(keyword in field_name_lower for keyword in id_keywords)
+
+        if is_id_or_code_field:
+            logger.debug(f"Skipping statistical analysis for '{col.name}' - detected as ID/code field")
+            return suggestions
+
         # OutlierDetectionCheck - based on std_dev relative to mean
         # FIX: Skip binary and low-cardinality categorical fields - CV is meaningless for these
         # Binary fields (e.g., 0/1 flags) always have high CV but this is expected, not anomalous
