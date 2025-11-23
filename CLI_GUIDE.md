@@ -80,13 +80,25 @@ python3 -m validation_framework.cli validate <config_file> [options]
 
 | Option | Short | Description | Default |
 |--------|-------|-------------|---------|
-| `--html-output` | `-o` | Path for HTML report output | `validation_report.html` |
-| `--json-output` | `-j` | Path for JSON report output | None |
+| `--html-output` | `-o` | Path for HTML report output (supports patterns) | `validation_report.html` |
+| `--json-output` | `-j` | Path for JSON report output (supports patterns) | None |
 | `--verbose` | `-v` | Verbose output (shows progress) | True |
 | `--quiet` | `-q` | Minimal output | False |
 | `--fail-on-warning` | | Fail if warnings are found | False |
 | `--log-level` | | Logging level (DEBUG, INFO, WARNING, ERROR) | INFO |
-| `--log-file` | | Optional log file path | None |
+| `--log-file` | | Optional log file path (supports patterns) | None |
+
+**Date/Time Patterns:**
+
+Output paths support automatic date/time pattern substitution:
+
+| Pattern | Example Output | Description |
+|---------|---------------|-------------|
+| `{date}` | `2025-11-22` | ISO date (YYYY-MM-DD) |
+| `{time}` | `14-30-45` | Time (HH-MM-SS) |
+| `{timestamp}` | `20251122_143045` | Compact timestamp |
+| `{datetime}` | `2025-11-22_14-30-45` | Combined date and time |
+| `{job_name}` | `My_Job_Name` | Job name from config (sanitized) |
 
 **Examples:**
 
@@ -99,13 +111,22 @@ python3 -m validation_framework.cli validate config.yaml \
   -o reports/validation.html \
   -j reports/validation.json
 
+# With date/time patterns (prevents overwrites)
+python3 -m validation_framework.cli validate config.yaml \
+  -o "reports/{date}/validation_{time}.html" \
+  -j "results/{timestamp}.json"
+
+# Organized by job name and date
+python3 -m validation_framework.cli validate config.yaml \
+  -o "reports/{job_name}_{date}.html"
+
 # Fail on warnings
 python3 -m validation_framework.cli validate config.yaml --fail-on-warning
 
-# Debug mode with log file
+# Debug mode with timestamped log file
 python3 -m validation_framework.cli validate config.yaml \
   --log-level DEBUG \
-  --log-file validation.log
+  --log-file "logs/validation_{datetime}.log"
 
 # Quiet mode (minimal output)
 python3 -m validation_framework.cli validate config.yaml --quiet
@@ -145,6 +166,29 @@ files:
 output:
   html_report: "validation_report.html"
   json_summary: "validation_summary.json"
+  fail_on_error: true
+```
+
+**Using Patterns in YAML Config:**
+
+```yaml
+validation_job:
+  name: "Customer Data Validation"
+
+files:
+  - name: "customers"
+    path: "data/customers.csv"
+    format: "csv"
+    validations:
+      - type: "MandatoryFieldCheck"
+        severity: "ERROR"
+        params:
+          fields: ["customer_id", "email"]
+
+output:
+  # Patterns work in YAML config too!
+  html_report: "reports/{job_name}_{date}.html"
+  json_summary: "results/{job_name}_{timestamp}.json"
   fail_on_error: true
 ```
 
@@ -321,8 +365,8 @@ python3 -m validation_framework.cli cda-analysis <config_file> [options]
 
 | Option | Short | Description | Default |
 |--------|-------|-------------|---------|
-| `--output` | `-o` | Path for HTML gap analysis report | `cda_gap_analysis.html` |
-| `--json-output` | `-j` | Path for JSON output (for automation) | None |
+| `--output` | `-o` | Path for HTML gap analysis report (supports patterns) | `cda_gap_analysis_{timestamp}.html` |
+| `--json-output` | `-j` | Path for JSON output (supports patterns) | None |
 | `--fail-on-gaps` | | Exit with error if any gaps detected | False |
 
 **Basic Examples:**
@@ -333,6 +377,11 @@ python3 -m validation_framework.cli cda-analysis config.yaml
 
 # Custom output path
 python3 -m validation_framework.cli cda-analysis config.yaml -o gaps.html
+
+# With date/time patterns
+python3 -m validation_framework.cli cda-analysis config.yaml \
+  -o "cda_reports/{job_name}_{date}.html" \
+  -j "cda_results/{timestamp}.json"
 
 # Generate JSON for CI/CD integration
 python3 -m validation_framework.cli cda-analysis config.yaml -j gaps.json

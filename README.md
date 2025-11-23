@@ -48,6 +48,7 @@ DataK9 is a Python framework for validating data quality before loading to datab
 - ✅ **Visual IDE** - DataK9 Studio for point-and-click configuration
 - ✅ **High performance** - Polars backend for 5-10x faster processing
 - ✅ **Enterprise-ready** - AutoSys/CI/CD integration, proper exit codes, JSON output
+- ✅ **Date/time patterns** - Automatic timestamping prevents file overwrites, improves audit trails
 
 ---
 
@@ -241,6 +242,45 @@ files:
 
 **→ [Understanding CDAs - What & Why](docs/guides/advanced/UNDERSTANDING_CDAS.md)**
 **→ [CDA Gap Analysis Guide - How](docs/guides/advanced/CDA_GAP_ANALYSIS_GUIDE.md)**
+
+</details>
+
+<details>
+<parameter name="summary"><b>📅 Date/Time Pattern Support</b> ▸ <i>Click to expand</i></summary>
+
+Prevent file overwrites and improve audit trails with automatic date/time pattern substitution:
+
+```bash
+# CLI with patterns
+python3 -m validation_framework.cli validate config.yaml \
+  -o "reports/{date}/validation_{time}.html" \
+  -j "results/{timestamp}.json"
+
+# YAML config with patterns
+output:
+  html_report: "reports/{job_name}_{timestamp}.html"
+  json_summary: "results/{date}/{job_name}_{time}.json"
+```
+
+**Supported Patterns:**
+
+| Pattern | Example | Use Case |
+|---------|---------|----------|
+| `{date}` | `2025-11-22` | Daily reports |
+| `{time}` | `14-30-45` | Multiple runs per day |
+| `{timestamp}` | `20251122_143045` | Unique per run ⭐ |
+| `{datetime}` | `2025-11-22_14-30-45` | Combined |
+| `{job_name}` | `My_Validation` | Organization |
+| `{file_name}` | `customers` | File-specific (profile) |
+| `{table_name}` | `orders` | Table-specific (database) |
+
+**Benefits:**
+- ✅ No file overwrites (each run gets unique timestamp)
+- ✅ Better audit trails (filenames show when validation ran)
+- ✅ Organized outputs (automatic directory structures)
+- ✅ Fully backward compatible (existing configs work unchanged)
+
+**→ [CLI Guide - Pattern Documentation](CLI_GUIDE.md#date-time-patterns)**
 
 </details>
 

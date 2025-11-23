@@ -148,7 +148,8 @@ print(f'Converted: {parquet_file}')
 
             lines.append(f"\n{symbol}  {warning['message']}")
             lines.append(f"   Recommendation: {warning['recommendation']}")
-            lines.append(f"   Benefit: {warning['benefit']}")
+            if 'benefit' in warning:
+                lines.append(f"   Benefit: {warning['benefit']}")
 
             if 'action' in warning:
                 lines.append(f"   Action: {warning['action']}")

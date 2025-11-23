@@ -2,6 +2,7 @@
 
 import yaml
 import os
+from datetime import datetime
 from typing import Dict, Any, List, Optional
 from pathlib import Path
 from validation_framework.core.results import Severity
@@ -18,6 +19,7 @@ from validation_framework.core.constants import (
     DEFAULT_CHUNK_SIZE,
     MAX_SAMPLE_FAILURES
 )
+from validation_framework.utils.path_patterns import PathPatternExpander
 
 
 # Alias for backwards compatibility
@@ -33,14 +35,17 @@ class ValidationConfig:
     MAX_YAML_NESTING_DEPTH = MAX_YAML_NESTING_DEPTH
     MAX_YAML_KEYS = MAX_YAML_KEY_COUNT
 
-    def __init__(self, config_dict: Dict[str, Any]):
+    def __init__(self, config_dict: Dict[str, Any], run_timestamp: Optional[datetime] = None):
         """
         Initialize from configuration dictionary.
 
         Args:
             config_dict: Configuration dictionary
+            run_timestamp: Optional timestamp for pattern expansion (for consistency)
         """
         self.raw_config = config_dict
+        self._run_timestamp = run_timestamp or datetime.now()
+        self._pattern_expander = PathPatternExpander(run_timestamp=self._run_timestamp)
         self._parse_config()
 
     @classmethod
@@ -189,8 +194,16 @@ class ValidationConfig:
 
         # Output configuration - support both nested and flat structure
         output_config = job_config.get("output", self.raw_config.get("output", {}))
-        self.html_report_path = output_config.get("html_report", "validation_report.html")
-        self.json_summary_path = output_config.get("json_summary", "validation_summary.json")
+
+        # Store templates for pattern expansion
+        self._html_report_template = output_config.get("html_report", "validation_report.html")
+        self._json_summary_template = output_config.get("json_summary", "validation_summary.json")
+
+        # Expand patterns with job context
+        context = {'job_name': self.job_name}
+        self.html_report_path = self._pattern_expander.expand(self._html_report_template, context)
+        self.json_summary_path = self._pattern_expander.expand(self._json_summary_template, context)
+
         self.fail_on_error = output_config.get("fail_on_error", True)
         self.fail_on_warning = output_config.get("fail_on_warning", False)
 
