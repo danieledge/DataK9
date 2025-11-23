@@ -15,6 +15,7 @@ import time
 import logging
 import psutil
 import os
+import gc  # Explicit garbage collection for memory management
 
 from validation_framework.profiler.profile_result import (
     ProfileResult, ColumnProfile, TypeInference, ColumnStatistics,
@@ -486,35 +487,48 @@ class DataProfiler:
                             numeric_data[col].extend(numeric_values.tolist())
 
                 # Collect datetime data for temporal analysis with memory-efficient sampling
+                # CRITICAL: Only attempt datetime conversion on likely datetime columns to avoid memory bloat
                 if self.enable_temporal_analysis:
-                    try:
-                        # Try to convert to datetime
-                        dt_values = pd.to_datetime(chunk[col], errors='coerce')
-                        # Only keep if at least 50% of non-null values converted successfully
-                        non_null_count = chunk[col].notna().sum()
-                        if non_null_count > 0:
-                            converted_count = dt_values.notna().sum()
-                            if converted_count / non_null_count >= 0.5:
-                                if col not in datetime_data:
-                                    datetime_data[col] = []
+                    # Skip datetime conversion for obviously non-datetime columns
+                    col_lower = col.lower()
+                    is_likely_datetime = (
+                        # Column name suggests datetime
+                        any(keyword in col_lower for keyword in ['date', 'time', 'timestamp', 'datetime', 'created', 'updated', 'modified']) or
+                        # Column is string type (datetime might be stored as string)
+                        chunk[col].dtype == 'object' or
+                        # Column is already datetime type
+                        pd.api.types.is_datetime64_any_dtype(chunk[col])
+                    )
 
-                                # Only collect if we haven't reached the limit
-                                current_count = len(datetime_data[col])
-                                if current_count < MAX_TEMPORAL_SAMPLES:
-                                    dt_list = dt_values.dropna().tolist()
-                                    samples_needed = MAX_TEMPORAL_SAMPLES - current_count
+                    if is_likely_datetime:
+                        try:
+                            # Try to convert to datetime
+                            dt_values = pd.to_datetime(chunk[col], errors='coerce')
+                            # Only keep if at least 50% of non-null values converted successfully
+                            non_null_count = chunk[col].notna().sum()
+                            if non_null_count > 0:
+                                converted_count = dt_values.notna().sum()
+                                if converted_count / non_null_count >= 0.5:
+                                    if col not in datetime_data:
+                                        datetime_data[col] = []
 
-                                    # Use sampling if chunk has more than needed
-                                    if len(dt_list) > samples_needed:
-                                        import random
-                                        datetime_data[col].extend(random.sample(dt_list, samples_needed))
-                                        if col not in sampling_triggered:
-                                            sampling_triggered[col] = row_count
-                                            logger.info(f"💾 Memory optimization: Column '{col}' temporal sampling limit reached at {row_count:,} rows (using {MAX_TEMPORAL_SAMPLES:,} samples)")
-                                    else:
-                                        datetime_data[col].extend(dt_list)
-                    except Exception:
-                        pass
+                                    # Only collect if we haven't reached the limit
+                                    current_count = len(datetime_data[col])
+                                    if current_count < MAX_TEMPORAL_SAMPLES:
+                                        dt_list = dt_values.dropna().tolist()
+                                        samples_needed = MAX_TEMPORAL_SAMPLES - current_count
+
+                                        # Use sampling if chunk has more than needed
+                                        if len(dt_list) > samples_needed:
+                                            import random
+                                            datetime_data[col].extend(random.sample(dt_list, samples_needed))
+                                            if col not in sampling_triggered:
+                                                sampling_triggered[col] = row_count
+                                                logger.info(f"💾 Memory optimization: Column '{col}' temporal sampling limit reached at {row_count:,} rows (using {MAX_TEMPORAL_SAMPLES:,} samples)")
+                                        else:
+                                            datetime_data[col].extend(dt_list)
+                        except Exception:
+                            pass
 
                 # Collect sample data for PII detection (Phase 1) - limit to 1000 samples per column
                 if self.enable_pii_detection:
@@ -527,6 +541,11 @@ class DataProfiler:
         # Record chunk processing time
         phase_timings['chunk_processing'] = time.time() - chunk_processing_start
         logger.info(f"⏱  Chunk processing completed in {phase_timings['chunk_processing']:.2f}s")
+
+        # Explicit garbage collection after each chunk to prevent memory buildup
+        # This is critical for large files with many chunks
+        del chunk  # Explicitly delete chunk DataFrame
+        gc.collect()  # Force garbage collection
 
         # Log memory optimization summary
         if sampling_triggered:
