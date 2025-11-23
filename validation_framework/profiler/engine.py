@@ -476,14 +476,15 @@ class DataProfiler:
 
                         # Use simple random sampling if chunk is larger than samples needed
                         if len(numeric_values) > samples_needed:
-                            import random
-                            sampled_values = random.sample(numeric_values.tolist(), samples_needed)
-                            numeric_data[col].extend(sampled_values)
+                            # Use pandas .sample() instead of tolist() to avoid memory spike
+                            sampled = numeric_values.sample(n=samples_needed, random_state=42)
+                            numeric_data[col].extend(sampled.tolist())
                             # Log when we hit the limit
                             if col not in sampling_triggered:
                                 sampling_triggered[col] = row_count
                                 logger.info(f"💾 Memory optimization: Column '{col}' sampling limit reached at {row_count:,} rows (using {MAX_CORRELATION_SAMPLES:,} samples for correlation)")
                         else:
+                            # Only convert to list when size is small (under limit)
                             numeric_data[col].extend(numeric_values.tolist())
 
                 # Collect datetime data for temporal analysis with memory-efficient sampling
@@ -806,9 +807,9 @@ class DataProfiler:
             if current_count < MAX_NUMERIC_SAMPLES:
                 samples_needed = MAX_NUMERIC_SAMPLES - current_count
                 if len(numeric_series) > samples_needed:
-                    # Random sample
-                    import random
-                    profile["numeric_values"].extend(random.sample(numeric_series.tolist(), samples_needed))
+                    # Use pandas .sample() instead of random.sample(tolist()) for memory efficiency
+                    sampled = numeric_series.sample(n=samples_needed, random_state=42)
+                    profile["numeric_values"].extend(sampled.tolist())
                 else:
                     profile["numeric_values"].extend(numeric_series.tolist())
 
@@ -821,13 +822,12 @@ class DataProfiler:
         current_count = len(profile["string_lengths"])
         if current_count < MAX_STRING_LENGTH_SAMPLES:
             samples_needed = MAX_STRING_LENGTH_SAMPLES - current_count
-            length_list = lengths.tolist()
-            if len(length_list) > samples_needed:
-                # Random sample
-                import random
-                profile["string_lengths"].extend(random.sample(length_list, samples_needed))
+            # Use pandas .sample() instead of tolist() for memory efficiency
+            if len(lengths) > samples_needed:
+                sampled_lengths = lengths.sample(n=samples_needed, random_state=42)
+                profile["string_lengths"].extend(sampled_lengths.tolist())
             else:
-                profile["string_lengths"].extend(length_list)
+                profile["string_lengths"].extend(lengths.tolist())
 
         # Pattern detection (sample only)
         if chunk_idx == 0:
