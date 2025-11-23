@@ -68,8 +68,8 @@ class ProfileHTMLReporter:
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Data Profile Report - {profile.file_name}</title>
-    <!-- Chart.js Library (Self-Hosted for Offline Use) -->
-    <script src="resources/js/chart.min.js"></script>
+    <!-- Chart.js Library (CDN) -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <style>
         * {{
             margin: 0;
@@ -222,36 +222,37 @@ class ProfileHTMLReporter:
 
         .column-card {{
             background: #2d2d44;
-            border-radius: 12px;
-            padding: 25px;
-            border: 2px solid #4a5568;
-            transition: border-color 0.3s;
+            border-radius: 8px;
+            padding: 16px;
+            border: 1px solid #4a5568;
+            transition: all 0.2s;
         }}
 
         .column-card:hover {{
             border-color: #667eea;
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
         }}
 
         .column-header {{
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 20px;
-            padding-bottom: 15px;
-            border-bottom: 2px solid #4a5568;
+            margin-bottom: 12px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #4a5568;
         }}
 
         .column-name {{
-            font-size: 1.3em;
-            font-weight: bold;
+            font-size: 1.1em;
+            font-weight: 600;
             color: #ffffff;
         }}
 
         .type-badge {{
-            padding: 6px 12px;
-            border-radius: 6px;
-            font-size: 0.85em;
-            font-weight: bold;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 0.75em;
+            font-weight: 600;
             text-transform: uppercase;
         }}
 
@@ -271,31 +272,150 @@ class ProfileHTMLReporter:
         }}
 
         .column-content {{
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }}
+
+        /* Compact stats grid */
+        .stats-grid {{
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 20px;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+            background: #1a1a2e;
+            padding: 12px;
+            border-radius: 6px;
+            border: 1px solid #4a5568;
+        }}
+
+        .stat-item {{
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }}
+
+        .stat-label {{
+            font-size: 0.7em;
+            color: #a0aec0;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }}
+
+        .stat-value {{
+            font-size: 0.9em;
+            color: #ffffff;
+            font-weight: 500;
+        }}
+
+        /* Quality score bar */
+        .quality-bar-compact {{
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: #1a1a2e;
+            padding: 8px 12px;
+            border-radius: 6px;
+            border: 1px solid #4a5568;
+        }}
+
+        .quality-label {{
+            font-size: 0.7em;
+            color: #a0aec0;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            min-width: 80px;
+        }}
+
+        .quality-progress {{
+            flex: 1;
+            height: 8px;
+            background: #2d3748;
+            border-radius: 4px;
+            overflow: hidden;
+        }}
+
+        .quality-fill {{
+            height: 100%;
+            transition: width 0.3s;
+        }}
+
+        .quality-score {{
+            font-size: 0.9em;
+            color: #ffffff;
+            font-weight: 600;
+            min-width: 50px;
+            text-align: right;
+        }}
+
+        /* Collapsible sections */
+        .collapsible-section {{
+            background: #1a1a2e;
+            border-radius: 6px;
+            border: 1px solid #4a5568;
+            overflow: hidden;
+        }}
+
+        .collapsible-header {{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 12px;
+            cursor: pointer;
+            user-select: none;
+            transition: background 0.2s;
+        }}
+
+        .collapsible-header:hover {{
+            background: #252542;
+        }}
+
+        .collapsible-title {{
+            font-size: 0.75em;
+            color: #a0aec0;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 600;
+        }}
+
+        .collapsible-icon {{
+            color: #667eea;
+            font-size: 0.9em;
+            transition: transform 0.2s;
+        }}
+
+        .collapsible-icon.expanded {{
+            transform: rotate(180deg);
+        }}
+
+        .collapsible-content {{
+            padding: 0 12px 12px 12px;
+            display: none;
+        }}
+
+        .collapsible-content.expanded {{
+            display: block;
         }}
 
         .info-section {{
-            background: #1a1a2e;
-            padding: 15px;
-            border-radius: 8px;
-            border: 1px solid #4a5568;
+            background: transparent;
+            padding: 0;
+            border-radius: 0;
+            border: none;
         }}
 
         .info-section h4 {{
             color: #a0aec0;
-            font-size: 0.9em;
+            font-size: 0.75em;
             text-transform: uppercase;
-            margin-bottom: 12px;
-            letter-spacing: 1px;
+            margin-bottom: 8px;
+            letter-spacing: 0.5px;
         }}
 
         .info-row {{
             display: flex;
             justify-content: space-between;
-            padding: 8px 0;
-            border-bottom: 1px solid #2d3748;
+            padding: 4px 0;
+            font-size: 0.85em;
         }}
 
         .info-row:last-child {{
@@ -566,6 +686,7 @@ class ProfileHTMLReporter:
 
             .chart-wrapper {{
                 height: 300px;
+                overflow-x: auto;
             }}
 
             .column-content {{
@@ -624,6 +745,8 @@ class ProfileHTMLReporter:
 
             .chart-wrapper {{
                 height: 250px;
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
             }}
         }}
 
@@ -636,6 +759,27 @@ class ProfileHTMLReporter:
             }}
         }}
     </style>
+    <script>
+        // Collapsible section functionality
+        document.addEventListener('DOMContentLoaded', function() {{
+            const collapsibleHeaders = document.querySelectorAll('.collapsible-header');
+
+            collapsibleHeaders.forEach(header => {{
+                header.addEventListener('click', function() {{
+                    const content = this.nextElementSibling;
+                    const icon = this.querySelector('.collapsible-icon');
+
+                    if (content.classList.contains('expanded')) {{
+                        content.classList.remove('expanded');
+                        icon.classList.remove('expanded');
+                    }} else {{
+                        content.classList.add('expanded');
+                        icon.classList.add('expanded');
+                    }}
+                }});
+            }});
+        }});
+    </script>
 </head>
 <body>
     <div class="container">
@@ -653,6 +797,7 @@ class ProfileHTMLReporter:
             <h3>📋 Report Sections</h3>
             <ul class="toc-list">
                 <li><a href="#summary">Summary</a></li>
+                {f'<li><a href="#phase2-summary">🔬 Advanced Analysis</a></li>' if any(col.temporal_analysis or (col.pii_info and col.pii_info.get('detected')) for col in profile.columns) else ''}
                 <li><a href="#quality-overview">Quality Overview</a></li>
                 <li><a href="#column-profiles">Column Profiles</a></li>
                 {f'<li><a href="#correlations">Correlations</a></li>' if profile.correlations else ''}
@@ -661,34 +806,9 @@ class ProfileHTMLReporter:
             </ul>
         </div>
 
-        <!-- Summary Section -->
+        <!-- Unified Summary Section -->
         <div id="summary"></div>
-        <div class="summary-grid">
-            <div class="summary-card">
-                <div class="label">File Size</div>
-                <div class="value">{self._format_file_size(profile.file_size_bytes)}</div>
-            </div>
-            <div class="summary-card">
-                <div class="label">Format</div>
-                <div class="value">{profile.format.upper()}</div>
-            </div>
-            <div class="summary-card">
-                <div class="label">Total Rows</div>
-                <div class="value">{profile.row_count:,}</div>
-            </div>
-            <div class="summary-card">
-                <div class="label">Total Columns</div>
-                <div class="value">{profile.column_count}</div>
-            </div>
-            <div class="summary-card">
-                <div class="label">Overall Quality</div>
-                <div class="value">
-                    <span class="quality-badge {self._get_quality_class(profile.overall_quality_score)}">
-                        {profile.overall_quality_score:.1f}%
-                    </span>
-                </div>
-            </div>
-        </div>
+        {self._generate_unified_summary(profile)}
 
         <!-- Quality Overview Charts -->
         <div id="quality-overview" class="section">
@@ -705,14 +825,34 @@ class ProfileHTMLReporter:
             </div>
 
             <div class="chart-container">
-                <h3 style="color: #cbd5e0; margin-bottom: 15px;">Data Completeness by Column</h3>
+                <h3 style="color: #cbd5e0; margin-bottom: 10px;">Data Completeness by Column</h3>
+                <div style="color: #9ca3af; font-size: 0.85em; margin-bottom: 15px; padding: 10px; background: #1f2937; border-radius: 6px; border-left: 3px solid #3b82f6;">
+                    📊 <strong>How to read this chart:</strong> Shows the percentage of non-null values for each column.
+                    Higher bars (closer to 100%) indicate more complete data. Columns below 95% may need attention.
+                    <div style="margin-top: 8px; color: #cbd5e0;">
+                        • <span style="color: #10b981;">Green zone (95-100%)</span> = Excellent completeness<br>
+                        • <span style="color: #f59e0b;">Orange zone (80-95%)</span> = Acceptable, monitor for improvements<br>
+                        • <span style="color: #ef4444;">Red zone (below 80%)</span> = Significant data gaps, requires investigation
+                    </div>
+                </div>
                 <div class="chart-wrapper">
                     <canvas id="completenessChart"></canvas>
                 </div>
             </div>
 
             <div class="chart-container">
-                <h3 style="color: #cbd5e0; margin-bottom: 15px;">Overall Quality Scores</h3>
+                <h3 style="color: #cbd5e0; margin-bottom: 10px;">Overall Quality Scores</h3>
+                <div style="color: #9ca3af; font-size: 0.85em; margin-bottom: 15px; padding: 10px; background: #1f2937; border-radius: 6px; border-left: 3px solid #3b82f6;">
+                    📊 <strong>How to read this chart:</strong> Displays a composite quality score (0-100%) for each column,
+                    combining multiple factors: completeness (no nulls), validity (correct format), uniqueness (distinct values),
+                    and consistency (pattern uniformity).
+                    <div style="margin-top: 8px; color: #cbd5e0;">
+                        • <span style="color: #10b981;">Score 90-100%</span> = Excellent quality, ready for use<br>
+                        • <span style="color: #3b82f6;">Score 70-89%</span> = Good quality, minor improvements possible<br>
+                        • <span style="color: #f59e0b;">Score 50-69%</span> = Fair quality, review recommended<br>
+                        • <span style="color: #ef4444;">Score below 50%</span> = Poor quality, immediate action needed
+                    </div>
+                </div>
                 <div class="chart-wrapper">
                     <canvas id="qualityChart"></canvas>
                 </div>
@@ -914,10 +1054,10 @@ class ProfileHTMLReporter:
         for col in columns:
             type_badge_class = "type-known" if col.type_info.is_known else "type-inferred"
 
-            issues_html = ""
-            if col.quality.issues:
-                issues_html = "<ul class='issues-list'>" + \
-                    "".join(f"<li>{issue}</li>" for issue in col.quality.issues) + \
+            observations_html = ""
+            if col.quality.observations:
+                observations_html = "<ul class='issues-list'>" + \
+                    "".join(f"<li>{obs}</li>" for obs in col.quality.observations) + \
                     "</ul>"
 
             # Top values table
@@ -953,82 +1093,271 @@ class ProfileHTMLReporter:
                     </table>
                 """
 
+            # Determine quality color
+            quality_score = col.quality.overall_score
+            if quality_score >= 90:
+                quality_color = '#10b981'  # Green
+            elif quality_score >= 75:
+                quality_color = '#3b82f6'  # Blue
+            elif quality_score >= 50:
+                quality_color = '#f59e0b'  # Orange
+            else:
+                quality_color = '#ef4444'  # Red
+
+            # Build additional stats for numeric/string types
+            extra_stats = ""
+            if col.statistics.min_value is not None and col.statistics.max_value is not None:
+                extra_stats += f"""
+                    <div class="stat-item">
+                        <div class="stat-label">Range</div>
+                        <div class="stat-value">{col.statistics.min_value} to {col.statistics.max_value}</div>
+                    </div>
+                """
+            if col.statistics.mean is not None:
+                extra_stats += f"""
+                    <div class="stat-item">
+                        <div class="stat-label">Mean</div>
+                        <div class="stat-value">{col.statistics.mean:.2f}</div>
+                    </div>
+                """
+            if col.statistics.min_length is not None:
+                extra_stats += f"""
+                    <div class="stat-item">
+                        <div class="stat-label">Length Range</div>
+                        <div class="stat-value">{col.statistics.min_length} - {col.statistics.max_length}</div>
+                    </div>
+                """
+
             html_parts.append(f"""
                 <div class="column-card">
                     <div class="column-header">
                         <div class="column-name">{col.name}</div>
                         <div class="type-badge {type_badge_class}">
                             {col.type_info.inferred_type}
-                            {'(Known)' if col.type_info.is_known else '(Inferred)'}
                         </div>
                     </div>
 
                     <div class="column-content">
-                        <!-- Type Information -->
-                        <div class="info-section">
-                            <h4>Type Information</h4>
-                            <div class="info-row">
-                                <span class="info-label">Inferred Type:</span>
-                                <span class="info-value">{col.type_info.inferred_type}</span>
+                        <!-- Compact Stats Grid -->
+                        <div class="stats-grid">
+                            <div class="stat-item">
+                                <div class="stat-label">Total Values</div>
+                                <div class="stat-value">{col.statistics.count:,}</div>
                             </div>
-                            {'<div class="info-row"><span class="info-label">Declared Type:</span><span class="info-value">' + col.type_info.declared_type + '</span></div>' if col.type_info.declared_type else ''}
-                            <div class="info-row">
-                                <span class="info-label">Confidence:</span>
-                                <span class="info-value">{col.type_info.confidence * 100:.1f}%</span>
+                            <div class="stat-item">
+                                <div class="stat-label">Nulls</div>
+                                <div class="stat-value">{col.statistics.null_count:,} ({col.statistics.null_percentage:.1f}%)</div>
                             </div>
-                            <div class="confidence-bar">
-                                <div class="confidence-fill" style="width: {col.type_info.confidence * 100}%"></div>
+                            <div class="stat-item">
+                                <div class="stat-label">Unique</div>
+                                <div class="stat-value">{col.statistics.unique_count:,} ({col.statistics.unique_percentage:.1f}%)</div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="stat-label">Type Confidence</div>
+                                <div class="stat-value">{col.type_info.confidence * 100:.0f}%</div>
+                            </div>
+                            {extra_stats}
+                        </div>
+
+                        <!-- Intelligent Sampling Info (if available) -->
+                        {self._generate_sampling_info(col)}
+
+                        <!-- Quality Metrics with Explanations -->
+                        <div style="margin-top: 16px;">
+                            <div style="font-weight: 600; margin-bottom: 12px; color: #1f2937;">Quality Metrics</div>
+
+                            <!-- Overall Score -->
+                            <div class="quality-bar-compact">
+                                <div class="quality-label">Overall Quality</div>
+                                <div class="quality-progress">
+                                    <div class="quality-fill" style="width: {quality_score}%; background: {quality_color};"></div>
+                                </div>
+                                <div class="quality-score" style="color: {quality_color};">{quality_score:.0f}%</div>
+                            </div>
+
+                            <!-- Completeness -->
+                            <div class="quality-bar-compact">
+                                <div class="quality-label">Completeness</div>
+                                <div class="quality-progress">
+                                    <div class="quality-fill" style="width: {col.quality.completeness}%; background: {'#10b981' if col.quality.completeness >= 95 else '#f59e0b' if col.quality.completeness >= 90 else '#ef4444'};"></div>
+                                </div>
+                                <div class="quality-score">{col.quality.completeness:.0f}%</div>
+                            </div>
+                            <div style="font-size: 12px; color: #6b7280; margin-left: 8px; margin-bottom: 8px;">
+                                {f"{'✓' if col.quality.completeness >= 95 else '⚠'} {col.statistics.null_count:,} null values ({col.statistics.null_percentage:.1f}%)" if col.statistics.null_count > 0 else "✓ No missing values"}
+                            </div>
+
+                            <!-- Type Confidence (Validity) -->
+                            <div class="quality-bar-compact">
+                                <div class="quality-label">Type Confidence</div>
+                                <div class="quality-progress">
+                                    <div class="quality-fill" style="width: {col.type_info.confidence * 100}%; background: {'#10b981' if col.type_info.confidence >= 0.95 else '#f59e0b' if col.type_info.confidence >= 0.80 else '#ef4444'};"></div>
+                                </div>
+                                <div class="quality-score">{col.type_info.confidence * 100:.0f}%</div>
+                            </div>
+                            <div style="font-size: 12px; color: #6b7280; margin-left: 8px; margin-bottom: 8px;">
+                                {f"{'✓' if col.type_info.confidence >= 0.95 else '⚠'} {col.type_info.confidence * 100:.1f}% of values match {col.type_info.inferred_type} type"}
+                                {self._generate_type_conflicts_display(col) if col.type_info.confidence < 0.95 else ''}
+                            </div>
+
+                            <!-- Uniqueness -->
+                            <div class="quality-bar-compact">
+                                <div class="quality-label">Uniqueness</div>
+                                <div class="quality-progress">
+                                    <div class="quality-fill" style="width: {col.quality.uniqueness}%; background: #667eea;"></div>
+                                </div>
+                                <div class="quality-score">{col.quality.uniqueness:.0f}%</div>
+                            </div>
+                            <div style="font-size: 12px; color: #6b7280; margin-left: 8px; margin-bottom: 8px;">
+                                {f"ℹ {col.statistics.unique_count:,} unique values - All values unique (potential key)" if col.statistics.cardinality == 1.0 and col.statistics.count > 1 else f"ℹ {col.statistics.unique_count:,} unique values ({col.statistics.unique_percentage:.1f}%)"}
+                            </div>
+
+                            <!-- Consistency -->
+                            <div class="quality-bar-compact">
+                                <div class="quality-label">Consistency</div>
+                                <div class="quality-progress">
+                                    <div class="quality-fill" style="width: {col.quality.consistency}%; background: {'#10b981' if col.quality.consistency >= 80 else '#f59e0b' if col.quality.consistency >= 50 else '#ef4444'};"></div>
+                                </div>
+                                <div class="quality-score">{col.quality.consistency:.0f}%</div>
+                            </div>
+                            <div style="font-size: 12px; color: #6b7280; margin-left: 8px; margin-bottom: 8px;">
+                                {f"ℹ {len(col.statistics.pattern_samples)} different patterns detected" if col.statistics.pattern_samples and len(col.statistics.pattern_samples) > 1 else "✓ Consistent pattern"}
                             </div>
                         </div>
 
-                        <!-- Statistics -->
-                        <div class="info-section">
-                            <h4>Statistics</h4>
-                            <div class="info-row">
-                                <span class="info-label">Total Values:</span>
-                                <span class="info-value">{col.statistics.count:,}</span>
+                        <!-- Collapsible: Top Values -->
+                        {f'''<div class="collapsible-section">
+                            <div class="collapsible-header">
+                                <div class="collapsible-title">📊 Top Values ({len(col.statistics.top_values)})</div>
+                                <div class="collapsible-icon">▼</div>
                             </div>
-                            <div class="info-row">
-                                <span class="info-label">Null Count:</span>
-                                <span class="info-value">{col.statistics.null_count:,} ({col.statistics.null_percentage:.1f}%)</span>
+                            <div class="collapsible-content">
+                                {top_values_html}
                             </div>
-                            <div class="info-row">
-                                <span class="info-label">Unique Values:</span>
-                                <span class="info-value">{col.statistics.unique_count:,} ({col.statistics.unique_percentage:.1f}%)</span>
-                            </div>
-                            {f'<div class="info-row"><span class="info-label">Range:</span><span class="info-value">{col.statistics.min_value} to {col.statistics.max_value}</span></div>' if col.statistics.min_value is not None else ''}
-                            {f'<div class="info-row"><span class="info-label">Mean:</span><span class="info-value">{col.statistics.mean:.2f}</span></div>' if col.statistics.mean is not None else ''}
-                        </div>
+                        </div>''' if top_values_html else ''}
 
-                        <!-- Quality Metrics -->
-                        <div class="info-section">
-                            <h4>Quality Metrics</h4>
-                            <div class="info-row">
-                                <span class="info-label">Overall Score:</span>
-                                <span class="info-value">{col.quality.overall_score:.1f}%</span>
+                        <!-- Data Insights (for additional observations not covered above) -->
+                        {f'''<div class="collapsible-section">
+                            <div class="collapsible-header">
+                                <div class="collapsible-title">ℹ Additional Data Insights ({len(col.quality.observations)})</div>
+                                <div class="collapsible-icon">▼</div>
                             </div>
-                            <div class="info-row">
-                                <span class="info-label">Completeness:</span>
-                                <span class="info-value">{col.quality.completeness:.1f}%</span>
+                            <div class="collapsible-content">
+                                <div style="padding-top: 8px;">
+                                    {observations_html}
+                                </div>
                             </div>
-                            <div class="info-row">
-                                <span class="info-label">Validity:</span>
-                                <span class="info-value">{col.quality.validity:.1f}%</span>
-                            </div>
-                            <div class="info-row">
-                                <span class="info-label">Uniqueness:</span>
-                                <span class="info-value">{col.quality.uniqueness:.1f}%</span>
-                            </div>
-                            {issues_html}
-                        </div>
+                        </div>''' if col.quality.observations else ''}
                     </div>
 
-                    <!-- Top Values -->
-                    {f'<div style="margin-top: 20px;"><h4 style="color: #a0aec0; margin-bottom: 10px; font-size: 0.9em;">TOP VALUES</h4>{top_values_html}</div>' if top_values_html else ''}
+                    <!-- Phase 2: Temporal Analysis -->
+                    {self._generate_temporal_viz(col) if col.temporal_analysis else ''}
+
+                    <!-- Phase 2: PII Detection -->
+                    {self._generate_pii_viz(col) if col.pii_info and col.pii_info.get('detected') else ''}
                 </div>
             """)
 
         return "".join(html_parts)
+
+    def _generate_sampling_info(self, col: ColumnProfile) -> str:
+        """Generate HTML for intelligent sampling transparency info."""
+        # Check if column has intelligent sampling metadata
+        if not hasattr(col.statistics, 'semantic_type') or col.statistics.semantic_type is None:
+            return ""
+
+        semantic_type = col.statistics.semantic_type
+        sample_size = getattr(col.statistics, 'sample_size', None)
+        sampling_strategy = getattr(col.statistics, 'sampling_strategy', None)
+
+        # Skip if semantic type is 'unknown' (default behavior)
+        if semantic_type == 'unknown':
+            return ""
+
+        # Semantic type icons and colors
+        type_icons = {
+            'id': '🔑',
+            'email': '📧',
+            'phone': '📞',
+            'date': '📅',
+            'datetime': '📅',
+            'timestamp': '⏰',
+            'amount': '💰',
+            'price': '💰',
+            'category': '🏷️',
+            'text': '📝',
+            'code': '🔢',
+            'unknown': '❓'
+        }
+
+        type_colors = {
+            'id': '#8b5cf6',
+            'email': '#3b82f6',
+            'phone': '#3b82f6',
+            'date': '#10b981',
+            'datetime': '#10b981',
+            'timestamp': '#10b981',
+            'amount': '#f59e0b',
+            'price': '#f59e0b',
+            'category': '#ec4899',
+            'text': '#6366f1',
+            'code': '#14b8a6',
+            'unknown': '#6b7280'
+        }
+
+        icon = type_icons.get(semantic_type, '🧠')
+        color = type_colors.get(semantic_type, '#667eea')
+
+        return f"""
+        <div style="margin-top: 12px; padding: 12px; background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%); border-left: 3px solid {color}; border-radius: 6px;">
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+                <span style="font-size: 18px;">{icon}</span>
+                <span style="font-weight: 600; color: {color}; font-size: 13px; text-transform: capitalize;">
+                    {semantic_type.replace('_', ' ')} Field
+                </span>
+                <span style="margin-left: auto; font-size: 11px; color: #9ca3af; background: rgba(156, 163, 175, 0.2); padding: 2px 8px; border-radius: 10px;">
+                    Intelligent Sampling
+                </span>
+            </div>
+            {f'<div style="font-size: 12px; color: #cbd5e0; line-height: 1.5;">{sampling_strategy}</div>' if sampling_strategy else ''}
+            {f'<div style="font-size: 11px; color: #9ca3af; margin-top: 4px;">Sample size: {sample_size:,} values</div>' if sample_size else ''}
+        </div>
+        """
+
+    def _generate_type_conflicts_display(self, col: ColumnProfile) -> str:
+        """
+        Generate HTML display for type conflicts when confidence < 95%.
+        Shows what other types were detected and their percentages.
+        """
+        if not hasattr(col.type_info, 'type_conflicts') or not col.type_info.type_conflicts:
+            return ""
+
+        conflicts = col.type_info.type_conflicts
+        if not conflicts:
+            return ""
+
+        # Build conflict display
+        conflict_items = []
+        for conflict in conflicts[:3]:  # Show top 3 conflicts
+            conflict_items.append(
+                f"{conflict['type']} ({conflict['percentage']}%)"
+            )
+
+        conflicts_text = ", ".join(conflict_items)
+
+        return f"""
+        <div style="margin-top: 6px; padding: 8px; background: rgba(245, 158, 11, 0.1); border-left: 2px solid #f59e0b; border-radius: 4px;">
+            <div style="font-size: 11px; color: #f59e0b; font-weight: 600; margin-bottom: 3px;">
+                Mixed Data Types Detected
+            </div>
+            <div style="font-size: 11px; color: #cbd5e0; line-height: 1.4;">
+                Also found: {conflicts_text}
+            </div>
+            <div style="font-size: 10px; color: #9ca3af; margin-top: 4px; font-style: italic;">
+                This may indicate data quality issues or valid mixed-type usage (e.g., alphanumeric IDs)
+            </div>
+        </div>
+        """
 
     def _generate_correlations_section(self, correlations: List) -> str:
         """Generate HTML for correlations section."""
@@ -1089,7 +1418,7 @@ class ProfileHTMLReporter:
                 <div class="suggestion-card">
                     <div class="suggestion-header">
                         <div class="validation-type">{sugg.validation_type}</div>
-                        <div class="severity-badge {severity_class}">{sugg.severity}</div>
+                        <div class="severity-badge {severity_class}">Severity: {sugg.severity}</div>
                     </div>
                     <div style="color: #cbd5e0; margin-bottom: 10px;">
                         {sugg.reason}
@@ -1102,6 +1431,461 @@ class ProfileHTMLReporter:
             """)
 
         return "".join(html_parts)
+
+    def _generate_unified_summary(self, profile: ProfileResult) -> str:
+        """Generate unified compact summary combining basic stats and Phase 2 findings."""
+
+        # Count Phase 2 features and intelligent sampling
+        temporal_columns = [col for col in profile.columns if col.temporal_analysis]
+        pii_columns = [col for col in profile.columns if col.pii_info and col.pii_info.get('detected')]
+        intelligent_sampled_columns = [
+            col for col in profile.columns
+            if hasattr(col.statistics, 'semantic_type') and
+            col.statistics.semantic_type and
+            col.statistics.semantic_type != 'unknown'
+        ]
+        has_phase2 = bool(temporal_columns or pii_columns or profile.dataset_privacy_risk or intelligent_sampled_columns)
+
+        # Quality color
+        quality_score = profile.overall_quality_score
+        if quality_score >= 90:
+            quality_color = '#10b981'
+            quality_label = 'EXCELLENT'
+        elif quality_score >= 75:
+            quality_color = '#3b82f6'
+            quality_label = 'GOOD'
+        elif quality_score >= 50:
+            quality_color = '#f59e0b'
+            quality_label = 'FAIR'
+        else:
+            quality_color = '#ef4444'
+            quality_label = 'POOR'
+
+        # Build Phase 2 insights if available
+        phase2_cards = ""
+        if has_phase2:
+            # Temporal insights
+            if temporal_columns:
+                freq_counts = {}
+                for col in temporal_columns:
+                    freq = col.temporal_analysis.get('frequency', {}).get('inferred', 'unknown')
+                    freq_counts[freq] = freq_counts.get(freq, 0) + 1
+
+                freq_summary = ", ".join([f"{count} {freq}" for freq, count in sorted(freq_counts.items())])
+                phase2_cards += f'''
+                <div style="background: #1e293b; padding: 12px; border-radius: 6px; border-left: 3px solid #10b981;">
+                    <div style="color: #10b981; font-size: 0.75em; text-transform: uppercase; font-weight: 600; margin-bottom: 6px;">📅 Temporal Analysis</div>
+                    <div style="color: #cbd5e0; font-size: 0.85em;">{len(temporal_columns)} datetime column(s) • {freq_summary}</div>
+                </div>
+                '''
+
+            # PII insights
+            if pii_columns:
+                high_risk = [col for col in pii_columns if col.pii_info.get('risk_score', 0) >= 70]
+                pii_types = set()
+                for col in pii_columns:
+                    for pii_type in col.pii_info.get('pii_types', []):
+                        pii_types.add(pii_type.get('name', 'Unknown'))
+
+                types_summary = ", ".join(list(pii_types)[:3])
+                risk_indicator = f"⚠️ {len(high_risk)} HIGH RISK" if high_risk else ""
+                phase2_cards += f'''
+                <div style="background: #1e293b; padding: 12px; border-radius: 6px; border-left: 3px solid #f59e0b;">
+                    <div style="color: #f59e0b; font-size: 0.75em; text-transform: uppercase; font-weight: 600; margin-bottom: 6px;">🔒 PII Detection</div>
+                    <div style="color: #cbd5e0; font-size: 0.85em;">{len(pii_columns)} column(s) with PII • {types_summary} {risk_indicator}</div>
+                </div>
+                '''
+
+            # Intelligent sampling insights
+            if intelligent_sampled_columns:
+                # Count semantic types
+                type_counts = {}
+                for col in intelligent_sampled_columns:
+                    sem_type = col.statistics.semantic_type
+                    type_counts[sem_type] = type_counts.get(sem_type, 0) + 1
+
+                types_summary = ", ".join([f"{count} {typ}" for typ, count in sorted(type_counts.items())])
+                optimization_pct = (len(intelligent_sampled_columns) / len(profile.columns) * 100) if profile.columns else 0
+                phase2_cards += f'''
+                <div style="background: #1e293b; padding: 12px; border-radius: 6px; border-left: 3px solid #8b5cf6;">
+                    <div style="color: #8b5cf6; font-size: 0.75em; text-transform: uppercase; font-weight: 600; margin-bottom: 6px;">🧠 Intelligent Sampling</div>
+                    <div style="color: #cbd5e0; font-size: 0.85em;">{len(intelligent_sampled_columns)} column(s) optimized • {types_summary}</div>
+                </div>
+                '''
+
+        # Analysis scope note
+        scope_note = ""
+        if has_phase2 and pii_columns:
+            scope_note = f'''
+            <div style="background: #1e293b; padding: 10px 12px; border-radius: 6px; border-left: 3px solid #3b82f6; margin-top: 16px;">
+                <div style="color: #9ca3af; font-size: 0.75em;">
+                    ℹ️ <strong>Analysis Scope:</strong> All {profile.row_count:,} rows analyzed for statistics and quality metrics.
+                    PII detection based on sample of up to 1,000 values per column for performance.
+                </div>
+            </div>
+            '''
+
+        return f'''
+        <div class="section" style="background: linear-gradient(135deg, #1e3a8a 0%, #312e81 100%); padding: 24px; margin-bottom: 20px;">
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: {20 if phase2_cards else 0}px;">
+                <div style="background: #1e293b; padding: 12px; border-radius: 6px; text-align: center;">
+                    <div style="color: #9ca3af; font-size: 0.7em; text-transform: uppercase; margin-bottom: 4px;">Format</div>
+                    <div style="color: #ffffff; font-size: 1.1em; font-weight: 600;">{profile.format.upper()}</div>
+                </div>
+                <div style="background: #1e293b; padding: 12px; border-radius: 6px; text-align: center;">
+                    <div style="color: #9ca3af; font-size: 0.7em; text-transform: uppercase; margin-bottom: 4px;">Size</div>
+                    <div style="color: #ffffff; font-size: 1.1em; font-weight: 600;">{self._format_file_size(profile.file_size_bytes)}</div>
+                </div>
+                <div style="background: #1e293b; padding: 12px; border-radius: 6px; text-align: center;">
+                    <div style="color: #9ca3af; font-size: 0.7em; text-transform: uppercase; margin-bottom: 4px;">Total Rows</div>
+                    <div style="color: #ffffff; font-size: 1.1em; font-weight: 600;" title="All rows analyzed">{profile.row_count:,}</div>
+                    <div style="color: #6b7280; font-size: 0.65em; margin-top: 2px;">100% analyzed</div>
+                </div>
+                <div style="background: #1e293b; padding: 12px; border-radius: 6px; text-align: center;">
+                    <div style="color: #9ca3af; font-size: 0.7em; text-transform: uppercase; margin-bottom: 4px;">Columns</div>
+                    <div style="color: #ffffff; font-size: 1.1em; font-weight: 600;">{profile.column_count}</div>
+                </div>
+                <div style="background: #1e293b; padding: 12px; border-radius: 6px; text-align: center;">
+                    <div style="color: #9ca3af; font-size: 0.7em; text-transform: uppercase; margin-bottom: 4px;">Quality</div>
+                    <div style="color: {quality_color}; font-size: 1.1em; font-weight: 700;">{quality_score:.0f}% {quality_label}</div>
+                </div>
+                <div style="background: #1e293b; padding: 12px; border-radius: 6px; text-align: center;">
+                    <div style="color: #9ca3af; font-size: 0.7em; text-transform: uppercase; margin-bottom: 4px;">Processing Time</div>
+                    <div style="color: #ffffff; font-size: 1.1em; font-weight: 600;">{profile.processing_time_seconds:.1f}s</div>
+                </div>
+            </div>
+            {f'<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 12px;">{phase2_cards}</div>' if phase2_cards else ''}
+            {scope_note}
+        </div>
+        '''
+
+    def _generate_phase2_summary(self, profile: ProfileResult) -> str:
+        """Generate Phase 2 findings summary section."""
+
+        # Count Phase 2 features
+        temporal_columns = [col for col in profile.columns if col.temporal_analysis]
+        pii_columns = [col for col in profile.columns if col.pii_info and col.pii_info.get('detected')]
+
+        # If no Phase 2 features detected, return empty
+        if not temporal_columns and not pii_columns and not profile.dataset_privacy_risk:
+            return ""
+
+        # Analyze temporal findings
+        temporal_insights = []
+        if temporal_columns:
+            # Count by frequency
+            freq_counts = {}
+            gap_columns = []
+            trend_columns = {'increasing': [], 'decreasing': [], 'stationary': []}
+
+            for col in temporal_columns:
+                temp = col.temporal_analysis
+                freq = temp.get('frequency', {}).get('inferred', 'unknown')
+                freq_counts[freq] = freq_counts.get(freq, 0) + 1
+
+                if temp.get('gaps', {}).get('gaps_detected'):
+                    gap_columns.append(col.name)
+
+                trend = temp.get('trend', {}).get('direction', 'unknown')
+                if trend in trend_columns:
+                    trend_columns[trend].append(col.name)
+
+            temporal_insights.append(f"Found {len(temporal_columns)} datetime/timestamp columns")
+            if freq_counts:
+                freq_list = [f"{count} {freq}" for freq, count in sorted(freq_counts.items())]
+                temporal_insights.append(f"Frequencies: {', '.join(freq_list)}")
+            if gap_columns:
+                temporal_insights.append(f"{len(gap_columns)} column(s) have missing time periods")
+            if trend_columns['increasing']:
+                temporal_insights.append(f"{len(trend_columns['increasing'])} column(s) show increasing trends")
+            if trend_columns['decreasing']:
+                temporal_insights.append(f"{len(trend_columns['decreasing'])} column(s) show decreasing trends")
+
+        # Analyze PII findings
+        pii_insights = []
+        if pii_columns:
+            high_risk = [col for col in pii_columns if col.pii_info.get('risk_score', 0) >= 70]
+            moderate_risk = [col for col in pii_columns if 40 <= col.pii_info.get('risk_score', 0) < 70]
+            low_risk = [col for col in pii_columns if col.pii_info.get('risk_score', 0) < 40]
+
+            # Collect PII types
+            pii_type_counts = {}
+            all_frameworks = set()
+            for col in pii_columns:
+                for pii_type in col.pii_info.get('pii_types', []):
+                    type_name = pii_type.get('name', 'Unknown')
+                    pii_type_counts[type_name] = pii_type_counts.get(type_name, 0) + 1
+                all_frameworks.update(col.pii_info.get('regulatory_frameworks', []))
+
+            pii_insights.append(f"Detected {len(pii_columns)} column(s) containing PII")
+            if high_risk:
+                pii_insights.append(f"⚠️ {len(high_risk)} HIGH RISK column(s) require immediate attention")
+            if moderate_risk:
+                pii_insights.append(f"{len(moderate_risk)} MODERATE RISK column(s)")
+            if pii_type_counts:
+                top_types = sorted(pii_type_counts.items(), key=lambda x: x[1], reverse=True)[:3]
+                type_list = [f"{name} ({count})" for name, count in top_types]
+                pii_insights.append(f"Types detected: {', '.join(type_list)}")
+            if all_frameworks:
+                pii_insights.append(f"Applicable regulations: {', '.join(sorted(all_frameworks)[:5])}")
+
+        # Dataset privacy risk
+        privacy_summary = ""
+        if profile.dataset_privacy_risk:
+            risk = profile.dataset_privacy_risk
+            risk_level = risk.get('risk_level', 'unknown').upper()
+            risk_score = risk.get('risk_score', 0)
+            risk_color = '#ef4444' if risk_score >= 70 else '#f59e0b' if risk_score >= 40 else '#10b981'
+
+            privacy_summary = f'''
+            <div style="margin-top: 20px; padding: 15px; background: #2d3748; border-radius: 8px; border-left: 4px solid {risk_color};">
+                <h4 style="color: {risk_color}; margin-bottom: 10px;">
+                    🔒 Dataset Privacy Risk: {risk_level} ({risk_score:.1f}/100)
+                </h4>
+                <div style="color: #cbd5e0; font-size: 0.9em;">
+                    {risk.get('pii_column_count', 0)} of {profile.column_count} columns ({risk.get('pii_column_percentage', 0):.1f}%) contain personally identifiable information
+                </div>
+            </div>
+            '''
+
+        # Build summary HTML
+        summary_html = f'''
+        <div id="phase2-summary" class="section" style="background: linear-gradient(135deg, #1e3a8a 0%, #312e81 100%); border-radius: 12px; padding: 30px; margin-bottom: 30px;">
+            <h2 style="color: #60a5fa; margin-bottom: 20px; font-size: 1.5em;">
+                🔬 Advanced Analysis Summary
+            </h2>
+            <div style="color: #cbd5e0; font-size: 0.95em; margin-bottom: 20px;">
+                This report includes advanced profiling features: temporal pattern analysis and PII detection with privacy risk assessment.
+            </div>
+        '''
+
+        if temporal_insights:
+            summary_html += f'''
+            <div style="margin-bottom: 20px; padding: 15px; background: #1e293b; border-radius: 8px; border-left: 4px solid #10b981;">
+                <h4 style="color: #10b981; margin-bottom: 10px;">📅 Temporal Analysis Findings</h4>
+                <ul style="color: #cbd5e0; margin-left: 20px; font-size: 0.9em;">
+                    {"".join([f"<li style='margin: 6px 0;'>{insight}</li>" for insight in temporal_insights])}
+                </ul>
+            </div>
+            '''
+
+        if pii_insights:
+            summary_html += f'''
+            <div style="margin-bottom: 20px; padding: 15px; background: #1e293b; border-radius: 8px; border-left: 4px solid #f59e0b;">
+                <h4 style="color: #f59e0b; margin-bottom: 10px;">🔒 PII Detection Findings</h4>
+                <ul style="color: #cbd5e0; margin-left: 20px; font-size: 0.9em;">
+                    {"".join([f"<li style='margin: 6px 0;'>{insight}</li>" for insight in pii_insights])}
+                </ul>
+            </div>
+            '''
+
+        summary_html += privacy_summary
+        summary_html += "</div>"
+
+        return summary_html
+
+    def _generate_temporal_viz(self, col: ColumnProfile) -> str:
+        """Generate temporal analysis visualization for a column."""
+        if not col.temporal_analysis:
+            return ""
+
+        temporal = col.temporal_analysis
+
+        # Extract key metrics
+        frequency = temporal.get('frequency', {})
+        freq_str = frequency.get('inferred', 'unknown')
+        freq_confidence = frequency.get('confidence', 0) * 100
+
+        gaps = temporal.get('gaps', {})
+        gap_count = gaps.get('gap_count', 0)
+        gaps_detected = gaps.get('gaps_detected', False)
+
+        trend = temporal.get('trend', {})
+        trend_direction = trend.get('direction', 'unknown')
+        trend_r2 = trend.get('r_squared', 0)
+
+        date_range = temporal.get('date_range', {})
+        span_days = date_range.get('span_days', 0)
+
+        # Generate frequency explanation
+        freq_explain = {
+            'daily': 'Data points occur approximately once per day',
+            'weekly': 'Data points occur approximately once per week',
+            'monthly': 'Data points occur approximately once per month',
+            'hourly': 'Data points occur approximately once per hour',
+            'quarterly': 'Data points occur approximately once per quarter',
+            'yearly': 'Data points occur approximately once per year',
+            'irregular': 'No consistent time interval detected between data points'
+        }.get(freq_str.lower(), 'Time interval pattern detected in the data')
+
+        # Generate trend explanation
+        trend_explain = {
+            'increasing': 'Values are generally rising over time',
+            'decreasing': 'Values are generally declining over time',
+            'stationary': 'Values remain relatively stable over time',
+            'unknown': 'No clear trend pattern detected'
+        }.get(trend_direction.lower(), 'Trend analysis performed')
+
+        # R² interpretation
+        if trend_r2 >= 0.7:
+            r2_explain = 'Strong trend (highly predictable)'
+        elif trend_r2 >= 0.4:
+            r2_explain = 'Moderate trend (somewhat predictable)'
+        else:
+            r2_explain = 'Weak trend (less predictable)'
+
+        return f'''
+        <div style="margin-top: 20px; padding: 15px; background: #374151; border-radius: 8px; border-left: 4px solid #10b981;">
+            <h4 style="color: #10b981; margin-bottom: 10px; font-size: 0.95em;">
+                📅 TEMPORAL ANALYSIS
+            </h4>
+            <div style="color: #9ca3af; font-size: 0.85em; margin-bottom: 15px; padding: 8px; background: #1f2937; border-radius: 4px;">
+                ℹ️ Temporal analysis examines time-based patterns in your date/timestamp data, including frequency, gaps, and trends.
+            </div>
+
+            <div class="info-row">
+                <span class="info-label">Frequency:</span>
+                <span class="info-value">{freq_str.title()} ({freq_confidence:.0f}% confidence)</span>
+            </div>
+            <div style="color: #9ca3af; font-size: 0.8em; margin-left: 20px; margin-top: 4px; margin-bottom: 10px;">
+                {freq_explain}
+            </div>
+
+            <div class="info-row">
+                <span class="info-label">Date Range:</span>
+                <span class="info-value">{span_days} days</span>
+            </div>
+            <div style="color: #9ca3af; font-size: 0.8em; margin-left: 20px; margin-top: 4px; margin-bottom: 10px;">
+                Total time span covered by this column's data
+            </div>
+
+            <div class="info-row">
+                <span class="info-label">Gaps Detected:</span>
+                <span class="info-value">{"Yes - " + str(gap_count) + " gaps" if gaps_detected else "No gaps"}</span>
+            </div>
+            <div style="color: #9ca3af; font-size: 0.8em; margin-left: 20px; margin-top: 4px; margin-bottom: 10px;">
+                {f"Missing {gap_count} expected time periods based on detected frequency" if gaps_detected else "All expected time periods present in sequence"}
+            </div>
+
+            <div class="info-row">
+                <span class="info-label">Trend:</span>
+                <span class="info-value">{trend_direction.title()} (R² = {trend_r2:.3f})</span>
+            </div>
+            <div style="color: #9ca3af; font-size: 0.8em; margin-left: 20px; margin-top: 4px;">
+                {trend_explain} • {r2_explain}
+            </div>
+        </div>
+        '''
+
+    def _generate_pii_viz(self, col: ColumnProfile) -> str:
+        """Generate PII detection visualization for a column."""
+        if not col.pii_info or not col.pii_info.get('detected'):
+            return ""
+
+        pii = col.pii_info
+        risk_score = pii.get('risk_score', 0)
+        pii_types = pii.get('pii_types', [])
+        frameworks = pii.get('regulatory_frameworks', [])
+        redaction = pii.get('redaction_strategy')
+        if isinstance(redaction, dict):
+            redaction = redaction.get('strategy', 'mask')
+        elif not redaction:
+            redaction = 'mask'
+
+        # Determine risk level color
+        if risk_score >= 70:
+            risk_color = '#ef4444'  # Red
+            risk_level = 'HIGH'
+        elif risk_score >= 40:
+            risk_color = '#f59e0b'  # Orange
+            risk_level = 'MODERATE'
+        else:
+            risk_color = '#10b981'  # Green
+            risk_level = 'LOW'
+
+        # Format PII types
+        pii_types_str = ", ".join([
+            f"{pt.get('name', 'Unknown')} ({int(pt.get('confidence', 0) * 100)}%)"
+            for pt in pii_types[:3]  # Top 3 types
+        ])
+
+        # Format frameworks
+        frameworks_str = ", ".join(frameworks[:5]) if frameworks else "None detected"
+
+        # Generate risk explanation
+        risk_explanations = {
+            'HIGH': 'This data poses significant privacy risks and requires strong protection measures',
+            'MODERATE': 'This data should be handled with care and appropriate security measures',
+            'LOW': 'This data has minimal privacy risk but should still be protected'
+        }
+        risk_explain = risk_explanations.get(risk_level, 'Privacy risk assessment completed')
+
+        # Generate redaction explanation
+        redaction_explanations = {
+            'mask': 'Replace characters with asterisks (e.g., ***@email.com)',
+            'hash': 'Convert to one-way cryptographic hash for anonymization',
+            'encrypt': 'Use reversible encryption for authorized access only',
+            'remove': 'Delete this data entirely if not essential'
+        }
+        redaction_explain = redaction_explanations.get(redaction.lower(), 'Apply appropriate data protection method')
+
+        return f'''
+        <div style="margin-top: 20px; padding: 15px; background: #374151; border-radius: 8px; border-left: 4px solid {risk_color};">
+            <h4 style="color: {risk_color}; margin-bottom: 10px; font-size: 0.95em;">
+                🔒 PII DETECTED - {risk_level} RISK
+            </h4>
+            <div style="color: #9ca3af; font-size: 0.85em; margin-bottom: 15px; padding: 8px; background: #1f2937; border-radius: 4px;">
+                ℹ️ PII (Personally Identifiable Information) detection identifies sensitive data that could identify individuals and assesses privacy risks.
+            </div>
+
+            <div class="info-row">
+                <span class="info-label">Risk Score:</span>
+                <span class="info-value" style="color: {risk_color}; font-weight: bold;">{risk_score}/100</span>
+            </div>
+            <div style="background: #1f2937; border-radius: 4px; height: 8px; margin: 10px 0;">
+                <div style="background: {risk_color}; height: 100%; width: {risk_score}%; border-radius: 4px; transition: width 0.3s;"></div>
+            </div>
+            <div style="color: #9ca3af; font-size: 0.8em; margin-bottom: 15px;">
+                {risk_explain}
+            </div>
+
+            <div class="info-row">
+                <span class="info-label">PII Types:</span>
+                <span class="info-value">{pii_types_str or "Unknown"}</span>
+            </div>
+            <div style="color: #9ca3af; font-size: 0.8em; margin-left: 20px; margin-top: 4px; margin-bottom: 10px;">
+                Types of personally identifiable information detected in this column
+            </div>
+
+            <div class="info-row">
+                <span class="info-label">Regulatory Frameworks:</span>
+                <span class="info-value" style="font-size: 0.85em;">{frameworks_str}</span>
+            </div>
+            <div style="color: #9ca3af; font-size: 0.8em; margin-left: 20px; margin-top: 4px; margin-bottom: 10px;">
+                Privacy regulations that may apply to this data (GDPR, CCPA, HIPAA, etc.)
+            </div>
+
+            <div class="info-row">
+                <span class="info-label">Recommended Action:</span>
+                <span class="info-value">{redaction.title() if redaction else "Review and mask"}</span>
+            </div>
+            <div style="color: #9ca3af; font-size: 0.8em; margin-left: 20px; margin-top: 4px; margin-bottom: 15px;">
+                {redaction_explain}
+            </div>
+
+            <div style="margin-top: 12px; padding: 10px; background: #1f2937; border-radius: 4px; border-left: 3px solid {risk_color};">
+                <div style="color: #cbd5e0; font-size: 0.85em;">
+                    <strong>⚠️ Privacy Protection Required</strong><br>
+                    This column contains personally identifiable information. Best practices:<br>
+                    • Implement data masking for non-production environments<br>
+                    • Establish role-based access controls<br>
+                    • Enable audit logging for PII access<br>
+                    • Document data retention and deletion policies<br>
+                    • Ensure compliance with applicable privacy regulations
+                </div>
+            </div>
+        </div>
+        '''
 
     def _escape_html(self, text: str) -> str:
         """Escape HTML special characters."""
