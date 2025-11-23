@@ -81,17 +81,28 @@ class ProfileHTMLReporter:
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: #e0e0e0;
-            padding: 20px;
+            padding: 0;
+            margin: 0;
             min-height: 100vh;
+            overflow-x: hidden; /* Prevent horizontal scroll on body */
         }}
 
         .container {{
-            max-width: 1400px;
+            max-width: 100%;
+            width: 100%;
             margin: 0 auto;
             background: #1e1e2e;
-            border-radius: 16px;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
-            overflow: hidden;
+            overflow-x: hidden; /* Prevent horizontal scroll on container */
+        }}
+
+        /* Mobile-first responsive wrapper with constrained max width */
+        @media (min-width: 769px) {{
+            .container {{
+                max-width: 1400px;
+                border-radius: 16px;
+                box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+                margin: 20px auto;
+            }}
         }}
 
         .header {{
@@ -606,23 +617,40 @@ class ProfileHTMLReporter:
             background: #667eea;
         }}
 
+        /* Sticky navigation for desktop, collapsible for mobile */
         .toc {{
             background: #2d2d44;
-            padding: 25px 40px;
+            padding: 20px;
             border-bottom: 2px solid #2d3748;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            max-width: 100%;
+            overflow-x: hidden;
         }}
 
         .toc h3 {{
             color: #ffffff;
             margin-bottom: 15px;
-            font-size: 1.2em;
+            font-size: 1.1em;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }}
+
+        .toc-toggle {{
+            display: none; /* Hidden on desktop */
+            color: #667eea;
+            font-size: 0.9em;
         }}
 
         .toc-list {{
             list-style: none;
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 10px;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 8px;
+            max-width: 100%;
         }}
 
         .toc-list li {{
@@ -636,6 +664,9 @@ class ProfileHTMLReporter:
             display: block;
             border-radius: 6px;
             transition: background 0.3s, color 0.3s;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }}
 
         .toc-list a:hover {{
@@ -648,45 +679,88 @@ class ProfileHTMLReporter:
             color: #667eea;
         }}
 
-        /* Mobile Responsiveness */
+        /* Mobile Responsiveness - Enhanced */
         @media (max-width: 768px) {{
             body {{
-                padding: 10px;
+                padding: 0;
+                background: #1e1e2e; /* Solid background on mobile */
+            }}
+
+            .container {{
+                border-radius: 0;
+                box-shadow: none;
+            }}
+
+            .header {{
+                padding: 20px 15px;
             }}
 
             .header h1 {{
-                font-size: 1.8em;
+                font-size: 1.6em;
             }}
 
             .header .subtitle {{
-                font-size: 0.9em;
+                font-size: 0.85em;
             }}
 
-            .summary-grid {{
-                grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-                padding: 20px;
-                gap: 15px;
-            }}
-
-            .summary-card .value {{
-                font-size: 1.5em;
-            }}
-
-            .section {{
-                padding: 20px;
-            }}
-
-            .section-title {{
-                font-size: 1.4em;
-            }}
-
-            .chart-container {{
+            /* Collapsible TOC on mobile */
+            .toc {{
+                position: static; /* Not sticky on mobile */
                 padding: 15px;
             }}
 
+            .toc h3 {{
+                font-size: 1em;
+            }}
+
+            .toc-toggle {{
+                display: inline-block; /* Show toggle on mobile */
+            }}
+
+            .toc-list {{
+                grid-template-columns: 1fr; /* Single column on mobile */
+                max-height: 0;
+                overflow: hidden;
+                transition: max-height 0.3s ease-out;
+            }}
+
+            .toc-list.mobile-expanded {{
+                max-height: 500px;
+                margin-top: 10px;
+            }}
+
+            .summary-grid {{
+                grid-template-columns: repeat(2, 1fr); /* 2 columns on tablet */
+                padding: 15px;
+                gap: 10px;
+            }}
+
+            .summary-card {{
+                padding: 12px;
+            }}
+
+            .summary-card .value {{
+                font-size: 1.3em;
+            }}
+
+            .summary-card .label {{
+                font-size: 0.7em;
+            }}
+
+            .section {{
+                padding: 15px;
+            }}
+
+            .section-title {{
+                font-size: 1.3em;
+            }}
+
+            .chart-container {{
+                padding: 12px;
+            }}
+
             .chart-wrapper {{
-                height: 300px;
-                overflow-x: auto;
+                height: 280px;
             }}
 
             .column-content {{
@@ -696,7 +770,7 @@ class ProfileHTMLReporter:
             .column-header {{
                 flex-direction: column;
                 align-items: flex-start;
-                gap: 10px;
+                gap: 8px;
             }}
 
             .config-header {{
@@ -705,8 +779,17 @@ class ProfileHTMLReporter:
                 gap: 10px;
             }}
 
+            .stats-grid {{
+                grid-template-columns: 1fr; /* Single column stats on mobile */
+            }}
+
+            /* Make tables horizontally scrollable with shadow indicators */
             .top-values-table {{
-                font-size: 0.85em;
+                font-size: 0.8em;
+                display: block;
+                overflow-x: auto;
+                white-space: nowrap;
+                -webkit-overflow-scrolling: touch;
             }}
 
             .top-values-table th,
@@ -714,39 +797,79 @@ class ProfileHTMLReporter:
                 padding: 6px 8px;
             }}
 
-            /* Make tables scrollable on mobile */
             .config-code {{
-                font-size: 0.75em;
+                font-size: 0.7em;
                 overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
             }}
 
             .command-box {{
-                font-size: 0.8em;
+                font-size: 0.75em;
                 overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+            }}
+
+            /* Adjust suggestion cards for mobile */
+            .suggestion-card {{
+                padding: 15px;
+            }}
+
+            .validation-type {{
+                font-size: 1em;
             }}
         }}
 
         @media (max-width: 480px) {{
             .header {{
-                padding: 20px;
+                padding: 15px 10px;
             }}
 
             .header h1 {{
-                font-size: 1.5em;
+                font-size: 1.4em;
+            }}
+
+            .header .subtitle {{
+                font-size: 0.75em;
             }}
 
             .summary-grid {{
-                grid-template-columns: 1fr;
+                grid-template-columns: 1fr; /* Single column on small mobile */
+                padding: 10px;
+                gap: 8px;
+            }}
+
+            .summary-card {{
+                padding: 10px;
             }}
 
             .section {{
-                padding: 15px;
+                padding: 10px;
+            }}
+
+            .section-title {{
+                font-size: 1.1em;
             }}
 
             .chart-wrapper {{
-                height: 250px;
-                overflow-x: auto;
-                -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
+                height: 220px;
+            }}
+
+            .toc {{
+                padding: 10px;
+            }}
+
+            .stats-grid {{
+                gap: 6px;
+                padding: 10px;
+            }}
+
+            .config-code {{
+                font-size: 0.65em;
+            }}
+
+            .command-box {{
+                font-size: 0.7em;
+                padding: 10px 15px;
             }}
         }}
 
@@ -778,6 +901,44 @@ class ProfileHTMLReporter:
                     }}
                 }});
             }});
+
+            // Mobile TOC toggle functionality
+            const tocHeader = document.querySelector('.toc h3');
+            const tocList = document.querySelector('.toc-list');
+
+            if (tocHeader && tocList) {{
+                tocHeader.addEventListener('click', function() {{
+                    if (window.innerWidth <= 768) {{
+                        tocList.classList.toggle('mobile-expanded');
+                        const toggle = tocHeader.querySelector('.toc-toggle');
+                        if (toggle) {{
+                            toggle.textContent = tocList.classList.contains('mobile-expanded') ? '▲' : '▼';
+                        }}
+                    }}
+                }});
+            }}
+
+            // Smooth scrolling for anchor links
+            document.querySelectorAll('a[href^="#"]').forEach(anchor => {{
+                anchor.addEventListener('click', function(e) {{
+                    e.preventDefault();
+                    const target = document.querySelector(this.getAttribute('href'));
+                    if (target) {{
+                        target.scrollIntoView({{
+                            behavior: 'smooth',
+                            block: 'start'
+                        }});
+                        // Close mobile TOC after navigation
+                        if (window.innerWidth <= 768 && tocList) {{
+                            tocList.classList.remove('mobile-expanded');
+                            const toggle = tocHeader.querySelector('.toc-toggle');
+                            if (toggle) {{
+                                toggle.textContent = '▼';
+                            }}
+                        }}
+                    }}
+                }});
+            }});
         }});
     </script>
 </head>
@@ -794,7 +955,7 @@ class ProfileHTMLReporter:
 
         <!-- Table of Contents -->
         <div class="toc">
-            <h3>📋 Report Sections</h3>
+            <h3>📋 Report Sections <span class="toc-toggle">▼</span></h3>
             <ul class="toc-list">
                 <li><a href="#summary">Summary</a></li>
                 {f'<li><a href="#phase2-summary">🔬 Advanced Analysis</a></li>' if any(col.temporal_analysis or (col.pii_info and col.pii_info.get('detected')) for col in profile.columns) else ''}
