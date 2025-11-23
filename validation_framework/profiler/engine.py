@@ -1583,8 +1583,9 @@ class DataProfiler:
 
             # Date format check
             if col.type_info.inferred_type == "date":
-                # Try to infer date format from samples
-                date_format = self._infer_date_format(col.type_info.sample_values)
+                # Try to infer date format from samples and detected patterns
+                detected_patterns = getattr(col.statistics, 'pattern_samples', None)
+                date_format = self._infer_date_format(col.type_info.sample_values, detected_patterns)
                 if date_format:
                     suggestions.append(ValidationSuggestion(
                         validation_type="DateFormatCheck",
@@ -1593,8 +1594,8 @@ class DataProfiler:
                             "field": col.name,
                             "format": date_format
                         },
-                        reason=f"Detected date format: {date_format}",
-                        confidence=80.0
+                        reason=f"Detected date/time format: {date_format}",
+                        confidence=95.0  # High confidence when using detected patterns
                     ))
 
             # Semantic pattern-based suggestions
@@ -1644,23 +1645,98 @@ class DataProfiler:
 
         return sorted(suggestions, key=lambda x: x.confidence, reverse=True)
 
-    def _infer_date_format(self, sample_values: List[Any]) -> Optional[str]:
-        """Infer date format from sample values."""
+    def _pattern_to_format_string(self, pattern: str) -> Optional[str]:
+        """
+        Convert detected pattern (e.g., '9999/99/99 99:99') to Python format string (e.g., '%Y/%m/%d %H:%M').
+
+        Pattern notation:
+        - 9 = digit
+        - A = letter
+        - / - : space = literal characters
+        """
+        if not pattern:
+            return None
+
+        # Pattern mapping: detected pattern notation → Python strftime format
+        pattern_mappings = {
+            # DateTime patterns (date + time)
+            r'^9999/99/99 99:99:99$': '%Y/%m/%d %H:%M:%S',
+            r'^9999/99/99 99:99$': '%Y/%m/%d %H:%M',
+            r'^9999-99-99 99:99:99$': '%Y-%m-%d %H:%M:%S',
+            r'^9999-99-99 99:99$': '%Y-%m-%d %H:%M',
+            r'^99/99/9999 99:99:99$': '%m/%d/%Y %H:%M:%S',
+            r'^99/99/9999 99:99$': '%m/%d/%Y %H:%M',
+            r'^99-99-9999 99:99:99$': '%m-%d-%Y %H:%M:%S',
+            r'^99-99-9999 99:99$': '%m-%d-%Y %H:%M',
+
+            # Date-only patterns
+            r'^9999-99-99$': '%Y-%m-%d',
+            r'^9999/99/99$': '%Y/%m/%d',
+            r'^99/99/9999$': '%m/%d/%Y',
+            r'^99-99-9999$': '%m-%d-%Y',
+            r'^99\.99\.9999$': '%d.%m.%Y',
+
+            # Time-only patterns
+            r'^99:99:99$': '%H:%M:%S',
+            r'^99:99$': '%H:%M',
+        }
+
+        # Check if pattern matches any known format
+        for pattern_regex, format_string in pattern_mappings.items():
+            if re.match(pattern_regex, pattern):
+                return format_string
+
+        return None
+
+    def _infer_date_format(self, sample_values: List[Any], detected_patterns: List[Dict[str, Any]] = None) -> Optional[str]:
+        """
+        Infer date format from sample values and detected patterns.
+
+        Args:
+            sample_values: Sample values to analyze
+            detected_patterns: Pre-detected patterns from pattern analysis
+
+        Returns:
+            Python strftime format string (e.g., '%Y/%m/%d %H:%M')
+        """
         if not sample_values:
             return None
 
-        # Common date formats
+        # First try to use detected patterns if available (more accurate)
+        if detected_patterns:
+            for pattern_info in detected_patterns:
+                pattern = pattern_info.get('pattern', '')
+                percentage = pattern_info.get('percentage', 0)
+
+                # If pattern has high confidence (>80%), convert it to format string
+                if percentage > 80:
+                    format_string = self._pattern_to_format_string(pattern)
+                    if format_string:
+                        logger.debug(f"Inferred date format from pattern '{pattern}': {format_string}")
+                        return format_string
+
+        # Fallback: Try common date/datetime formats with regex matching
         formats = [
+            # DateTime formats (date + time)
+            ("%Y/%m/%d %H:%M:%S", r'^\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}$'),
+            ("%Y/%m/%d %H:%M", r'^\d{4}/\d{2}/\d{2} \d{2}:\d{2}$'),
+            ("%Y-%m-%d %H:%M:%S", r'^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$'),
+            ("%Y-%m-%d %H:%M", r'^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$'),
+            ("%m/%d/%Y %H:%M:%S", r'^\d{2}/\d{2}/\d{4} \d{2}:\d{2}:\d{2}$'),
+            ("%m/%d/%Y %H:%M", r'^\d{2}/\d{2}/\d{4} \d{2}:\d{2}$'),
+
+            # Date-only formats
             ("%Y-%m-%d", r'^\d{4}-\d{2}-\d{2}$'),
+            ("%Y/%m/%d", r'^\d{4}/\d{2}/\d{2}$'),
             ("%d/%m/%Y", r'^\d{2}/\d{2}/\d{4}$'),
             ("%m/%d/%Y", r'^\d{2}/\d{2}/\d{4}$'),
-            ("%Y/%m/%d", r'^\d{4}/\d{2}/\d{2}$'),
             ("%d-%m-%Y", r'^\d{2}-\d{2}-\d{4}$'),
         ]
 
         for date_format, pattern in formats:
             matches = sum(1 for val in sample_values if re.match(pattern, str(val)))
             if matches > len(sample_values) * 0.8:  # 80% match
+                logger.debug(f"Inferred date format from samples: {date_format}")
                 return date_format
 
         return None
