@@ -1368,6 +1368,136 @@ class DataProfiler:
         # Default: suggest range check for numeric measurements with natural bounds
         return True
 
+    def _generate_semantic_type_validations(self, col: ColumnProfile) -> List[ValidationSuggestion]:
+        """
+        Generate validation suggestions based on detected semantic types.
+
+        Returns appropriate validations for each semantic type:
+        - email → RegexPatternCheck
+        - url → RegexPatternCheck
+        - uuid → RegexPatternCheck
+        - ip_address → RegexPatternCheck
+        - phone_number → RegexPatternCheck + StringLengthCheck
+        - amount → Non-negative check (min_value=0)
+        - count → Non-negative check (min_value=0)
+        - date/datetime → DateFormatCheck
+        """
+        suggestions = []
+        semantic_type = getattr(col.statistics, 'semantic_type', None)
+
+        if not semantic_type or semantic_type == 'unknown':
+            return suggestions
+
+        # Email address validation
+        if semantic_type == 'email':
+            suggestions.append(ValidationSuggestion(
+                validation_type="RegexPatternCheck",
+                severity="ERROR",
+                params={
+                    "field": col.name,
+                    "pattern": r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+                },
+                reason="Email address format validation",
+                confidence=90.0
+            ))
+
+        # URL validation
+        elif semantic_type == 'url':
+            suggestions.append(ValidationSuggestion(
+                validation_type="RegexPatternCheck",
+                severity="ERROR",
+                params={
+                    "field": col.name,
+                    "pattern": r'^https?://[^\s/$.?#].[^\s]*$'
+                },
+                reason="URL format validation",
+                confidence=90.0
+            ))
+
+        # UUID validation
+        elif semantic_type == 'uuid':
+            suggestions.append(ValidationSuggestion(
+                validation_type="RegexPatternCheck",
+                severity="ERROR",
+                params={
+                    "field": col.name,
+                    "pattern": r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+                },
+                reason="UUID format validation (standard 8-4-4-4-12 format)",
+                confidence=95.0
+            ))
+
+        # IP Address validation
+        elif semantic_type == 'ip_address':
+            suggestions.append(ValidationSuggestion(
+                validation_type="RegexPatternCheck",
+                severity="ERROR",
+                params={
+                    "field": col.name,
+                    "pattern": r'^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$'
+                },
+                reason="IPv4 address format validation",
+                confidence=90.0
+            ))
+
+        # Phone number validation
+        elif semantic_type == 'phone_number':
+            suggestions.append(ValidationSuggestion(
+                validation_type="StringLengthCheck",
+                severity="WARNING",
+                params={
+                    "field": col.name,
+                    "min_length": 10,
+                    "max_length": 20
+                },
+                reason="Phone number length validation",
+                confidence=85.0
+            ))
+
+        # Amount fields - suggest non-negative check (NOT range check)
+        elif semantic_type == 'amount':
+            if col.statistics.min_value is not None:
+                suggestions.append(ValidationSuggestion(
+                    validation_type="RangeCheck",
+                    severity="ERROR",
+                    params={
+                        "field": col.name,
+                        "min_value": 0  # Amounts should be non-negative
+                        # NO max_value - amounts are unbounded!
+                    },
+                    reason="Amount fields must be non-negative (no upper bound)",
+                    confidence=95.0
+                ))
+
+        # Count fields - non-negative integers
+        elif semantic_type == 'count':
+            suggestions.append(ValidationSuggestion(
+                validation_type="RangeCheck",
+                severity="ERROR",
+                params={
+                    "field": col.name,
+                    "min_value": 0  # Counts must be non-negative
+                    # NO max_value - counts are unbounded!
+                },
+                reason="Count fields must be non-negative integers",
+                confidence=95.0
+            ))
+
+        # File path validation
+        elif semantic_type == 'path':
+            suggestions.append(ValidationSuggestion(
+                validation_type="RegexPatternCheck",
+                severity="WARNING",
+                params={
+                    "field": col.name,
+                    "pattern": r'^[/\\]?[\w\s\-./\\]+$'
+                },
+                reason="File path format validation",
+                confidence=80.0
+            ))
+
+        return suggestions
+
     def _generate_validation_suggestions(
         self,
         columns: List[ColumnProfile],
@@ -1495,10 +1625,10 @@ class DataProfiler:
                             confidence=adjusted_confidence
                         ))
 
-            # Semantic type-aware suggestions (based on column semantics)
-            # NOTE: Amount/price fields are REMOVED from range validation
-            # Financial amounts are unbounded - historical max is not a valid upper bound
-            # The _should_suggest_range_check() method already excludes amount fields
+            # Semantic type-aware validation suggestions
+            # Generate appropriate validations based on detected semantic types
+            semantic_suggestions = self._generate_semantic_type_validations(col)
+            suggestions.extend(semantic_suggestions)
 
         # Add mandatory field check if any mandatory fields found
         if mandatory_fields:
