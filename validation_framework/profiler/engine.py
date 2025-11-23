@@ -47,6 +47,14 @@ except ImportError:
     ENHANCED_CORRELATION_AVAILABLE = False
     logger.warning("Enhanced correlation not available")
 
+try:
+    from visions.functional import detect_type
+    from visions.types import Float, Integer, String, Boolean, Object
+    VISIONS_AVAILABLE = True
+except ImportError:
+    VISIONS_AVAILABLE = False
+    # Don't log warning yet - logger not initialized
+
 logger = logging.getLogger(__name__)
 
 
@@ -1013,6 +1021,43 @@ class DataProfiler:
             sample_values=profile_data["sample_values"][:10]
         )
 
+    def _detect_semantic_type_with_visions(self, sample_values: List[Any]) -> Optional[str]:
+        """
+        Use visions library to detect semantic type from sample values.
+        Returns semantic type string like 'email', 'url', 'uuid', 'integer', 'float', etc.
+        """
+        if not VISIONS_AVAILABLE or not sample_values:
+            return None
+
+        try:
+            import pandas as pd
+            # Use first 100 samples for visions detection (memory efficient)
+            sample = pd.Series(sample_values[:100])
+            detected_type = detect_type(sample)
+            type_name = detected_type.__name__ if hasattr(detected_type, '__name__') else str(detected_type)
+
+            # Map visions types to our semantic types
+            type_mapping = {
+                'EmailAddress': 'email',
+                'URL': 'url',
+                'UUID': 'uuid',
+                'IPAddress': 'ip_address',
+                'PhoneNumber': 'phone_number',
+                'Integer': 'integer',
+                'Float': 'float',
+                'Boolean': 'boolean',
+                'Categorical': 'category',
+                'String': 'string',
+                'Object': 'object'
+            }
+
+            # Return mapped type or original type_name in lowercase
+            return type_mapping.get(type_name, type_name.lower())
+
+        except Exception as e:
+            logger.debug(f"Visions semantic type detection failed: {e}")
+            return None
+
     def _calculate_statistics(
         self,
         profile_data: Dict[str, Any],
@@ -1034,8 +1079,19 @@ class DataProfiler:
         stats.null_count = null_count
         stats.null_percentage = 100 * null_count / total_rows if total_rows > 0 else 0
 
+        # Enhanced semantic type detection using visions (if available)
+        visions_semantic_type = self._detect_semantic_type_with_visions(profile_data["sample_values"])
+
+        # Prefer visions detection over name-based detection for higher accuracy
+        if visions_semantic_type and visions_semantic_type not in ['integer', 'float', 'string', 'object']:
+            # Visions detected a specific semantic type (email, url, uuid, etc.)
+            stats.semantic_type = visions_semantic_type
+            logger.debug(f"Visions detected semantic type for '{column_name}': {visions_semantic_type}")
+        else:
+            # Fallback to name-based detection from SmartColumnAnalyzer
+            stats.semantic_type = intelligence.semantic_type
+
         # Add intelligent sampling metadata for transparency
-        stats.semantic_type = intelligence.semantic_type
         stats.sample_size = min(len(numeric_values) if numeric_values else len(value_counts), intelligence.recommended_sample_size)
         stats.sampling_strategy = SmartColumnAnalyzer.get_sampling_summary(
             column_name, total_rows, intelligence
@@ -1234,13 +1290,15 @@ class DataProfiler:
         """
         Smart pattern-based detection: Should this field have a RangeCheck validation?
 
-        Uses data characteristics and semantic understanding instead of hardcoded keywords.
+        Uses semantic type detection (from visions or name-based) combined with
+        data characteristics and pattern analysis.
 
         Returns False for:
         - Identifiers (IDs, keys, codes)
         - Categories (low cardinality enums)
         - Amounts/prices/money (unbounded by nature)
         - Boolean flags
+        - Semantic types: URLs, Emails, UUIDs, Phone numbers, IP addresses
 
         Returns True for:
         - Measurements with natural bounds (age, percentage, count)
@@ -1248,9 +1306,17 @@ class DataProfiler:
         """
         col_name_lower = col.name.lower()
 
-        # 1. Check semantic type (if profiler already determined it)
+        # 1. Check semantic type (already set by visions or SmartColumnAnalyzer)
         semantic_type = getattr(col.statistics, 'semantic_type', None)
-        if semantic_type in ['id', 'identifier', 'key', 'category']:
+
+        # Semantic types that should NOT have range checks
+        non_range_semantic_types = [
+            'id', 'identifier', 'key', 'category',
+            'email', 'url', 'uuid', 'ip_address', 'phone_number'
+        ]
+
+        if semantic_type in non_range_semantic_types:
+            logger.debug(f"Semantic type '{semantic_type}' detected for {col.name} - excluding from RangeCheck")
             return False
 
         # 2. Detect amount/money/price fields - these are UNBOUNDED and should NOT have range checks
