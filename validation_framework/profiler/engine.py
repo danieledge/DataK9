@@ -777,19 +777,22 @@ class DataProfiler:
         # Value frequency (limit to prevent memory issues)
         # Only compute value_counts if we haven't reached the limit
         if len(profile["value_counts"]) < 10000:
-            # For large series, only compute value counts on top N most frequent to save memory
-            # This prevents computing value_counts on millions of rows when dict is nearly full
-            remaining_slots = 10000 - len(profile["value_counts"])
-            if len(non_null_series) > 50000 and remaining_slots < 1000:
-                # Near capacity with large chunk - only sample to avoid expensive value_counts
-                sample_for_freq = non_null_series.sample(n=min(10000, len(non_null_series)), random_state=42)
-                value_freq = sample_for_freq.value_counts()
+            # CRITICAL MEMORY FIX: Always sample before computing value_counts
+            # Computing value_counts on 2M rows creates large temporary structures
+            # Sample to max 10K rows to prevent memory spikes
+            max_sample_size = 10000
+            if len(non_null_series) > max_sample_size:
+                sample_for_freq = non_null_series.sample(n=max_sample_size, random_state=42)
             else:
-                value_freq = non_null_series.value_counts()
+                sample_for_freq = non_null_series
+
+            value_freq = sample_for_freq.value_counts()
 
             for val, count in value_freq.items():
                 if len(profile["value_counts"]) >= 10000:
                     break  # Stop if we hit the limit mid-iteration
+                # Note: Counts are from sampled data, not exact counts
+                # This is acceptable as value_counts is for cardinality estimation
                 profile["value_counts"][val] = profile["value_counts"].get(val, 0) + count
 
         # Numeric analysis (memory-efficient sampling for statistics)
