@@ -325,15 +325,27 @@ class PIIDetector:
                 # Calculate confidence based on match percentage
                 confidence = match_count / len(samples)
 
-                # Special validation for credit cards (Luhn algorithm)
+                # CRITICAL FIX: Special validation for credit cards (Luhn algorithm)
+                # Reject patterns that contain letters (e.g., "AAA999999" is NOT a credit card)
                 if pii_type == 'credit_card':
+                    # First check: Do any values contain letters? If so, NOT credit cards
+                    contains_letters = any(
+                        any(c.isalpha() for c in str(v))
+                        for v in matched_values
+                    )
+
+                    if contains_letters:
+                        # Contains letters - definitely not credit cards, skip this detection
+                        continue
+
+                    # Second check: Luhn algorithm validation
                     valid_cc_count = sum(
                         1 for v in matched_values
                         if self._validate_credit_card_luhn(v)
                     )
                     if valid_cc_count == 0:
-                        # No valid credit cards found, reduce confidence
-                        confidence *= 0.3
+                        # No valid credit cards found via Luhn, reduce confidence significantly
+                        confidence *= 0.1  # Reduced from 0.3 to 0.1 to be more strict
 
                 # Only report if confidence meets threshold
                 if confidence >= self.min_confidence:

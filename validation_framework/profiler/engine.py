@@ -1498,6 +1498,134 @@ class DataProfiler:
 
         return suggestions
 
+    def _generate_temporal_validations(self, col: ColumnProfile) -> List[ValidationSuggestion]:
+        """Generate temporal validation suggestions based on temporal_analysis data."""
+        suggestions = []
+
+        # Only proceed if temporal analysis exists
+        temporal_analysis = getattr(col.statistics, 'temporal_analysis', None)
+        if not temporal_analysis:
+            return suggestions
+
+        # DateRangeCheck - based on detected date range
+        date_range = temporal_analysis.get('date_range', {})
+        if date_range and date_range.get('start') and date_range.get('end'):
+            suggestions.append(ValidationSuggestion(
+                validation_type="DateRangeCheck",
+                severity="ERROR",
+                params={
+                    "field": col.name,
+                    "min_date": date_range['start'],
+                    "max_date": date_range['end']
+                },
+                reason=f"Detected date range: {date_range['start']} to {date_range['end']}",
+                confidence=90.0
+            ))
+
+        # DateSequenceCheck - based on regular frequency detection
+        frequency = temporal_analysis.get('frequency', {})
+        if frequency and frequency.get('is_regular'):
+            suggestions.append(ValidationSuggestion(
+                validation_type="DateSequenceCheck",
+                severity="WARNING",
+                params={
+                    "field": col.name,
+                    "expected_frequency": frequency.get('inferred', 'daily')
+                },
+                reason=f"Detected regular {frequency.get('inferred', 'daily')} frequency",
+                confidence=85.0
+            ))
+
+        # DateGapCheck - based on gaps detection
+        gaps = temporal_analysis.get('gaps', {})
+        if gaps and gaps.get('gaps_detected'):
+            suggestions.append(ValidationSuggestion(
+                validation_type="DateGapCheck",
+                severity="WARNING",
+                params={
+                    "field": col.name,
+                    "max_gap_days": 7  # Default threshold
+                },
+                reason="Temporal gaps detected in date sequence",
+                confidence=80.0
+            ))
+
+        return suggestions
+
+    def _generate_statistical_validations(self, col: ColumnProfile, row_count: int) -> List[ValidationSuggestion]:
+        """Generate statistical validation suggestions based on distribution analysis."""
+        suggestions = []
+
+        # Only proceed for numeric fields
+        if col.type_info.inferred_type not in ['integer', 'float', 'decimal']:
+            return suggestions
+
+        # OutlierDetectionCheck - based on std_dev relative to mean
+        if hasattr(col.statistics, 'mean') and hasattr(col.statistics, 'std_dev'):
+            mean = col.statistics.mean
+            std_dev = col.statistics.std_dev
+
+            # High variability indicator (std_dev > 50% of mean)
+            if mean and std_dev and mean != 0:
+                coefficient_of_variation = (std_dev / abs(mean)) * 100
+
+                if coefficient_of_variation > 50:
+                    suggestions.append(ValidationSuggestion(
+                        validation_type="OutlierDetectionCheck",
+                        severity="WARNING",
+                        params={
+                            "field": col.name,
+                            "method": "zscore",
+                            "threshold": 3.0
+                        },
+                        reason=f"High variability detected (CV={coefficient_of_variation:.1f}%)",
+                        confidence=75.0
+                    ))
+
+        return suggestions
+
+    def _generate_string_pattern_validations(self, col: ColumnProfile) -> List[ValidationSuggestion]:
+        """Generate string/pattern validation suggestions."""
+        suggestions = []
+
+        # Only proceed for string fields
+        if col.type_info.inferred_type != 'string':
+            return suggestions
+
+        # StringLengthCheck - for fields with consistent length
+        if hasattr(col.statistics, 'min_length') and hasattr(col.statistics, 'max_length'):
+            min_len = col.statistics.min_length
+            max_len = col.statistics.max_length
+
+            # If min == max, all values have same length
+            if min_len == max_len and min_len > 0:
+                suggestions.append(ValidationSuggestion(
+                    validation_type="StringLengthCheck",
+                    severity="ERROR",
+                    params={
+                        "field": col.name,
+                        "min_length": min_len,
+                        "max_length": max_len
+                    },
+                    reason=f"All values have consistent length ({min_len} characters)",
+                    confidence=95.0
+                ))
+            # If length varies within small range, suggest range
+            elif min_len and max_len and (max_len - min_len) <= 3:
+                suggestions.append(ValidationSuggestion(
+                    validation_type="StringLengthCheck",
+                    severity="WARNING",
+                    params={
+                        "field": col.name,
+                        "min_length": min_len,
+                        "max_length": max_len
+                    },
+                    reason=f"Length varies within small range ({min_len}-{max_len} characters)",
+                    confidence=80.0
+                ))
+
+        return suggestions
+
     def _generate_validation_suggestions(
         self,
         columns: List[ColumnProfile],
@@ -1570,16 +1698,33 @@ class DataProfiler:
                 ))
 
             # Unique key check for high cardinality
+            # CRITICAL FIX: Exclude amount/count/measurement fields from UniqueKeyCheck
+            # High cardinality in these fields is expected behavior, not indication of unique key
             if col.statistics.cardinality > 0.99 and row_count > 100:
-                suggestions.append(ValidationSuggestion(
-                    validation_type="UniqueKeyCheck",
-                    severity="ERROR",
-                    params={
-                        "fields": [col.name]
-                    },
-                    reason="Field appears to be a unique identifier",
-                    confidence=95.0
-                ))
+                semantic_type = getattr(col.statistics, 'semantic_type', None)
+
+                # Exclude semantic types that naturally have high cardinality
+                exclude_types = {'amount', 'count', 'measurement', 'float', 'decimal'}
+
+                # Also exclude fields with names suggesting measurements (case-insensitive)
+                measurement_keywords = ['amount', 'price', 'cost', 'value', 'balance', 'total',
+                                       'sum', 'count', 'quantity', 'measure', 'metric']
+                field_name_lower = col.name.lower()
+                is_measurement_field = any(keyword in field_name_lower for keyword in measurement_keywords)
+
+                # Only suggest UniqueKeyCheck if NOT a measurement field
+                if semantic_type not in exclude_types and not is_measurement_field:
+                    suggestions.append(ValidationSuggestion(
+                        validation_type="UniqueKeyCheck",
+                        severity="ERROR",
+                        params={
+                            "fields": [col.name]
+                        },
+                        reason="Field appears to be a unique identifier (high cardinality, non-measurement type)",
+                        confidence=95.0
+                    ))
+                else:
+                    logger.debug(f"Skipping UniqueKeyCheck for '{col.name}' - detected as measurement field (semantic_type={semantic_type})")
 
             # Date format check
             if col.type_info.inferred_type == "date":
@@ -1599,13 +1744,18 @@ class DataProfiler:
                     ))
 
             # Semantic pattern-based suggestions
+            # CRITICAL FIX: Raise confidence threshold from 30% to 80% for ERROR severity
+            # Lower thresholds cause false positives in production validations
             from .semantic_patterns import SemanticPatternDetector
 
             if col.type_info.sample_values:
-                # Detect semantic patterns in the data
+                # Detect semantic patterns in the data with tiered thresholds
+                # - 80%+ confidence → ERROR severity (strict enforcement)
+                # - 50-80% confidence → WARNING severity (advisory)
+                # - Below 50% → Informational only (not suggested as validation)
                 patterns = SemanticPatternDetector.detect_patterns(
                     col.type_info.sample_values,
-                    min_confidence=0.30  # 30% threshold for suggestions
+                    min_confidence=0.50  # Raised from 30% to 50% minimum
                 )
 
                 # Add suggestions for detected patterns
@@ -1615,9 +1765,18 @@ class DataProfiler:
                         # Adjust confidence based on match percentage
                         adjusted_confidence = pattern_match.confidence * 100
 
+                        # Use ERROR severity only for high confidence (80%+)
+                        # Use WARNING severity for medium confidence (50-80%)
+                        if adjusted_confidence >= 80:
+                            severity = "ERROR"
+                        elif adjusted_confidence >= 50:
+                            severity = "WARNING"
+                        else:
+                            continue  # Skip suggestions below 50% confidence
+
                         suggestions.append(ValidationSuggestion(
                             validation_type=pattern_suggestion['validation_type'],
-                            severity=pattern_suggestion['severity'],
+                            severity=severity,  # Dynamic severity based on confidence
                             params={
                                 **pattern_suggestion['params'],
                                 'field': col.name
@@ -1630,6 +1789,25 @@ class DataProfiler:
             # Generate appropriate validations based on detected semantic types
             semantic_suggestions = self._generate_semantic_type_validations(col)
             suggestions.extend(semantic_suggestions)
+
+        # ENHANCED VALIDATION SUGGESTIONS
+        # Add temporal, statistical, and string/pattern validation suggestions
+        # These were previously missing despite rich analysis data being available
+
+        # Temporal validation suggestions (leverages existing temporal_analysis)
+        for col in columns:
+            temporal_suggestions = self._generate_temporal_validations(col)
+            suggestions.extend(temporal_suggestions)
+
+        # Statistical validation suggestions (leverages distribution/anomaly analysis)
+        for col in columns:
+            statistical_suggestions = self._generate_statistical_validations(col, row_count)
+            suggestions.extend(statistical_suggestions)
+
+        # String/pattern validation suggestions (StringLengthCheck, consistent patterns)
+        for col in columns:
+            string_suggestions = self._generate_string_pattern_validations(col)
+            suggestions.extend(string_suggestions)
 
         # Add mandatory field check if any mandatory fields found
         if mandatory_fields:
