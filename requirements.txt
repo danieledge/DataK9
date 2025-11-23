@@ -31,6 +31,9 @@ statsmodels>=0.14.0      # Temporal analysis (trend detection, seasonality)
 scipy>=1.11.0            # Statistical functions for correlation
 scikit-learn>=1.3.0      # Mutual information for enhanced correlation
 
+# Enhanced Semantic Type Detection
+visions>=0.8.0           # Intelligent semantic type inference (Email, URL, UUID, etc.)
+
 # Optional async dependencies (for concurrent file validation)
 # Install with: pip install aiofiles
 # aiofiles>=23.0.0
