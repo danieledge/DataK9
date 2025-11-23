@@ -762,17 +762,33 @@ class DataProfiler:
         elif chunk_idx % 10 == 0:
             # Every 10th chunk: sample 1000 values for type refinement
             sample_size = min(1000, len(non_null_series))
-            import random
-            sampled_values = random.sample(list(non_null_series), sample_size) if len(non_null_series) > sample_size else list(non_null_series)
-            for value in sampled_values:
+            # Use pandas .sample() instead of converting to list (memory efficient)
+            if len(non_null_series) > sample_size:
+                sampled_series = non_null_series.sample(n=sample_size, random_state=42)
+            else:
+                sampled_series = non_null_series
+
+            for value in sampled_series:
                 detected_type = self._detect_type(value)
                 profile["type_counts"][detected_type] = profile["type_counts"].get(detected_type, 0) + 1
-            profile["type_sampled_count"] += len(sampled_values)
+            profile["type_sampled_count"] += len(sampled_series)
 
         # Value frequency (limit to prevent memory issues)
+        # Only compute value_counts if we haven't reached the limit
         if len(profile["value_counts"]) < 10000:
-            value_freq = non_null_series.value_counts()
+            # For large series, only compute value counts on top N most frequent to save memory
+            # This prevents computing value_counts on millions of rows when dict is nearly full
+            remaining_slots = 10000 - len(profile["value_counts"])
+            if len(non_null_series) > 50000 and remaining_slots < 1000:
+                # Near capacity with large chunk - only sample to avoid expensive value_counts
+                sample_for_freq = non_null_series.sample(n=min(10000, len(non_null_series)), random_state=42)
+                value_freq = sample_for_freq.value_counts()
+            else:
+                value_freq = non_null_series.value_counts()
+
             for val, count in value_freq.items():
+                if len(profile["value_counts"]) >= 10000:
+                    break  # Stop if we hit the limit mid-iteration
                 profile["value_counts"][val] = profile["value_counts"].get(val, 0) + count
 
         # Numeric analysis (memory-efficient sampling for statistics)
