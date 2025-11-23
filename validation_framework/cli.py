@@ -9,6 +9,7 @@ Provides commands for:
 
 import click
 import sys
+from datetime import datetime
 from pathlib import Path
 
 from validation_framework.core.engine import ValidationEngine
@@ -16,6 +17,7 @@ from validation_framework.core.registry import get_registry
 from validation_framework.core.logging_config import setup_logging, get_logger
 from validation_framework.core.pretty_output import PrettyOutput as po
 from validation_framework.utils.performance_advisor import get_performance_advisor
+from validation_framework.utils.path_patterns import PathPatternExpander
 
 logger = get_logger(__name__)
 
@@ -48,6 +50,13 @@ def validate(config_file, html_output, json_output, verbose, fail_on_warning, lo
 
     CONFIG_FILE: Path to YAML configuration file defining validations
 
+    Output paths support date/time patterns:
+    - {date} -> 2025-11-22
+    - {time} -> 14-30-45
+    - {timestamp} -> 20251122_143045
+    - {datetime} -> 2025-11-22_14-30-45
+    - {job_name} -> Job_Name (from config)
+
     Examples:
 
     \b
@@ -59,13 +68,25 @@ def validate(config_file, html_output, json_output, verbose, fail_on_warning, lo
     data-validate validate config.yaml -o report.html -j results.json
 
     \b
+    # With date/time patterns
+    data-validate validate config.yaml -o "reports/{date}/validation_{time}.html"
+
+    \b
     # Fail on warnings
     data-validate validate config.yaml --fail-on-warning
 
     \b
     # With custom log level and file
-    data-validate validate config.yaml --log-level DEBUG --log-file validation.log
+    data-validate validate config.yaml --log-level DEBUG --log-file "logs/{timestamp}.log"
     """
+    # Create pattern expander with consistent timestamp for this run
+    run_timestamp = datetime.now()
+    expander = PathPatternExpander(run_timestamp=run_timestamp)
+
+    # Expand log file pattern first (needed for setup_logging)
+    if log_file:
+        log_file = expander.expand(log_file, {})
+
     # Setup logging
     setup_logging(level=log_level, log_file=log_file)
     logger.info(f"Starting validation: {config_file}")
@@ -96,19 +117,24 @@ def validate(config_file, html_output, json_output, verbose, fail_on_warning, lo
 
         report = engine.run(verbose=verbose)
 
-        # Generate HTML report
+        # Build context for pattern expansion
+        context = {'job_name': engine.config.job_name}
+
+        # Generate HTML report (expand patterns in CLI override)
         if html_output:
+            html_output = expander.expand(html_output, context)
             engine.generate_html_report(report, html_output)
         else:
-            # Use default from config or fallback
+            # Use default from config (already expanded in config.py)
             html_path = engine.config.html_report_path
             engine.generate_html_report(report, html_path)
 
-        # Generate JSON report
+        # Generate JSON report (expand patterns in CLI override)
         if json_output:
+            json_output = expander.expand(json_output, context)
             engine.generate_json_report(report, json_output)
         else:
-            # Check if config specifies JSON output
+            # Check if config specifies JSON output (already expanded in config.py)
             if engine.config.json_summary_path:
                 engine.generate_json_report(report, engine.config.json_summary_path)
 
@@ -393,13 +419,18 @@ def version():
 @click.option('--database', '--db', help='Database connection string (e.g., sqlite:///test.db or postgresql://...)')
 @click.option('--table', '-t', help='Database table name to profile')
 @click.option('--query', '-q', help='SQL query to profile (alternative to --table)')
-@click.option('--html-output', '-o', help='Path for HTML profile report (default: profile_report.html)')
+@click.option('--html-output', '-o', help='Path for HTML profile report (default: {file_name}_profile_{date}.html)')
 @click.option('--json-output', '-j', help='Path for JSON profile output')
-@click.option('--config-output', '-c', help='Path to save generated validation config (default: <filename>_validation.yaml)')
-@click.option('--chunk-size', type=int, default=50000, help='Number of rows per chunk for large files/tables')
+@click.option('--config-output', '-c', help='Path to save generated validation config (default: {file_name}_validation_{timestamp}.yaml)')
+@click.option('--chunk-size', type=int, default=None, help='Number of rows per chunk (default: auto-calculate based on available memory)')
 @click.option('--log-level', type=click.Choice(['DEBUG', 'INFO', 'WARNING', 'ERROR'], case_sensitive=False),
               default='INFO', help='Logging level')
-def profile(file_path, format, database, table, query, html_output, json_output, config_output, chunk_size, log_level):
+@click.option('--disable-temporal', is_flag=True, help='Disable temporal analysis for datetime columns')
+@click.option('--disable-pii', is_flag=True, help='Disable PII detection with privacy risk scoring')
+@click.option('--disable-correlation', is_flag=True, help='Disable enhanced multi-method correlation analysis')
+@click.option('--disable-all-enhancements', is_flag=True, help='Disable all profiler enhancements (temporal, PII, correlation)')
+def profile(file_path, format, database, table, query, html_output, json_output, config_output, chunk_size, log_level,
+            disable_temporal, disable_pii, disable_correlation, disable_all_enhancements):
     """
     Profile a data file or database table to understand its structure and quality.
 
@@ -413,6 +444,14 @@ def profile(file_path, format, database, table, query, html_output, json_output,
 
     FILE_PATH: Path to data file to profile (not required if using --database)
 
+    Output paths support date/time patterns:
+    - {date} -> 2025-11-22
+    - {time} -> 14-30-45
+    - {timestamp} -> 20251122_143045
+    - {datetime} -> 2025-11-22_14-30-45
+    - {file_name} -> source_file (from input file)
+    - {table_name} -> table (from database table)
+
     Examples:
 
     \b
@@ -422,6 +461,10 @@ def profile(file_path, format, database, table, query, html_output, json_output,
     \b
     # Profile with custom output paths
     data-validate profile data.csv -o profile.html -c validation.yaml
+
+    \b
+    # Profile with date/time patterns
+    data-validate profile data.csv -o "profiles/{file_name}_{date}.html"
 
     \b
     # Profile large Parquet file with custom chunk size
@@ -438,6 +481,10 @@ def profile(file_path, format, database, table, query, html_output, json_output,
     from validation_framework.profiler.engine import DataProfiler
     from validation_framework.profiler.html_reporter import ProfileHTMLReporter
     from validation_framework.loaders.factory import LoaderFactory
+
+    # Create pattern expander with consistent timestamp for this run
+    run_timestamp = datetime.now()
+    expander = PathPatternExpander(run_timestamp=run_timestamp)
 
     # Setup logging
     setup_logging(level=log_level)
@@ -457,7 +504,19 @@ def profile(file_path, format, database, table, query, html_output, json_output,
         sys.exit(1)
 
     try:
-        profiler = DataProfiler(chunk_size=chunk_size)
+        # Handle --disable-all-enhancements flag (disables all Phase 1 features)
+        if disable_all_enhancements:
+            disable_temporal = True
+            disable_pii = True
+            disable_correlation = True
+
+        # Initialize profiler with enhancements (enabled by default, disabled if flag set)
+        profiler = DataProfiler(
+            chunk_size=chunk_size,
+            enable_temporal_analysis=not disable_temporal,
+            enable_pii_detection=not disable_pii,
+            enable_enhanced_correlation=not disable_correlation
+        )
 
         # DATABASE MODE
         if database:
@@ -465,10 +524,16 @@ def profile(file_path, format, database, table, query, html_output, json_output,
 
             # Set default output paths based on table/query
             source_name = table if table else "query_result"
+            context = {'table_name': source_name}
+
             if not html_output:
-                html_output = f"{source_name}_profile_report.html"
+                html_output = f"{{table_name}}_profile_report_{{date}}.html"
             if not config_output:
-                config_output = f"{source_name}_validation.yaml"
+                config_output = f"{{table_name}}_validation_{{timestamp}}.yaml"
+
+            # Expand patterns
+            html_output = expander.expand(html_output, context)
+            config_output = expander.expand(config_output, context)
 
             click.echo(f"🗄️  Profiling database table: {table if table else 'custom query'}...")
 
@@ -514,12 +579,18 @@ def profile(file_path, format, database, table, query, html_output, json_output,
                 format = format_map.get(file_ext, 'csv')
                 logger.info(f"Auto-detected format: {format}")
 
-            # Set default output paths
+            # Set default output paths with patterns
             file_stem = Path(file_path).stem
+            context = {'file_name': file_stem}
+
             if not html_output:
-                html_output = f"{file_stem}_profile_report.html"
+                html_output = f"{{file_name}}_profile_report_{{date}}.html"
             if not config_output:
-                config_output = f"{file_stem}_validation.yaml"
+                config_output = f"{{file_name}}_validation_{{timestamp}}.yaml"
+
+            # Expand patterns
+            html_output = expander.expand(html_output, context)
+            config_output = expander.expand(config_output, context)
 
             # Performance advisory: Recommend Parquet if large CSV
             advisor = get_performance_advisor()
@@ -565,6 +636,10 @@ def profile(file_path, format, database, table, query, html_output, json_output,
         # Generate JSON output if requested
         if json_output:
             import json
+            # Expand patterns in JSON output path
+            context = {'file_name': Path(file_path).stem if file_path else (table or 'query_result')}
+            json_output = expander.expand(json_output, context)
+
             with open(json_output, 'w') as f:
                 json.dump(profile_result.to_dict(), f, indent=2)
             click.echo(f"✅ JSON output saved: {json_output}")
@@ -581,7 +656,7 @@ def profile(file_path, format, database, table, query, html_output, json_output,
         if profile_result.suggested_validations:
             click.echo(f"\n💡 Top Validation Suggestions:")
             for sugg in profile_result.suggested_validations[:5]:
-                click.echo(f"  • {sugg.validation_type} ({sugg.severity})")
+                click.echo(f"  • {sugg.validation_type} [Recommended severity: {sugg.severity}]")
                 click.echo(f"    {sugg.reason}")
 
         sys.exit(0)
@@ -599,8 +674,8 @@ def profile(file_path, format, database, table, query, html_output, json_output,
 
 @cli.command('cda-analysis')
 @click.argument('config_file', type=click.Path(exists=True))
-@click.option('--output', '-o', default='cda_gap_analysis.html',
-              help='Path for HTML gap analysis report')
+@click.option('--output', '-o', default='cda_gap_analysis_{timestamp}.html',
+              help='Path for HTML gap analysis report (default: cda_gap_analysis_{timestamp}.html)')
 @click.option('--json-output', '-j', help='Path for JSON gap analysis output')
 @click.option('--fail-on-gaps', is_flag=True,
               help='Exit with error code if any gaps detected')
@@ -613,6 +688,13 @@ def cda_analysis(config_file, output, json_output, fail_on_gaps):
 
     CONFIG_FILE: Path to YAML configuration file with critical_data_attributes defined
 
+    Output paths support date/time patterns:
+    - {date} -> 2025-11-22
+    - {time} -> 14-30-45
+    - {timestamp} -> 20251122_143045
+    - {datetime} -> 2025-11-22_14-30-45
+    - {job_name} -> Job_Name (from config)
+
     Examples:
 
     \b
@@ -624,16 +706,24 @@ def cda_analysis(config_file, output, json_output, fail_on_gaps):
     python3 -m validation_framework.cli cda-analysis config.yaml -o gaps.html
 
     \b
+    # With date/time patterns
+    python3 -m validation_framework.cli cda-analysis config.yaml -o "cda_reports/{job_name}_{date}.html"
+
+    \b
     # Fail CI/CD if any gaps detected
     python3 -m validation_framework.cli cda-analysis config.yaml --fail-on-gaps
 
     \b
     # Generate JSON output for automation
-    python3 -m validation_framework.cli cda-analysis config.yaml -j gaps.json
+    python3 -m validation_framework.cli cda-analysis config.yaml -j "cda_results/{timestamp}.json"
     """
     import yaml
     import json as json_module
     from validation_framework.cda import CDAGapAnalyzer, CDAReporter
+
+    # Create pattern expander with consistent timestamp for this run
+    run_timestamp = datetime.now()
+    expander = PathPatternExpander(run_timestamp=run_timestamp)
 
     po.logo()
     po.header("CDA Gap Analysis")
@@ -661,6 +751,14 @@ def cda_analysis(config_file, output, json_output, fail_on_gaps):
         # Run analysis
         analyzer = CDAGapAnalyzer()
         report = analyzer.analyze(config)
+
+        # Build context for pattern expansion
+        context = {'job_name': report.job_name}
+
+        # Expand patterns in output paths
+        output = expander.expand(output, context)
+        if json_output:
+            json_output = expander.expand(json_output, context)
 
         # Display summary
         po.section("Analysis Summary")
