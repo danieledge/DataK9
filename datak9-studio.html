@@ -4797,6 +4797,71 @@ files:
                                             </label>
                                         </div>
                                     </div>
+
+                                    <!-- CLI Command Display -->
+                                    <div class="settings-field" style="margin-top: 20px;">
+                                        <label style="display: flex; justify-content: space-between; align-items: center;">
+                                            <span style="font-weight: 600; color: var(--text-primary);">
+                                                🚀 CLI Command
+                                            </span>
+                                            <button class="btn btn-small"
+                                                    onclick="app.copyCommandToClipboard()"
+                                                    style="padding: 4px 12px; font-size: 11px; background: var(--primary); color: white; border: none; border-radius: 4px; cursor: pointer;"
+                                                    title="Copy command to clipboard">
+                                                📋 Copy
+                                            </button>
+                                        </label>
+                                        <div id="cli-command-display"
+                                             style="background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 6px; padding: 12px; margin-top: 8px; font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace; font-size: 12px; color: var(--text-primary); overflow-x: auto; white-space: pre-wrap; word-break: break-all;">
+                                            ${this.generateCLICommand()}
+                                        </div>
+                                        <div class="field-hint" style="margin-top: 8px; font-size: 11px; color: var(--text-muted);">
+                                            ℹ️ Run this command in your terminal after downloading the YAML configuration
+                                        </div>
+                                    </div>
+
+                                    <!-- Available CLI Options -->
+                                    <details style="margin-top: 16px; padding: 12px; background: var(--bg-secondary); border-radius: 6px; border: 1px solid var(--border-color);">
+                                        <summary style="cursor: pointer; font-weight: 600; color: var(--text-primary); font-size: 12px; user-select: none;">
+                                            📚 All Available CLI Options
+                                        </summary>
+                                        <div style="margin-top: 12px; font-size: 11px; color: var(--text-muted); line-height: 1.6;">
+                                            <div style="margin-bottom: 8px;">
+                                                <code style="background: var(--bg-primary); padding: 2px 6px; border-radius: 3px; color: var(--primary);">--html-output, -o</code>
+                                                <span style="margin-left: 8px;">Path for HTML report output</span>
+                                            </div>
+                                            <div style="margin-bottom: 8px;">
+                                                <code style="background: var(--bg-primary); padding: 2px 6px; border-radius: 3px; color: var(--primary);">--json-output, -j</code>
+                                                <span style="margin-left: 8px;">Path for JSON summary output</span>
+                                            </div>
+                                            <div style="margin-bottom: 8px;">
+                                                <code style="background: var(--bg-primary); padding: 2px 6px; border-radius: 3px; color: var(--primary);">--verbose, -v</code>
+                                                <span style="margin-left: 8px;">Enable verbose output (default: enabled)</span>
+                                            </div>
+                                            <div style="margin-bottom: 8px;">
+                                                <code style="background: var(--bg-primary); padding: 2px 6px; border-radius: 3px; color: var(--primary);">--quiet, -q</code>
+                                                <span style="margin-left: 8px;">Suppress verbose output</span>
+                                            </div>
+                                            <div style="margin-bottom: 8px;">
+                                                <code style="background: var(--bg-primary); padding: 2px 6px; border-radius: 3px; color: var(--primary);">--fail-on-warning</code>
+                                                <span style="margin-left: 8px;">Exit with error code if warnings are found</span>
+                                            </div>
+                                            <div style="margin-bottom: 8px;">
+                                                <code style="background: var(--bg-primary); padding: 2px 6px; border-radius: 3px; color: var(--primary);">--log-level</code>
+                                                <span style="margin-left: 8px;">Set logging level (DEBUG, INFO, WARNING, ERROR)</span>
+                                            </div>
+                                            <div style="margin-bottom: 8px;">
+                                                <code style="background: var(--bg-primary); padding: 2px 6px; border-radius: 3px; color: var(--primary);">--log-file</code>
+                                                <span style="margin-left: 8px;">Optional log file path for detailed logging</span>
+                                            </div>
+                                            <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border-color); font-style: italic;">
+                                                <strong>Example:</strong><br>
+                                                <code style="background: var(--bg-primary); padding: 4px 8px; border-radius: 3px; display: block; margin-top: 6px; color: var(--text-primary);">
+                                                    python3 -m validation_framework.cli validate config.yaml --html-output report.html --json-output summary.json --fail-on-warning --log-level DEBUG
+                                                </code>
+                                            </div>
+                                        </div>
+                                    </details>
                                 </div>
                             </div>
                         </div>
@@ -5006,8 +5071,125 @@ files:
                     }
                 }
 
+                // Update CLI command
+                this.updateCLICommand();
+
                 this.updateYAMLEditor();
                 this.saveToLocalStorage();
+            },
+
+            /**
+             * Generate CLI command based on current configuration
+             */
+            generateCLICommand() {
+                // Get config file name
+                const configFile = this.config.validation_job?.name || 'validation_config';
+                const configFileName = configFile.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_-]/g, '') + '.yaml';
+
+                // Start with base command
+                let cmd = `python3 -m validation_framework.cli validate ${configFileName}`;
+
+                // Add output options
+                const output = this.config.output || {};
+
+                if (output.html_report) {
+                    cmd += ` --html-output "${output.html_report}"`;
+                }
+
+                if (output.json_summary) {
+                    cmd += ` --json-output "${output.json_summary}"`;
+                }
+
+                // Add fail options
+                if (output.fail_on_warning === true) {
+                    cmd += ` --fail-on-warning`;
+                }
+
+                // Add verbose (default is true, so only add --quiet if disabled)
+                // Note: This would need to be added to the UI if desired
+
+                // Add log level (if not default)
+                // Note: This would need to be added to the UI if desired
+
+                return cmd;
+            },
+
+            /**
+             * Update CLI command display
+             */
+            updateCLICommand() {
+                const commandDisplay = document.getElementById('cli-command-display');
+                if (commandDisplay) {
+                    commandDisplay.textContent = this.generateCLICommand();
+                }
+            },
+
+            /**
+             * Copy CLI command to clipboard
+             */
+            async copyCommandToClipboard() {
+                const command = this.generateCLICommand();
+
+                try {
+                    // Try modern clipboard API first
+                    if (navigator.clipboard && navigator.clipboard.writeText) {
+                        await navigator.clipboard.writeText(command);
+                        this.showToast('Command copied to clipboard!', 'success');
+                    } else {
+                        // Fallback to older method
+                        const textArea = document.createElement('textarea');
+                        textArea.value = command;
+                        textArea.style.position = 'fixed';
+                        textArea.style.left = '-999999px';
+                        textArea.style.top = '-999999px';
+                        document.body.appendChild(textArea);
+                        textArea.focus();
+                        textArea.select();
+
+                        try {
+                            document.execCommand('copy');
+                            this.showToast('Command copied to clipboard!', 'success');
+                        } catch (err) {
+                            this.showToast('Failed to copy command', 'error');
+                        }
+
+                        document.body.removeChild(textArea);
+                    }
+                } catch (err) {
+                    console.error('Failed to copy command:', err);
+                    this.showToast('Failed to copy command', 'error');
+                }
+            },
+
+            /**
+             * Show toast notification
+             */
+            showToast(message, type = 'info') {
+                // Simple toast implementation
+                const toast = document.createElement('div');
+                toast.className = `toast toast-${type}`;
+                toast.textContent = message;
+                toast.style.cssText = `
+                    position: fixed;
+                    bottom: 20px;
+                    right: 20px;
+                    background: ${type === 'success' ? '#10b981' : type === 'error' ? '#ef4444' : '#3b82f6'};
+                    color: white;
+                    padding: 12px 20px;
+                    border-radius: 6px;
+                    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+                    z-index: 30000;
+                    animation: slideIn 0.3s ease-out;
+                `;
+
+                document.body.appendChild(toast);
+
+                setTimeout(() => {
+                    toast.style.animation = 'slideOut 0.3s ease-in';
+                    setTimeout(() => {
+                        document.body.removeChild(toast);
+                    }, 300);
+                }, 3000);
             },
 
             /**
