@@ -424,13 +424,14 @@ def version():
 @click.option('--config-output', '-c', help='Path to save generated validation config (default: {file_name}_validation_{timestamp}.yaml)')
 @click.option('--chunk-size', type=int, default=None, help='Number of rows per chunk (default: auto-calculate based on available memory)')
 @click.option('--sample', '-s', type=int, default=None, help='Profile only the first N rows (useful for quick analysis of large files)')
+@click.option('--no-memory-check', is_flag=True, help='Disable memory usage warnings for large files')
 @click.option('--log-level', type=click.Choice(['DEBUG', 'INFO', 'WARNING', 'ERROR'], case_sensitive=False),
               default='WARNING', help='Logging level')
 @click.option('--disable-temporal', is_flag=True, help='Disable temporal analysis for datetime columns')
 @click.option('--disable-pii', is_flag=True, help='Disable PII detection with privacy risk scoring')
 @click.option('--disable-correlation', is_flag=True, help='Disable enhanced multi-method correlation analysis')
 @click.option('--disable-all-enhancements', is_flag=True, help='Disable all profiler enhancements (temporal, PII, correlation)')
-def profile(file_path, format, database, table, query, html_output, json_output, config_output, chunk_size, sample, log_level,
+def profile(file_path, format, database, table, query, html_output, json_output, config_output, chunk_size, sample, no_memory_check, log_level,
             disable_temporal, disable_pii, disable_correlation, disable_all_enhancements):
     """
     Profile a data file or database table to understand its structure and quality.
@@ -589,15 +590,16 @@ def profile(file_path, format, database, table, query, html_output, json_output,
             html_output = expander.expand(html_output, context)
             config_output = expander.expand(config_output, context)
 
-            # Performance advisory: Recommend Parquet if large CSV
-            advisor = get_performance_advisor()
-            analysis = advisor.analyze_file(file_path, operation='profile')
-            warnings_output = advisor.format_warnings_for_cli(analysis)
-            if warnings_output:
-                click.echo("")  # Blank line
-                for line in warnings_output:
-                    click.echo(line)
-                click.echo("")  # Blank line
+            # Performance advisory: Recommend Parquet if large CSV (unless --no-memory-check specified)
+            if not no_memory_check:
+                advisor = get_performance_advisor()
+                analysis = advisor.analyze_file(file_path, operation='profile')
+                warnings_output = advisor.format_warnings_for_cli(analysis)
+                if warnings_output:
+                    click.echo("")  # Blank line
+                    for line in warnings_output:
+                        click.echo(line)
+                    click.echo("")  # Blank line
 
             # Create profiler and run analysis
             if sample:
