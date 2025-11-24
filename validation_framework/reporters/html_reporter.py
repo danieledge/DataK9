@@ -936,11 +936,11 @@ HTML_TEMPLATE = """
                         <span class="stat-label">Warnings:</span>
                         <span class="stat-value warning">{{ file_report.warning_count }}</span>
                     </div>
-                    <span class="toggle-icon" id="toggle-file-{{ loop.index }}">▼</span>
+                    <span class="toggle-icon rotated" id="toggle-file-{{ loop.index }}">▼</span>
                 </div>
             </div>
 
-            <div class="file-content" id="file-{{ loop.index }}" style="display: block;">
+            <div class="file-content" id="file-{{ loop.index }}" style="display: none;">
                 <!-- File Metadata -->
                 <div class="file-meta">
                     <div class="meta-item">
