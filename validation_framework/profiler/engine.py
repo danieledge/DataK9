@@ -935,8 +935,13 @@ class DataProfiler:
         Detect the type of a value.
 
         Returns:
-            Type string: 'integer', 'float', 'boolean', 'date', 'string'
+            Type string: 'integer', 'float', 'boolean', 'date', 'string', 'array'
         """
+        # Check if value is array-like (list, numpy array, etc.)
+        # This must be checked BEFORE pd.isna() to avoid "ambiguous truth value" error
+        if isinstance(value, (list, np.ndarray)) or hasattr(value, '__array__'):
+            return 'array'
+
         # Check for null
         if pd.isna(value):
             return 'null'
