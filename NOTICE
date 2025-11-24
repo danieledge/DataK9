@@ -1,0 +1,170 @@
+DataK9 Data Quality Framework
+Copyright (c) 2024 Daniel Edge
+
+This product includes software developed by Daniel Edge and contributors.
+
+================================================================================
+THIRD-PARTY SOFTWARE NOTICES AND INFORMATION
+================================================================================
+
+This project uses the following third-party libraries and resources.
+All are compatible with commercial use without restrictions.
+
+--------------------------------------------------------------------------------
+1. FIBO (Financial Industry Business Ontology)
+--------------------------------------------------------------------------------
+Source: EDM Council - https://spec.edmcouncil.org/fibo/
+License: MIT License
+Usage: Semantic taxonomy derived from FIBO ontology concepts
+Location: validation_framework/profiler/taxonomies/finance_taxonomy.json
+
+The finance_taxonomy.json file contains semantic tags derived from FIBO
+(Financial Industry Business Ontology), maintained by the EDM Council.
+FIBO is licensed under the MIT License, which permits commercial use.
+
+FIBO License:
+    MIT License
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in all
+    copies or substantial portions of the Software.
+
+References:
+- FIBO classes referenced in taxonomy (e.g., fibo-fnd-acc-cur:MonetaryAmount)
+- FIBO definitions adapted for semantic tagging
+- FIBO modules: FND/Accounting, FBC/ProductsAndServices, IND/InterestRates
+
+--------------------------------------------------------------------------------
+2. Python Dependencies (All Commercial-Use Compatible)
+--------------------------------------------------------------------------------
+
+pandas (BSD-3-Clause)
+    Copyright (c) 2008-2011, AQR Capital Management, LLC, Lambda Foundry, Inc.
+    Copyright (c) 2011-2024, Open source contributors
+    https://pandas.pydata.org/
+
+pyarrow (Apache-2.0)
+    Copyright (c) 2016-2024 The Apache Software Foundation
+    https://arrow.apache.org/
+
+openpyxl (MIT)
+    Copyright (c) 2010 openpyxl
+    https://openpyxl.readthedocs.io/
+
+PyYAML (MIT)
+    Copyright (c) 2017-2021 Ingy döt Net
+    Copyright (c) 2006-2016 Kirill Simonov
+    https://pyyaml.org/
+
+Jinja2 (BSD-3-Clause)
+    Copyright (c) 2007 by the Pallets team
+    https://palletsprojects.com/p/jinja/
+
+Click (BSD-3-Clause)
+    Copyright (c) 2014 by the Pallets team
+    https://palletsprojects.com/p/click/
+
+jsonschema (MIT)
+    Copyright (c) 2013 Julian Berman
+    https://python-jsonschema.readthedocs.io/
+
+dask (BSD-3-Clause)
+    Copyright (c) 2014-2024, Anaconda, Inc. and contributors
+    https://www.dask.org/
+
+tqdm (MPL-2.0 AND MIT)
+    Copyright (c) 2013-2024 Casper da Costa-Luis
+    https://tqdm.github.io/
+
+python-dateutil (Apache-2.0 OR BSD-3-Clause)
+    Copyright (c) 2003-2011 - Gustavo Niemeyer
+    Copyright (c) 2012-2014 - Tomi Pieviläinen
+    Copyright (c) 2014-2016 - Yaron de Leeuw
+    Copyright (c) 2015-     - Paul Ganssle
+    https://dateutil.readthedocs.io/
+
+colorama (BSD-3-Clause)
+    Copyright (c) 2010 Jonathan Hartley
+    https://github.com/tartley/colorama
+
+psutil (BSD-3-Clause)
+    Copyright (c) 2009, Jay Loden, Dave Daeschler, Giampaolo Rodola'
+    https://github.com/giampaolo/psutil
+
+statsmodels (BSD-3-Clause)
+    Copyright (C) 2006, Jonathan E. Taylor
+    Copyright (c) 2006-2008 Scipy Developers
+    Copyright (c) 2009-2024 statsmodels Developers
+    https://www.statsmodels.org/
+
+scipy (BSD-3-Clause)
+    Copyright (c) 2001-2002 Enthought, Inc. 2003-2024, SciPy Developers
+    https://scipy.org/
+
+scikit-learn (BSD-3-Clause)
+    Copyright (c) 2007-2024 The scikit-learn developers
+    https://scikit-learn.org/
+
+visions (BSD-3-Clause)
+    Copyright (c) 2019-2024 Dynatrace
+    https://github.com/dynatrace-oss/visions
+
+--------------------------------------------------------------------------------
+3. License Summary
+--------------------------------------------------------------------------------
+
+All dependencies use OSI-approved open source licenses that permit:
+✓ Commercial use
+✓ Modification
+✓ Distribution
+✓ Private use
+
+License Types Used:
+- MIT License: Permissive, allows commercial use without restrictions
+- BSD-3-Clause: Permissive, allows commercial use without restrictions
+- Apache-2.0: Permissive, allows commercial use, includes patent grant
+- MPL-2.0: Weak copyleft on modifications, allows commercial use
+
+NO COPYLEFT RESTRICTIONS:
+This project does NOT use GPL, AGPL, or other strong copyleft licenses.
+All dependencies are compatible with proprietary/commercial software.
+
+--------------------------------------------------------------------------------
+4. Attribution Requirements
+--------------------------------------------------------------------------------
+
+When distributing this software, you must:
+
+1. Include this NOTICE file
+2. Include the LICENSE file (MIT License)
+3. Preserve copyright notices in source files
+4. Acknowledge use of FIBO taxonomy (if using semantic tagging features)
+
+Example acknowledgment:
+"This software uses semantic tagging derived from FIBO (Financial Industry
+Business Ontology), an industry-standard ontology maintained by the EDM Council
+and licensed under the MIT License."
+
+--------------------------------------------------------------------------------
+5. No Warranty
+--------------------------------------------------------------------------------
+
+All third-party software is provided "AS IS" without warranty of any kind.
+See individual licenses for complete warranty disclaimers.
+
+--------------------------------------------------------------------------------
+6. Questions?
+--------------------------------------------------------------------------------
+
+For questions about licensing or attributions:
+- Review individual package licenses at their respective URLs
+- Consult with your legal team for commercial deployment
+- Open an issue at: https://github.com/yourusername/data-validation-tool/issues
+
+Last Updated: 2024-11-24
