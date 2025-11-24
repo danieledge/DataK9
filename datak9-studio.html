@@ -5133,18 +5133,6 @@ files:
                     input.focus();
                     input.setSelectionRange(start + pattern.length, start + pattern.length);
                 }
-
-                this.closeModal();
-            },
-
-            /**
-             * Close modal
-             */
-            closeModal() {
-                const modal = document.querySelector('.modal-overlay');
-                if (modal) {
-                    modal.remove();
-                }
             },
 
             /**
@@ -6448,7 +6436,7 @@ params:
                 Object.entries(this.validationLibrary).forEach(([key, val]) => {
                     itemsHTML += `
                         <div class="validation-catalog-item" data-category="${val.category}" data-name="${val.name.toLowerCase()}"
-                             onclick="app.selectValidationFromCatalog('${key}')">
+                             onclick="event.stopPropagation(); app.selectValidationFromCatalog('${key}')">
                             <div class="validation-catalog-header">
                                 <span class="validation-catalog-icon">${val.icon}</span>
                                 <span class="validation-catalog-name">${val.name}</span>
@@ -6504,6 +6492,8 @@ params:
             },
 
             selectValidationFromCatalog(validationType) {
+                console.log('selectValidationFromCatalog called with:', validationType);
+
                 if (this.selectedFile === null) {
                     alert('Please select a file first');
                     return;
@@ -6514,11 +6504,14 @@ params:
                     file.validations = [];
                 }
 
+                // Add the validation
                 file.validations.push({
                     type: validationType,
                     severity: 'ERROR',
                     params: {}
                 });
+
+                console.log('Validation added. Total validations:', file.validations.length);
 
                 this.selectedValidation = file.validations.length - 1;
                 this.closeModal('add-validation-modal');
@@ -6570,12 +6563,20 @@ params:
             },
 
             deleteCurrentValidation() {
-                if (this.selectedFile === null || this.selectedValidation === null) return;
+                console.log('deleteCurrentValidation called');
+
+                if (this.selectedFile === null || this.selectedValidation === null) {
+                    console.log('No file or validation selected, returning');
+                    return;
+                }
+
+                const file = this.config.files[this.selectedFile];
+                console.log('Before delete - Total validations:', file.validations.length);
 
                 if (confirm('Are you sure you want to delete this validation?')) {
-                    const file = this.config.files[this.selectedFile];
                     file.validations.splice(this.selectedValidation, 1);
                     this.selectedValidation = null;
+                    console.log('After delete - Total validations:', file.validations.length);
                     this.saveToLocalStorage();
                     this.render();
                 }
