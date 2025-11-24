@@ -7,7 +7,8 @@
 
   **Data validation for files and databases**
 
-  [![Version 0.2.0](https://img.shields.io/badge/version-0.2.0-blue.svg)](#changelog)
+  [![Version 0.2.0-beta](https://img.shields.io/badge/version-0.2.0--beta-orange.svg)](#changelog)
+  [![Status: Beta](https://img.shields.io/badge/status-Beta%20%7C%20WIP-orange.svg)](#️-beta-software---testing-required)
   [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
   [![Tests: 115+ passing](https://img.shields.io/badge/tests-115%2B%20passing-brightgreen.svg)](tests/)
   [![Coverage: 48%](https://img.shields.io/badge/coverage-48%25-yellow.svg)](htmlcov/)
@@ -35,6 +36,27 @@
 **Enterprise Ready:** Deploy in financial services, healthcare, government, or any commercial setting without licensing concerns.
 
 **Learn More:** [Commercial Use Guide](docs/for-developers/DEPENDENCIES.md)
+
+---
+
+## ⚠️ Beta Software - Testing Required
+
+**IMPORTANT: DataK9 is currently in BETA.**
+
+- 🧪 **Work in Progress** - Active development, features may change
+- ✅ **Extensive Testing Required** - Thoroughly test with your data before deploying
+- 🔍 **Validate Results** - Verify validation outputs match your expectations
+- 📊 **Start Small** - Test on sample datasets before running on production data
+- 🐛 **Report Issues** - Found a bug? [Open an issue](https://github.com/danieledge/DataK9/issues)
+
+**This software is provided "AS IS" without warranty. See [LICENSE](LICENSE) for details.**
+
+**Before Deployment:**
+1. Test all validations with representative sample data
+2. Verify profiler output accuracy
+3. Test memory usage with your largest datasets
+4. Review and customize auto-generated configs
+5. Validate in non-production environment first
 
 ---
 
