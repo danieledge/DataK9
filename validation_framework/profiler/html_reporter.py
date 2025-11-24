@@ -234,9 +234,9 @@ class ProfileHTMLReporter:
         .column-card {{
             background: #2d2d44;
             border-radius: 8px;
-            padding: 12px;
             border: 1px solid #4a5568;
             transition: all 0.2s;
+            overflow: hidden;
         }}
 
         .column-card:hover {{
@@ -244,27 +244,105 @@ class ProfileHTMLReporter:
             box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
         }}
 
+        .column-card.expanded {{
+            border-color: #667eea;
+        }}
+
+        /* Collapsible Column Header - Shows summary */
         .column-header {{
             display: flex;
-            justify-content: space-between;
             align-items: center;
-            margin-bottom: 8px;
-            padding-bottom: 8px;
-            border-bottom: 1px solid #4a5568;
+            gap: 12px;
+            padding: 10px 12px;
+            cursor: pointer;
+            user-select: none;
+            transition: background 0.2s;
+        }}
+
+        .column-header:hover {{
+            background: rgba(102, 126, 234, 0.1);
+        }}
+
+        .column-header-main {{
+            flex: 1;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            min-width: 0;
         }}
 
         .column-name {{
-            font-size: 1.1em;
+            font-size: 1em;
             font-weight: 600;
             color: #ffffff;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }}
+
+        .column-summary {{
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }}
+
+        .expand-icon {{
+            color: #667eea;
+            font-size: 1.1em;
+            transition: transform 0.3s ease;
+            flex-shrink: 0;
+        }}
+
+        .expand-icon.expanded {{
+            transform: rotate(90deg);
         }}
 
         .type-badge {{
-            padding: 4px 10px;
-            border-radius: 4px;
-            font-size: 0.75em;
+            padding: 3px 8px;
+            border-radius: 3px;
+            font-size: 0.7em;
             font-weight: 600;
             text-transform: uppercase;
+            flex-shrink: 0;
+        }}
+
+        /* Info tags for features */
+        .info-tag {{
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 0.65em;
+            font-weight: 600;
+            text-transform: uppercase;
+            background: rgba(102, 126, 234, 0.2);
+            color: #a0aec0;
+            border: 1px solid rgba(102, 126, 234, 0.3);
+            flex-shrink: 0;
+        }}
+
+        .info-tag.semantic {{
+            background: rgba(139, 92, 246, 0.2);
+            color: #c4b5fd;
+            border-color: rgba(139, 92, 246, 0.3);
+        }}
+
+        .info-tag.pii {{
+            background: rgba(239, 68, 68, 0.2);
+            color: #fca5a5;
+            border-color: rgba(239, 68, 68, 0.3);
+        }}
+
+        .info-tag.temporal {{
+            background: rgba(16, 185, 129, 0.2);
+            color: #6ee7b7;
+            border-color: rgba(16, 185, 129, 0.3);
+        }}
+
+        /* Quick metric badges in header */
+        .quick-metric {{
+            font-size: 0.7em;
+            color: #a0aec0;
+            flex-shrink: 0;
         }}
 
         .type-known {{
@@ -283,6 +361,15 @@ class ProfileHTMLReporter:
         }}
 
         .column-content {{
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out, padding 0.3s ease-out;
+            padding: 0;
+        }}
+
+        .column-content.expanded {{
+            max-height: 5000px;
+            padding: 12px;
             display: flex;
             flex-direction: column;
             gap: 8px;
@@ -1376,6 +1463,23 @@ class ProfileHTMLReporter:
             }}
         }}
 
+        // Toggle column card expand/collapse
+        function toggleColumn(columnId) {{
+            const card = document.getElementById('column-' + columnId);
+            const content = card.querySelector('.column-content');
+            const icon = card.querySelector('.expand-icon');
+
+            if (content.classList.contains('expanded')) {{
+                content.classList.remove('expanded');
+                icon.classList.remove('expanded');
+                card.classList.remove('expanded');
+            }} else {{
+                content.classList.add('expanded');
+                icon.classList.add('expanded');
+                card.classList.add('expanded');
+            }}
+        }}
+
         // Copy validation YAML function
         function copyValidation(yamlId) {{
             const yamlText = document.getElementById(yamlId).textContent;
@@ -1577,15 +1681,39 @@ class ProfileHTMLReporter:
                     </div>
                 """
 
+            # Build info tags for special features
+            info_tags = []
+            if col.semantic_info and col.semantic_info.get('primary_tag') != 'unknown':
+                semantic_tag = col.semantic_info.get('primary_tag', 'unknown').replace('_', ' ').title()
+                info_tags.append(f'<span class="info-tag semantic">{semantic_tag}</span>')
+            if col.pii_info and col.pii_info.get('detected'):
+                info_tags.append('<span class="info-tag pii">PII</span>')
+            if col.temporal_analysis:
+                info_tags.append('<span class="info-tag temporal">TEMPORAL</span>')
+
+            info_tags_html = " ".join(info_tags)
+
+            # Get RAG status for header
+            rag_status, rag_class = self._get_rag_status(quality_score, 'general')
+
             html_parts.append(f"""
-                <div class="column-card">
-                    <div class="column-header">
-                        <div class="column-name">{col.name}</div>
-                        <div class="type-badge {type_badge_class}">
-                            {col.type_info.inferred_type}
+                <div class="column-card" id="column-{col.name.replace(' ', '-')}">
+                    <!-- Collapsible Header with Summary -->
+                    <div class="column-header" onclick="toggleColumn('{col.name.replace(' ', '-')}')">
+                        <span class="expand-icon">▶</span>
+                        <div class="column-header-main">
+                            <span class="column-name">{col.name}</span>
+                            <span class="type-badge {type_badge_class}">{col.type_info.inferred_type}</span>
+                        </div>
+                        <div class="column-summary">
+                            <span class="rag-badge {rag_class}">{quality_score:.0f}% {rag_status}</span>
+                            <span class="quick-metric">{col.statistics.null_percentage:.0f}% nulls</span>
+                            <span class="quick-metric">{col.statistics.unique_percentage:.0f}% unique</span>
+                            {info_tags_html}
                         </div>
                     </div>
 
+                    <!-- Expandable Content (Collapsed by Default) -->
                     <div class="column-content">
                         <!-- Compact Stats Grid -->
                         <div class="stats-grid">
