@@ -10,9 +10,8 @@ jsonschema>=4.17.0
 # Optional for very large datasets
 dask[dataframe]>=2023.5.0
 
-# Optional for bloom filter optimizations (10x faster duplicate detection)
-# Install with: pip install pybloom-live
-# pybloom-live>=4.0.0
+# Bloom filter optimizations (10x faster duplicate detection)
+pybloom-live>=4.0.0
 
 # Progress bars
 tqdm>=4.65.0
