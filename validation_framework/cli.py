@@ -423,13 +423,14 @@ def version():
 @click.option('--json-output', '-j', help='Path for JSON profile output')
 @click.option('--config-output', '-c', help='Path to save generated validation config (default: {file_name}_validation_{timestamp}.yaml)')
 @click.option('--chunk-size', type=int, default=None, help='Number of rows per chunk (default: auto-calculate based on available memory)')
+@click.option('--sample', '-s', type=int, default=None, help='Profile only the first N rows (useful for quick analysis of large files)')
 @click.option('--log-level', type=click.Choice(['DEBUG', 'INFO', 'WARNING', 'ERROR'], case_sensitive=False),
               default='WARNING', help='Logging level')
 @click.option('--disable-temporal', is_flag=True, help='Disable temporal analysis for datetime columns')
 @click.option('--disable-pii', is_flag=True, help='Disable PII detection with privacy risk scoring')
 @click.option('--disable-correlation', is_flag=True, help='Disable enhanced multi-method correlation analysis')
 @click.option('--disable-all-enhancements', is_flag=True, help='Disable all profiler enhancements (temporal, PII, correlation)')
-def profile(file_path, format, database, table, query, html_output, json_output, config_output, chunk_size, log_level,
+def profile(file_path, format, database, table, query, html_output, json_output, config_output, chunk_size, sample, log_level,
             disable_temporal, disable_pii, disable_correlation, disable_all_enhancements):
     """
     Profile a data file or database table to understand its structure and quality.
@@ -599,10 +600,14 @@ def profile(file_path, format, database, table, query, html_output, json_output,
                 click.echo("")  # Blank line
 
             # Create profiler and run analysis
-            click.echo(f"🔍 Profiling {file_path}...")
+            if sample:
+                click.echo(f"🔍 Profiling {file_path} (first {sample:,} rows)...")
+            else:
+                click.echo(f"🔍 Profiling {file_path}...")
             profile_result = profiler.profile_file(
                 file_path=file_path,
-                file_format=format
+                file_format=format,
+                sample_rows=sample
             )
 
         # Format file size

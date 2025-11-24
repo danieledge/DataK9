@@ -391,6 +391,7 @@ class DataProfiler:
         file_path: str,
         file_format: str = "csv",
         declared_schema: Optional[Dict[str, str]] = None,
+        sample_rows: Optional[int] = None,
         **loader_kwargs
     ) -> ProfileResult:
         """
@@ -400,6 +401,7 @@ class DataProfiler:
             file_path: Path to file to profile
             file_format: Format (csv, excel, json, parquet)
             declared_schema: Optional declared schema {column: type}
+            sample_rows: Optional limit - profile only the first N rows (useful for large files)
             **loader_kwargs: Additional arguments for data loader
 
         Returns:
@@ -491,6 +493,17 @@ class DataProfiler:
         # Process data in chunks
         chunk_processing_start = time.time()
         for chunk_idx, chunk in enumerate(loader.load()):
+            # Handle sampling: if we've already reached sample_rows, don't process more
+            if sample_rows and row_count >= sample_rows:
+                logger.debug(f"📊 Sample limit reached ({sample_rows:,} rows) - stopping chunk processing")
+                break
+
+            # If sampling and this chunk would exceed limit, truncate it
+            if sample_rows and (row_count + len(chunk)) > sample_rows:
+                rows_to_take = sample_rows - row_count
+                chunk = chunk.iloc[:rows_to_take]
+                logger.debug(f"📊 Final chunk truncated to {rows_to_take:,} rows to meet sample limit")
+
             row_count += len(chunk)
             logger.debug(f"📊 Processing chunk {chunk_idx + 1}/{total_chunks_str} ({len(chunk):,} rows) - Total: {row_count:,} rows")
 
