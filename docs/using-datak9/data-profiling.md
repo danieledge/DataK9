@@ -31,7 +31,8 @@ Data profiling provides comprehensive analysis of your datasets:
 - 🔍 **Schema Discovery** - Automatic type detection with confidence levels
 - ✅ **Quality Assessment** - Completeness, validity, uniqueness scores
 - 🎯 **Pattern Detection** - Common patterns in string data
-- 💡 **Validation Suggestions** - Recommended checks based on data
+- 🧠 **Semantic Understanding** - FIBO-based meaning detection (NEW!)
+- 💡 **Validation Suggestions** - Context-aware recommendations with FIBO intelligence
 - ⚙️ **Config Generation** - Ready-to-use YAML configuration
 
 ### When to Use Profiling
@@ -95,6 +96,8 @@ open customers_profile_report.html
 - Quality scores
 - Pattern analysis
 - Correlation matrices
+- **FIBO semantic understanding cards** (explains what each column means)
+- Industry-standard financial terminology
 
 **2. Auto-Generated YAML Config:**
 ```yaml
@@ -191,6 +194,42 @@ Processing Time: 3.2 seconds
 ### Column-Level Analysis
 
 For each column, DataK9 provides:
+
+#### Semantic Understanding (FIBO-Based)
+
+**NEW! Financial Intelligence:**
+- **Semantic tags** from FIBO (Financial Industry Business Ontology)
+- **Plain-language explanations** of what each column represents
+- **Context-aware validation suggestions** based on semantic meaning
+- **Industry-standard terminology** (e.g., "MonetaryAmount", "Currency", "Account")
+
+**Example:**
+```
+transaction_amount
+├── Semantic Tag: money.amount
+├── Confidence: 80%
+├── FIBO Class: fibo-fnd-acc-cur:MonetaryAmount
+├── Definition: A monetary measure, expressed in some currency
+├── Evidence:
+│   ├── Column name contains "amount"
+│   ├── All values are numeric
+│   └── All values ≥ 0 (monetary property)
+└── Suggested Validations:
+    ├── NonNegativeCheck (FIBO: money must be ≥ 0)
+    └── OutlierDetectionCheck
+```
+
+**FIBO Tags Available:**
+- `money.amount` - Monetary amounts and values
+- `money.currency` - Currency codes (USD, EUR, GBP)
+- `money.price` - Prices and rates
+- `banking.account` - Account identifiers
+- `banking.transaction` - Transaction records
+- `banking.payment` - Payment methods
+- `temporal.transaction_date` - Transaction timestamps
+- And 21 more semantic tags!
+
+**Learn More:** [FIBO Ontology](https://spec.edmcouncil.org/fibo/) (MIT License)
 
 #### Basic Statistics
 
@@ -388,6 +427,21 @@ Interactive table with all columns:
 
 For each column, an expandable panel with:
 
+**Semantic Understanding (NEW!):**
+```
+transaction_amount
+├── 🧠 SEMANTIC UNDERSTANDING
+│   ├── Primary Tag: money.amount
+│   ├── Confidence: 80% (HIGH)
+│   ├── All Tags: money.amount, numeric
+│   ├── Evidence:
+│   │   ├── Visions type: Integer
+│   │   ├── Column name pattern: "amount"
+│   │   └── Data property: All values ≥ 0
+│   └── FIBO Reference: fibo-fnd-acc-cur:MonetaryAmount
+│       "A monetary measure, expressed in some currency"
+```
+
 **Statistics:**
 ```
 customer_id (integer)
@@ -415,11 +469,17 @@ pending          700     7.0%
 
 **Validation Recommendations:**
 ```
-Suggested Validations:
+Suggested Validations (FIBO-Enhanced):
 ✓ UniqueKeyCheck (100% unique)
 ✓ MandatoryFieldCheck (0% null)
 ✓ RangeCheck (min: 1, max: 10000)
+✓ NonNegativeCheck (FIBO: money.amount must be ≥ 0)
 ```
+
+**FIBO Intelligence:**
+Recommendations marked with "FIBO:" are based on industry-standard financial
+semantics, providing context-aware validation rules that understand the
+**meaning** of your data, not just its type.
 
 #### 4. Data Quality Issues
 
@@ -484,6 +544,46 @@ Click to download the complete YAML file.
 DataK9 automatically suggests validations based on profiling results:
 
 ### Rules for Generation
+
+#### FIBO-Based Suggestions (NEW!)
+
+When semantic tagging is enabled, DataK9 generates intelligent validations based on **financial industry semantics**:
+
+**money.amount → NonNegativeCheck**
+```yaml
+- type: "RangeCheck"
+  severity: "ERROR"
+  params:
+    field: "transaction_amount"
+    min_value: 0  # FIBO: money.amount must be non-negative
+```
+
+**money.currency → CurrencyCodeCheck**
+```yaml
+- type: "RegexCheck"
+  severity: "ERROR"
+  params:
+    field: "currency_code"
+    pattern: "^[A-Z]{3}$"  # FIBO: ISO 4217 3-letter codes
+```
+
+**banking.payment → ValidValuesCheck**
+```yaml
+- type: "ValidValuesCheck"
+  severity: "ERROR"
+  params:
+    field: "payment_method"
+    valid_values: ["wire", "ach", "check", "card"]
+    # FIBO: Common payment instrument types
+```
+
+**Why FIBO Matters:**
+- Industry-standard terminology you can trust
+- Context-aware rules that understand data meaning
+- Validation suggestions aligned with financial best practices
+- MIT-licensed ontology maintained by EDM Council
+
+#### Pattern-Based Suggestions
 
 **EmptyFileCheck:**
 - Always generated
@@ -1277,12 +1377,18 @@ python3 -m validation_framework.cli profile <file_path>
 | `--sample-rows` | Sample N rows | `--sample-rows 100000` |
 | `--sample-percent` | Sample N% rows | `--sample-percent 10` |
 | `--chunk-size` | Rows per chunk | `--chunk-size 50000` |
+| `--enable-semantic-tagging` | Enable FIBO semantic analysis | `--enable-semantic-tagging` |
 
 ### Examples
 
 ```bash
 # Basic profiling
 python3 -m validation_framework.cli profile data.csv
+
+# With FIBO semantic tagging (recommended for financial data)
+python3 -m validation_framework.cli profile transactions.csv \
+  --enable-semantic-tagging \
+  -o profile.html
 
 # Custom output paths
 python3 -m validation_framework.cli profile data.csv \
@@ -1292,16 +1398,34 @@ python3 -m validation_framework.cli profile data.csv \
 # Explicit format
 python3 -m validation_framework.cli profile data.txt --format csv
 
-# Sample large file
+# Sample large file with semantic tagging
 python3 -m validation_framework.cli profile huge.parquet \
-  --sample-rows 1000000
+  --sample-rows 1000000 \
+  --enable-semantic-tagging
 
-# All outputs
-python3 -m validation_framework.cli profile data.csv \
+# All outputs with FIBO intelligence
+python3 -m validation_framework.cli profile financial_data.csv \
+  --enable-semantic-tagging \
   -o profile.html \
   -c validation.yaml \
   -j profile.json
 ```
+
+**💡 Tip:** Use `--enable-semantic-tagging` for financial datasets to get FIBO-based
+semantic understanding and context-aware validation suggestions!
+
+---
+
+## Example Reports
+
+**See It In Action:**
+
+View a live example report with FIBO semantic tagging:
+- **[Profiler Example with Semantic Tagging](../../examples/reports/profiler_example_with_semantic_tagging.html)**
+- Financial transaction data (100 rows)
+- FIBO-based semantic understanding
+- Context-aware validation suggestions
+- Industry-standard terminology
 
 ---
 
@@ -1313,7 +1437,12 @@ python3 -m validation_framework.cli profile data.csv \
 2. **[Validation Catalog](validation-catalog.md)** - Explore all 35+ validations
 3. **[Best Practices](best-practices.md)** - Production deployment guidance
 4. **[Reading Reports](reading-reports.md)** - Understanding validation results
+5. **[DEPENDENCIES.md](../for-developers/DEPENDENCIES.md)** - Licensing and FIBO attribution
 
 ---
 
-**🐕 Profile first, validate confidently - DataK9 guards with data-driven intelligence**
+**🐕 Profile first, validate confidently - DataK9 guards with FIBO-powered intelligence**
+
+**About FIBO:** DataK9 uses semantic concepts from FIBO (Financial Industry Business
+Ontology), an industry-standard maintained by the EDM Council under the MIT License.
+Learn more at https://spec.edmcouncil.org/fibo/
