@@ -4898,7 +4898,13 @@ files:
                                             <button class="validation-action-btn duplicate-btn"
                                                     onclick="event.stopPropagation(); app.duplicateValidation(${fileIndex}, ${valIndex})"
                                                     title="Duplicate validation">
-                                                📋
+                                                📋 Copy
+                                            </button>
+                                            <button class="validation-action-btn delete-btn"
+                                                    onclick="event.stopPropagation(); app.deleteValidationFromSidebar(${fileIndex}, ${valIndex})"
+                                                    title="Delete validation"
+                                                    style="color: var(--status-error);">
+                                                🗑️ Delete
                                             </button>
                                         </div>
                                     </div>
@@ -6576,6 +6582,47 @@ params:
                 if (confirm('Are you sure you want to delete this validation?')) {
                     file.validations.splice(this.selectedValidation, 1);
                     this.selectedValidation = null;
+                    console.log('After delete - Total validations:', file.validations.length);
+                    this.saveToLocalStorage();
+                    this.render();
+                }
+            },
+
+            /**
+             * Delete validation from sidebar action button
+             * Uses direct file and validation indices instead of selected state
+             */
+            deleteValidationFromSidebar(fileIndex, validationIndex) {
+                console.log('deleteValidationFromSidebar called:', {fileIndex, validationIndex});
+
+                if (fileIndex < 0 || fileIndex >= this.config.files.length) {
+                    console.error('Invalid file index:', fileIndex);
+                    return;
+                }
+
+                const file = this.config.files[fileIndex];
+                if (!file.validations || validationIndex < 0 || validationIndex >= file.validations.length) {
+                    console.error('Invalid validation index:', validationIndex);
+                    return;
+                }
+
+                const validation = file.validations[validationIndex];
+                const valDef = this.validationLibrary[validation.type];
+                const validationName = valDef ? valDef.name : validation.type;
+
+                console.log('Before delete - Total validations:', file.validations.length);
+
+                if (confirm(`Delete "${validationName}" validation?`)) {
+                    file.validations.splice(validationIndex, 1);
+
+                    // If the deleted validation was selected, clear selection
+                    if (this.selectedFile === fileIndex && this.selectedValidation === validationIndex) {
+                        this.selectedValidation = null;
+                    } else if (this.selectedFile === fileIndex && this.selectedValidation > validationIndex) {
+                        // Adjust selected index if it was after the deleted one
+                        this.selectedValidation--;
+                    }
+
                     console.log('After delete - Total validations:', file.validations.length);
                     this.saveToLocalStorage();
                     this.render();
