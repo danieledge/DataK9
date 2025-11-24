@@ -42,7 +42,7 @@ def cli():
 @click.option('--verbose/--quiet', '-v/-q', default=True, help='Verbose output')
 @click.option('--fail-on-warning', is_flag=True, help='Fail if warnings are found')
 @click.option('--log-level', type=click.Choice(['DEBUG', 'INFO', 'WARNING', 'ERROR'], case_sensitive=False),
-              default='INFO', help='Logging level')
+              default='WARNING', help='Logging level')
 @click.option('--log-file', type=click.Path(), help='Optional log file path')
 def validate(config_file, html_output, json_output, verbose, fail_on_warning, log_level, log_file):
     """
@@ -424,7 +424,7 @@ def version():
 @click.option('--config-output', '-c', help='Path to save generated validation config (default: {file_name}_validation_{timestamp}.yaml)')
 @click.option('--chunk-size', type=int, default=None, help='Number of rows per chunk (default: auto-calculate based on available memory)')
 @click.option('--log-level', type=click.Choice(['DEBUG', 'INFO', 'WARNING', 'ERROR'], case_sensitive=False),
-              default='INFO', help='Logging level')
+              default='WARNING', help='Logging level')
 @click.option('--disable-temporal', is_flag=True, help='Disable temporal analysis for datetime columns')
 @click.option('--disable-pii', is_flag=True, help='Disable PII detection with privacy risk scoring')
 @click.option('--disable-correlation', is_flag=True, help='Disable enhanced multi-method correlation analysis')
@@ -535,7 +535,7 @@ def profile(file_path, format, database, table, query, html_output, json_output,
             html_output = expander.expand(html_output, context)
             config_output = expander.expand(config_output, context)
 
-            click.echo(f"🗄️  Profiling database table: {table if table else 'custom query'}...")
+            click.echo(f"🔍 Profiling database: {table if table else 'query'}...")
 
             # Create database loader
             loader = LoaderFactory.create_database_loader(
@@ -545,12 +545,8 @@ def profile(file_path, format, database, table, query, html_output, json_output,
                 chunk_size=chunk_size
             )
 
-            # Get row count
+            # Get row count and load sample data
             row_count = loader.get_row_count()
-            click.echo(f"  • Detected {row_count:,} rows in {source_name}")
-
-            # Load sample data for profiling
-            click.echo(f"  • Loading sample data...")
             sample_chunk = next(loader.load())
 
             # Profile the sample
@@ -620,18 +616,13 @@ def profile(file_path, format, database, table, query, html_output, json_output,
         else:
             size_str = f"{size_bytes / (1024 * 1024 * 1024):.2f} GB"
 
-        click.echo(f"\n📊 Profile Summary:")
-        click.echo(f"  • File: {profile_result.file_name}")
-        click.echo(f"  • Size: {size_str}")
-        click.echo(f"  • Rows: {profile_result.row_count:,}")
-        click.echo(f"  • Columns: {profile_result.column_count}")
-        click.echo(f"  • Overall Quality Score: {profile_result.overall_quality_score:.1f}%")
-        click.echo(f"  • Processing Time: {profile_result.processing_time_seconds:.2f}s")
+        # Compact summary
+        click.echo(f"\n✓ Profile complete: {profile_result.row_count:,} rows × {profile_result.column_count} cols | Quality: {profile_result.overall_quality_score:.0f}% | {profile_result.processing_time_seconds:.1f}s")
 
         # Generate HTML report
         reporter = ProfileHTMLReporter()
         reporter.generate_report(profile_result, html_output)
-        click.echo(f"\n✅ HTML report generated: {html_output}")
+        click.echo(f"  → HTML: {html_output}")
 
         # Generate JSON output if requested
         if json_output:
@@ -642,22 +633,13 @@ def profile(file_path, format, database, table, query, html_output, json_output,
 
             with open(json_output, 'w') as f:
                 json.dump(profile_result.to_dict(), f, indent=2)
-            click.echo(f"✅ JSON output saved: {json_output}")
+            click.echo(f"  → JSON: {json_output}")
 
         # Save generated validation config
         if profile_result.generated_config_yaml:
             with open(config_output, 'w') as f:
                 f.write(profile_result.generated_config_yaml)
-            click.echo(f"✅ Validation config saved: {config_output}")
-            click.echo(f"\n💡 To run validations, use:")
-            click.echo(f"   {profile_result.generated_config_command}")
-
-        # Show top suggestions
-        if profile_result.suggested_validations:
-            click.echo(f"\n💡 Top Validation Suggestions:")
-            for sugg in profile_result.suggested_validations[:5]:
-                click.echo(f"  • {sugg.validation_type} [Recommended severity: {sugg.severity}]")
-                click.echo(f"    {sugg.reason}")
+            click.echo(f"  → Config: {config_output}")
 
         sys.exit(0)
 

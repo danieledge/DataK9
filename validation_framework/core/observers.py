@@ -172,14 +172,18 @@ class CLIProgressObserver(EngineObserver):
         from validation_framework.core.pretty_output import PrettyOutput
         self.po = PrettyOutput
 
+        # Track validation results for compact summary
+        self.current_file_passed = 0
+        self.current_file_failed = 0
+        self.current_file_total = 0
+
     def on_job_start(self, job_name: str, file_count: int) -> None:
-        """Display job start banner with logo and summary."""
+        """Display job start banner with compact summary."""
         if self.verbose:
-            self.po.logo()
-            self.po.header("VALIDATION JOB")
-            self.po.key_value("Job Name", job_name, indent=2)
-            self.po.key_value("Files", file_count, indent=2)
-            self.po.blank_line()
+            # Compact header without logo
+            print(f"\n{self.po.INFO}🐕 DataK9 - {job_name}{self.po.RESET}")
+            print(f"{self.po.DIM}{'━' * 60}{self.po.RESET}")
+            print(f"{self.po.INFO}📁 Processing {file_count} {'file' if file_count == 1 else 'files'}...{self.po.RESET}\n")
 
     def on_file_start(
         self,
@@ -187,12 +191,13 @@ class CLIProgressObserver(EngineObserver):
         file_path: str,
         validation_count: int
     ) -> None:
-        """Display file validation start."""
-        if self.verbose:
-            self.po.section(f"File: {file_name}")
-            self.po.key_value("Path", file_path, indent=2)
-            self.po.key_value("Validations", validation_count, indent=2)
-            self.po.blank_line()
+        """Reset validation counters for this file."""
+        # Reset counters for new file
+        self.current_file_passed = 0
+        self.current_file_failed = 0
+        self.current_file_total = validation_count
+
+        # Don't print anything here - we'll show summary at on_file_complete
 
     def on_validation_start(
         self,
@@ -209,26 +214,40 @@ class CLIProgressObserver(EngineObserver):
         validation_type: str,
         result: ValidationResult
     ) -> None:
-        """Display validation result (pass/fail indicator)."""
-        if self.verbose:
-            if result.passed:
-                print(f"  {self.po.SUCCESS}{self.po.CHECK} {validation_type}: PASS{self.po.RESET}")
-            else:
-                print(f"  {self.po.ERROR}{self.po.CROSS} {validation_type}: FAIL ({result.failed_count} failures){self.po.RESET}")
+        """Track validation result silently."""
+        # Track results for file summary (don't print individual validations)
+        if result.passed:
+            self.current_file_passed += 1
+        else:
+            self.current_file_failed += 1
 
     def on_file_complete(self, report: FileValidationReport) -> None:
-        """Display file summary."""
+        """Display compact one-line file summary."""
         if self.verbose:
-            self.po.blank_line()
-            self.po.info(f"File '{report.file_name}' completed: {report.status}")
-            self.po.blank_line()
+            # Status icon and color
+            if report.status == Status.PASSED:
+                status_icon = "✓"
+                color = self.po.SUCCESS
+            elif report.error_count > 0:
+                status_icon = "✗"
+                color = self.po.ERROR
+            else:
+                status_icon = "⚠"
+                color = self.po.WARNING
+
+            # Compact one-line output
+            file_name_display = report.file_name[:35].ljust(35)  # Truncate and pad
+            checks_display = f"{self.current_file_passed}/{self.current_file_total}".rjust(8)
+            passed_display = f"✓{self.current_file_passed}".rjust(6)
+            failed_display = f"✗{self.current_file_failed}".rjust(6)
+            time_display = f"[{report.execution_time:.1f}s]".rjust(8)
+
+            print(f"{color}{status_icon}{self.po.RESET} {file_name_display} {checks_display} passed  {passed_display} {failed_display}  {self.po.DIM}{time_display}{self.po.RESET}")
 
     def on_job_complete(self, report: ValidationReport) -> None:
-        """Display final job summary."""
+        """Display compact final summary."""
         if self.verbose:
-            self.po.header("VALIDATION SUMMARY")
-
-            # Create summary statistics
+            # Calculate totals
             total_validations = sum(
                 len(file_report.validation_results)
                 for file_report in report.file_reports
@@ -241,16 +260,15 @@ class CLIProgressObserver(EngineObserver):
 
             failed = total_validations - passed
 
-            summary_items = [
-                ("Files Processed", len(report.file_reports), self.po.INFO),
-                ("Total Validations", total_validations, self.po.INFO),
-                ("Passed", passed, self.po.SUCCESS),
-                ("Failed", failed, self.po.ERROR),
-                ("Status", report.overall_status.value, self.po.SUCCESS if report.overall_status == Status.PASSED else self.po.ERROR),
-                ("Duration", f"{report.duration_seconds:.2f}s", self.po.DIM)
-            ]
+            # Compact summary
+            print(f"\n{self.po.DIM}{'━' * 60}{self.po.RESET}")
 
-            self.po.summary_box("Results", summary_items)
+            if report.overall_status == Status.PASSED:
+                print(f"{self.po.SUCCESS}✅ PASSED{self.po.RESET} - {passed} of {total_validations} validations passed {self.po.DIM}({report.duration_seconds:.1f}s){self.po.RESET}")
+            elif report.overall_status == Status.WARNING:
+                print(f"{self.po.WARNING}⚠️  PASSED WITH WARNINGS{self.po.RESET} - {passed}/{total_validations} passed {self.po.DIM}({report.duration_seconds:.1f}s){self.po.RESET}")
+            else:
+                print(f"{self.po.ERROR}✗ FAILED{self.po.RESET} - {failed} of {total_validations} validations failed {self.po.DIM}({report.duration_seconds:.1f}s){self.po.RESET}")
 
     def on_error(self, error: Exception, context: Dict[str, Any]) -> None:
         """Display error message."""

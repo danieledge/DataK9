@@ -194,7 +194,7 @@ class DataProfiler:
             ProfileResult with comprehensive profile information
         """
         start_time = time.time()
-        logger.info(f"Starting profile of DataFrame: {name}")
+        logger.debug(f"Starting profile of DataFrame: {name}")
 
         row_count = len(df)
 
@@ -245,7 +245,7 @@ class DataProfiler:
 
         # Phase 1: Apply temporal analysis to datetime columns
         if self.enable_temporal_analysis:
-            logger.info("Running temporal analysis on datetime columns...")
+            logger.debug("Running temporal analysis on datetime columns...")
             for column in columns:
                 if column.name in datetime_data and len(datetime_data[column.name]) > 0:
                     try:
@@ -261,7 +261,7 @@ class DataProfiler:
         # Phase 1: Apply PII detection to all columns
         pii_columns = []
         if self.enable_pii_detection:
-            logger.info("Running PII detection on all columns...")
+            logger.debug("Running PII detection on all columns...")
             for column in columns:
                 if column.name in all_column_data and len(all_column_data[column.name]) > 0:
                     try:
@@ -277,12 +277,12 @@ class DataProfiler:
                     except Exception as e:
                         logger.warning(f"PII detection failed for column {column.name}: {e}")
             phase_timings['pii_detection'] = time.time() - pii_start
-            logger.info(f"⏱  PII detection completed in {phase_timings['pii_detection']:.2f}s")
+            logger.debug(f"⏱  PII detection completed in {phase_timings['pii_detection']:.2f}s")
 
         # Phase 2: Apply semantic tagging to all columns
         if self.enable_semantic_tagging:
             semantic_start = time.time()
-            logger.info("🧠 Running FIBO-based semantic tagging on all columns...")
+            logger.debug("🧠 Running FIBO-based semantic tagging on all columns...")
             for column in columns:
                 try:
                     # Get visions type from statistics (already computed)
@@ -305,7 +305,7 @@ class DataProfiler:
                     logger.warning(f"Semantic tagging failed for column {column.name}: {e}")
 
             phase_timings['semantic_tagging'] = time.time() - semantic_start
-            logger.info(f"⏱  Semantic tagging completed in {phase_timings['semantic_tagging']:.2f}s")
+            logger.debug(f"⏱  Semantic tagging completed in {phase_timings['semantic_tagging']:.2f}s")
 
         # Calculate correlations
         correlation_start = time.time()
@@ -316,7 +316,7 @@ class DataProfiler:
         enhanced_correlations = None
         if self.enable_enhanced_correlation and len(numeric_data) >= 2:
             enhanced_corr_start = time.time()
-            logger.info("Running enhanced correlation analysis...")
+            logger.debug("Running enhanced correlation analysis...")
             try:
                 enhanced_correlations = self.enhanced_correlation_analyzer.calculate_correlations_multi_method(
                     numeric_data,
@@ -335,21 +335,21 @@ class DataProfiler:
                         p_value=pair.get('p_value'),
                         is_significant=pair.get('is_significant')
                     ))
-                logger.info(f"Enhanced correlation analysis found {len(enhanced_correlations.get('correlation_pairs', []))} significant correlations")
+                logger.debug(f"Enhanced correlation analysis found {len(enhanced_correlations.get('correlation_pairs', []))} significant correlations")
             except Exception as e:
                 logger.warning(f"Enhanced correlation analysis failed: {e}")
 
         # Phase 1: Calculate dataset-level privacy risk
         dataset_privacy_risk = None
         if self.enable_pii_detection and pii_columns:
-            logger.info("Calculating dataset-level privacy risk...")
+            logger.debug("Calculating dataset-level privacy risk...")
             try:
                 dataset_privacy_risk = self.pii_detector.calculate_dataset_privacy_risk(
                     pii_columns=pii_columns,
                     total_columns=len(columns),
                     total_rows=row_count
                 )
-                logger.info(f"Dataset privacy risk: {dataset_privacy_risk.get('risk_level', 'unknown').upper()} ({dataset_privacy_risk.get('risk_score', 0)}/100)")
+                logger.debug(f"Dataset privacy risk: {dataset_privacy_risk.get('risk_level', 'unknown').upper()} ({dataset_privacy_risk.get('risk_score', 0)}/100)")
             except Exception as e:
                 logger.warning(f"Dataset privacy risk calculation failed: {e}")
 
@@ -365,7 +365,7 @@ class DataProfiler:
         )
 
         processing_time = time.time() - start_time
-        logger.info(f"Profile completed in {processing_time:.2f} seconds")
+        logger.debug(f"Profile completed in {processing_time:.2f} seconds")
 
         return ProfileResult(
             file_name=f"{name} (DataFrame)",
@@ -406,7 +406,7 @@ class DataProfiler:
             ProfileResult with comprehensive profile information
         """
         start_time = time.time()
-        logger.info(f"Starting profile of {file_path}")
+        logger.debug(f"Starting profile of {file_path}")
 
         # Track timing for each phase
         phase_timings = {}
@@ -432,10 +432,10 @@ class DataProfiler:
                 validation_complexity="simple"
             )
             chunk_size = calc_result['recommended_chunk_size']
-            logger.info(f"🎯 Auto-calculated chunk size: {chunk_size:,} rows (based on {calc_result['available_memory_mb']:,}MB available memory)")
-            logger.info(f"   Estimated chunks: {calc_result['estimated_chunks']:,} | Peak memory: ~{calc_result['estimated_memory_mb']:,}MB")
+            logger.debug(f"🎯 Auto-calculated chunk size: {chunk_size:,} rows (based on {calc_result['available_memory_mb']:,}MB available memory)")
+            logger.debug(f"   Estimated chunks: {calc_result['estimated_chunks']:,} | Peak memory: ~{calc_result['estimated_memory_mb']:,}MB")
         else:
-            logger.info(f"📊 Using specified chunk size: {chunk_size:,} rows")
+            logger.debug(f"📊 Using specified chunk size: {chunk_size:,} rows")
 
         # Load data iterator
         loader = LoaderFactory.create_loader(
@@ -475,14 +475,14 @@ class DataProfiler:
                     if file_metadata.get('num_row_groups'):
                         info_parts.append(f"{file_metadata['num_row_groups']} row groups")
 
-                    logger.info(f"📋 File: {', '.join(info_parts)} ({total_chunks} chunks of {self.chunk_size:,})")
+                    logger.debug(f"📋 File: {', '.join(info_parts)} ({total_chunks} chunks of {self.chunk_size:,})")
             elif hasattr(loader, 'get_row_count'):
                 # Fallback to just row count
                 total_rows = loader.get_row_count()
                 import math
                 total_chunks = math.ceil(total_rows / self.chunk_size)
                 total_chunks_str = str(total_chunks)
-                logger.info(f"📋 File contains {total_rows:,} rows ({total_chunks} chunks of {self.chunk_size:,})")
+                logger.debug(f"📋 File contains {total_rows:,} rows ({total_chunks} chunks of {self.chunk_size:,})")
         except Exception as e:
             # If we can't get metadata, just show "?" - not a critical failure
             logger.debug(f"Could not read file metadata: {e}")
@@ -492,8 +492,7 @@ class DataProfiler:
         chunk_processing_start = time.time()
         for chunk_idx, chunk in enumerate(loader.load()):
             row_count += len(chunk)
-            logger.info(f"📊 Processing chunk {chunk_idx + 1}/{total_chunks_str} ({len(chunk):,} rows) - Total: {row_count:,} rows")
-            logger.debug(f"Processing chunk {chunk_idx}, rows: {len(chunk)}")
+            logger.debug(f"📊 Processing chunk {chunk_idx + 1}/{total_chunks_str} ({len(chunk):,} rows) - Total: {row_count:,} rows")
 
             # Memory safety check - will raise MemoryError if critical threshold exceeded
             self._check_memory_safety(chunk_idx, row_count)
@@ -534,7 +533,7 @@ class DataProfiler:
                             # Log when we hit the limit
                             if col not in sampling_triggered:
                                 sampling_triggered[col] = row_count
-                                logger.info(f"💾 Memory optimization: Column '{col}' sampling limit reached at {row_count:,} rows (using {MAX_CORRELATION_SAMPLES:,} samples for correlation)")
+                                logger.debug(f"💾 Memory optimization: Column '{col}' sampling limit reached at {row_count:,} rows (using {MAX_CORRELATION_SAMPLES:,} samples for correlation)")
                         else:
                             # Only convert to list when size is small (under limit)
                             numeric_data[col].extend(numeric_values.tolist())
@@ -577,7 +576,7 @@ class DataProfiler:
                                             datetime_data[col].extend(random.sample(dt_list, samples_needed))
                                             if col not in sampling_triggered:
                                                 sampling_triggered[col] = row_count
-                                                logger.info(f"💾 Memory optimization: Column '{col}' temporal sampling limit reached at {row_count:,} rows (using {MAX_TEMPORAL_SAMPLES:,} samples)")
+                                                logger.debug(f"💾 Memory optimization: Column '{col}' temporal sampling limit reached at {row_count:,} rows (using {MAX_TEMPORAL_SAMPLES:,} samples)")
                                         else:
                                             datetime_data[col].extend(dt_list)
                         except Exception:
@@ -593,7 +592,7 @@ class DataProfiler:
 
         # Record chunk processing time
         phase_timings['chunk_processing'] = time.time() - chunk_processing_start
-        logger.info(f"⏱  Chunk processing completed in {phase_timings['chunk_processing']:.2f}s")
+        logger.debug(f"⏱  Chunk processing completed in {phase_timings['chunk_processing']:.2f}s")
 
         # Explicit garbage collection after each chunk to prevent memory buildup
         # This is critical for large files with many chunks
@@ -602,9 +601,9 @@ class DataProfiler:
 
         # Log memory optimization summary
         if sampling_triggered:
-            logger.info(f"💾 Memory optimization: Sampled {len(sampling_triggered)} numeric columns (max {MAX_CORRELATION_SAMPLES:,} values each)")
+            logger.debug(f"💾 Memory optimization: Sampled {len(sampling_triggered)} numeric columns (max {MAX_CORRELATION_SAMPLES:,} values each)")
             total_samples = sum(len(values) for values in numeric_data.values())
-            logger.info(f"💾 Total correlation samples in memory: {total_samples:,} values (vs {row_count:,} total rows)")
+            logger.debug(f"💾 Total correlation samples in memory: {total_samples:,} values (vs {row_count:,} total rows)")
 
         # Finalize column profiles
         finalize_start = time.time()
@@ -613,12 +612,12 @@ class DataProfiler:
             column_profile = self._finalize_column_profile(col_name, profile_data, row_count)
             columns.append(column_profile)
         phase_timings['finalize_profiles'] = time.time() - finalize_start
-        logger.info(f"⏱  Profile finalization completed in {phase_timings['finalize_profiles']:.2f}s")
+        logger.debug(f"⏱  Profile finalization completed in {phase_timings['finalize_profiles']:.2f}s")
 
         # Phase 1: Apply temporal analysis to datetime columns
         if self.enable_temporal_analysis:
             temporal_start = time.time()
-            logger.info("Running temporal analysis on datetime columns...")
+            logger.debug("Running temporal analysis on datetime columns...")
             for column in columns:
                 if column.name in datetime_data and len(datetime_data[column.name]) > 0:
                     try:
@@ -631,13 +630,13 @@ class DataProfiler:
                     except Exception as e:
                         logger.warning(f"Temporal analysis failed for column {column.name}: {e}")
             phase_timings['temporal_analysis'] = time.time() - temporal_start
-            logger.info(f"⏱  Temporal analysis completed in {phase_timings['temporal_analysis']:.2f}s")
+            logger.debug(f"⏱  Temporal analysis completed in {phase_timings['temporal_analysis']:.2f}s")
 
         # Phase 1: Apply PII detection to all columns
         pii_columns = []
         if self.enable_pii_detection:
             pii_start = time.time()
-            logger.info("Running PII detection on all columns...")
+            logger.debug("Running PII detection on all columns...")
             for column in columns:
                 if column.name in all_column_data and len(all_column_data[column.name]) > 0:
                     try:
@@ -653,12 +652,12 @@ class DataProfiler:
                     except Exception as e:
                         logger.warning(f"PII detection failed for column {column.name}: {e}")
             phase_timings['pii_detection'] = time.time() - pii_start
-            logger.info(f"⏱  PII detection completed in {phase_timings['pii_detection']:.2f}s")
+            logger.debug(f"⏱  PII detection completed in {phase_timings['pii_detection']:.2f}s")
 
         # Phase 2: Apply semantic tagging to all columns
         if self.enable_semantic_tagging:
             semantic_start = time.time()
-            logger.info("🧠 Running FIBO-based semantic tagging on all columns...")
+            logger.debug("🧠 Running FIBO-based semantic tagging on all columns...")
             for column in columns:
                 try:
                     # Get visions type from statistics (already computed)
@@ -681,7 +680,7 @@ class DataProfiler:
                     logger.warning(f"Semantic tagging failed for column {column.name}: {e}")
 
             phase_timings['semantic_tagging'] = time.time() - semantic_start
-            logger.info(f"⏱  Semantic tagging completed in {phase_timings['semantic_tagging']:.2f}s")
+            logger.debug(f"⏱  Semantic tagging completed in {phase_timings['semantic_tagging']:.2f}s")
 
         # Calculate correlations
         correlation_start = time.time()
@@ -692,7 +691,7 @@ class DataProfiler:
         enhanced_correlations = None
         if self.enable_enhanced_correlation and len(numeric_data) >= 2:
             enhanced_corr_start = time.time()
-            logger.info("Running enhanced correlation analysis...")
+            logger.debug("Running enhanced correlation analysis...")
             try:
                 enhanced_correlations = self.enhanced_correlation_analyzer.calculate_correlations_multi_method(
                     numeric_data,
@@ -711,21 +710,21 @@ class DataProfiler:
                         p_value=pair.get('p_value'),
                         is_significant=pair.get('is_significant')
                     ))
-                logger.info(f"Enhanced correlation analysis found {len(enhanced_correlations.get('correlation_pairs', []))} significant correlations")
+                logger.debug(f"Enhanced correlation analysis found {len(enhanced_correlations.get('correlation_pairs', []))} significant correlations")
             except Exception as e:
                 logger.warning(f"Enhanced correlation analysis failed: {e}")
 
         # Phase 1: Calculate dataset-level privacy risk
         dataset_privacy_risk = None
         if self.enable_pii_detection and pii_columns:
-            logger.info("Calculating dataset-level privacy risk...")
+            logger.debug("Calculating dataset-level privacy risk...")
             try:
                 dataset_privacy_risk = self.pii_detector.calculate_dataset_privacy_risk(
                     pii_columns=pii_columns,
                     total_columns=len(columns),
                     total_rows=row_count
                 )
-                logger.info(f"Dataset privacy risk: {dataset_privacy_risk.get('risk_level', 'unknown').upper()} ({dataset_privacy_risk.get('risk_score', 0)}/100)")
+                logger.debug(f"Dataset privacy risk: {dataset_privacy_risk.get('risk_level', 'unknown').upper()} ({dataset_privacy_risk.get('risk_score', 0)}/100)")
             except Exception as e:
                 logger.warning(f"Dataset privacy risk calculation failed: {e}")
 
@@ -747,13 +746,13 @@ class DataProfiler:
         phase_timings['generate_config'] = time.time() - config_start
 
         processing_time = time.time() - start_time
-        logger.info(f"⏱  Profile completed in {processing_time:.2f} seconds")
+        logger.debug(f"⏱  Profile completed in {processing_time:.2f} seconds")
 
         # Log timing breakdown
-        logger.info("⏱  Timing breakdown:")
+        logger.debug("⏱  Timing breakdown:")
         for phase, duration in phase_timings.items():
             percentage = (duration / processing_time * 100) if processing_time > 0 else 0
-            logger.info(f"   {phase}: {duration:.2f}s ({percentage:.1f}%)")
+            logger.debug(f"   {phase}: {duration:.2f}s ({percentage:.1f}%)")
 
         return ProfileResult(
             file_name=file_name,
@@ -1478,7 +1477,7 @@ class DataProfiler:
             if rule_type == "NonNegativeCheck":
                 suggestions.append(ValidationSuggestion(
                     validation_type="RangeCheck",
-                    severity="ERROR",
+                    severity="WARNING",
                     params={
                         "field": col.name,
                         "min_value": 0
@@ -1492,7 +1491,7 @@ class DataProfiler:
                 if col.quality.completeness > 95:
                     suggestions.append(ValidationSuggestion(
                         validation_type="MandatoryFieldCheck",
-                        severity="ERROR",
+                        severity="WARNING",
                         params={
                             "fields": [col.name]
                         },
@@ -1505,7 +1504,7 @@ class DataProfiler:
                 if col.statistics.cardinality > 0.90:
                     suggestions.append(ValidationSuggestion(
                         validation_type="UniqueKeyCheck",
-                        severity="ERROR",
+                        severity="WARNING",
                         params={
                             "fields": [col.name]
                         },
@@ -1521,7 +1520,7 @@ class DataProfiler:
                     if min_len is not None and max_len is not None:
                         suggestions.append(ValidationSuggestion(
                             validation_type="StringLengthCheck",
-                            severity="ERROR",
+                            severity="WARNING",
                             params={
                                 "field": col.name,
                                 "min_length": min_len,
@@ -1539,7 +1538,7 @@ class DataProfiler:
                     if valid_values:
                         suggestions.append(ValidationSuggestion(
                             validation_type="ValidValuesCheck",
-                            severity="ERROR",
+                            severity="WARNING",
                             params={
                                 "field": col.name,
                                 "valid_values": valid_values
@@ -1566,7 +1565,7 @@ class DataProfiler:
                 # For temporal fields
                 suggestions.append(ValidationSuggestion(
                     validation_type="DateFormatCheck",
-                    severity="ERROR",
+                    severity="WARNING",
                     params={
                         "field": col.name
                     },
@@ -1629,7 +1628,7 @@ class DataProfiler:
         if semantic_type == 'email':
             suggestions.append(ValidationSuggestion(
                 validation_type="RegexCheck",
-                severity="ERROR",
+                severity="WARNING",
                 params={
                     "field": col.name,
                     "pattern": r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
@@ -1642,7 +1641,7 @@ class DataProfiler:
         elif semantic_type == 'url':
             suggestions.append(ValidationSuggestion(
                 validation_type="RegexCheck",
-                severity="ERROR",
+                severity="WARNING",
                 params={
                     "field": col.name,
                     "pattern": r'^https?://[^\s/$.?#].[^\s]*$'
@@ -1655,7 +1654,7 @@ class DataProfiler:
         elif semantic_type == 'uuid':
             suggestions.append(ValidationSuggestion(
                 validation_type="RegexCheck",
-                severity="ERROR",
+                severity="WARNING",
                 params={
                     "field": col.name,
                     "pattern": r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
@@ -1668,7 +1667,7 @@ class DataProfiler:
         elif semantic_type == 'ip_address':
             suggestions.append(ValidationSuggestion(
                 validation_type="RegexCheck",
-                severity="ERROR",
+                severity="WARNING",
                 params={
                     "field": col.name,
                     "pattern": r'^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$'
@@ -1696,7 +1695,7 @@ class DataProfiler:
             if col.statistics.min_value is not None:
                 suggestions.append(ValidationSuggestion(
                     validation_type="RangeCheck",
-                    severity="ERROR",
+                    severity="WARNING",
                     params={
                         "field": col.name,
                         "min_value": 0  # Amounts should be non-negative
@@ -1710,7 +1709,7 @@ class DataProfiler:
         elif semantic_type == 'count':
             suggestions.append(ValidationSuggestion(
                 validation_type="RangeCheck",
-                severity="ERROR",
+                severity="WARNING",
                 params={
                     "field": col.name,
                     "min_value": 0  # Counts must be non-negative
@@ -1749,7 +1748,7 @@ class DataProfiler:
         if date_range and date_range.get('start') and date_range.get('end'):
             suggestions.append(ValidationSuggestion(
                 validation_type="DateRangeCheck",
-                severity="ERROR",
+                severity="WARNING",
                 params={
                     "field": col.name,
                     "min_date": date_range['start'],
@@ -1865,7 +1864,7 @@ class DataProfiler:
             if min_len == max_len and min_len > 0:
                 suggestions.append(ValidationSuggestion(
                     validation_type="StringLengthCheck",
-                    severity="ERROR",
+                    severity="WARNING",
                     params={
                         "field": col.name,
                         "min_length": min_len,
@@ -1910,7 +1909,7 @@ class DataProfiler:
 
             suggestions.append(ValidationSuggestion(
                 validation_type="RowCountRangeCheck",
-                severity="WARNING",
+                severity="ERROR",
                 params={
                     "min_rows": max(1, int(row_count * 0.5)),
                     "max_rows": int(row_count * 2)
@@ -1954,7 +1953,7 @@ class DataProfiler:
                 if valid_values:
                     suggestions.append(ValidationSuggestion(
                         validation_type="ValidValuesCheck",
-                        severity="ERROR",
+                        severity="WARNING",
                         params={
                             "field": col.name,
                             "valid_values": valid_values
@@ -1989,7 +1988,7 @@ class DataProfiler:
                 if semantic_type not in exclude_types and not is_measurement_field and not is_temporal:
                     suggestions.append(ValidationSuggestion(
                         validation_type="UniqueKeyCheck",
-                        severity="ERROR",
+                        severity="WARNING",
                         params={
                             "fields": [col.name]
                         },
@@ -2007,7 +2006,7 @@ class DataProfiler:
                 if date_format:
                     suggestions.append(ValidationSuggestion(
                         validation_type="DateFormatCheck",
-                        severity="ERROR",
+                        severity="WARNING",
                         params={
                             "field": col.name,
                             "format": date_format
@@ -2039,18 +2038,15 @@ class DataProfiler:
                         # Adjust confidence based on match percentage
                         adjusted_confidence = pattern_match.confidence * 100
 
-                        # Use ERROR severity only for high confidence (80%+)
-                        # Use WARNING severity for medium confidence (50-80%)
-                        if adjusted_confidence >= 80:
-                            severity = "ERROR"
-                        elif adjusted_confidence >= 50:
+                        # All field-level semantic pattern checks use WARNING severity
+                        if adjusted_confidence >= 50:
                             severity = "WARNING"
                         else:
                             continue  # Skip suggestions below 50% confidence
 
                         suggestions.append(ValidationSuggestion(
                             validation_type=pattern_suggestion['validation_type'],
-                            severity=severity,  # Dynamic severity based on confidence
+                            severity=severity,
                             params={
                                 **pattern_suggestion['params'],
                                 'field': col.name
@@ -2087,7 +2083,7 @@ class DataProfiler:
         if mandatory_fields:
             suggestions.append(ValidationSuggestion(
                 validation_type="MandatoryFieldCheck",
-                severity="ERROR",
+                severity="WARNING",
                 params={
                     "fields": mandatory_fields
                 },
