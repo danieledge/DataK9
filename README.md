@@ -19,6 +19,8 @@
 
 ---
 
+<a id="commercial-use"></a>
+
 ## ✅ Commercial Use
 
 **DataK9 is 100% free for commercial use without restrictions.**
