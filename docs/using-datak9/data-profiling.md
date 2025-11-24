@@ -657,6 +657,271 @@ consistency = values_matching_pattern / non_null_values * 100
 
 ## How Profiling Works
 
+### Profiler Execution Steps
+
+DataK9's profiler follows a systematic multi-stage process to analyze your data efficiently and accurately:
+
+#### Stage 1: Intelligent Chunk Size Determination
+
+Before processing begins, the profiler **automatically determines the optimal chunk size** based on your data characteristics:
+
+```python
+# DataK9 analyzes:
+- File size (MB/GB)
+- Available system memory
+- Column count (more columns = smaller chunks)
+- Data type mix (complex types need more memory)
+
+# Result: Optimal chunk size (typically 10K-100K rows)
+# - Small files: Process entire file
+# - Medium files (1-100 MB): 50K row chunks
+# - Large files (100MB-10GB): 25K row chunks
+# - Huge files (>10GB): 10K row chunks
+```
+
+**Why This Matters:**
+- Prevents out-of-memory errors on large files
+- Maximizes performance on small files
+- Adapts to your system's capabilities
+- No manual tuning required
+
+#### Stage 2: Initial Schema Detection
+
+First pass through the data to understand structure:
+
+```
+🔍 Loading and Inspecting Data...
+├── Detect file format (CSV, Excel, Parquet, JSON)
+├── Read column names from header
+├── Count total rows (if possible without full scan)
+├── Sample first 1000 rows for type inference
+└── Initialize statistics collectors for each column
+```
+
+**Output:** Schema structure with preliminary type guesses
+
+#### Stage 3: Chunked Statistical Analysis
+
+Process data in memory-efficient chunks:
+
+```
+📊 Processing Chunks (50,000 rows per chunk)...
+├── Chunk 1/20
+│   ├── Update null counts
+│   ├── Update unique value sets
+│   ├── Collect min/max values
+│   ├── Accumulate for mean calculation
+│   └── Track value frequencies
+├── Chunk 2/20
+│   └── ... (same as chunk 1)
+├── ...
+└── Chunk 20/20
+    └── ... (finalize aggregations)
+```
+
+**Key Point:** Only ONE chunk is in memory at a time. After processing, chunk data is discarded and next chunk is loaded.
+
+**Memory Safety:** Even a 200GB file uses only ~400MB RAM during profiling.
+
+#### Stage 4: Type Inference and Pattern Detection
+
+After collecting statistics, analyze patterns:
+
+```
+🧠 Inferring Types and Detecting Patterns...
+├── For each column:
+│   ├── Apply pattern matchers (email, phone, URL, date)
+│   ├── Calculate type confidence scores
+│   ├── Detect format consistency (email: 98.5% match)
+│   ├── Flag PII if detected (with safeguards)
+│   └── Classify as integer, float, string, date, etc.
+└── Generate type inference report
+```
+
+**Smart Detection:**
+- 30% threshold prevents false PII positives
+- Column name filtering (e.g., 'id' won't be flagged as PII)
+- Multiple evidence sources combined for accuracy
+
+#### Stage 5: FIBO Semantic Tagging (NEW!)
+
+Understand the **meaning** of each column using Financial Industry Business Ontology:
+
+```
+🏦 FIBO Semantic Analysis...
+├── For each column:
+│   ├── Stage 1: Map from Visions type detection
+│   │   └── (e.g., "Integer_EWMA_1" → numeric tag)
+│   ├── Stage 2: Match against FIBO taxonomy patterns
+│   │   ├── Column name: "transaction_amount" → money.amount
+│   │   ├── Column name: "currency_code" → money.currency
+│   │   └── Column name: "payment_method" → banking.payment
+│   ├── Stage 3: Refine with data properties
+│   │   ├── All values ≥ 0 → confirms money.amount
+│   │   └── 3-letter codes → confirms money.currency
+│   └── Assign confidence score (0-100%)
+└── Tag columns with semantic meaning
+
+Example Results:
+├── transaction_amount → money.amount (80% confidence)
+├── currency_code → money.currency (100% confidence)
+└── payment_method → banking.payment (100% confidence)
+```
+
+**FIBO Benefits:**
+- Industry-standard financial semantics (MIT license)
+- Context-aware validation suggestions
+- Plain-language explanations of what each column represents
+- 28 semantic tags across 8 categories
+
+#### Stage 6: Quality Scoring
+
+Calculate comprehensive quality metrics:
+
+```
+✅ Calculating Quality Metrics...
+├── For each column:
+│   ├── Completeness = (non-null / total) × 100
+│   ├── Validity = (matching_type / non-null) × 100
+│   ├── Uniqueness = (unique / total) × 100
+│   ├── Consistency = (matching_pattern / non-null) × 100
+│   └── Column Quality = avg(completeness, validity, uniqueness, consistency)
+└── Overall Quality = avg(all column quality scores)
+```
+
+**Quality Score Example:**
+```
+customer_id:
+├── Completeness: 100% (no nulls)
+├── Validity: 100% (all integers)
+├── Uniqueness: 100% (all unique)
+├── Consistency: 100% (uniform format)
+└── Quality: 100% ✅ EXCELLENT
+```
+
+#### Stage 7: Correlation Analysis
+
+For numeric columns, discover relationships:
+
+```
+🔗 Analyzing Correlations...
+├── Calculate Pearson correlation matrix
+├── Identify strong correlations (|r| > 0.7)
+├── Detect functional dependencies
+│   ├── Check cardinality ratios
+│   ├── Require 98% consistency
+│   └── Apply statistical significance thresholds
+└── Generate cross-field validation suggestions
+```
+
+**False Positive Prevention:**
+- Cardinality check prevents coincidental 1:1 mappings
+- Minimum 5 occurrences per source value
+- Small sample warnings (<100 rows)
+
+#### Stage 8: Intelligent Validation Suggestions
+
+Generate context-aware validation rules:
+
+```
+💡 Generating Validation Suggestions...
+├── FIBO-based suggestions (NEW!)
+│   ├── money.amount → NonNegativeCheck
+│   ├── money.currency → CurrencyCodeCheck (3-letter ISO)
+│   └── banking.payment → ValidValuesCheck (wire/ach/card)
+├── Statistical suggestions
+│   ├── 100% unique → UniqueKeyCheck
+│   ├── Narrow range → RangeCheck
+│   └── Outliers detected → OutlierDetectionCheck
+├── Pattern-based suggestions
+│   ├── Email pattern → RegexCheck
+│   ├── Date format → DateFormatCheck
+│   └── Phone pattern → RegexCheck
+└── Completeness-based suggestions
+    ├── >95% complete → MandatoryFieldCheck
+    └── <80% complete → Flag quality issue
+```
+
+**Smart Suggestions:**
+- Severity recommendations (not error badges!)
+- Confidence scores (0-100%)
+- YAML snippets ready to copy
+- Linked to FIBO ontology classes
+
+#### Stage 9: Report Generation
+
+Create beautiful, interactive HTML report:
+
+```
+📄 Generating HTML Report...
+├── Executive summary with quality gauge
+├── Column summary table (sortable, filterable)
+├── Detailed statistics for each column
+├── FIBO semantic understanding cards (NEW!)
+│   ├── Primary tag with confidence
+│   ├── All semantic tags
+│   ├── Evidence used for classification
+│   └── FIBO ontology reference link
+├── Validation suggestions by category
+├── Correlation matrix visualization
+├── Auto-generated YAML configuration
+└── Export to HTML file
+```
+
+**View Example Report:** [profiler_example_with_semantic_tagging.html](../../examples/reports/profiler_example_with_semantic_tagging.html)
+
+#### Stage 10: Configuration Export
+
+Generate ready-to-use validation config:
+
+```yaml
+validation_job:
+  name: "Financial Transactions Validation"
+
+files:
+  - name: "transactions"
+    path: "data/transactions.csv"
+
+    validations:
+      # FIBO-based validation (auto-detected from semantic tag)
+      - type: "RangeCheck"
+        severity: "ERROR"
+        params:
+          field: "transaction_amount"
+          min_value: 0  # FIBO: money.amount must be non-negative
+
+      # Pattern-based validation
+      - type: "RegexCheck"
+        severity: "ERROR"
+        params:
+          field: "currency_code"
+          pattern: "^[A-Z]{3}$"  # ISO 4217 currency codes
+```
+
+### Performance Characteristics
+
+**Memory Usage:**
+- Constant memory footprint regardless of file size
+- Only one chunk loaded at a time
+- Tested: 5M rows (422MB) → +1.0% memory delta
+- No memory leaks detected
+
+**Processing Speed:**
+- ~17,500 rows/second (5M row test)
+- Faster with Parquet vs CSV
+- Scales linearly with row count
+- Semantic tagging adds <5% overhead
+
+**Real-World Example:**
+```
+Dataset: 5,000,000 rows × 10 columns (422 MB CSV)
+Time: 4.76 minutes
+Memory: 3.2% → 4.2% (+1.0% delta)
+Tagged: 4/10 columns with FIBO semantics
+Suggestions: 23 validations (7 FIBO-based)
+Status: ✅ NO MEMORY LEAKS
+```
+
 ### Statistical Analysis Algorithms
 
 DataK9's profiler uses advanced statistical methods to analyze your data deeply:

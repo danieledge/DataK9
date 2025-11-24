@@ -504,21 +504,11 @@ class ProfileHTMLReporter:
             font-size: 1.1em;
         }}
 
-        .severity-badge {{
-            padding: 4px 10px;
-            border-radius: 4px;
-            font-size: 0.8em;
-            font-weight: bold;
-        }}
-
-        .severity-error {{
-            background: #f56565;
-            color: white;
-        }}
-
-        .severity-warning {{
-            background: #ed8936;
-            color: white;
+        .severity-text {{
+            color: #cbd5e0;
+            font-size: 0.85em;
+            font-weight: normal;
+            font-style: italic;
         }}
 
         /* Validation Coverage Card */
@@ -631,20 +621,6 @@ class ProfileHTMLReporter:
             transform: rotate(180deg);
         }}
 
-        /* New Validation Badge */
-        .new-badge {{
-            background: linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%);
-            color: white;
-            font-size: 0.6em;
-            padding: 3px 8px;
-            border-radius: 4px;
-            margin-left: 10px;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            display: inline-block;
-            vertical-align: middle;
-        }}
 
         /* Suggestion Actions */
         .suggestion-actions {{
@@ -1628,6 +1604,9 @@ class ProfileHTMLReporter:
                         </div>''' if col.quality.observations else ''}
                     </div>
 
+                    <!-- Phase 2: Semantic Understanding (FIBO) -->
+                    {self._generate_semantic_viz(col) if col.semantic_info and col.semantic_info.get('primary_tag') != 'unknown' else ''}
+
                     <!-- Phase 2: Temporal Analysis -->
                     {self._generate_temporal_viz(col) if col.temporal_analysis else ''}
 
@@ -1812,17 +1791,10 @@ class ProfileHTMLReporter:
         # Remove empty categories
         return {k: v for k, v in categories.items() if v['suggestions']}
 
-    def _is_new_validation_type(self, validation_type: str) -> bool:
-        """Check if validation type is newly added from intelligence enhancements."""
-        NEW_TYPES = {'DateRangeCheck', 'DateSequenceCheck', 'DateGapCheck',
-                     'OutlierDetectionCheck', 'StringLengthCheck'}
-        return validation_type in NEW_TYPES
-
     def _generate_coverage_summary(self, suggestions: List) -> str:
         """Generate validation coverage summary card."""
         total_suggestions = len(suggestions)
         unique_types = len(set(sugg.validation_type for sugg in suggestions))
-        new_suggestions = sum(1 for sugg in suggestions if self._is_new_validation_type(sugg.validation_type))
 
         # Estimate coverage (35 total validation types in framework)
         coverage_pct = min(100, (unique_types / 35.0) * 100)
@@ -1838,11 +1810,6 @@ class ProfileHTMLReporter:
                 <div class="metric">
                     <div class="metric-value">{unique_types}/35</div>
                     <div class="metric-label">Validation Types</div>
-                </div>
-                <div class="metric highlight-new">
-                    <div class="metric-value" style="color: #bb9af7;">+{new_suggestions}</div>
-                    <div class="metric-label">Intelligent Suggestions</div>
-                    <div class="metric-sub">Temporal, Statistical, Pattern</div>
                 </div>
                 <div class="metric">
                     <div class="metric-value" style="color: {'#10b981' if coverage_pct >= 40 else '#f59e0b' if coverage_pct >= 20 else '#ef4444'};">{coverage_pct:.0f}%</div>
@@ -1907,9 +1874,7 @@ class ProfileHTMLReporter:
 
             for sugg in cat_suggestions:
                 suggestion_counter += 1
-                severity_class = "severity-error" if sugg.severity == "ERROR" else "severity-warning"
-                is_new = self._is_new_validation_type(sugg.validation_type)
-                new_badge = '<span class="new-badge">✨ NEW</span>' if is_new else ''
+                severity_text = f"Recommend {sugg.severity} severity"
 
                 # Confidence bar color
                 confidence = sugg.confidence
@@ -1933,18 +1898,17 @@ class ProfileHTMLReporter:
                         <div class="suggestion-header">
                             <div class="validation-type">
                                 {sugg.validation_type}
-                                {new_badge}
                             </div>
                             <div class="suggestion-actions">
                                 <button class="copy-validation-btn" onclick="copyValidation('yaml-{suggestion_counter}')" title="Copy YAML snippet">
                                     📋 Copy YAML
                                 </button>
-                                <div class="severity-badge {severity_class}">{sugg.severity}</div>
                             </div>
                         </div>
                         <div style="color: #cbd5e0; margin-bottom: 10px;">
                             {sugg.reason}
                         </div>
+                        <div class="severity-text">{severity_text}</div>
                         {f'<div style="color: #a0aec0; font-size: 0.85em; margin-top: 10px;">{params_html}</div>' if params_html else ''}
                         <div class="confidence-container">
                             <div class="confidence-label">Confidence: {confidence:.0f}%</div>
@@ -2413,6 +2377,136 @@ class ProfileHTMLReporter:
                     • Enable audit logging for PII access<br>
                     • Document data retention and deletion policies<br>
                     • Ensure compliance with applicable privacy regulations
+                </div>
+            </div>
+        </div>
+        '''
+
+    def _generate_semantic_viz(self, col: ColumnProfile) -> str:
+        """Generate semantic understanding visualization for a column (FIBO-based)."""
+        if not col.semantic_info:
+            return ""
+
+        semantic = col.semantic_info
+        primary_tag = semantic.get('primary_tag', 'unknown')
+        if primary_tag == 'unknown':
+            return ""
+
+        all_tags = semantic.get('semantic_tags', [primary_tag])
+        confidence = semantic.get('confidence', 0.0)
+        explanation = semantic.get('explanation', '')
+        evidence = semantic.get('evidence', {})
+        fibo_source = semantic.get('fibo_source', None)
+
+        # Determine confidence color
+        if confidence >= 0.90:
+            conf_color = '#10b981'  # Green
+            conf_level = 'HIGH'
+        elif confidence >= 0.70:
+            conf_color = '#3b82f6'  # Blue
+            conf_level = 'GOOD'
+        elif confidence >= 0.50:
+            conf_color = '#f59e0b'  # Orange
+            conf_level = 'MODERATE'
+        else:
+            conf_color = '#9ca3af'  # Gray
+            conf_level = 'LOW'
+
+        # Tag category icons (based on primary tag prefix)
+        tag_icons = {
+            'money': '💰',
+            'banking': '🏦',
+            'loan': '🏠',
+            'security': '📈',
+            'party': '👤',
+            'identifier': '🔑',
+            'temporal': '📅',
+            'category': '🏷️',
+            'risk': '⚠️',
+            'contact': '📧',
+            'pii': '🔒'
+        }
+
+        # Get category from primary tag
+        category = primary_tag.split('.')[0] if '.' in primary_tag else primary_tag
+        icon = tag_icons.get(category, '🧠')
+
+        # Format semantic tags as badges
+        tags_html = " ".join([
+            f'<span style="display: inline-block; background: #374151; color: #9ca3af; padding: 4px 10px; border-radius: 12px; font-size: 0.75em; margin: 2px;">{tag}</span>'
+            for tag in all_tags[:5]  # Show top 5 tags
+        ])
+
+        # Format evidence
+        evidence_items = []
+        if evidence.get('visions_type'):
+            evidence_items.append(f"✓ Visions detected as <strong>{evidence['visions_type']}</strong>")
+        if evidence.get('fibo_match'):
+            evidence_items.append(f"✓ Matched FIBO pattern for <strong>{evidence['fibo_match']}</strong>")
+        if evidence.get('name_match'):
+            evidence_items.append(f"✓ Column name pattern match")
+
+        evidence_html = "<br>".join(evidence_items) if evidence_items else "Based on data properties and patterns"
+
+        # Format FIBO reference
+        fibo_html = ""
+        if fibo_source:
+            fibo_class_name = fibo_source.split(':')[-1] if ':' in fibo_source else fibo_source
+            fibo_html = f'''
+            <div style="margin-top: 10px; padding: 8px; background: #1f2937; border-radius: 4px; border-left: 3px solid #667eea;">
+                <div style="color: #cbd5e0; font-size: 0.85em;">
+                    <strong>🏦 FIBO Ontology Reference</strong><br>
+                    <span style="color: #9ca3af;">Class:</span> <code style="color: #a5b4fc; background: #374151; padding: 2px 6px; border-radius: 3px; font-size: 0.9em;">{fibo_class_name}</code><br>
+                    <span style="color: #9ca3af; font-size: 0.8em;">Financial Industry Business Ontology - industry standard for financial data semantics</span>
+                </div>
+            </div>
+            '''
+
+        return f'''
+        <div style="margin-top: 20px; padding: 15px; background: linear-gradient(135deg, #1e293b 0%, #334155 100%); border-radius: 8px; border-left: 4px solid {conf_color};">
+            <h4 style="color: {conf_color}; margin-bottom: 10px; font-size: 0.95em;">
+                {icon} SEMANTIC UNDERSTANDING
+            </h4>
+            <div style="color: #9ca3af; font-size: 0.85em; margin-bottom: 15px; padding: 8px; background: #1f2937; border-radius: 4px;">
+                ℹ️ DataK9 uses FIBO (Financial Industry Business Ontology) to understand what this column represents and suggest appropriate validations.
+            </div>
+
+            <div class="info-row">
+                <span class="info-label">Primary Classification:</span>
+                <span class="info-value" style="color: {conf_color}; font-weight: bold;">{primary_tag}</span>
+            </div>
+            <div style="color: #9ca3af; font-size: 0.8em; margin-left: 20px; margin-top: 4px; margin-bottom: 15px;">
+                {explanation}
+            </div>
+
+            <div class="info-row">
+                <span class="info-label">Confidence:</span>
+                <span class="info-value" style="color: {conf_color}; font-weight: bold;">{int(confidence * 100)}% ({conf_level})</span>
+            </div>
+            <div style="background: #1f2937; border-radius: 4px; height: 8px; margin: 10px 0;">
+                <div style="background: {conf_color}; height: 100%; width: {int(confidence * 100)}%; border-radius: 4px; transition: width 0.3s;"></div>
+            </div>
+
+            <div class="info-row" style="margin-top: 15px;">
+                <span class="info-label">All Semantic Tags:</span>
+            </div>
+            <div style="margin-top: 8px; margin-bottom: 15px;">
+                {tags_html}
+            </div>
+
+            <div class="info-row">
+                <span class="info-label">Evidence:</span>
+            </div>
+            <div style="color: #9ca3af; font-size: 0.85em; margin-left: 20px; margin-top: 8px; margin-bottom: 15px;">
+                {evidence_html}
+            </div>
+
+            {fibo_html}
+
+            <div style="margin-top: 12px; padding: 10px; background: #1f2937; border-radius: 4px; border-left: 3px solid {conf_color};">
+                <div style="color: #cbd5e0; font-size: 0.85em;">
+                    <strong>💡 Smart Validations</strong><br>
+                    Based on the semantic understanding of <strong>{primary_tag}</strong>, DataK9 automatically suggests context-aware validation rules that make sense for this type of data.
                 </div>
             </div>
         </div>
