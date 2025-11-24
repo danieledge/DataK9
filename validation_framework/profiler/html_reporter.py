@@ -318,59 +318,85 @@ class ProfileHTMLReporter:
             font-weight: 500;
         }}
 
-        /* Quality score bar */
-        .quality-bar-compact {{
+        /* RAG Status - Simple and Clean */
+        .quality-metric {{
             display: flex;
             align-items: center;
-            gap: 10px;
+            justify-content: space-between;
             background: #1a1a2e;
-            padding: 8px 12px;
+            padding: 10px 12px;
             border-radius: 6px;
             border: 1px solid #4a5568;
+            margin-bottom: 8px;
         }}
 
         .quality-label {{
-            font-size: 0.7em;
+            font-size: 0.75em;
             color: #a0aec0;
             text-transform: uppercase;
             letter-spacing: 0.5px;
-            min-width: 80px;
+            font-weight: 600;
         }}
 
-        .quality-progress {{
-            flex: 1;
-            height: 8px;
-            background: #2d3748;
-            border-radius: 4px;
-            overflow: hidden;
+        .quality-value {{
+            display: flex;
+            align-items: center;
+            gap: 10px;
         }}
 
-        .quality-fill {{
-            height: 100%;
-            transition: width 0.3s;
-        }}
-
-        .quality-score {{
-            font-size: 0.9em;
+        .quality-percentage {{
+            font-size: 0.95em;
             color: #ffffff;
             font-weight: 600;
-            min-width: 50px;
+            min-width: 45px;
             text-align: right;
         }}
 
-        /* Collapsible sections */
+        .rag-badge {{
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 0.7em;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            min-width: 70px;
+            text-align: center;
+        }}
+
+        .rag-green {{
+            background: #10b981;
+            color: white;
+        }}
+
+        .rag-amber {{
+            background: #f59e0b;
+            color: white;
+        }}
+
+        .rag-red {{
+            background: #ef4444;
+            color: white;
+        }}
+
+        .rag-blue {{
+            background: #3b82f6;
+            color: white;
+        }}
+
+        /* Collapsible sections - Collapsed by default */
         .collapsible-section {{
             background: #1a1a2e;
             border-radius: 6px;
             border: 1px solid #4a5568;
             overflow: hidden;
+            margin-top: 12px;
         }}
 
         .collapsible-header {{
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 8px 12px;
+            padding: 10px 12px;
             cursor: pointer;
             user-select: none;
             transition: background 0.2s;
@@ -391,7 +417,7 @@ class ProfileHTMLReporter:
         .collapsible-icon {{
             color: #667eea;
             font-size: 0.9em;
-            transition: transform 0.2s;
+            transition: transform 0.3s ease;
         }}
 
         .collapsible-icon.expanded {{
@@ -399,12 +425,16 @@ class ProfileHTMLReporter:
         }}
 
         .collapsible-content {{
-            padding: 0 12px 12px 12px;
-            display: none;
+            max-height: 0;
+            overflow: hidden;
+            background: #252542;
+            transition: max-height 0.3s ease-out, padding 0.3s ease-out;
+            padding: 0;
         }}
 
         .collapsible-content.expanded {{
-            display: block;
+            max-height: 2000px;
+            padding: 12px;
         }}
 
         .info-section {{
@@ -1401,6 +1431,70 @@ class ProfileHTMLReporter:
         else:
             return "quality-poor"
 
+    def _get_rag_status(self, score: float, metric_type: str = "general") -> tuple:
+        """
+        Get RAG (Red/Amber/Green) status for a quality metric.
+
+        Returns: (status_text, css_class)
+        """
+        if metric_type == "completeness":
+            if score >= 95:
+                return ("GOOD", "rag-green")
+            elif score >= 90:
+                return ("ACCEPTABLE", "rag-amber")
+            else:
+                return ("POOR", "rag-red")
+        elif metric_type == "confidence":
+            if score >= 95:
+                return ("HIGH", "rag-green")
+            elif score >= 80:
+                return ("MEDIUM", "rag-amber")
+            else:
+                return ("LOW", "rag-red")
+        elif metric_type == "consistency":
+            if score >= 80:
+                return ("GOOD", "rag-green")
+            elif score >= 50:
+                return ("ACCEPTABLE", "rag-amber")
+            else:
+                return ("POOR", "rag-red")
+        else:  # general or overall
+            if score >= 90:
+                return ("EXCELLENT", "rag-green")
+            elif score >= 75:
+                return ("GOOD", "rag-blue")
+            elif score >= 50:
+                return ("FAIR", "rag-amber")
+            else:
+                return ("POOR", "rag-red")
+
+    def _format_number(self, value: any) -> str:
+        """Format numeric values, handling scientific notation and extreme values."""
+        try:
+            # Handle string representations
+            if isinstance(value, str):
+                # Try to parse as float
+                try:
+                    num_val = float(value)
+                except (ValueError, OverflowError):
+                    return value
+            else:
+                num_val = float(value)
+
+            # Check for extreme values (likely data corruption or overflow)
+            if abs(num_val) > 1e15:
+                return f"{num_val:.2e}"  # Use scientific notation
+            elif abs(num_val) < 0.001 and num_val != 0:
+                return f"{num_val:.2e}"  # Small numbers in scientific notation
+            else:
+                # Regular formatting with commas for large numbers
+                if abs(num_val) >= 1000:
+                    return f"{num_val:,.2f}"
+                else:
+                    return f"{num_val:.2f}"
+        except (ValueError, TypeError, OverflowError):
+            return str(value)
+
     def _generate_column_profiles(self, columns: List[ColumnProfile]) -> str:
         """Generate HTML for column profiles."""
         html_parts = []
@@ -1414,7 +1508,7 @@ class ProfileHTMLReporter:
                     "".join(f"<li>{obs}</li>" for obs in col.quality.observations) + \
                     "</ul>"
 
-            # Top values table
+            # Top values table - Simple percentages without bars
             top_values_html = ""
             if col.statistics.top_values:
                 rows = []
@@ -1424,12 +1518,7 @@ class ProfileHTMLReporter:
                         <tr>
                             <td>{self._escape_html(str(item['value']))}</td>
                             <td>{item['count']:,}</td>
-                            <td>
-                                <span class="percentage-bar">
-                                    <span class="percentage-fill" style="width: {pct}%"></span>
-                                </span>
-                                {pct:.1f}%
-                            </td>
+                            <td>{pct:.1f}%</td>
                         </tr>
                     """)
                 top_values_html = f"""
@@ -1464,14 +1553,14 @@ class ProfileHTMLReporter:
                 extra_stats += f"""
                     <div class="stat-item">
                         <div class="stat-label">Range</div>
-                        <div class="stat-value">{col.statistics.min_value} to {col.statistics.max_value}</div>
+                        <div class="stat-value">{self._format_number(col.statistics.min_value)} to {self._format_number(col.statistics.max_value)}</div>
                     </div>
                 """
             if col.statistics.mean is not None:
                 extra_stats += f"""
                     <div class="stat-item">
                         <div class="stat-label">Mean</div>
-                        <div class="stat-value">{col.statistics.mean:.2f}</div>
+                        <div class="stat-value">{self._format_number(col.statistics.mean)}</div>
                     </div>
                 """
             if col.statistics.min_length is not None:
@@ -1516,39 +1605,39 @@ class ProfileHTMLReporter:
                         <!-- Intelligent Sampling Info (if available) -->
                         {self._generate_sampling_info(col)}
 
-                        <!-- Quality Metrics with Explanations -->
+                        <!-- Quality Metrics - RAG Status -->
                         <div style="margin-top: 16px;">
                             <div style="font-weight: 600; margin-bottom: 12px; color: #1f2937;">Quality Metrics</div>
 
                             <!-- Overall Score -->
-                            <div class="quality-bar-compact">
+                            <div class="quality-metric">
                                 <div class="quality-label">Overall Quality</div>
-                                <div class="quality-progress">
-                                    <div class="quality-fill" style="width: {quality_score}%; background: {quality_color};"></div>
+                                <div class="quality-value">
+                                    <span class="quality-percentage">{quality_score:.0f}%</span>
+                                    <span class="rag-badge {self._get_rag_status(quality_score, 'general')[1]}">{self._get_rag_status(quality_score, 'general')[0]}</span>
                                 </div>
-                                <div class="quality-score" style="color: {quality_color};">{quality_score:.0f}%</div>
                             </div>
 
                             <!-- Completeness -->
-                            <div class="quality-bar-compact">
+                            <div class="quality-metric">
                                 <div class="quality-label">Completeness</div>
-                                <div class="quality-progress">
-                                    <div class="quality-fill" style="width: {col.quality.completeness}%; background: {'#10b981' if col.quality.completeness >= 95 else '#f59e0b' if col.quality.completeness >= 90 else '#ef4444'};"></div>
+                                <div class="quality-value">
+                                    <span class="quality-percentage">{col.quality.completeness:.0f}%</span>
+                                    <span class="rag-badge {self._get_rag_status(col.quality.completeness, 'completeness')[1]}">{self._get_rag_status(col.quality.completeness, 'completeness')[0]}</span>
                                 </div>
-                                <div class="quality-score">{col.quality.completeness:.0f}%</div>
                             </div>
                             <div style="font-size: 12px; color: #6b7280; margin-left: 8px; margin-bottom: 8px;">
                                 {f"{'✓' if col.quality.completeness >= 95 else '⚠'} {col.statistics.null_count:,} null values ({col.statistics.null_percentage:.1f}%)" if col.statistics.null_count > 0 else "✓ No missing values"}
                                 {f'<br><span style="color: #3b82f6;">ℹ️ Note: {col.statistics.whitespace_null_count:,} whitespace-only values treated as null</span>' if col.statistics.whitespace_null_count > 0 else ''}
                             </div>
 
-                            <!-- Type Confidence (Validity) -->
-                            <div class="quality-bar-compact">
+                            <!-- Type Confidence -->
+                            <div class="quality-metric">
                                 <div class="quality-label">Type Confidence</div>
-                                <div class="quality-progress">
-                                    <div class="quality-fill" style="width: {col.type_info.confidence * 100}%; background: {'#10b981' if col.type_info.confidence >= 0.95 else '#f59e0b' if col.type_info.confidence >= 0.80 else '#ef4444'};"></div>
+                                <div class="quality-value">
+                                    <span class="quality-percentage">{col.type_info.confidence * 100:.0f}%</span>
+                                    <span class="rag-badge {self._get_rag_status(col.type_info.confidence * 100, 'confidence')[1]}">{self._get_rag_status(col.type_info.confidence * 100, 'confidence')[0]}</span>
                                 </div>
-                                <div class="quality-score">{col.type_info.confidence * 100:.0f}%</div>
                             </div>
                             <div style="font-size: 12px; color: #6b7280; margin-left: 8px; margin-bottom: 8px;">
                                 {f"{'✓' if col.type_info.confidence >= 0.95 else '⚠'} {col.type_info.confidence * 100:.1f}% of values match {col.type_info.inferred_type} type"}
@@ -1556,24 +1645,24 @@ class ProfileHTMLReporter:
                             </div>
 
                             <!-- Uniqueness -->
-                            <div class="quality-bar-compact">
+                            <div class="quality-metric">
                                 <div class="quality-label">Uniqueness</div>
-                                <div class="quality-progress">
-                                    <div class="quality-fill" style="width: {col.quality.uniqueness}%; background: #667eea;"></div>
+                                <div class="quality-value">
+                                    <span class="quality-percentage">{col.quality.uniqueness:.0f}%</span>
+                                    <span class="rag-badge rag-blue">INFO</span>
                                 </div>
-                                <div class="quality-score">{col.quality.uniqueness:.0f}%</div>
                             </div>
                             <div style="font-size: 12px; color: #6b7280; margin-left: 8px; margin-bottom: 8px;">
                                 {f"ℹ {col.statistics.unique_count:,} unique values - All values unique (potential key)" if col.statistics.cardinality == 1.0 and col.statistics.count > 1 else f"ℹ {col.statistics.unique_count:,} unique values ({col.statistics.unique_percentage:.1f}%)"}
                             </div>
 
                             <!-- Consistency -->
-                            <div class="quality-bar-compact">
+                            <div class="quality-metric">
                                 <div class="quality-label">Consistency</div>
-                                <div class="quality-progress">
-                                    <div class="quality-fill" style="width: {col.quality.consistency}%; background: {'#10b981' if col.quality.consistency >= 80 else '#f59e0b' if col.quality.consistency >= 50 else '#ef4444'};"></div>
+                                <div class="quality-value">
+                                    <span class="quality-percentage">{col.quality.consistency:.0f}%</span>
+                                    <span class="rag-badge {self._get_rag_status(col.quality.consistency, 'consistency')[1]}">{self._get_rag_status(col.quality.consistency, 'consistency')[0]}</span>
                                 </div>
-                                <div class="quality-score">{col.quality.consistency:.0f}%</div>
                             </div>
                             <div style="font-size: 12px; color: #6b7280; margin-left: 8px; margin-bottom: 8px;">
                                 {f"ℹ {len(col.statistics.pattern_samples)} different patterns detected" if col.statistics.pattern_samples and len(col.statistics.pattern_samples) > 1 else "✓ Consistent pattern"}
@@ -1584,7 +1673,7 @@ class ProfileHTMLReporter:
                         {f'''<div class="collapsible-section">
                             <div class="collapsible-header">
                                 <div class="collapsible-title">📊 Top Values ({len(col.statistics.top_values)})</div>
-                                <div class="collapsible-icon">▼</div>
+                                <div class="collapsible-icon">▶</div>
                             </div>
                             <div class="collapsible-content">
                                 {top_values_html}
@@ -1595,7 +1684,7 @@ class ProfileHTMLReporter:
                         {f'''<div class="collapsible-section">
                             <div class="collapsible-header">
                                 <div class="collapsible-title">ℹ Additional Data Insights ({len(col.quality.observations)})</div>
-                                <div class="collapsible-icon">▼</div>
+                                <div class="collapsible-icon">▶</div>
                             </div>
                             <div class="collapsible-content">
                                 <div style="padding-top: 8px;">
