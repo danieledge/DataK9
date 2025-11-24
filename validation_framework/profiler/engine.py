@@ -814,6 +814,7 @@ class DataProfiler:
             "type_counts": {},  # Count of each detected type
             "type_sampled_count": 0,  # Track how many rows we sampled for type detection
             "null_count": 0,
+            "whitespace_null_count": 0,  # Count of whitespace-only values treated as null
             "value_counts": {},  # Frequency distribution
             "numeric_values": [],  # For statistics
             "string_lengths": [],  # For string analysis
@@ -831,7 +832,24 @@ class DataProfiler:
         """Update column profile with chunk data."""
         profile["total_processed"] += len(series)
 
-        # Count nulls
+        # Treat whitespace-only strings as null
+        # Check for string columns and replace whitespace-only values with NaN
+        if series.dtype == 'object':  # String columns are typically 'object' dtype
+            # Count whitespace-only values before converting them
+            whitespace_mask = series.astype(str).str.strip() == ''
+            whitespace_count = whitespace_mask.sum()
+
+            # Track whitespace nulls for informational reporting
+            if "whitespace_null_count" not in profile:
+                profile["whitespace_null_count"] = 0
+            profile["whitespace_null_count"] += whitespace_count
+
+            # Replace whitespace-only values with NaN
+            if whitespace_count > 0:
+                series = series.copy()  # Avoid modifying original
+                series[whitespace_mask] = np.nan
+
+        # Count nulls (now includes whitespace-only values)
         null_mask = series.isna()
         profile["null_count"] += null_mask.sum()
 
@@ -1179,6 +1197,7 @@ class DataProfiler:
         stats.count = total_rows
         stats.null_count = null_count
         stats.null_percentage = 100 * null_count / total_rows if total_rows > 0 else 0
+        stats.whitespace_null_count = profile_data.get("whitespace_null_count", 0)
 
         # Enhanced semantic type detection using visions (if available)
         visions_semantic_type = self._detect_semantic_type_with_visions(profile_data["sample_values"])

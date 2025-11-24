@@ -1539,6 +1539,7 @@ class ProfileHTMLReporter:
                             </div>
                             <div style="font-size: 12px; color: #6b7280; margin-left: 8px; margin-bottom: 8px;">
                                 {f"{'✓' if col.quality.completeness >= 95 else '⚠'} {col.statistics.null_count:,} null values ({col.statistics.null_percentage:.1f}%)" if col.statistics.null_count > 0 else "✓ No missing values"}
+                                {f'<br><span style="color: #3b82f6;">ℹ️ Note: {col.statistics.whitespace_null_count:,} whitespace-only values treated as null</span>' if col.statistics.whitespace_null_count > 0 else ''}
                             </div>
 
                             <!-- Type Confidence (Validity) -->
