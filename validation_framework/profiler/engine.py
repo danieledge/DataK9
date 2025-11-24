@@ -835,8 +835,12 @@ class DataProfiler:
         # Treat whitespace-only strings as null
         # Check for string columns and replace whitespace-only values with NaN
         if series.dtype == 'object':  # String columns are typically 'object' dtype
-            # Count whitespace-only values before converting them
-            whitespace_mask = series.astype(str).str.strip() == ''
+            # First, identify values that are NOT already null
+            not_null_mask = series.notna()
+
+            # For non-null values, check if they're whitespace-only
+            # This avoids converting NaN to string 'nan' and incorrectly counting it
+            whitespace_mask = not_null_mask & (series.str.strip() == '')
             whitespace_count = whitespace_mask.sum()
 
             # Track whitespace nulls for informational reporting

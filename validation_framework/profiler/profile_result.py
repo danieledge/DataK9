@@ -138,6 +138,7 @@ class ColumnStatistics:
             "count": int(self.count) if self.count is not None else 0,
             "null_count": int(self.null_count) if self.null_count is not None else 0,
             "null_percentage": round(float(self.null_percentage), 2),
+            "whitespace_null_count": int(self.whitespace_null_count) if self.whitespace_null_count is not None else 0,
             "unique_count": int(self.unique_count) if self.unique_count is not None else 0,
             "unique_percentage": round(float(self.unique_percentage), 2),
             "cardinality": round(float(self.cardinality), 3),
