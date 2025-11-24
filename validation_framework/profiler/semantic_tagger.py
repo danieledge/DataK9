@@ -3,6 +3,13 @@ Semantic tagging for data profiler columns.
 
 Assigns semantic tags to columns based on FIBO taxonomy, Visions detection,
 column name patterns, and data properties.
+
+ATTRIBUTION:
+This module uses semantic concepts derived from FIBO (Financial Industry Business
+Ontology), maintained by the EDM Council under the MIT License.
+https://spec.edmcouncil.org/fibo/
+
+FIBO taxonomy location: validation_framework/profiler/taxonomies/finance_taxonomy.json
 """
 
 import re
