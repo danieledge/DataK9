@@ -67,6 +67,16 @@ tmp*.parquet
 tmp*_profile_report.html
 tmp*_validation.yaml
 
+# Auto-generated validation configs (test artifacts)
+*_validation_*.yaml
+customers_validation.yaml
+
+# Auto-generated profile reports (test artifacts)
+*_profile_*.html
+
+# Test artifacts directory
+test-artifacts/
+
 # Demo artifacts
 demo-tmp/
 

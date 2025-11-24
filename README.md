@@ -11,9 +11,28 @@
   [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
   [![Tests: 115+ passing](https://img.shields.io/badge/tests-115%2B%20passing-brightgreen.svg)](tests/)
   [![Coverage: 48%](https://img.shields.io/badge/coverage-48%25-yellow.svg)](htmlcov/)
+  [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+  [![Commercial Use: ✓](https://img.shields.io/badge/Commercial%20Use-✓%20Unrestricted-brightgreen.svg)](#commercial-use)
 
   **[Quick Start](#-quick-start-3-minutes)** • **[Documentation](docs/)** • **[Examples](examples/)** • **[CLI Guide](CLI_GUIDE.md)**
 </div>
+
+---
+
+## ✅ Commercial Use
+
+**DataK9 is 100% free for commercial use without restrictions.**
+
+- ✓ **MIT License** - Use in any commercial environment
+- ✓ **All Dependencies** - Permissive licenses (MIT, BSD-3-Clause, Apache-2.0)
+- ✓ **FIBO Ontology** - MIT License for semantic intelligence
+- ✓ **No Copyleft** - No GPL/AGPL restrictions
+- ✓ **No Fees** - Forever free
+- ✓ **Full Attribution** - See [NOTICE](NOTICE) and [DEPENDENCIES.md](docs/for-developers/DEPENDENCIES.md)
+
+**Enterprise Ready:** Deploy in financial services, healthcare, government, or any commercial setting without licensing concerns.
+
+**Learn More:** [Commercial Use Guide](docs/for-developers/DEPENDENCIES.md)
 
 ---
 
