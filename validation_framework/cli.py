@@ -517,7 +517,8 @@ def profile(file_path, format, database, table, query, html_output, json_output,
             chunk_size=chunk_size,
             enable_temporal_analysis=not disable_temporal,
             enable_pii_detection=not disable_pii,
-            enable_enhanced_correlation=not disable_correlation
+            enable_enhanced_correlation=not disable_correlation,
+            disable_memory_safety=no_memory_check  # Pass through the --no-memory-check flag
         )
 
         # DATABASE MODE
@@ -600,6 +601,14 @@ def profile(file_path, format, database, table, query, html_output, json_output,
                     for line in warnings_output:
                         click.echo(line)
                     click.echo("")  # Blank line
+            else:
+                # Warning when memory checks are disabled
+                click.echo("")
+                click.echo("⚠️  WARNING: Memory checks disabled (--no-memory-check)")
+                click.echo("    This flag disables memory safety checks and may cause system instability.")
+                click.echo("    DO NOT use on production systems or shared infrastructure.")
+                click.echo("    Only use for development/testing on dedicated hardware.")
+                click.echo("")
 
             # Create profiler and run analysis
             if sample:

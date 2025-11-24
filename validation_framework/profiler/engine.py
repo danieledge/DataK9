@@ -86,7 +86,8 @@ class DataProfiler:
         enable_temporal_analysis: bool = True,
         enable_pii_detection: bool = True,
         enable_enhanced_correlation: bool = True,
-        enable_semantic_tagging: bool = True
+        enable_semantic_tagging: bool = True,
+        disable_memory_safety: bool = False
     ):
         """
         Initialize data profiler.
@@ -98,6 +99,7 @@ class DataProfiler:
             enable_pii_detection: Enable Phase 1 PII detection (default: True)
             enable_enhanced_correlation: Enable Phase 1 enhanced correlation (default: True)
             enable_semantic_tagging: Enable Phase 2 FIBO-based semantic tagging (default: True)
+            disable_memory_safety: Disable memory safety termination (default: False, USE WITH CAUTION)
         """
         self.chunk_size = chunk_size  # None means auto-calculate
         self.max_correlation_columns = max_correlation_columns
@@ -119,6 +121,7 @@ class DataProfiler:
         self.semantic_tagger = SemanticTagger() if self.enable_semantic_tagging else None
 
         # Memory safety configuration
+        self.disable_memory_safety = disable_memory_safety  # WARNING: Only for development/testing
         self.memory_check_interval = 10  # Check memory every N chunks
         self.memory_warning_threshold = 75  # Warn at 75% memory usage
         self.memory_critical_threshold = 85  # Terminate at 85% memory usage
@@ -161,14 +164,23 @@ class DataProfiler:
             # Check critical threshold
             if memory_percent >= self.memory_critical_threshold:
                 available_mb = system_memory.available / 1024 / 1024
-                logger.error(f"🚨 CRITICAL: Memory usage {memory_percent:.1f}% exceeds threshold {self.memory_critical_threshold}%")
-                logger.error(f"🚨 Process: {process_memory_mb:.1f}MB, Available: {available_mb:.1f}MB")
-                logger.error(f"🚨 Terminating profiler to prevent system instability at {row_count:,} rows")
-                raise MemoryError(
-                    f"Profiler terminated: Memory usage {memory_percent:.1f}% exceeded critical threshold {self.memory_critical_threshold}%. "
-                    f"Processed {row_count:,} rows before termination. "
-                    f"Consider using --sample flag to profile a subset of data, or increase available system memory."
-                )
+
+                if self.disable_memory_safety:
+                    # Memory safety disabled - log warning but continue processing
+                    logger.warning(f"🚨 CRITICAL: Memory usage {memory_percent:.1f}% exceeds threshold {self.memory_critical_threshold}%")
+                    logger.warning(f"🚨 Process: {process_memory_mb:.1f}MB, Available: {available_mb:.1f}MB")
+                    logger.warning(f"🚨 Memory safety disabled (--no-memory-check) - continuing at {row_count:,} rows despite high memory")
+                    logger.warning(f"⚠️  System instability possible - monitor memory usage carefully")
+                else:
+                    # Normal operation - terminate to protect system
+                    logger.error(f"🚨 CRITICAL: Memory usage {memory_percent:.1f}% exceeds threshold {self.memory_critical_threshold}%")
+                    logger.error(f"🚨 Process: {process_memory_mb:.1f}MB, Available: {available_mb:.1f}MB")
+                    logger.error(f"🚨 Terminating profiler to prevent system instability at {row_count:,} rows")
+                    raise MemoryError(
+                        f"Profiler terminated: Memory usage {memory_percent:.1f}% exceeded critical threshold {self.memory_critical_threshold}%. "
+                        f"Processed {row_count:,} rows before termination. "
+                        f"Consider using --sample flag to profile a subset of data, or increase available system memory."
+                    )
 
             return True
 
