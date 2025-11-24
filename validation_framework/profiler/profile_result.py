@@ -80,6 +80,7 @@ class ColumnStatistics:
         count: Total number of rows
         null_count: Number of null values
         null_percentage: Percentage of nulls
+        whitespace_null_count: Number of whitespace-only values treated as null
         unique_count: Number of unique values
         unique_percentage: Percentage of unique values
         cardinality: Ratio of unique to total values
@@ -100,6 +101,7 @@ class ColumnStatistics:
     count: int = 0
     null_count: int = 0
     null_percentage: float = 0.0
+    whitespace_null_count: int = 0
     unique_count: int = 0
     unique_percentage: float = 0.0
     cardinality: float = 0.0
