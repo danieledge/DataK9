@@ -234,7 +234,7 @@ class ProfileHTMLReporter:
         .column-card {{
             background: #2d2d44;
             border-radius: 8px;
-            padding: 16px;
+            padding: 12px;
             border: 1px solid #4a5568;
             transition: all 0.2s;
         }}
@@ -248,8 +248,8 @@ class ProfileHTMLReporter:
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 12px;
-            padding-bottom: 10px;
+            margin-bottom: 8px;
+            padding-bottom: 8px;
             border-bottom: 1px solid #4a5568;
         }}
 
@@ -285,17 +285,17 @@ class ProfileHTMLReporter:
         .column-content {{
             display: flex;
             flex-direction: column;
-            gap: 12px;
+            gap: 8px;
         }}
 
         /* Compact stats grid */
         .stats-grid {{
             display: grid;
             grid-template-columns: repeat(2, 1fr);
-            gap: 8px;
+            gap: 6px;
             background: #1a1a2e;
-            padding: 12px;
-            border-radius: 6px;
+            padding: 8px;
+            border-radius: 4px;
             border: 1px solid #4a5568;
         }}
 
@@ -318,48 +318,54 @@ class ProfileHTMLReporter:
             font-weight: 500;
         }}
 
-        /* RAG Status - Simple and Clean */
+        /* RAG Status - Compact Grid Layout */
+        .quality-metrics-grid {{
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 6px;
+            margin-top: 12px;
+        }}
+
         .quality-metric {{
             display: flex;
             align-items: center;
             justify-content: space-between;
             background: #1a1a2e;
-            padding: 10px 12px;
-            border-radius: 6px;
+            padding: 6px 10px;
+            border-radius: 4px;
             border: 1px solid #4a5568;
-            margin-bottom: 8px;
         }}
 
         .quality-label {{
-            font-size: 0.75em;
+            font-size: 0.7em;
             color: #a0aec0;
             text-transform: uppercase;
-            letter-spacing: 0.5px;
+            letter-spacing: 0.3px;
             font-weight: 600;
         }}
 
         .quality-value {{
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 6px;
         }}
 
         .quality-percentage {{
-            font-size: 0.95em;
+            font-size: 0.85em;
             color: #ffffff;
             font-weight: 600;
-            min-width: 45px;
+            min-width: 38px;
             text-align: right;
         }}
 
         .rag-badge {{
-            padding: 4px 10px;
-            border-radius: 4px;
-            font-size: 0.7em;
+            padding: 3px 8px;
+            border-radius: 3px;
+            font-size: 0.65em;
             font-weight: 700;
             text-transform: uppercase;
-            letter-spacing: 0.5px;
-            min-width: 70px;
+            letter-spacing: 0.3px;
+            min-width: 60px;
             text-align: center;
         }}
 
@@ -1605,68 +1611,46 @@ class ProfileHTMLReporter:
                         <!-- Intelligent Sampling Info (if available) -->
                         {self._generate_sampling_info(col)}
 
-                        <!-- Quality Metrics - RAG Status -->
-                        <div style="margin-top: 16px;">
-                            <div style="font-weight: 600; margin-bottom: 12px; color: #1f2937;">Quality Metrics</div>
+                        <!-- Quality Metrics - Compact 2-Column Grid -->
+                        <div style="margin-top: 12px;">
+                            <div style="font-weight: 600; margin-bottom: 8px; color: #1f2937; font-size: 0.9em;">Quality Metrics</div>
 
-                            <!-- Overall Score -->
-                            <div class="quality-metric">
-                                <div class="quality-label">Overall Quality</div>
-                                <div class="quality-value">
-                                    <span class="quality-percentage">{quality_score:.0f}%</span>
-                                    <span class="rag-badge {self._get_rag_status(quality_score, 'general')[1]}">{self._get_rag_status(quality_score, 'general')[0]}</span>
+                            <div class="quality-metrics-grid">
+                                <!-- Row 1: Overall & Completeness -->
+                                <div class="quality-metric">
+                                    <div class="quality-label">Overall</div>
+                                    <div class="quality-value">
+                                        <span class="quality-percentage">{quality_score:.0f}%</span>
+                                        <span class="rag-badge {self._get_rag_status(quality_score, 'general')[1]}">{self._get_rag_status(quality_score, 'general')[0]}</span>
+                                    </div>
+                                </div>
+                                <div class="quality-metric">
+                                    <div class="quality-label">Complete</div>
+                                    <div class="quality-value">
+                                        <span class="quality-percentage">{col.quality.completeness:.0f}%</span>
+                                        <span class="rag-badge {self._get_rag_status(col.quality.completeness, 'completeness')[1]}">{self._get_rag_status(col.quality.completeness, 'completeness')[0]}</span>
+                                    </div>
+                                </div>
+
+                                <!-- Row 2: Type Confidence & Consistency -->
+                                <div class="quality-metric">
+                                    <div class="quality-label">Confidence</div>
+                                    <div class="quality-value">
+                                        <span class="quality-percentage">{col.type_info.confidence * 100:.0f}%</span>
+                                        <span class="rag-badge {self._get_rag_status(col.type_info.confidence * 100, 'confidence')[1]}">{self._get_rag_status(col.type_info.confidence * 100, 'confidence')[0]}</span>
+                                    </div>
+                                </div>
+                                <div class="quality-metric">
+                                    <div class="quality-label">Consistent</div>
+                                    <div class="quality-value">
+                                        <span class="quality-percentage">{col.quality.consistency:.0f}%</span>
+                                        <span class="rag-badge {self._get_rag_status(col.quality.consistency, 'consistency')[1]}">{self._get_rag_status(col.quality.consistency, 'consistency')[0]}</span>
+                                    </div>
                                 </div>
                             </div>
 
-                            <!-- Completeness -->
-                            <div class="quality-metric">
-                                <div class="quality-label">Completeness</div>
-                                <div class="quality-value">
-                                    <span class="quality-percentage">{col.quality.completeness:.0f}%</span>
-                                    <span class="rag-badge {self._get_rag_status(col.quality.completeness, 'completeness')[1]}">{self._get_rag_status(col.quality.completeness, 'completeness')[0]}</span>
-                                </div>
-                            </div>
-                            <div style="font-size: 12px; color: #6b7280; margin-left: 8px; margin-bottom: 8px;">
-                                {f"{'✓' if col.quality.completeness >= 95 else '⚠'} {col.statistics.null_count:,} null values ({col.statistics.null_percentage:.1f}%)" if col.statistics.null_count > 0 else "✓ No missing values"}
-                                {f'<br><span style="color: #3b82f6;">ℹ️ Note: {col.statistics.whitespace_null_count:,} whitespace-only values treated as null</span>' if col.statistics.whitespace_null_count > 0 else ''}
-                            </div>
-
-                            <!-- Type Confidence -->
-                            <div class="quality-metric">
-                                <div class="quality-label">Type Confidence</div>
-                                <div class="quality-value">
-                                    <span class="quality-percentage">{col.type_info.confidence * 100:.0f}%</span>
-                                    <span class="rag-badge {self._get_rag_status(col.type_info.confidence * 100, 'confidence')[1]}">{self._get_rag_status(col.type_info.confidence * 100, 'confidence')[0]}</span>
-                                </div>
-                            </div>
-                            <div style="font-size: 12px; color: #6b7280; margin-left: 8px; margin-bottom: 8px;">
-                                {f"{'✓' if col.type_info.confidence >= 0.95 else '⚠'} {col.type_info.confidence * 100:.1f}% of values match {col.type_info.inferred_type} type"}
-                                {self._generate_type_conflicts_display(col) if col.type_info.confidence < 0.95 else ''}
-                            </div>
-
-                            <!-- Uniqueness -->
-                            <div class="quality-metric">
-                                <div class="quality-label">Uniqueness</div>
-                                <div class="quality-value">
-                                    <span class="quality-percentage">{col.quality.uniqueness:.0f}%</span>
-                                    <span class="rag-badge rag-blue">INFO</span>
-                                </div>
-                            </div>
-                            <div style="font-size: 12px; color: #6b7280; margin-left: 8px; margin-bottom: 8px;">
-                                {f"ℹ {col.statistics.unique_count:,} unique values - All values unique (potential key)" if col.statistics.cardinality == 1.0 and col.statistics.count > 1 else f"ℹ {col.statistics.unique_count:,} unique values ({col.statistics.unique_percentage:.1f}%)"}
-                            </div>
-
-                            <!-- Consistency -->
-                            <div class="quality-metric">
-                                <div class="quality-label">Consistency</div>
-                                <div class="quality-value">
-                                    <span class="quality-percentage">{col.quality.consistency:.0f}%</span>
-                                    <span class="rag-badge {self._get_rag_status(col.quality.consistency, 'consistency')[1]}">{self._get_rag_status(col.quality.consistency, 'consistency')[0]}</span>
-                                </div>
-                            </div>
-                            <div style="font-size: 12px; color: #6b7280; margin-left: 8px; margin-bottom: 8px;">
-                                {f"ℹ {len(col.statistics.pattern_samples)} different patterns detected" if col.statistics.pattern_samples and len(col.statistics.pattern_samples) > 1 else "✓ Consistent pattern"}
-                            </div>
+                            <!-- Compact info notes -->
+                            {f'<div style="font-size: 11px; color: #6b7280; margin-top: 6px;">{col.statistics.null_count:,} nulls{f" ({col.statistics.whitespace_null_count:,} whitespace)" if col.statistics.whitespace_null_count > 0 else ""} • {col.statistics.unique_count:,} unique</div>' if col.statistics.null_count > 0 or col.statistics.whitespace_null_count > 0 else f'<div style="font-size: 11px; color: #6b7280; margin-top: 6px;">{col.statistics.unique_count:,} unique values</div>'}
                         </div>
 
                         <!-- Collapsible: Top Values -->
