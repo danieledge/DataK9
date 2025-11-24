@@ -1176,7 +1176,7 @@ class DataProfiler:
         stats.cardinality = stats.unique_count / non_null_count if non_null_count > 0 else 0
 
         # Numeric statistics
-        if numeric_values:
+        if numeric_values is not None and len(numeric_values) > 0:
             try:
                 # Convert to float array explicitly to avoid type issues
                 numeric_array = np.array(numeric_values, dtype=np.float64)
@@ -1535,16 +1535,18 @@ class DataProfiler:
                 # For low cardinality fields, suggest valid values
                 if col.statistics.cardinality < 0.05 and col.statistics.unique_count < 20:
                     valid_values = [item["value"] for item in col.statistics.top_values]
-                    suggestions.append(ValidationSuggestion(
-                        validation_type="ValidValuesCheck",
-                        severity="ERROR",
-                        params={
-                            "field": col.name,
-                            "valid_values": valid_values
-                        },
-                        reason=f"FIBO: {primary_tag} has limited valid values",
-                        confidence=90.0
-                    ))
+                    # Only suggest if we actually have valid values to check
+                    if valid_values:
+                        suggestions.append(ValidationSuggestion(
+                            validation_type="ValidValuesCheck",
+                            severity="ERROR",
+                            params={
+                                "field": col.name,
+                                "valid_values": valid_values
+                            },
+                            reason=f"FIBO: {primary_tag} has limited valid values",
+                            confidence=90.0
+                        ))
 
             elif rule_type == "OutlierDetectionCheck":
                 # Suggest outlier detection for monetary amounts, etc.
@@ -1598,11 +1600,11 @@ class DataProfiler:
         - Falls back to old semantic_type detection
 
         Returns appropriate validations for each semantic type:
-        - email → RegexPatternCheck
-        - url → RegexPatternCheck
-        - uuid → RegexPatternCheck
-        - ip_address → RegexPatternCheck
-        - phone_number → RegexPatternCheck + StringLengthCheck
+        - email → RegexCheck
+        - url → RegexCheck
+        - uuid → RegexCheck
+        - ip_address → RegexCheck
+        - phone_number → StringLengthCheck
         - amount → Non-negative check (min_value=0)
         - count → Non-negative check (min_value=0)
         - date/datetime → DateFormatCheck
@@ -1626,7 +1628,7 @@ class DataProfiler:
         # Email address validation
         if semantic_type == 'email':
             suggestions.append(ValidationSuggestion(
-                validation_type="RegexPatternCheck",
+                validation_type="RegexCheck",
                 severity="ERROR",
                 params={
                     "field": col.name,
@@ -1639,7 +1641,7 @@ class DataProfiler:
         # URL validation
         elif semantic_type == 'url':
             suggestions.append(ValidationSuggestion(
-                validation_type="RegexPatternCheck",
+                validation_type="RegexCheck",
                 severity="ERROR",
                 params={
                     "field": col.name,
@@ -1652,7 +1654,7 @@ class DataProfiler:
         # UUID validation
         elif semantic_type == 'uuid':
             suggestions.append(ValidationSuggestion(
-                validation_type="RegexPatternCheck",
+                validation_type="RegexCheck",
                 severity="ERROR",
                 params={
                     "field": col.name,
@@ -1665,7 +1667,7 @@ class DataProfiler:
         # IP Address validation
         elif semantic_type == 'ip_address':
             suggestions.append(ValidationSuggestion(
-                validation_type="RegexPatternCheck",
+                validation_type="RegexCheck",
                 severity="ERROR",
                 params={
                     "field": col.name,
@@ -1721,7 +1723,7 @@ class DataProfiler:
         # File path validation
         elif semantic_type == 'path':
             suggestions.append(ValidationSuggestion(
-                validation_type="RegexPatternCheck",
+                validation_type="RegexCheck",
                 severity="WARNING",
                 params={
                     "field": col.name,
@@ -1948,16 +1950,18 @@ class DataProfiler:
             # Valid values for low cardinality
             if col.statistics.cardinality < 0.05 and col.statistics.unique_count < 20:
                 valid_values = [item["value"] for item in col.statistics.top_values]
-                suggestions.append(ValidationSuggestion(
-                    validation_type="ValidValuesCheck",
-                    severity="ERROR",
-                    params={
-                        "field": col.name,
-                        "valid_values": valid_values
-                    },
-                    reason=f"Low cardinality field with {col.statistics.unique_count} unique values",
-                    confidence=85.0
-                ))
+                # Only suggest if we actually have valid values to check
+                if valid_values:
+                    suggestions.append(ValidationSuggestion(
+                        validation_type="ValidValuesCheck",
+                        severity="ERROR",
+                        params={
+                            "field": col.name,
+                            "valid_values": valid_values
+                        },
+                        reason=f"Low cardinality field with {col.statistics.unique_count} unique values",
+                        confidence=85.0
+                    ))
 
             # Unique key check for high cardinality
             # CRITICAL FIX: Exclude amount/count/measurement/temporal fields from UniqueKeyCheck
@@ -2024,7 +2028,8 @@ class DataProfiler:
                 # - Below 50% → Informational only (not suggested as validation)
                 patterns = SemanticPatternDetector.detect_patterns(
                     col.type_info.sample_values,
-                    min_confidence=0.50  # Raised from 30% to 50% minimum
+                    min_confidence=0.50,  # Raised from 30% to 50% minimum
+                    column_name=col.name  # Pass column name for context-based filtering
                 )
 
                 # Add suggestions for detected patterns

@@ -35,9 +35,13 @@ class SemanticPatternDetector:
             re.IGNORECASE
         ),
         'phone': re.compile(
-            r'(?:\+?1[-.\s]?)?'  # Optional country code
-            r'(?:\(?\d{3}\)?[-.\s]?)?'  # Area code
-            r'\d{3}[-.\s]?\d{4}'  # Main number
+            # Require phone-specific formatting (parentheses, dashes, dots, or +)
+            # Avoid matching plain digit sequences that could be IDs/accounts
+            r'(?:'
+            r'(?:\+\d{1,3}[-.\s]?)?\(?\d{3}\)[-.\s]\d{3}[-.\s]\d{4}|'  # (123) 456-7890 or +1 (123) 456-7890
+            r'(?:\+\d{1,3}[-.\s]?)??\d{3}[-. ]\d{3}[-. ]\d{4}|'  # 123-456-7890 or 123.456.7890
+            r'\+\d{1,3}\s?\d{1,14}'  # International format with +
+            r')'
             r'(?:\s?(?:ext|x)\s?\d{2,5})?',  # Optional extension
             re.IGNORECASE
         ),
@@ -79,14 +83,16 @@ class SemanticPatternDetector:
     def detect_patterns(
         cls,
         sample_values: List[Any],
-        min_confidence: float = 0.20
+        min_confidence: float = 0.50,
+        column_name: str = None
     ) -> Dict[str, PatternMatch]:
         """
         Detect semantic patterns in sample data.
 
         Args:
             sample_values: List of values to analyze
-            min_confidence: Minimum match ratio to report (default 20%)
+            min_confidence: Minimum match ratio to report (default 50%)
+            column_name: Column name for context-based filtering (optional)
 
         Returns:
             Dictionary mapping pattern types to PatternMatch results
@@ -102,7 +108,23 @@ class SemanticPatternDetector:
         total_sampled = len(str_values)
         results = {}
 
+        # Apply column name-based heuristics to avoid false positives
+        column_lower = column_name.lower() if column_name else ''
+        skip_patterns = set()
+
+        # Skip phone detection for account/ID/transaction fields
+        if any(term in column_lower for term in ['account', 'id', 'transaction', 'reference', 'number', 'code']):
+            skip_patterns.add('phone')
+
+        # Skip credit card detection for account/ID/bank fields
+        if any(term in column_lower for term in ['account', 'id', 'bank', 'transaction', 'reference', 'routing']):
+            skip_patterns.add('credit_card')
+
         for pattern_name, pattern in cls.PATTERNS.items():
+            # Skip patterns based on column name heuristics
+            if pattern_name in skip_patterns:
+                continue
+
             matches: Set[str] = set()
             match_count = 0
 
@@ -164,7 +186,7 @@ class SemanticPatternDetector:
         """
         suggestions = {
             'email': {
-                'validation_type': 'RegexPatternCheck',
+                'validation_type': 'RegexCheck',
                 'params': {
                     'pattern': r'^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}$',
                     'pattern_name': 'Valid Email Format'
@@ -173,7 +195,7 @@ class SemanticPatternDetector:
                 'reason': 'Email addresses detected - validate format'
             },
             'phone': {
-                'validation_type': 'RegexPatternCheck',
+                'validation_type': 'RegexCheck',
                 'params': {
                     'pattern': r'^(?:\+?1[-.\s]?)?(?:\(?\d{3}\)?[-.\s]?)?\d{3}[-.\s]?\d{4}$',
                     'pattern_name': 'Valid Phone Number'
@@ -182,7 +204,7 @@ class SemanticPatternDetector:
                 'reason': 'Phone numbers detected - validate format'
             },
             'url': {
-                'validation_type': 'RegexPatternCheck',
+                'validation_type': 'RegexCheck',
                 'params': {
                     'pattern': r'^https?://.+',
                     'pattern_name': 'Valid URL'
@@ -191,7 +213,7 @@ class SemanticPatternDetector:
                 'reason': 'URLs detected - validate format'
             },
             'credit_card': {
-                'validation_type': 'RegexPatternCheck',
+                'validation_type': 'RegexCheck',
                 'params': {
                     'pattern': r'^\d{13,19}$',
                     'pattern_name': 'Valid Credit Card Number'
@@ -200,7 +222,7 @@ class SemanticPatternDetector:
                 'reason': 'Credit card numbers detected - validate and ensure PCI compliance'
             },
             'ssn': {
-                'validation_type': 'RegexPatternCheck',
+                'validation_type': 'RegexCheck',
                 'params': {
                     'pattern': r'^\d{3}-\d{2}-\d{4}$',
                     'pattern_name': 'Valid SSN Format'
@@ -209,7 +231,7 @@ class SemanticPatternDetector:
                 'reason': 'SSN detected - validate format and ensure data security'
             },
             'ipv4': {
-                'validation_type': 'RegexPatternCheck',
+                'validation_type': 'RegexCheck',
                 'params': {
                     'pattern': r'^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$',
                     'pattern_name': 'Valid IPv4 Address'
