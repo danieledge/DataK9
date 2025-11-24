@@ -4271,8 +4271,11 @@ files:
                         this.updateProjectState(false);  // No project loaded
                     }
 
-                    // Initialize Monaco Editor
-                    this.initMonacoEditor();
+                    // Update loading message
+                    this.showLoadingIndicator('Initializing Monaco Editor...');
+
+                    // Initialize Monaco Editor (now with proper async handling)
+                    await this.initMonacoEditorAsync();
 
                     // Set up keyboard shortcuts
                     this.initKeyboardShortcuts();
@@ -4368,51 +4371,160 @@ files:
                Monaco Editor Initialization
                ==================================================================== */
 
+            /**
+             * Async wrapper for Monaco Editor initialization
+             * Returns a promise that resolves when Monaco is ready or rejects on error
+             */
+            initMonacoEditorAsync() {
+                return new Promise((resolve, reject) => {
+                    this.monacoResolve = resolve;
+                    this.monacoReject = reject;
+                    this.initMonacoEditor();
+                });
+            },
+
             initMonacoEditor() {
+                // Track retry attempts
+                if (!this.monacoRetryCount) {
+                    this.monacoRetryCount = 0;
+                }
+
                 // Check if require is defined (Monaco loader.js must be loaded first)
                 if (typeof require === 'undefined') {
-                    console.error('Monaco loader not loaded yet. Retrying in 100ms...');
+                    this.monacoRetryCount++;
+
+                    if (this.monacoRetryCount > 50) {  // 5 seconds total (50 * 100ms)
+                        console.error('Monaco Editor failed to load after 5 seconds');
+                        const errorMsg = 'Monaco Editor failed to load. Please ensure you are accessing DataK9 Studio via HTTP (not file://) and that monaco-editor/ directory is accessible.';
+                        this.showMonacoError(errorMsg);
+                        if (this.monacoReject) {
+                            this.monacoReject(new Error(errorMsg));
+                        }
+                        return;
+                    }
+
+                    console.warn(`Monaco loader not loaded yet. Retry ${this.monacoRetryCount}/50 in 100ms...`);
                     setTimeout(() => this.initMonacoEditor(), 100);
                     return;
                 }
 
-                require.config({
-                    paths: {
-                        'vs': 'monaco-editor/min/vs'
-                    }
-                });
-
-                require(['vs/editor/editor.main'], () => {
-                    this.monacoEditor = monaco.editor.create(
-                        document.getElementById('monaco-editor'),
-                        {
-                            value: this.generateYAML(),
-                            language: 'yaml',
-                            theme: 'vs-dark',
-                            automaticLayout: true,
-                            minimap: { enabled: true },
-                            fontSize: 13,
-                            lineNumbers: 'on',
-                            roundedSelection: false,
-                            scrollBeyondLastLine: false,
-                            readOnly: true,  // Start locked
-                            cursorStyle: 'line',
-                            wordWrap: 'on'
-                        }
-                    );
-
-                    // Listen for changes in Monaco Editor
-                    // Note: We don't sync on every keystroke as YAML will be invalid while typing
-                    // Instead, mark as having unsaved changes and sync only when user saves
-                    this.monacoEditor.onDidChangeModelContent(() => {
-                        if (!this.isSyncing) {
-                            this.projectState.hasUnsavedChanges = true;
-                            this.updateStatusBar();
+                // Configure Monaco with error handling
+                try {
+                    require.config({
+                        paths: {
+                            'vs': 'monaco-editor/min/vs'
                         }
                     });
 
-                    console.log('Monaco Editor initialized (locked)');
-                });
+                    // Set timeout for Monaco loading
+                    const monacoTimeout = setTimeout(() => {
+                        if (!this.monacoEditor) {
+                            console.error('Monaco Editor initialization timed out');
+                            const errorMsg = 'Monaco Editor loading timed out. This usually happens when:\n\n1. Accessing via file:// protocol (use HTTP instead)\n2. Monaco files are not accessible\n3. Network/CORS restrictions\n\nPlease serve DataK9 Studio via HTTP server.';
+                            this.showMonacoError(errorMsg);
+                            if (this.monacoReject) {
+                                this.monacoReject(new Error(errorMsg));
+                            }
+                        }
+                    }, 10000);  // 10 second timeout
+
+                    require(['vs/editor/editor.main'], () => {
+                        clearTimeout(monacoTimeout);
+
+                        try {
+                            this.monacoEditor = monaco.editor.create(
+                                document.getElementById('monaco-editor'),
+                                {
+                                    value: this.generateYAML(),
+                                    language: 'yaml',
+                                    theme: 'vs-dark',
+                                    automaticLayout: true,
+                                    minimap: { enabled: true },
+                                    fontSize: 13,
+                                    lineNumbers: 'on',
+                                    roundedSelection: false,
+                                    scrollBeyondLastLine: false,
+                                    readOnly: true,  // Start locked
+                                    cursorStyle: 'line',
+                                    wordWrap: 'on'
+                                }
+                            );
+
+                            // Listen for changes in Monaco Editor
+                            // Note: We don't sync on every keystroke as YAML will be invalid while typing
+                            // Instead, mark as having unsaved changes and sync only when user saves
+                            this.monacoEditor.onDidChangeModelContent(() => {
+                                if (!this.isSyncing) {
+                                    this.projectState.hasUnsavedChanges = true;
+                                    this.updateStatusBar();
+                                }
+                            });
+
+                            console.log('Monaco Editor initialized successfully');
+
+                            // Resolve the promise
+                            if (this.monacoResolve) {
+                                this.monacoResolve();
+                            }
+                        } catch (error) {
+                            console.error('Failed to create Monaco Editor instance:', error);
+                            const errorMsg = `Monaco Editor failed to initialize: ${error.message}`;
+                            this.showMonacoError(errorMsg);
+                            if (this.monacoReject) {
+                                this.monacoReject(error);
+                            }
+                        }
+                    }, (error) => {
+                        // Error callback for require()
+                        clearTimeout(monacoTimeout);
+                        console.error('Failed to load Monaco Editor modules:', error);
+                        const errorMsg = `Failed to load Monaco Editor modules. Please ensure:\n\n1. You are accessing via HTTP (not file://)\n2. monaco-editor/ directory exists and is accessible\n3. No browser security restrictions are blocking the load\n\nError: ${error.message || JSON.stringify(error)}`;
+                        this.showMonacoError(errorMsg);
+                        if (this.monacoReject) {
+                            this.monacoReject(new Error(errorMsg));
+                        }
+                    });
+                } catch (error) {
+                    console.error('Error configuring Monaco Editor:', error);
+                    const errorMsg = `Error configuring Monaco Editor: ${error.message}`;
+                    this.showMonacoError(errorMsg);
+                    if (this.monacoReject) {
+                        this.monacoReject(error);
+                    }
+                }
+            },
+
+            /**
+             * Show Monaco Editor error message with fallback UI
+             */
+            showMonacoError(message) {
+                // Hide loading indicator if still showing
+                this.hideLoadingIndicator();
+
+                // Replace Monaco editor container with error message
+                const editorContainer = document.getElementById('monaco-editor');
+                if (editorContainer) {
+                    editorContainer.innerHTML = `
+                        <div style="padding: 32px; color: var(--text-primary); font-family: var(--font-sans);">
+                            <h3 style="color: var(--status-error); margin-bottom: 16px;">⚠️ Monaco Editor Failed to Load</h3>
+                            <p style="margin-bottom: 16px; white-space: pre-line; line-height: 1.6;">${message}</p>
+                            <div style="background: var(--bg-input); padding: 16px; border-radius: 4px; margin-bottom: 16px;">
+                                <p style="margin-bottom: 12px;"><strong>Quick Fix:</strong></p>
+                                <p style="margin-bottom: 8px;">1. Ensure you have Python 3 installed</p>
+                                <p style="margin-bottom: 8px;">2. Open terminal in the DataK9 directory</p>
+                                <p style="margin-bottom: 8px;">3. Run: <code style="background: var(--bg-dark); padding: 4px 8px; border-radius: 3px;">python3 -m http.server 8080</code></p>
+                                <p style="margin-bottom: 8px;">4. Open: <code style="background: var(--bg-dark); padding: 4px 8px; border-radius: 3px;">http://localhost:8080/datak9-studio.html</code></p>
+                            </div>
+                            <p style="color: var(--text-secondary); font-size: 14px;">Note: DataK9 Studio uses Monaco Editor (the VS Code editor) which requires HTTP protocol due to browser security restrictions.</p>
+                            <button class="btn btn-primary" onclick="location.reload()" style="margin-top: 16px;">
+                                🔄 Retry
+                            </button>
+                        </div>
+                    `;
+                }
+
+                // Show error in console for debugging
+                console.error('Monaco Editor Error:', message);
             },
 
             /* ====================================================================
