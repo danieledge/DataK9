@@ -47,6 +47,14 @@ except ImportError:
     ENHANCED_CORRELATION_AVAILABLE = False
     logger.warning("Enhanced correlation not available")
 
+# Phase 2: Semantic Tagging with FIBO
+try:
+    from validation_framework.profiler.semantic_tagger import SemanticTagger
+    SEMANTIC_TAGGING_AVAILABLE = True
+except ImportError:
+    SEMANTIC_TAGGING_AVAILABLE = False
+    # Semantic tagging is optional
+
 try:
     from visions.functional import detect_type
     from visions.types import Float, Integer, String, Boolean, Object
@@ -77,7 +85,8 @@ class DataProfiler:
         max_correlation_columns: int = 20,
         enable_temporal_analysis: bool = True,
         enable_pii_detection: bool = True,
-        enable_enhanced_correlation: bool = True
+        enable_enhanced_correlation: bool = True,
+        enable_semantic_tagging: bool = True
     ):
         """
         Initialize data profiler.
@@ -88,6 +97,7 @@ class DataProfiler:
             enable_temporal_analysis: Enable Phase 1 temporal analysis (default: True)
             enable_pii_detection: Enable Phase 1 PII detection (default: True)
             enable_enhanced_correlation: Enable Phase 1 enhanced correlation (default: True)
+            enable_semantic_tagging: Enable Phase 2 FIBO-based semantic tagging (default: True)
         """
         self.chunk_size = chunk_size  # None means auto-calculate
         self.max_correlation_columns = max_correlation_columns
@@ -97,10 +107,16 @@ class DataProfiler:
         self.enable_pii_detection = enable_pii_detection and PII_DETECTION_AVAILABLE
         self.enable_enhanced_correlation = enable_enhanced_correlation and ENHANCED_CORRELATION_AVAILABLE
 
+        # Phase 2: Semantic tagging
+        self.enable_semantic_tagging = enable_semantic_tagging and SEMANTIC_TAGGING_AVAILABLE
+
         # Initialize Phase 1 analyzers if enabled
         self.temporal_analyzer = TemporalAnalyzer() if self.enable_temporal_analysis else None
         self.pii_detector = PIIDetector() if self.enable_pii_detection else None
         self.enhanced_correlation_analyzer = EnhancedCorrelationAnalyzer() if self.enable_enhanced_correlation else None
+
+        # Initialize Phase 2: Semantic tagger
+        self.semantic_tagger = SemanticTagger() if self.enable_semantic_tagging else None
 
         # Memory safety configuration
         self.memory_check_interval = 10  # Check memory every N chunks
@@ -262,6 +278,34 @@ class DataProfiler:
                         logger.warning(f"PII detection failed for column {column.name}: {e}")
             phase_timings['pii_detection'] = time.time() - pii_start
             logger.info(f"⏱  PII detection completed in {phase_timings['pii_detection']:.2f}s")
+
+        # Phase 2: Apply semantic tagging to all columns
+        if self.enable_semantic_tagging:
+            semantic_start = time.time()
+            logger.info("🧠 Running FIBO-based semantic tagging on all columns...")
+            for column in columns:
+                try:
+                    # Get visions type from statistics (already computed)
+                    visions_type = getattr(column.statistics, 'semantic_type', None)
+
+                    # Apply semantic tagging
+                    semantic_info = self.semantic_tagger.tag_column(
+                        column_name=column.name,
+                        inferred_type=column.type_info.inferred_type,
+                        visions_type=visions_type,
+                        statistics=column.statistics,
+                        quality=column.quality
+                    )
+
+                    # Store semantic info in column profile
+                    column.semantic_info = semantic_info.to_dict()
+
+                    logger.debug(f"Semantic tagging completed for '{column.name}': {semantic_info.primary_tag} (confidence: {semantic_info.confidence:.2f})")
+                except Exception as e:
+                    logger.warning(f"Semantic tagging failed for column {column.name}: {e}")
+
+            phase_timings['semantic_tagging'] = time.time() - semantic_start
+            logger.info(f"⏱  Semantic tagging completed in {phase_timings['semantic_tagging']:.2f}s")
 
         # Calculate correlations
         correlation_start = time.time()
@@ -610,6 +654,34 @@ class DataProfiler:
                         logger.warning(f"PII detection failed for column {column.name}: {e}")
             phase_timings['pii_detection'] = time.time() - pii_start
             logger.info(f"⏱  PII detection completed in {phase_timings['pii_detection']:.2f}s")
+
+        # Phase 2: Apply semantic tagging to all columns
+        if self.enable_semantic_tagging:
+            semantic_start = time.time()
+            logger.info("🧠 Running FIBO-based semantic tagging on all columns...")
+            for column in columns:
+                try:
+                    # Get visions type from statistics (already computed)
+                    visions_type = getattr(column.statistics, 'semantic_type', None)
+
+                    # Apply semantic tagging
+                    semantic_info = self.semantic_tagger.tag_column(
+                        column_name=column.name,
+                        inferred_type=column.type_info.inferred_type,
+                        visions_type=visions_type,
+                        statistics=column.statistics,
+                        quality=column.quality
+                    )
+
+                    # Store semantic info in column profile
+                    column.semantic_info = semantic_info.to_dict()
+
+                    logger.debug(f"Semantic tagging completed for '{column.name}': {semantic_info.primary_tag} (confidence: {semantic_info.confidence:.2f})")
+                except Exception as e:
+                    logger.warning(f"Semantic tagging failed for column {column.name}: {e}")
+
+            phase_timings['semantic_tagging'] = time.time() - semantic_start
+            logger.info(f"⏱  Semantic tagging completed in {phase_timings['semantic_tagging']:.2f}s")
 
         # Calculate correlations
         correlation_start = time.time()
@@ -1368,9 +1440,162 @@ class DataProfiler:
         # Default: suggest range check for numeric measurements with natural bounds
         return True
 
+    def _generate_fibo_semantic_validations(self, col: ColumnProfile) -> List[ValidationSuggestion]:
+        """
+        Generate validation suggestions based on FIBO semantic tags.
+
+        Phase 2: Uses semantic_tagger to get recommended validations from taxonomy.
+
+        Args:
+            col: ColumnProfile with semantic_info
+
+        Returns:
+            List of validation suggestions from FIBO taxonomy
+        """
+        suggestions = []
+
+        if not col.semantic_info or not self.semantic_tagger:
+            return suggestions
+
+        # Get primary semantic tag
+        primary_tag = col.semantic_info.get('primary_tag', 'unknown')
+        if primary_tag == 'unknown':
+            return suggestions
+
+        # Get recommended validation rules from taxonomy
+        validation_rules = self.semantic_tagger.get_validation_rules(primary_tag)
+        skip_validations = self.semantic_tagger.get_skip_validations(primary_tag)
+
+        logger.debug(f"FIBO validations for '{col.name}' ({primary_tag}): {validation_rules}")
+
+        # Generate validation suggestions based on taxonomy rules
+        for rule_type in validation_rules:
+            # Skip validations that taxonomy says to skip
+            if rule_type in skip_validations:
+                continue
+
+            # Generate appropriate parameters based on rule type
+            if rule_type == "NonNegativeCheck":
+                suggestions.append(ValidationSuggestion(
+                    validation_type="RangeCheck",
+                    severity="ERROR",
+                    params={
+                        "field": col.name,
+                        "min_value": 0
+                    },
+                    reason=f"FIBO: {primary_tag} must be non-negative",
+                    confidence=95.0
+                ))
+
+            elif rule_type == "MandatoryFieldCheck":
+                # Only suggest if completeness is high
+                if col.quality.completeness > 95:
+                    suggestions.append(ValidationSuggestion(
+                        validation_type="MandatoryFieldCheck",
+                        severity="ERROR",
+                        params={
+                            "fields": [col.name]
+                        },
+                        reason=f"FIBO: {primary_tag} is typically mandatory",
+                        confidence=90.0
+                    ))
+
+            elif rule_type == "UniqueKeyCheck":
+                # Only suggest if cardinality is high
+                if col.statistics.cardinality > 0.90:
+                    suggestions.append(ValidationSuggestion(
+                        validation_type="UniqueKeyCheck",
+                        severity="ERROR",
+                        params={
+                            "fields": [col.name]
+                        },
+                        reason=f"FIBO: {primary_tag} should be unique identifier",
+                        confidence=95.0
+                    ))
+
+            elif rule_type == "StringLengthCheck":
+                # Use detected string lengths
+                if hasattr(col.statistics, 'min_length') and hasattr(col.statistics, 'max_length'):
+                    min_len = col.statistics.min_length
+                    max_len = col.statistics.max_length
+                    if min_len is not None and max_len is not None:
+                        suggestions.append(ValidationSuggestion(
+                            validation_type="StringLengthCheck",
+                            severity="ERROR",
+                            params={
+                                "field": col.name,
+                                "min_length": min_len,
+                                "max_length": max_len
+                            },
+                            reason=f"FIBO: {primary_tag} has expected length range",
+                            confidence=85.0
+                        ))
+
+            elif rule_type == "ValidValuesCheck":
+                # For low cardinality fields, suggest valid values
+                if col.statistics.cardinality < 0.05 and col.statistics.unique_count < 20:
+                    valid_values = [item["value"] for item in col.statistics.top_values]
+                    suggestions.append(ValidationSuggestion(
+                        validation_type="ValidValuesCheck",
+                        severity="ERROR",
+                        params={
+                            "field": col.name,
+                            "valid_values": valid_values
+                        },
+                        reason=f"FIBO: {primary_tag} has limited valid values",
+                        confidence=90.0
+                    ))
+
+            elif rule_type == "OutlierDetectionCheck":
+                # Suggest outlier detection for monetary amounts, etc.
+                suggestions.append(ValidationSuggestion(
+                    validation_type="OutlierDetectionCheck",
+                    severity="WARNING",
+                    params={
+                        "field": col.name,
+                        "method": "zscore",
+                        "threshold": 3.0
+                    },
+                    reason=f"FIBO: {primary_tag} should be monitored for outliers",
+                    confidence=75.0
+                ))
+
+            elif rule_type == "DateFormatCheck":
+                # For temporal fields
+                suggestions.append(ValidationSuggestion(
+                    validation_type="DateFormatCheck",
+                    severity="ERROR",
+                    params={
+                        "field": col.name
+                    },
+                    reason=f"FIBO: {primary_tag} must be valid date format",
+                    confidence=90.0
+                ))
+
+            elif rule_type == "RangeCheck":
+                # General range check (use detected min/max)
+                if col.statistics.min_value is not None and col.statistics.max_value is not None:
+                    suggestions.append(ValidationSuggestion(
+                        validation_type="RangeCheck",
+                        severity="WARNING",
+                        params={
+                            "field": col.name,
+                            "min_value": col.statistics.min_value,
+                            "max_value": col.statistics.max_value
+                        },
+                        reason=f"FIBO: {primary_tag} observed range",
+                        confidence=80.0
+                    ))
+
+        return suggestions
+
     def _generate_semantic_type_validations(self, col: ColumnProfile) -> List[ValidationSuggestion]:
         """
         Generate validation suggestions based on detected semantic types.
+
+        Phase 2: Enhanced with FIBO-based semantic tagging.
+        - Checks FIBO semantic tags first (if available)
+        - Falls back to old semantic_type detection
 
         Returns appropriate validations for each semantic type:
         - email → RegexPatternCheck
@@ -1383,6 +1608,16 @@ class DataProfiler:
         - date/datetime → DateFormatCheck
         """
         suggestions = []
+
+        # Phase 2: Check FIBO semantic tags first
+        if col.semantic_info and self.enable_semantic_tagging and self.semantic_tagger:
+            fibo_suggestions = self._generate_fibo_semantic_validations(col)
+            suggestions.extend(fibo_suggestions)
+            # If FIBO provided suggestions, we can return early
+            if fibo_suggestions:
+                return suggestions
+
+        # Fallback to old semantic_type detection
         semantic_type = getattr(col.statistics, 'semantic_type', None)
 
         if not semantic_type or semantic_type == 'unknown':

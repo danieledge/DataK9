@@ -229,6 +229,7 @@ class ColumnProfile:
         quality: Quality metrics
         temporal_analysis: Temporal analysis results (for datetime columns)
         pii_info: PII detection results
+        semantic_info: Semantic understanding with FIBO-derived tags
     """
     name: str
     type_info: TypeInference
@@ -236,6 +237,7 @@ class ColumnProfile:
     quality: QualityMetrics
     temporal_analysis: Optional[Dict[str, Any]] = None
     pii_info: Optional[Dict[str, Any]] = None
+    semantic_info: Optional[Dict[str, Any]] = None
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary representation."""
@@ -251,6 +253,8 @@ class ColumnProfile:
             result["temporal_analysis"] = convert_numpy_types(self.temporal_analysis)
         if self.pii_info:
             result["pii_info"] = convert_numpy_types(self.pii_info)
+        if self.semantic_info:
+            result["semantic_info"] = convert_numpy_types(self.semantic_info)
 
         return result
 
