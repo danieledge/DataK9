@@ -1603,7 +1603,7 @@ class DataProfiler:
             elif rule_type == "OutlierDetectionCheck":
                 # Suggest outlier detection for monetary amounts, etc.
                 suggestions.append(ValidationSuggestion(
-                    validation_type="OutlierDetectionCheck",
+                    validation_type="StatisticalOutlierCheck",
                     severity="WARNING",
                     params={
                         "field": col.name,
@@ -1878,13 +1878,13 @@ class DataProfiler:
                 cardinality and cardinality < 0.10
             )
 
-            # Only suggest OutlierDetectionCheck for continuous numeric fields with high variability
+            # Only suggest StatisticalOutlierCheck for continuous numeric fields with high variability
             if mean and std_dev and mean != 0 and not is_binary and not is_low_cardinality_categorical:
                 coefficient_of_variation = (std_dev / abs(mean)) * 100
 
                 if coefficient_of_variation > 50:
                     suggestions.append(ValidationSuggestion(
-                        validation_type="OutlierDetectionCheck",
+                        validation_type="StatisticalOutlierCheck",
                         severity="WARNING",
                         params={
                             "field": col.name,
@@ -1896,7 +1896,7 @@ class DataProfiler:
                     ))
             elif is_binary or is_low_cardinality_categorical:
                 card_str = f"{cardinality:.2f}" if cardinality is not None else "N/A"
-                logger.debug(f"Skipping OutlierDetectionCheck for '{col.name}' - detected as binary/categorical field (unique_count={unique_count}, cardinality={card_str})")
+                logger.debug(f"Skipping StatisticalOutlierCheck for '{col.name}' - detected as binary/categorical field (unique_count={unique_count}, cardinality={card_str})")
 
         return suggestions
 

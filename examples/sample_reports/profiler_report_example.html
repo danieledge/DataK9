@@ -1028,7 +1028,7 @@
                 <span><span class="pill-dot"></span>500 rows</span>
                 <span><span class="pill-dot"></span>22.24 KB</span>
                 <span><span class="pill-dot"></span>0.2s</span>
-                <span><span class="pill-dot"></span>2025-11-25 13:40</span>
+                <span><span class="pill-dot"></span>2025-11-25 14:14</span>
             </div>
         </div>
     </header>
@@ -2018,35 +2018,35 @@
                             </div>
                             <div class="suggestion-card ">
                                 <div class="suggestion-header">
-                                    <div class="suggestion-type">OutlierDetectionCheck</div>
+                                    <div class="suggestion-type">StatisticalOutlierCheck</div>
                                     <div class="suggestion-confidence">75% confidence</div>
                                 </div>
                                 
                                 <div class="suggestion-reason">FIBO: money.amount should be monitored for outliers</div>
                                 <div class="suggestion-yaml-container">
-                                    <pre class="suggestion-yaml">      - type: "OutlierDetectionCheck"
+                                    <pre class="suggestion-yaml">      - type: "StatisticalOutlierCheck"
         severity: "WARNING"
           field: "opening_balance"
           method: "zscore"
           threshold: 3.0</pre>
-                                    <button class="copy-yaml-btn" onclick="copyYaml(`      - type: "OutlierDetectionCheck"
+                                    <button class="copy-yaml-btn" onclick="copyYaml(`      - type: "StatisticalOutlierCheck"
         severity: "WARNING"\n          field: "opening_balance"\n          method: "zscore"\n          threshold: 3.0`)">📋 Copy</button>
                                 </div>
                             </div>
                             <div class="suggestion-card ">
                                 <div class="suggestion-header">
-                                    <div class="suggestion-type">OutlierDetectionCheck</div>
+                                    <div class="suggestion-type">StatisticalOutlierCheck</div>
                                     <div class="suggestion-confidence">75% confidence</div>
                                 </div>
                                 
                                 <div class="suggestion-reason">High variability detected (CV=56.8%)</div>
                                 <div class="suggestion-yaml-container">
-                                    <pre class="suggestion-yaml">      - type: "OutlierDetectionCheck"
+                                    <pre class="suggestion-yaml">      - type: "StatisticalOutlierCheck"
         severity: "WARNING"
           field: "opening_balance"
           method: "zscore"
           threshold: 3.0</pre>
-                                    <button class="copy-yaml-btn" onclick="copyYaml(`      - type: "OutlierDetectionCheck"
+                                    <button class="copy-yaml-btn" onclick="copyYaml(`      - type: "StatisticalOutlierCheck"
         severity: "WARNING"\n          field: "opening_balance"\n          method: "zscore"\n          threshold: 3.0`)">📋 Copy</button>
                                 </div>
                             </div>
@@ -2082,7 +2082,7 @@
                                 </div>
                                 <pre class="full-config-yaml" id="fullConfigYaml"># Auto-generated validation configuration
 # Generated from profile of: accounts.csv
-# Generated at: 2025-11-25 13:40:07
+# Generated at: 2025-11-25 14:14:53
 # File size: 0.0 MB, Rows: 500
 # Recommended chunk size: 2,000,000 rows (Using maximum chunk size (2,000,000). Sufficient memory available.)
 
@@ -2176,7 +2176,7 @@ files:
           max_rows: 1000
         # Expect approximately 500 rows based on profile
 
-      - type: "OutlierDetectionCheck"
+      - type: "StatisticalOutlierCheck"
         severity: "WARNING"
         params:
           field: "opening_balance"
@@ -2184,7 +2184,7 @@ files:
           threshold: 3.0
         # FIBO: money.amount should be monitored for outliers
 
-      - type: "OutlierDetectionCheck"
+      - type: "StatisticalOutlierCheck"
         severity: "WARNING"
         params:
           field: "opening_balance"
