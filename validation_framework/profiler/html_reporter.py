@@ -1971,7 +1971,7 @@ class ProfileHTMLReporter:
             'file': {'name': '📋 File-Level Validations', 'validations': ['EmptyFileCheck', 'RowCountRangeCheck'], 'suggestions': []},
             'uniqueness': {'name': '🔑 Uniqueness & Identity', 'validations': ['UniqueKeyCheck', 'DuplicateCheck'], 'suggestions': []},
             'temporal': {'name': '📅 Temporal Validations', 'validations': ['DateRangeCheck', 'DateSequenceCheck', 'DateGapCheck'], 'suggestions': []},
-            'statistical': {'name': '📈 Statistical Validations', 'validations': ['OutlierDetectionCheck', 'DistributionCheck'], 'suggestions': []},
+            'statistical': {'name': '📈 Statistical Validations', 'validations': ['StatisticalOutlierCheck', 'DistributionCheck'], 'suggestions': []},
             'pattern': {'name': '📐 String & Pattern Validations', 'validations': ['StringLengthCheck', 'FormatCheck', 'RegexCheck'], 'suggestions': []},
             'range': {'name': '📊 Data Range & Boundaries', 'validations': ['RangeCheck', 'NumericRangeCheck'], 'suggestions': []},
             'completeness': {'name': '✓ Data Completeness', 'validations': ['MandatoryFieldCheck', 'NullCheck'], 'suggestions': []},
