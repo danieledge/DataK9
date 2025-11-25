@@ -1,0 +1,2484 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>Data Quality Report - accounts.csv</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/wordcloud@1.2.2/src/wordcloud2.min.js"></script>
+
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --bg-main: #050713;
+            --bg-elevated: #0b1020;
+            --bg-card: #0d1424;
+            --bg-hover: #111a2e;
+            --border-subtle: rgba(148, 163, 184, 0.15);
+            --border-focus: rgba(96, 165, 250, 0.4);
+            --accent: #60a5fa;
+            --accent-soft: rgba(96, 165, 250, 0.08);
+            --accent-gradient: linear-gradient(135deg, #3b82f6, #8b5cf6);
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            --good: #10b981;
+            --good-soft: rgba(16, 185, 129, 0.12);
+            --warning: #f59e0b;
+            --warning-soft: rgba(245, 158, 11, 0.12);
+            --critical: #ef4444;
+            --critical-soft: rgba(239, 68, 68, 0.12);
+            --info: #3b82f6;
+            --info-soft: rgba(59, 130, 246, 0.12);
+            --radius-sm: 6px;
+            --radius-md: 10px;
+            --radius-lg: 14px;
+            --radius-xl: 20px;
+            --shadow-card: 0 4px 24px rgba(0, 0, 0, 0.4);
+            --shadow-glow: 0 0 40px rgba(96, 165, 250, 0.08);
+            --transition-fast: 0.15s ease-out;
+            --transition-med: 0.25s ease-out;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: radial-gradient(ellipse at top left, #111827 0%, #030712 50%, #030712 100%);
+            color: var(--text-primary);
+            min-height: 100vh;
+            line-height: 1.5;
+        }
+
+        .top-nav {
+            background: rgba(11, 16, 32, 0.85);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--border-subtle);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .top-inner {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 14px 32px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 24px;
+            flex-wrap: wrap;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+
+        .brand-mark {
+            width: 42px;
+            height: 42px;
+            background: var(--accent-gradient);
+            border-radius: var(--radius-md);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 800;
+            font-size: 1.1em;
+            color: #fff;
+            box-shadow: 0 4px 16px rgba(59, 130, 246, 0.3);
+        }
+
+        .brand-text {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .brand-text span:first-child {
+            font-weight: 700;
+            font-size: 1.05em;
+            color: var(--text-primary);
+        }
+
+        .brand-text span:last-child {
+            font-size: 0.75em;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .file-meta {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            font-size: 0.85em;
+            color: var(--text-secondary);
+            flex-wrap: wrap;
+        }
+
+        .file-name-pill {
+            background: var(--accent-soft);
+            color: var(--accent);
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-weight: 600;
+            font-size: 0.85em;
+            border: 1px solid rgba(96, 165, 250, 0.2);
+        }
+
+        .pill-dot {
+            display: inline-block;
+            width: 6px;
+            height: 6px;
+            background: var(--text-muted);
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+
+        .page {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 32px;
+        }
+
+        .page-header {
+            margin-bottom: 32px;
+        }
+
+        .page-title-block h1 {
+            font-size: 1.8em;
+            font-weight: 700;
+            margin-bottom: 6px;
+            background: linear-gradient(135deg, #f1f5f9 0%, #94a3b8 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .page-title-block p {
+            color: var(--text-secondary);
+            font-size: 0.95em;
+        }
+
+        .kpi-belt {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-bottom: 32px;
+        }
+
+        @media (max-width: 768px) {
+            .kpi-belt {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        .kpi-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-lg);
+            padding: 20px;
+            text-align: center;
+        }
+
+        .kpi-label {
+            font-size: 0.75em;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-muted);
+            margin-bottom: 8px;
+        }
+
+        .kpi-value {
+            font-size: 2em;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .kpi-value.critical {
+            color: var(--critical);
+        }
+
+        .kpi-trend {
+            font-size: 0.75em;
+            margin-top: 8px;
+        }
+
+        .kpi-trend.good { color: var(--good); }
+        .kpi-trend.warning { color: var(--warning); }
+        .kpi-trend.critical { color: var(--critical); }
+
+        .sampling-bar {
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-lg);
+            padding: 16px 24px;
+            margin-bottom: 24px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 24px;
+            align-items: center;
+        }
+
+        .sampling-bar-title {
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .sampling-stat {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .sampling-stat-label {
+            font-size: 0.7em;
+            text-transform: uppercase;
+            color: var(--text-muted);
+        }
+
+        .sampling-stat-value {
+            font-size: 0.9em;
+            color: var(--text-secondary);
+        }
+
+        .sampling-stat-value.highlight {
+            color: var(--accent);
+            font-weight: 600;
+        }
+
+        .hint-box {
+            background: var(--bg-elevated);
+            border-left: 3px solid var(--accent);
+            padding: 12px 16px;
+            border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+            font-size: 0.82em;
+            color: var(--text-secondary);
+            margin-bottom: 16px;
+        }
+
+        /* FIBO Section Styles */
+        .fibo-section {
+            background: linear-gradient(135deg, #1e1b4b 0%, var(--bg-card) 100%);
+            border: 1px solid rgba(139, 92, 246, 0.3);
+            border-radius: var(--radius-lg);
+            padding: 20px;
+            margin: 16px 0;
+        }
+
+        .fibo-header {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            margin-bottom: 16px;
+        }
+
+        .fibo-icon {
+            font-size: 2em;
+        }
+
+        .fibo-title h3 {
+            color: #c4b5fd;
+            font-size: 1.1em;
+            margin: 0;
+        }
+
+        .fibo-title p {
+            color: var(--text-muted);
+            font-size: 0.85em;
+            margin: 2px 0 0 0;
+        }
+
+        .fibo-content {
+            font-size: 0.9em;
+        }
+
+        .fibo-description {
+            color: var(--text-secondary);
+            line-height: 1.6;
+            margin-bottom: 16px;
+        }
+
+        .fibo-description strong {
+            color: #a5b4fc;
+        }
+
+        .fibo-stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .fibo-stat {
+            background: var(--bg-elevated);
+            padding: 14px;
+            border-radius: var(--radius-md);
+            text-align: center;
+        }
+
+        .fibo-stat-value {
+            font-size: 1.5em;
+            font-weight: 600;
+            color: #c4b5fd;
+        }
+
+        .fibo-stat-label {
+            font-size: 0.75em;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-top: 4px;
+        }
+
+        .fibo-stat-note {
+            font-size: 0.7em;
+            color: var(--text-muted);
+            margin-top: 2px;
+        }
+
+        .fibo-categories {
+            margin-bottom: 8px;
+        }
+
+        .fibo-categories-label {
+            font-size: 0.8em;
+            color: var(--text-muted);
+            margin-right: 8px;
+        }
+
+        .fibo-category-tag {
+            display: inline-block;
+            background: rgba(139, 92, 246, 0.15);
+            color: #c4b5fd;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 0.8em;
+            margin: 2px;
+        }
+
+        .layout-grid {
+            display: block;
+            max-width: 100%;
+            overflow: hidden;
+        }
+
+        .main-column {
+            min-width: 0;
+        }
+
+        .accordion {
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-lg);
+            margin-bottom: 16px;
+            overflow: hidden;
+        }
+
+        .accordion-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 20px;
+            cursor: pointer;
+            transition: background var(--transition-fast);
+        }
+
+        .accordion-header:hover {
+            background: var(--bg-hover);
+        }
+
+        .accordion-title-group {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+
+        .accordion-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: var(--radius-md);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.1em;
+        }
+
+        .accordion-icon.overview { background: var(--info-soft); }
+        .accordion-icon.quality { background: var(--good-soft); }
+        .accordion-icon.columns { background: var(--accent-soft); }
+        .accordion-icon.issues { background: var(--critical-soft); }
+
+        .accordion-title {
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .accordion-subtitle {
+            font-size: 0.8em;
+            color: var(--text-muted);
+        }
+
+        .accordion-meta {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .accordion-badge {
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 0.7em;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .accordion-badge.good { background: var(--good-soft); color: var(--good); }
+        .accordion-badge.warning { background: var(--warning-soft); color: var(--warning); }
+        .accordion-badge.critical { background: var(--critical-soft); color: var(--critical); }
+        .accordion-badge.info { background: var(--info-soft); color: var(--info); }
+
+        .accordion-chevron {
+            color: var(--text-muted);
+            transition: transform var(--transition-fast);
+        }
+
+        .accordion.open .accordion-chevron {
+            transform: rotate(180deg);
+        }
+
+        .accordion-body {
+            display: none;
+            border-top: 1px solid var(--border-subtle);
+        }
+
+        .accordion.open .accordion-body {
+            display: block;
+        }
+
+        .accordion-content {
+            padding: 20px;
+        }
+
+        .overview-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .overview-stat {
+            background: var(--bg-elevated);
+            padding: 16px;
+            border-radius: var(--radius-md);
+        }
+
+        .overview-stat-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .overview-stat-label {
+            font-size: 0.8em;
+            color: var(--text-muted);
+            text-transform: uppercase;
+        }
+
+        .overview-stat-value {
+            font-size: 1.5em;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .overview-stat-bar {
+            height: 6px;
+            background: var(--bg-main);
+            border-radius: 3px;
+            overflow: hidden;
+            margin-top: 8px;
+        }
+
+        .overview-stat-fill {
+            height: 100%;
+            border-radius: 3px;
+            transition: width 0.5s ease;
+        }
+
+        .overview-stat-fill.good { background: var(--good); }
+        .overview-stat-fill.warning { background: var(--warning); }
+        .overview-stat-fill.critical { background: var(--critical); }
+
+        .overview-stat-hint {
+            font-size: 0.75em;
+            color: var(--text-muted);
+            margin-top: 8px;
+        }
+
+        .chart-container {
+            background: var(--bg-elevated);
+            padding: 20px;
+            border-radius: var(--radius-md);
+            margin-bottom: 16px;
+        }
+
+        .chart-title {
+            font-size: 0.9em;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 16px;
+        }
+
+        .column-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .column-row {
+            background: var(--bg-elevated);
+            border-radius: var(--radius-md);
+            overflow: hidden;
+        }
+
+        .column-row-header {
+            display: grid;
+            grid-template-columns: auto auto 1fr auto auto auto;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            cursor: pointer;
+            transition: background var(--transition-fast);
+        }
+
+        @media (min-width: 1200px) {
+            .column-row-header {
+                grid-template-columns: auto auto minmax(200px, 1fr) minmax(150px, auto) minmax(200px, auto) auto;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .column-row-header {
+                grid-template-columns: auto auto 1fr auto;
+                grid-template-rows: auto auto;
+            }
+            .column-quick-stats {
+                grid-column: 3 / -1;
+                grid-row: 2;
+                justify-self: start;
+            }
+            .column-tags {
+                grid-column: 1 / -1;
+                grid-row: 3;
+            }
+        }
+
+        .column-row-header:hover {
+            background: var(--bg-hover);
+        }
+
+        .column-expand-icon {
+            color: var(--text-muted);
+            font-size: 0.7em;
+            transition: transform var(--transition-fast);
+        }
+
+        .column-row.expanded .column-expand-icon {
+            transform: rotate(90deg);
+        }
+
+        .column-type-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: var(--radius-sm);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.9em;
+        }
+
+        .column-type-icon.string { background: rgba(139, 92, 246, 0.2); }
+        .column-type-icon.number { background: rgba(59, 130, 246, 0.2); }
+        .column-type-icon.date { background: rgba(245, 158, 11, 0.2); }
+
+        .column-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .column-name {
+            font-weight: 600;
+            color: var(--text-primary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .column-type {
+            font-size: 0.75em;
+            color: var(--text-muted);
+        }
+
+        .column-quick-stats {
+            display: flex;
+            gap: 16px;
+            font-size: 0.75em;
+            color: var(--text-secondary);
+        }
+
+        .column-tags {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+
+        .column-tag {
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 0.65em;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .column-tag.pii { background: var(--critical-soft); color: var(--critical); }
+        .column-tag.temporal { background: var(--warning-soft); color: var(--warning); }
+        .column-tag.semantic { background: var(--info-soft); color: var(--info); }
+        .column-tag.fibo {
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.15) 0%, rgba(59, 130, 246, 0.15) 100%);
+            color: #7c3aed;
+            border: 1px solid rgba(139, 92, 246, 0.3);
+        }
+        .column-tag.fibo .fibo-icon { margin-right: 4px; }
+        .column-tag.fibo-domain {
+            background: rgba(59, 130, 246, 0.1);
+            color: #3b82f6;
+            font-size: 0.6em;
+        }
+
+        .column-quality-score {
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 0.75em;
+            font-weight: 600;
+        }
+
+        .column-quality-score.good { background: var(--good-soft); color: var(--good); }
+        .column-quality-score.warning { background: var(--warning-soft); color: var(--warning); }
+        .column-quality-score.critical { background: var(--critical-soft); color: var(--critical); }
+
+        .column-details {
+            display: none;
+            border-top: 1px solid var(--border-subtle);
+        }
+
+        .column-row.expanded .column-details {
+            display: block;
+        }
+
+        .column-details-content {
+            padding: 16px;
+        }
+
+        .column-stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 12px;
+        }
+
+        .column-stat {
+            background: var(--bg-main);
+            padding: 10px;
+            border-radius: var(--radius-sm);
+        }
+
+        .column-stat-label {
+            font-size: 0.7em;
+            color: var(--text-muted);
+            text-transform: uppercase;
+        }
+
+        .column-stat-value {
+            font-size: 0.9em;
+            color: var(--text-primary);
+            font-weight: 500;
+        }
+
+        .top-values-section {
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid var(--border-subtle);
+        }
+
+        .top-values-title {
+            font-size: 0.75em;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            margin-bottom: 8px;
+        }
+
+        .top-values-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+            gap: 6px;
+        }
+
+        .top-value-item {
+            background: var(--bg-main);
+            padding: 6px 10px;
+            border-radius: var(--radius-sm);
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.8em;
+        }
+
+        .top-value-name {
+            color: var(--text-secondary);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            max-width: 100px;
+        }
+
+        .top-value-count {
+            color: var(--text-muted);
+        }
+
+        .sampled-note {
+            font-size: 0.7em;
+            color: var(--text-muted);
+            font-style: italic;
+            margin-top: 6px;
+        }
+
+        .suggestion-card {
+            background: var(--bg-elevated);
+            border-radius: var(--radius-md);
+            padding: 16px;
+            margin-bottom: 12px;
+            border-left: 3px solid var(--info);
+        }
+
+        .suggestion-card.high-priority {
+            border-left-color: #8b5cf6;
+        }
+
+        .suggestion-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 8px;
+        }
+
+        .suggestion-type {
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .suggestion-confidence {
+            font-size: 0.75em;
+            color: var(--text-muted);
+        }
+
+        .suggestion-reason {
+            font-size: 0.85em;
+            color: var(--text-secondary);
+            margin-bottom: 12px;
+        }
+
+        .suggestion-field {
+            font-size: 0.8em;
+            color: var(--text-muted);
+            margin-bottom: 6px;
+            padding: 4px 8px;
+            background: var(--bg-card);
+            border-radius: var(--radius-sm);
+            display: inline-block;
+        }
+
+        .suggestion-field strong {
+            color: var(--accent);
+        }
+
+        .suggestion-yaml-container {
+            display: flex;
+            gap: 8px;
+            align-items: flex-start;
+            margin-top: 8px;
+        }
+
+        .suggestion-yaml {
+            flex: 1;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            padding: 10px 12px;
+            font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+            font-size: 0.75em;
+            color: var(--text-secondary);
+            margin: 0;
+            white-space: pre-wrap;
+            word-break: break-word;
+            overflow-x: auto;
+        }
+
+        .copy-yaml-btn {
+            background: var(--accent-soft);
+            color: var(--accent);
+            border: 1px solid rgba(96, 165, 250, 0.3);
+            padding: 6px 12px;
+            border-radius: var(--radius-sm);
+            font-size: 0.75em;
+            cursor: pointer;
+            transition: all var(--transition-fast);
+        }
+
+        .copy-yaml-btn:hover {
+            background: var(--accent);
+            color: #fff;
+        }
+
+        /* Full Config Section */
+        .full-config-container {
+            margin-top: 12px;
+        }
+
+        .config-actions {
+            margin-bottom: 10px;
+        }
+
+        .copy-config-btn {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: #fff;
+            border: none;
+            padding: 10px 20px;
+            border-radius: var(--radius-md);
+            font-size: 0.85em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all var(--transition-fast);
+        }
+
+        .copy-config-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+        }
+
+        .full-config-yaml {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            padding: 16px;
+            font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+            font-size: 0.8em;
+            color: var(--text-secondary);
+            margin: 0;
+            white-space: pre;
+            overflow-x: auto;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+
+        .pii-risk-card {
+            background: var(--critical-soft);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            border-radius: var(--radius-md);
+            padding: 16px;
+            margin-bottom: 16px;
+        }
+
+        .pii-risk-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .pii-risk-score {
+            font-size: 1.5em;
+            font-weight: 700;
+            color: var(--critical);
+        }
+
+        .pii-risk-level {
+            font-size: 0.85em;
+            color: var(--critical);
+        }
+
+        .pii-column-item {
+            background: var(--bg-elevated);
+            padding: 12px;
+            border-radius: var(--radius-sm);
+            margin-top: 12px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .pii-column-name {
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .pii-type-badge {
+            background: var(--critical-soft);
+            color: var(--critical);
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 0.7em;
+            font-weight: 600;
+        }
+
+        .pii-frameworks {
+            display: flex;
+            gap: 6px;
+        }
+
+        .pii-framework-tag {
+            background: var(--warning-soft);
+            color: var(--warning);
+            padding: 2px 6px;
+            border-radius: 6px;
+            font-size: 0.65em;
+            font-weight: 600;
+        }
+
+        .freshness-content {
+            padding: 0;
+        }
+
+        .freshness-timeline {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .freshness-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .freshness-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+
+        .freshness-dot.good { background: var(--good); box-shadow: 0 0 8px var(--good); }
+        .freshness-dot.warning { background: var(--warning); box-shadow: 0 0 8px var(--warning); }
+
+        .freshness-info {
+            flex: 1;
+        }
+
+        .freshness-label {
+            font-size: 0.75em;
+            color: var(--text-muted);
+            text-transform: uppercase;
+        }
+
+        .freshness-value {
+            font-size: 0.9em;
+            color: var(--text-primary);
+        }
+
+        .column-search {
+            margin-bottom: 12px;
+        }
+
+        .column-search input {
+            width: 100%;
+            padding: 10px 14px;
+            background: var(--bg-main);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-md);
+            color: var(--text-primary);
+            font-size: 0.9em;
+        }
+
+        .column-search input:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        @media (max-width: 768px) {
+            .page { padding: 16px; }
+            .top-inner { padding: 12px 16px; }
+            .file-meta { display: none; }
+            .column-quick-stats { display: none; }
+            .column-tags { display: none; }
+        }
+    </style>
+</head>
+<body>
+    <!-- Top Navigation -->
+    <header class="top-nav">
+        <div class="top-inner">
+            <div class="brand">
+                <div class="brand-mark">DK9</div>
+                <div class="brand-text">
+                    <span>DataK9</span>
+                    <span>Data Profiler</span>
+                </div>
+            </div>
+            <div class="file-meta">
+                <span class="file-name-pill">accounts.csv</span>
+                <span><span class="pill-dot"></span>500 rows</span>
+                <span><span class="pill-dot"></span>22.24 KB</span>
+                <span><span class="pill-dot"></span>0.2s</span>
+                <span><span class="pill-dot"></span>2025-11-25 13:40</span>
+            </div>
+        </div>
+    </header>
+
+    <main class="page">
+        <!-- Page Header -->
+        <section class="page-header">
+            <div class="page-title-block">
+                <h1>Data Quality & Completeness</h1>
+                <p>Snapshot of overall health, completeness and key risks across this dataset.</p>
+            </div>
+        </section>
+
+        <!-- KPI Belt -->
+        <section class="kpi-belt">
+            <div class="kpi-card">
+                <div class="kpi-label">Overall Quality</div>
+                <div class="kpi-value">91.1%</div>
+                <div class="kpi-trend good">Excellent - data is high quality</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-label">Completeness</div>
+                <div class="kpi-value">99.5%</div>
+                <div class="kpi-trend good">▲ Excellent - minimal nulls</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-label">Privacy Risk</div>
+                <div class="kpi-value critical">85</div>
+                <div class="kpi-trend critical">⚠ 1 PII columns detected</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-label">Columns Analyzed</div>
+                <div class="kpi-value">6</div>
+                <div class="kpi-trend good">All columns profiled</div>
+            </div>
+        </section>
+
+        <!-- Sampling Summary -->
+        
+        <section class="sampling-bar" style="flex-direction: column; align-items: stretch;">
+            <div style="display: flex; flex-wrap: wrap; gap: 24px; align-items: center;">
+                <div class="sampling-bar-title">🔬 Processing Summary</div>
+                <div class="sampling-stat">
+                    <span class="sampling-stat-label">Total Rows</span>
+                    <span class="sampling-stat-value highlight">500</span>
+                </div>
+                <div class="sampling-stat">
+                    <span class="sampling-stat-label">Full Scan</span>
+                    <span class="sampling-stat-value">Row count, nulls, file metadata</span>
+                </div>
+                <div class="sampling-stat">
+                    <span class="sampling-stat-label">Sampled</span>
+                    <span class="sampling-stat-value">Statistics, patterns, top values</span>
+                </div>
+                <div class="sampling-stat">
+                    <span class="sampling-stat-label">Sample Size</span>
+                    <span class="sampling-stat-value">500 rows (100.0000%)</span>
+                </div>
+            </div>
+            <div class="hint-box" style="margin-top: 12px; margin-bottom: 0; border-left-color: var(--info);">
+                <strong>📊 Sampling methodology:</strong> For 500 rows, statistical sampling provides high confidence results while keeping processing time manageable.
+                <br><strong style="color: var(--warning);">⚠️ Limitations:</strong> Rare values (&lt;0.01% occurrence) and extreme outliers may not be captured in sampled statistics.
+                <br><strong>*</strong> Unique count marked with * means every sampled row was unique - actual cardinality is likely much higher.
+            </div>
+        </section>
+
+        <!-- FIBO Semantic Analysis Section -->
+        
+        <section class="fibo-section">
+            <div class="fibo-header">
+                <div class="fibo-icon">🏦</div>
+                <div class="fibo-title">
+                    <h3>FIBO Semantic Analysis</h3>
+                    <p>Financial Industry Business Ontology mapping</p>
+                </div>
+            </div>
+            <div class="fibo-content">
+                <div class="fibo-description">
+                    DataK9 uses <strong>FIBO</strong> (Financial Industry Business Ontology) - an industry-standard
+                    semantic framework maintained by the EDM Council - to automatically understand the meaning
+                    and purpose of your data columns, enabling context-aware validation suggestions.
+                </div>
+                <div class="fibo-stats-grid">
+                    <div class="fibo-stat">
+                        <div class="fibo-stat-value">5</div>
+                        <div class="fibo-stat-label">Columns Classified</div>
+                        <div class="fibo-stat-note">of 6 total</div>
+                    </div>
+                    <div class="fibo-stat">
+                        <div class="fibo-stat-value">5</div>
+                        <div class="fibo-stat-label">FIBO Pattern Matches</div>
+                        <div class="fibo-stat-note">mapped to ontology</div>
+                    </div>
+                    <div class="fibo-stat">
+                        <div class="fibo-stat-value">3</div>
+                        <div class="fibo-stat-label">Semantic Domains</div>
+                        <div class="fibo-stat-note">detected categories</div>
+                    </div>
+                </div>
+                <div class="fibo-categories">
+                    <span class="fibo-categories-label">Detected domains:</span>
+                    <span class="fibo-category-tag">banking</span><span class="fibo-category-tag">money</span><span class="fibo-category-tag">party</span>
+                </div>
+                <div class="hint-box" style="margin-top: 12px; border-left-color: #8b5cf6;">
+                    💡 <strong>What this means:</strong> Columns identified as financial data types (e.g., "money.amount", "identifier.account")
+                    automatically receive context-appropriate validation suggestions like non-negative checks, precision rules, or uniqueness constraints.
+                    <br><a href="https://spec.edmcouncil.org/fibo/" target="_blank" style="color: #8b5cf6;">Learn more about FIBO →</a>
+                </div>
+            </div>
+        </section>
+
+        <!-- PII Risk Section (if PII detected) -->
+        
+        <div class="accordion open" data-accordion="pii">
+            <div class="accordion-header" onclick="toggleAccordion(this)">
+                <div class="accordion-title-group">
+                    <div class="accordion-icon issues">🔒</div>
+                    <div>
+                        <div class="accordion-title">Privacy & PII Risk</div>
+                        <div class="accordion-subtitle">Sensitive data detection</div>
+                    </div>
+                </div>
+                <div class="accordion-meta">
+                    <span class="accordion-badge critical">CRITICAL</span>
+                    <span class="accordion-chevron">▼</span>
+                </div>
+            </div>
+            <div class="accordion-body">
+                <div class="accordion-content">
+                    <div class="pii-risk-card">
+                        <div class="pii-risk-header">
+                            <div class="pii-risk-score">85 / 100</div>
+                            <div class="pii-risk-level">Critical Risk</div>
+                        </div>
+                    </div>
+                    
+                <div class="pii-column-item">
+                    <div class="pii-column-name">account_number</div>
+                    <span class="pii-type-badge">Account</span>
+                    <div class="pii-frameworks"></div>
+                </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Layout -->
+        <div class="layout-grid">
+            <div class="main-column">
+                <!-- Overview Accordion -->
+                
+                <div class="accordion open" data-accordion="overview">
+                    <div class="accordion-header" onclick="toggleAccordion(this)">
+                        <div class="accordion-title-group">
+                            <div class="accordion-icon overview">📊</div>
+                            <div>
+                                <div class="accordion-title">Overview & Distribution</div>
+                                <div class="accordion-subtitle">Data types, completeness breakdown</div>
+                            </div>
+                        </div>
+                        <div class="accordion-meta">
+                            <span class="accordion-badge good">Healthy</span>
+                            <span class="accordion-chevron">▼</span>
+                        </div>
+                    </div>
+                    <div class="accordion-body">
+                        <div class="accordion-content">
+                            <div class="hint-box">
+                                <strong>📊 How to read these metrics:</strong> Quality dimensions measure different aspects of your data. Higher percentages indicate better data quality.
+                            </div>
+                            <div class="overview-grid">
+                                <div class="overview-stat">
+                                    <div class="overview-stat-header">
+                                        <span class="overview-stat-label">Completeness</span>
+                                    </div>
+                                    <div class="overview-stat-value">99.5%</div>
+                                    <div class="overview-stat-bar">
+                                        <div class="overview-stat-fill good" style="width: 99.53333333333335%"></div>
+                                    </div>
+                                    <div class="overview-stat-hint">✓ No missing values - ready for analysis</div>
+                                </div>
+                                <div class="overview-stat">
+                                    <div class="overview-stat-header">
+                                        <span class="overview-stat-label">Validity</span>
+                                    </div>
+                                    <div class="overview-stat-value">99.9%</div>
+                                    <div class="overview-stat-bar">
+                                        <div class="overview-stat-fill good" style="width: 99.89999999999999%"></div>
+                                    </div>
+                                    <div class="overview-stat-hint">100% of values match expected formats</div>
+                                </div>
+                                <div class="overview-stat">
+                                    <div class="overview-stat-header">
+                                        <span class="overview-stat-label">Consistency</span>
+                                    </div>
+                                    <div class="overview-stat-value">78.0%</div>
+                                    <div class="overview-stat-bar">
+                                        <div class="overview-stat-fill critical" style="width: 78.0%"></div>
+                                    </div>
+                                    <div class="overview-stat-hint">Some pattern variations detected</div>
+                                </div>
+                                <div class="overview-stat">
+                                    <div class="overview-stat-header">
+                                        <span class="overview-stat-label">Uniqueness</span>
+                                    </div>
+                                    <div class="overview-stat-value">78.5%</div>
+                                    <div class="overview-stat-bar">
+                                        <div class="overview-stat-fill critical" style="width: 78.53981786262892%"></div>
+                                    </div>
+                                    <div class="overview-stat-hint">ℹ Some expected duplication in categorical columns</div>
+                                </div>
+                            </div>
+                            <div class="chart-container">
+                                <div class="chart-title">Data Type Distribution</div>
+                                <canvas id="typeChart" height="100"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Quality Metrics Accordion -->
+                
+                <div class="accordion" data-accordion="quality">
+                    <div class="accordion-header" onclick="toggleAccordion(this)">
+                        <div class="accordion-title-group">
+                            <div class="accordion-icon quality">✓</div>
+                            <div>
+                                <div class="accordion-title">Quality Metrics</div>
+                                <div class="accordion-subtitle">Detailed quality breakdown by dimension</div>
+                            </div>
+                        </div>
+                        <div class="accordion-meta">
+                            <span class="accordion-badge good">91%</span>
+                            <span class="accordion-chevron">▼</span>
+                        </div>
+                    </div>
+                    <div class="accordion-body">
+                        <div class="accordion-content">
+                            <div class="hint-box">
+                                <strong>📈 Quality Score Breakdown:</strong> The overall quality score combines multiple factors:
+                                <br>• <strong>Completeness</strong> (40%): Percentage of non-null values
+                                <br>• <strong>Validity</strong> (30%): Values matching expected type/format
+                                <br>• <strong>Consistency</strong> (20%): Pattern uniformity across the column
+                                <br>• <strong>Uniqueness</strong> (10%): Cardinality relative to column type
+                            </div>
+                            <div class="chart-container">
+                                <div class="chart-title">Quality Score by Column</div>
+                                <canvas id="qualityChart" height="120"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Value Distribution Accordion -->
+                
+                <div class="accordion open" data-accordion="distribution">
+                    <div class="accordion-header" onclick="toggleAccordion(this)">
+                        <div class="accordion-title-group">
+                            <div class="accordion-icon quality">📊</div>
+                            <div>
+                                <div class="accordion-title">Value Distribution</div>
+                                <div class="accordion-subtitle">Top values in categorical columns</div>
+                            </div>
+                        </div>
+                        <div class="accordion-meta">
+                            <span class="accordion-badge info">3 charts</span>
+                            <span class="accordion-chevron">▼</span>
+                        </div>
+                    </div>
+                    <div class="accordion-body">
+                        <div class="accordion-content">
+                            <div class="hint-box">
+                                <strong>📊 Value Analysis:</strong> These charts show column quality metrics and value distributions. Useful for:
+                                <br>• Identifying data quality issues
+                                <br>• Building ValidValuesCheck validations
+                                <br>• Understanding business domain distribution
+                            </div>
+                            <div style="display: grid; gap: 20px;">
+                                <div class="chart-container">
+                                    <div class="chart-title">Column Quality: Completeness vs Validity</div>
+                                    <div class="hint-box" style="margin-bottom: 12px; margin-top: 0;">
+                                        Bubble size represents unique value count. Position shows completeness (x) vs validity (y).
+                                    </div>
+                                    <canvas id="bubbleChart" height="200"></canvas>
+                                </div>
+                                <div class="chart-container">
+                                    <div class="chart-title">Categorical Values Word Cloud</div>
+                                    <div class="hint-box" style="margin-bottom: 12px; margin-top: 0;">
+                                        Word size represents frequency. Showing top values from: account_type
+                                    </div>
+                                    <div id="wordCloudContainer" style="width: 100%; height: 250px; background: var(--bg-elevated); border-radius: var(--radius-md);"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Column Explorer Accordion -->
+                
+                <div class="accordion" data-accordion="columns">
+                    <div class="accordion-header" onclick="toggleAccordion(this)">
+                        <div class="accordion-title-group">
+                            <div class="accordion-icon columns">📋</div>
+                            <div>
+                                <div class="accordion-title">Column Explorer</div>
+                                <div class="accordion-subtitle">6 columns with semantic analysis</div>
+                            </div>
+                        </div>
+                        <div class="accordion-meta">
+                            <span class="accordion-badge info">6 tagged</span>
+                            <span class="accordion-chevron">▼</span>
+                        </div>
+                    </div>
+                    <div class="accordion-body">
+                        <div class="accordion-content">
+                            <div class="hint-box">
+                                <strong>🧠 Intelligent Analysis:</strong> Columns are automatically analyzed for:
+                                <br>• <strong>Semantic meaning</strong> - MONEY, TIMESTAMP, ACCOUNT_ID, etc.
+                                <br>• <strong>PII detection</strong> - Credit cards, SSN, emails, phones
+                                <br>• <strong>Temporal patterns</strong> - Date ranges, frequency, gaps
+                                <br>Click any column to see detailed statistics and insights.
+                            </div>
+                            <div class="column-search">
+                                <input type="text" placeholder="Search columns by name, type, or tag..." oninput="filterColumns(this.value)">
+                            </div>
+                            <div class="column-list" id="columnList">
+                                
+                                <div class="column-row" onclick="toggleColumnRow(this)">
+                                    <div class="column-row-header">
+                                        <span class="column-expand-icon">▶</span>
+                                        <div class="column-type-icon number">🔢</div>
+                                        <div class="column-info">
+                                            <div class="column-name">account_id</div>
+                                            <div class="column-type">integer (100% confidence)</div>
+                                        </div>
+                                        <div class="column-quick-stats">
+                                            <span>100% complete</span>
+                                            <span>100.00% unique</span>
+                                        </div>
+                                        <div class="column-tags">
+                                            <span class="column-tag fibo">banking.account</span>
+                                        </div>
+                                        <span class="column-quality-score good">98%</span>
+                                    </div>
+                                    <div class="column-details">
+                                        <div class="column-details-content">
+                                            <div class="column-stats-grid">
+                                            <div class="column-stat">
+                                                <div class="column-stat-label">Row Count</div>
+                                                <div class="column-stat-value">500</div>
+                                            </div>
+                                            <div class="column-stat">
+                                                <div class="column-stat-label">Null Count</div>
+                                                <div class="column-stat-value">0</div>
+                                            </div>
+                                            <div class="column-stat">
+                                                <div class="column-stat-label">Unique Values</div>
+                                                <div class="column-stat-value">500*</div>
+                                            </div>
+                                            <div class="column-stat">
+                                                <div class="column-stat-label">Mean</div>
+                                                <div class="column-stat-value">250.50</div>
+                                            </div>
+                                            <div class="column-stat">
+                                                <div class="column-stat-label">Median</div>
+                                                <div class="column-stat-value">250.50</div>
+                                            </div>
+                                            <div class="column-stat">
+                                                <div class="column-stat-label">Std Dev</div>
+                                                <div class="column-stat-value">144.34</div>
+                                            </div>
+                                            <div class="column-stat">
+                                                <div class="column-stat-label">Min</div>
+                                                <div class="column-stat-value">1.0</div>
+                                            </div>
+                                            <div class="column-stat">
+                                                <div class="column-stat-label">Max</div>
+                                                <div class="column-stat-value">500.0</div>
+                                            </div></div>
+                                            
+                                            <div class="top-values-section">
+                                                <div class="top-values-title">Top Values (from sample)</div>
+                                                <div class="top-values-grid">
+                                                    <div class="top-value-item">
+                                                        <span class="top-value-name">1</span>
+                                                        <span class="top-value-count">1</span>
+                                                    </div>
+                                                    <div class="top-value-item">
+                                                        <span class="top-value-name">2</span>
+                                                        <span class="top-value-count">1</span>
+                                                    </div>
+                                                    <div class="top-value-item">
+                                                        <span class="top-value-name">3</span>
+                                                        <span class="top-value-count">1</span>
+                                                    </div>
+                                                    <div class="top-value-item">
+                                                        <span class="top-value-name">4</span>
+                                                        <span class="top-value-count">1</span>
+                                                    </div>
+                                                    <div class="top-value-item">
+                                                        <span class="top-value-name">5</span>
+                                                        <span class="top-value-count">1</span>
+                                                    </div></div>
+                                                <div class="sampled-note">Based on 500 row sample</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="column-row" onclick="toggleColumnRow(this)">
+                                    <div class="column-row-header">
+                                        <span class="column-expand-icon">▶</span>
+                                        <div class="column-type-icon number">🔐</div>
+                                        <div class="column-info">
+                                            <div class="column-name">account_number</div>
+                                            <div class="column-type">integer (100% confidence)</div>
+                                        </div>
+                                        <div class="column-quick-stats">
+                                            <span>100% complete</span>
+                                            <span>100.00% unique</span>
+                                        </div>
+                                        <div class="column-tags">
+                                            <span class="column-tag pii">PII</span><span class="column-tag fibo">banking.account</span>
+                                        </div>
+                                        <span class="column-quality-score good">97%</span>
+                                    </div>
+                                    <div class="column-details">
+                                        <div class="column-details-content">
+                                            <div class="column-stats-grid">
+                                            <div class="column-stat">
+                                                <div class="column-stat-label">Row Count</div>
+                                                <div class="column-stat-value">500</div>
+                                            </div>
+                                            <div class="column-stat">
+                                                <div class="column-stat-label">Null Count</div>
+                                                <div class="column-stat-value">0</div>
+                                            </div>
+                                            <div class="column-stat">
+                                                <div class="column-stat-label">Unique Values</div>
+                                                <div class="column-stat-value">500*</div>
+                                            </div>
+                                            <div class="column-stat">
+                                                <div class="column-stat-label">Mean</div>
+                                                <div class="column-stat-value">51.98M</div>
+                                            </div>
+                                            <div class="column-stat">
+                                                <div class="column-stat-label">Median</div>
+                                                <div class="column-stat-value">55.62M</div>
+                                            </div>
+                                            <div class="column-stat">
+                                                <div class="column-stat-label">Std Dev</div>
+                                                <div class="column-stat-value">30.64M</div>
+                                            </div>
+                                            <div class="column-stat">
+                                                <div class="column-stat-label">Min</div>
+                                                <div class="column-stat-value">139.0</div>
+                                            </div>
+                                            <div class="column-stat">
+                                                <div class="column-stat-label">Max</div>
+                                                <div class="column-stat-value">99998002.0</div>
+                                            </div></div>
+                                            
+                                            <div class="top-values-section">
+                                                <div class="top-values-title">Top Values (from sample)</div>
+                                                <div class="top-values-grid">
+                                                    <div class="top-value-item">
+                                                        <span class="top-value-name">911</span>
+                                                        <span class="top-value-count">1</span>
+                                                    </div>
+                                                    <div class="top-value-item">
+                                                        <span class="top-value-name">56645437</span>
+                                                        <span class="top-value-count">1</span>
+                                                    </div>
+                                                    <div class="top-value-item">
+                                                        <span class="top-value-name">41198228</span>
+                                                        <span class="top-value-count">1</span>
+                                                    </div>
+                                                    <div class="top-value-item">
+                                                        <span class="top-value-name">70101183</span>
+                                                        <span class="top-value-count">1</span>
+                                                    </div>
+                                                    <div class="top-value-item">
+                                                        <span class="top-value-name">890</span>
+                                                        <span class="top-value-count">1</span>
+                                                    </div></div>
+                                                <div class="sampled-note">Based on 500 row sample</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="column-row" onclick="toggleColumnRow(this)">
+                                    <div class="column-row-header">
+                                        <span class="column-expand-icon">▶</span>
+                                        <div class="column-type-icon number">🔢</div>
+                                        <div class="column-info">
+                                            <div class="column-name">customer_id</div>
+                                            <div class="column-type">integer (100% confidence)</div>
+                                        </div>
+                                        <div class="column-quick-stats">
+                                            <span>99% complete</span>
+                                            <span>77.82% unique</span>
+                                        </div>
+                                        <div class="column-tags">
+                                            <span class="column-tag fibo">party.customer_id</span>
+                                        </div>
+                                        <span class="column-quality-score good">91%</span>
+                                    </div>
+                                    <div class="column-details">
+                                        <div class="column-details-content">
+                                            <div class="column-stats-grid">
+                                            <div class="column-stat">
+                                                <div class="column-stat-label">Row Count</div>
+                                                <div class="column-stat-value">500</div>
+                                            </div>
+                                            <div class="column-stat">
+                                                <div class="column-stat-label">Null Count</div>
+                                                <div class="column-stat-value">4</div>
+                                            </div>
+                                            <div class="column-stat">
+                                                <div class="column-stat-label">Unique Values</div>
+                                                <div class="column-stat-value">386</div>
+                                            </div>
+                                            <div class="column-stat">
+                                                <div class="column-stat-label">Mean</div>
+                                                <div class="column-stat-value">463.78</div>
+                                            </div>
+                                            <div class="column-stat">
+                                                <div class="column-stat-label">Median</div>
+                                                <div class="column-stat-value">450.00</div>
+                                            </div>
+                                            <div class="column-stat">
+                                                <div class="column-stat-label">Std Dev</div>
+                                                <div class="column-stat-value">288.20</div>
+                                            </div>
+                                            <div class="column-stat">
+                                                <div class="column-stat-label">Min</div>
+                                                <div class="column-stat-value">1.0</div>
+                                            </div>
+                                            <div class="column-stat">
+                                                <div class="column-stat-label">Max</div>
+                                                <div class="column-stat-value">998.0</div>
+                                            </div></div>
+                                            
+                                            <div class="top-values-section">
+                                                <div class="top-values-title">Top Values (from sample)</div>
+                                                <div class="top-values-grid">
+                                                    <div class="top-value-item">
+                                                        <span class="top-value-name">91.0</span>
+                                                        <span class="top-value-count">5</span>
+                                                    </div>
+                                                    <div class="top-value-item">
+                                                        <span class="top-value-name">821.0</span>
+                                                        <span class="top-value-count">4</span>
+                                                    </div>
+                                                    <div class="top-value-item">
+                                                        <span class="top-value-name">576.0</span>
+                                                        <span class="top-value-count">4</span>
+                                                    </div>
+                                                    <div class="top-value-item">
+                                                        <span class="top-value-name">487.0</span>
+                                                        <span class="top-value-count">4</span>
+                                                    </div>
+                                                    <div class="top-value-item">
+                                                        <span class="top-value-name">680.0</span>
+                                                        <span class="top-value-count">3</span>
+                                                    </div></div>
+                                                <div class="sampled-note">Based on 496 row sample</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="column-row" onclick="toggleColumnRow(this)">
+                                    <div class="column-row-header">
+                                        <span class="column-expand-icon">▶</span>
+                                        <div class="column-type-icon string">📝</div>
+                                        <div class="column-info">
+                                            <div class="column-name">account_type</div>
+                                            <div class="column-type">string (100% confidence)</div>
+                                        </div>
+                                        <div class="column-quick-stats">
+                                            <span>98% complete</span>
+                                            <span>0.82% unique</span>
+                                        </div>
+                                        <div class="column-tags">
+                                            <span class="column-tag fibo">banking.account</span>
+                                        </div>
+                                        <span class="column-quality-score warning">65%</span>
+                                    </div>
+                                    <div class="column-details">
+                                        <div class="column-details-content">
+                                            <div class="column-stats-grid">
+                                            <div class="column-stat">
+                                                <div class="column-stat-label">Row Count</div>
+                                                <div class="column-stat-value">500</div>
+                                            </div>
+                                            <div class="column-stat">
+                                                <div class="column-stat-label">Null Count</div>
+                                                <div class="column-stat-value">10</div>
+                                            </div>
+                                            <div class="column-stat">
+                                                <div class="column-stat-label">Unique Values</div>
+                                                <div class="column-stat-value">4*</div>
+                                            </div>
+                                            <div class="column-stat">
+                                                <div class="column-stat-label">Length</div>
+                                                <div class="column-stat-value">6-10 chars</div>
+                                            </div>
+                                            <div class="column-stat">
+                                                <div class="column-stat-label">Pattern</div>
+                                                <div class="column-stat-value">AAAAAAAAAA</div>
+                                            </div>
+                                            <div class="column-stat">
+                                                <div class="column-stat-label">Sample Size</div>
+                                                <div class="column-stat-value">4</div>
+                                            </div></div>
+                                            
+                                            <div class="top-values-section">
+                                                <div class="top-values-title">Top Values (from sample)</div>
+                                                <div class="top-values-grid">
+                                                    <div class="top-value-item">
+                                                        <span class="top-value-name">SAVINGS</span>
+                                                        <span class="top-value-count">133</span>
+                                                    </div>
+                                                    <div class="top-value-item">
+                                                        <span class="top-value-name">CHECKING</span>
+                                                        <span class="top-value-count">126</span>
+                                                    </div>
+                                                    <div class="top-value-item">
+                                                        <span class="top-value-name">CREDIT</span>
+                                                        <span class="top-value-count">117</span>
+                                                    </div>
+                                                    <div class="top-value-item">
+                                                        <span class="top-value-name">INVESTMENT</span>
+                                                        <span class="top-value-count">114</span>
+                                                    </div></div>
+                                                <div class="sampled-note">Based on 4 row sample</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="column-row" onclick="toggleColumnRow(this)">
+                                    <div class="column-row-header">
+                                        <span class="column-expand-icon">▶</span>
+                                        <div class="column-type-icon number">🔢</div>
+                                        <div class="column-info">
+                                            <div class="column-name">opening_balance</div>
+                                            <div class="column-type">float (99% confidence)</div>
+                                        </div>
+                                        <div class="column-quick-stats">
+                                            <span>100% complete</span>
+                                            <span>99.80% unique</span>
+                                        </div>
+                                        <div class="column-tags">
+                                            <span class="column-tag fibo">money.amount</span>
+                                        </div>
+                                        <span class="column-quality-score good">96%</span>
+                                    </div>
+                                    <div class="column-details">
+                                        <div class="column-details-content">
+                                            <div class="column-stats-grid">
+                                            <div class="column-stat">
+                                                <div class="column-stat-label">Row Count</div>
+                                                <div class="column-stat-value">500</div>
+                                            </div>
+                                            <div class="column-stat">
+                                                <div class="column-stat-label">Null Count</div>
+                                                <div class="column-stat-value">0</div>
+                                            </div>
+                                            <div class="column-stat">
+                                                <div class="column-stat-label">Unique Values</div>
+                                                <div class="column-stat-value">499</div>
+                                            </div>
+                                            <div class="column-stat">
+                                                <div class="column-stat-label">Mean</div>
+                                                <div class="column-stat-value">5.03K</div>
+                                            </div>
+                                            <div class="column-stat">
+                                                <div class="column-stat-label">Median</div>
+                                                <div class="column-stat-value">5.00K</div>
+                                            </div>
+                                            <div class="column-stat">
+                                                <div class="column-stat-label">Std Dev</div>
+                                                <div class="column-stat-value">2.85K</div>
+                                            </div>
+                                            <div class="column-stat">
+                                                <div class="column-stat-label">Min</div>
+                                                <div class="column-stat-value">0.62</div>
+                                            </div>
+                                            <div class="column-stat">
+                                                <div class="column-stat-label">Max</div>
+                                                <div class="column-stat-value">9966.63</div>
+                                            </div></div>
+                                            
+                                            <div class="top-values-section">
+                                                <div class="top-values-title">Top Values (from sample)</div>
+                                                <div class="top-values-grid">
+                                                    <div class="top-value-item">
+                                                        <span class="top-value-name">3366.55</span>
+                                                        <span class="top-value-count">2</span>
+                                                    </div>
+                                                    <div class="top-value-item">
+                                                        <span class="top-value-name">561.65</span>
+                                                        <span class="top-value-count">1</span>
+                                                    </div>
+                                                    <div class="top-value-item">
+                                                        <span class="top-value-name">4585.95</span>
+                                                        <span class="top-value-count">1</span>
+                                                    </div>
+                                                    <div class="top-value-item">
+                                                        <span class="top-value-name">7267.97</span>
+                                                        <span class="top-value-count">1</span>
+                                                    </div>
+                                                    <div class="top-value-item">
+                                                        <span class="top-value-name">9355.61</span>
+                                                        <span class="top-value-count">1</span>
+                                                    </div></div>
+                                                <div class="sampled-note">Based on 500 row sample</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="column-row" onclick="toggleColumnRow(this)">
+                                    <div class="column-row-header">
+                                        <span class="column-expand-icon">▶</span>
+                                        <div class="column-type-icon date">📅</div>
+                                        <div class="column-info">
+                                            <div class="column-name">opening_date</div>
+                                            <div class="column-type">date (100% confidence)</div>
+                                        </div>
+                                        <div class="column-quick-stats">
+                                            <span>100% complete</span>
+                                            <span>92.80% unique</span>
+                                        </div>
+                                        <div class="column-tags">
+                                            <span class="column-tag temporal">TEMPORAL</span><span class="column-tag semantic">DATE</span>
+                                        </div>
+                                        <span class="column-quality-score good">99%</span>
+                                    </div>
+                                    <div class="column-details">
+                                        <div class="column-details-content">
+                                            <div class="column-stats-grid">
+                                            <div class="column-stat">
+                                                <div class="column-stat-label">Row Count</div>
+                                                <div class="column-stat-value">500</div>
+                                            </div>
+                                            <div class="column-stat">
+                                                <div class="column-stat-label">Null Count</div>
+                                                <div class="column-stat-value">0</div>
+                                            </div>
+                                            <div class="column-stat">
+                                                <div class="column-stat-label">Unique Values</div>
+                                                <div class="column-stat-value">464*</div>
+                                            </div>
+                                            <div class="column-stat">
+                                                <div class="column-stat-label">Length</div>
+                                                <div class="column-stat-value">10-10 chars</div>
+                                            </div>
+                                            <div class="column-stat">
+                                                <div class="column-stat-label">Pattern</div>
+                                                <div class="column-stat-value">9999-99-99</div>
+                                            </div>
+                                            <div class="column-stat">
+                                                <div class="column-stat-label">Sample Size</div>
+                                                <div class="column-stat-value">464</div>
+                                            </div></div>
+                                            
+                                            <div class="top-values-section">
+                                                <div class="top-values-title">Top Values (from sample)</div>
+                                                <div class="top-values-grid">
+                                                    <div class="top-value-item">
+                                                        <span class="top-value-name">2019-10-18</span>
+                                                        <span class="top-value-count">3</span>
+                                                    </div>
+                                                    <div class="top-value-item">
+                                                        <span class="top-value-name">2023-05-13</span>
+                                                        <span class="top-value-count">3</span>
+                                                    </div>
+                                                    <div class="top-value-item">
+                                                        <span class="top-value-name">2025-05-25</span>
+                                                        <span class="top-value-count">2</span>
+                                                    </div>
+                                                    <div class="top-value-item">
+                                                        <span class="top-value-name">2017-04-12</span>
+                                                        <span class="top-value-count">2</span>
+                                                    </div>
+                                                    <div class="top-value-item">
+                                                        <span class="top-value-name">2016-12-24</span>
+                                                        <span class="top-value-count">2</span>
+                                                    </div></div>
+                                                <div class="sampled-note">Based on 464 row sample</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Validation Suggestions Accordion -->
+                
+                <div class="accordion" data-accordion="suggestions">
+                    <div class="accordion-header" onclick="toggleAccordion(this)">
+                        <div class="accordion-title-group">
+                            <div class="accordion-icon quality">💡</div>
+                            <div>
+                                <div class="accordion-title">Validation Suggestions</div>
+                                <div class="accordion-subtitle">12 suggested checks</div>
+                            </div>
+                        </div>
+                        <div class="accordion-meta">
+                            <span class="accordion-badge info">12 suggestions</span>
+                            <span class="accordion-chevron">▼</span>
+                        </div>
+                    </div>
+                    <div class="accordion-body">
+                        <div class="accordion-content">
+                            <div class="hint-box">
+                                <strong>💡 Smart Suggestions:</strong> Based on the data profile, these validations are recommended.
+                                Copy individual snippets or use the full config below.
+                            </div>
+                            
+                            <div class="suggestion-card high-priority">
+                                <div class="suggestion-header">
+                                    <div class="suggestion-type">EmptyFileCheck</div>
+                                    <div class="suggestion-confidence">100% confidence</div>
+                                </div>
+                                
+                                <div class="suggestion-reason">Prevent empty file loads</div>
+                                <div class="suggestion-yaml-container">
+                                    <pre class="suggestion-yaml">      - type: "EmptyFileCheck"
+        severity: "ERROR"</pre>
+                                    <button class="copy-yaml-btn" onclick="copyYaml(`      - type: "EmptyFileCheck"
+        severity: "ERROR"`)">📋 Copy</button>
+                                </div>
+                            </div>
+                            <div class="suggestion-card high-priority">
+                                <div class="suggestion-header">
+                                    <div class="suggestion-type">RangeCheck</div>
+                                    <div class="suggestion-confidence">95% confidence</div>
+                                </div>
+                                
+                                <div class="suggestion-reason">FIBO: money.amount must be non-negative</div>
+                                <div class="suggestion-yaml-container">
+                                    <pre class="suggestion-yaml">      - type: "RangeCheck"
+        severity: "WARNING"
+          field: "opening_balance"
+          min_value: 0</pre>
+                                    <button class="copy-yaml-btn" onclick="copyYaml(`      - type: "RangeCheck"
+        severity: "WARNING"\n          field: "opening_balance"\n          min_value: 0`)">📋 Copy</button>
+                                </div>
+                            </div>
+                            <div class="suggestion-card high-priority">
+                                <div class="suggestion-header">
+                                    <div class="suggestion-type">DateFormatCheck</div>
+                                    <div class="suggestion-confidence">95% confidence</div>
+                                </div>
+                                
+                                <div class="suggestion-reason">Detected date/time format: %Y-%m-%d</div>
+                                <div class="suggestion-yaml-container">
+                                    <pre class="suggestion-yaml">      - type: "DateFormatCheck"
+        severity: "WARNING"
+          field: "opening_date"
+          format: "%Y-%m-%d"</pre>
+                                    <button class="copy-yaml-btn" onclick="copyYaml(`      - type: "DateFormatCheck"
+        severity: "WARNING"\n          field: "opening_date"\n          format: "%Y-%m-%d"`)">📋 Copy</button>
+                                </div>
+                            </div>
+                            <div class="suggestion-card high-priority">
+                                <div class="suggestion-header">
+                                    <div class="suggestion-type">MandatoryFieldCheck</div>
+                                    <div class="suggestion-confidence">95% confidence</div>
+                                </div>
+                                <div class="suggestion-field">Field: <strong>account_id</strong></div>
+                                <div class="suggestion-reason">6 fields have >95% completeness</div>
+                                <div class="suggestion-yaml-container">
+                                    <pre class="suggestion-yaml">      - type: "MandatoryFieldCheck"
+        severity: "WARNING"
+          fields:
+            - "account_id"
+            - "account_number"
+            - "customer_id"
+            - "account_type"
+            - "opening_balance"
+            - "opening_date"</pre>
+                                    <button class="copy-yaml-btn" onclick="copyYaml(`      - type: "MandatoryFieldCheck"
+        severity: "WARNING"\n          fields:\n            - "account_id"\n            - "account_number"\n            - "customer_id"\n            - "account_type"\n            - "opening_balance"\n            - "opening_date"`)">📋 Copy</button>
+                                </div>
+                            </div>
+                            <div class="suggestion-card high-priority">
+                                <div class="suggestion-header">
+                                    <div class="suggestion-type">MandatoryFieldCheck</div>
+                                    <div class="suggestion-confidence">90% confidence</div>
+                                </div>
+                                <div class="suggestion-field">Field: <strong>account_id</strong></div>
+                                <div class="suggestion-reason">FIBO: banking.account is typically mandatory</div>
+                                <div class="suggestion-yaml-container">
+                                    <pre class="suggestion-yaml">      - type: "MandatoryFieldCheck"
+        severity: "WARNING"
+          fields:
+            - "account_id"</pre>
+                                    <button class="copy-yaml-btn" onclick="copyYaml(`      - type: "MandatoryFieldCheck"
+        severity: "WARNING"\n          fields:\n            - "account_id"`)">📋 Copy</button>
+                                </div>
+                            </div>
+                            <div class="suggestion-card high-priority">
+                                <div class="suggestion-header">
+                                    <div class="suggestion-type">MandatoryFieldCheck</div>
+                                    <div class="suggestion-confidence">90% confidence</div>
+                                </div>
+                                <div class="suggestion-field">Field: <strong>account_number</strong></div>
+                                <div class="suggestion-reason">FIBO: banking.account is typically mandatory</div>
+                                <div class="suggestion-yaml-container">
+                                    <pre class="suggestion-yaml">      - type: "MandatoryFieldCheck"
+        severity: "WARNING"
+          fields:
+            - "account_number"</pre>
+                                    <button class="copy-yaml-btn" onclick="copyYaml(`      - type: "MandatoryFieldCheck"
+        severity: "WARNING"\n          fields:\n            - "account_number"`)">📋 Copy</button>
+                                </div>
+                            </div>
+                            <div class="suggestion-card high-priority">
+                                <div class="suggestion-header">
+                                    <div class="suggestion-type">MandatoryFieldCheck</div>
+                                    <div class="suggestion-confidence">90% confidence</div>
+                                </div>
+                                <div class="suggestion-field">Field: <strong>customer_id</strong></div>
+                                <div class="suggestion-reason">FIBO: party.customer_id is typically mandatory</div>
+                                <div class="suggestion-yaml-container">
+                                    <pre class="suggestion-yaml">      - type: "MandatoryFieldCheck"
+        severity: "WARNING"
+          fields:
+            - "customer_id"</pre>
+                                    <button class="copy-yaml-btn" onclick="copyYaml(`      - type: "MandatoryFieldCheck"
+        severity: "WARNING"\n          fields:\n            - "customer_id"`)">📋 Copy</button>
+                                </div>
+                            </div>
+                            <div class="suggestion-card high-priority">
+                                <div class="suggestion-header">
+                                    <div class="suggestion-type">MandatoryFieldCheck</div>
+                                    <div class="suggestion-confidence">90% confidence</div>
+                                </div>
+                                <div class="suggestion-field">Field: <strong>account_type</strong></div>
+                                <div class="suggestion-reason">FIBO: banking.account is typically mandatory</div>
+                                <div class="suggestion-yaml-container">
+                                    <pre class="suggestion-yaml">      - type: "MandatoryFieldCheck"
+        severity: "WARNING"
+          fields:
+            - "account_type"</pre>
+                                    <button class="copy-yaml-btn" onclick="copyYaml(`      - type: "MandatoryFieldCheck"
+        severity: "WARNING"\n          fields:\n            - "account_type"`)">📋 Copy</button>
+                                </div>
+                            </div>
+                            <div class="suggestion-card high-priority">
+                                <div class="suggestion-header">
+                                    <div class="suggestion-type">ValidValuesCheck</div>
+                                    <div class="suggestion-confidence">85% confidence</div>
+                                </div>
+                                
+                                <div class="suggestion-reason">Low cardinality field with 4 unique values</div>
+                                <div class="suggestion-yaml-container">
+                                    <pre class="suggestion-yaml">      - type: "ValidValuesCheck"
+        severity: "WARNING"
+          field: "account_type"
+          valid_values:
+            - "SAVINGS"
+            - "CHECKING"
+            - "CREDIT"
+            - "INVESTMENT"</pre>
+                                    <button class="copy-yaml-btn" onclick="copyYaml(`      - type: "ValidValuesCheck"
+        severity: "WARNING"\n          field: "account_type"\n          valid_values:\n            - "SAVINGS"\n            - "CHECKING"\n            - "CREDIT"\n            - "INVESTMENT"`)">📋 Copy</button>
+                                </div>
+                            </div>
+                            <div class="suggestion-card ">
+                                <div class="suggestion-header">
+                                    <div class="suggestion-type">RowCountRangeCheck</div>
+                                    <div class="suggestion-confidence">80% confidence</div>
+                                </div>
+                                
+                                <div class="suggestion-reason">Expect approximately 500 rows based on profile</div>
+                                <div class="suggestion-yaml-container">
+                                    <pre class="suggestion-yaml">      - type: "RowCountRangeCheck"
+        severity: "ERROR"
+          min_rows: 250
+          max_rows: 1000</pre>
+                                    <button class="copy-yaml-btn" onclick="copyYaml(`      - type: "RowCountRangeCheck"
+        severity: "ERROR"\n          min_rows: 250\n          max_rows: 1000`)">📋 Copy</button>
+                                </div>
+                            </div>
+                            <div class="suggestion-card ">
+                                <div class="suggestion-header">
+                                    <div class="suggestion-type">OutlierDetectionCheck</div>
+                                    <div class="suggestion-confidence">75% confidence</div>
+                                </div>
+                                
+                                <div class="suggestion-reason">FIBO: money.amount should be monitored for outliers</div>
+                                <div class="suggestion-yaml-container">
+                                    <pre class="suggestion-yaml">      - type: "OutlierDetectionCheck"
+        severity: "WARNING"
+          field: "opening_balance"
+          method: "zscore"
+          threshold: 3.0</pre>
+                                    <button class="copy-yaml-btn" onclick="copyYaml(`      - type: "OutlierDetectionCheck"
+        severity: "WARNING"\n          field: "opening_balance"\n          method: "zscore"\n          threshold: 3.0`)">📋 Copy</button>
+                                </div>
+                            </div>
+                            <div class="suggestion-card ">
+                                <div class="suggestion-header">
+                                    <div class="suggestion-type">OutlierDetectionCheck</div>
+                                    <div class="suggestion-confidence">75% confidence</div>
+                                </div>
+                                
+                                <div class="suggestion-reason">High variability detected (CV=56.8%)</div>
+                                <div class="suggestion-yaml-container">
+                                    <pre class="suggestion-yaml">      - type: "OutlierDetectionCheck"
+        severity: "WARNING"
+          field: "opening_balance"
+          method: "zscore"
+          threshold: 3.0</pre>
+                                    <button class="copy-yaml-btn" onclick="copyYaml(`      - type: "OutlierDetectionCheck"
+        severity: "WARNING"\n          field: "opening_balance"\n          method: "zscore"\n          threshold: 3.0`)">📋 Copy</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Full Validation Config Accordion -->
+                
+                <div class="accordion" data-accordion="config">
+                    <div class="accordion-header" onclick="toggleAccordion(this)">
+                        <div class="accordion-title-group">
+                            <div class="accordion-icon quality">⚙️</div>
+                            <div>
+                                <div class="accordion-title">Full Validation Configuration</div>
+                                <div class="accordion-subtitle">Ready-to-use YAML config file</div>
+                            </div>
+                        </div>
+                        <div class="accordion-meta">
+                            <span class="accordion-badge good">Ready</span>
+                            <span class="accordion-chevron">▼</span>
+                        </div>
+                    </div>
+                    <div class="accordion-body">
+                        <div class="accordion-content">
+                            <div class="hint-box">
+                                <strong>📋 Complete Configuration:</strong> Copy this YAML and save it as a <code>.yaml</code> file
+                                to run validations with DataK9 CLI: <code>python3 -m validation_framework.cli validate config.yaml</code>
+                            </div>
+                            <div class="full-config-container">
+                                <div class="config-actions">
+                                    <button class="copy-config-btn" onclick="copyFullConfig()">📋 Copy Full Config</button>
+                                </div>
+                                <pre class="full-config-yaml" id="fullConfigYaml"># Auto-generated validation configuration
+# Generated from profile of: accounts.csv
+# Generated at: 2025-11-25 13:40:07
+# File size: 0.0 MB, Rows: 500
+# Recommended chunk size: 2,000,000 rows (Using maximum chunk size (2,000,000). Sufficient memory available.)
+
+validation_job:
+  name: "Validation for accounts.csv"
+  description: "Auto-generated from data profile"
+
+settings:
+  chunk_size: 2000000  # Optimized for csv format, 12 validations (moderate complexity)
+  max_sample_failures: 100
+
+files:
+  - name: "accounts"
+    path: "examples/sample_data/accounts.csv"
+    format: "csv"
+
+    validations:
+      - type: "EmptyFileCheck"
+        severity: "ERROR"
+        # Prevent empty file loads
+
+      - type: "RangeCheck"
+        severity: "WARNING"
+        params:
+          field: "opening_balance"
+          min_value: 0
+        # FIBO: money.amount must be non-negative
+
+      - type: "DateFormatCheck"
+        severity: "WARNING"
+        params:
+          field: "opening_date"
+          format: "%Y-%m-%d"
+        # Detected date/time format: %Y-%m-%d
+
+      - type: "MandatoryFieldCheck"
+        severity: "WARNING"
+        params:
+          fields:
+            - "account_id"
+            - "account_number"
+            - "customer_id"
+            - "account_type"
+            - "opening_balance"
+            - "opening_date"
+        # 6 fields have &gt;95% completeness
+
+      - type: "MandatoryFieldCheck"
+        severity: "WARNING"
+        params:
+          fields:
+            - "account_id"
+        # FIBO: banking.account is typically mandatory
+
+      - type: "MandatoryFieldCheck"
+        severity: "WARNING"
+        params:
+          fields:
+            - "account_number"
+        # FIBO: banking.account is typically mandatory
+
+      - type: "MandatoryFieldCheck"
+        severity: "WARNING"
+        params:
+          fields:
+            - "customer_id"
+        # FIBO: party.customer_id is typically mandatory
+
+      - type: "MandatoryFieldCheck"
+        severity: "WARNING"
+        params:
+          fields:
+            - "account_type"
+        # FIBO: banking.account is typically mandatory
+
+      - type: "ValidValuesCheck"
+        severity: "WARNING"
+        params:
+          field: "account_type"
+          valid_values:
+            - "SAVINGS"
+            - "CHECKING"
+            - "CREDIT"
+            - "INVESTMENT"
+        # Low cardinality field with 4 unique values
+
+      - type: "RowCountRangeCheck"
+        severity: "ERROR"
+        params:
+          min_rows: 250
+          max_rows: 1000
+        # Expect approximately 500 rows based on profile
+
+      - type: "OutlierDetectionCheck"
+        severity: "WARNING"
+        params:
+          field: "opening_balance"
+          method: "zscore"
+          threshold: 3.0
+        # FIBO: money.amount should be monitored for outliers
+
+      - type: "OutlierDetectionCheck"
+        severity: "WARNING"
+        params:
+          field: "opening_balance"
+          method: "zscore"
+          threshold: 3.0
+        # High variability detected (CV=56.8%)
+</pre>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Temporal Analysis Accordion (if temporal columns exist) -->
+                
+                <div class="accordion" data-accordion="temporal">
+                    <div class="accordion-header" onclick="toggleAccordion(this)">
+                        <div class="accordion-title-group">
+                            <div class="accordion-icon overview">📅</div>
+                            <div>
+                                <div class="accordion-title">Temporal Analysis</div>
+                                <div class="accordion-subtitle">Time series analysis for opening_date</div>
+                            </div>
+                        </div>
+                        <div class="accordion-meta">
+                            <span class="accordion-badge good">Available</span>
+                            <span class="accordion-chevron">▼</span>
+                        </div>
+                    </div>
+                    <div class="accordion-body">
+                        <div class="accordion-content">
+                            <div class="freshness-content">
+                                <div class="freshness-timeline">
+                                    <div class="freshness-item">
+                                        <div class="freshness-dot good"></div>
+                                        <div class="freshness-info">
+                                            <div class="freshness-label">Date Range</div>
+                                            <div class="freshness-value">2015-12-04 to 2025-10-11</div>
+                                        </div>
+                                    </div>
+                                    <div class="freshness-item">
+                                        <div class="freshness-dot good"></div>
+                                        <div class="freshness-info">
+                                            <div class="freshness-label">Time Span</div>
+                                            <div class="freshness-value">3599 days</div>
+                                        </div>
+                                    </div>
+                                    <div class="freshness-item">
+                                        <div class="freshness-dot good"></div>
+                                        <div class="freshness-info">
+                                            <div class="freshness-label">Detected Frequency</div>
+                                            <div class="freshness-value">weekly (19% confidence)</div>
+                                        </div>
+                                    </div>
+                                    <div class="freshness-item">
+                                        <div class="freshness-dot warning"></div>
+                                        <div class="freshness-info">
+                                            <div class="freshness-label">Gaps</div>
+                                            <div class="freshness-value">125 gaps detected (largest: 41 days 00:00:00)</div>
+                                        </div>
+                                    </div>
+                                    <div class="freshness-item">
+                                        <div class="freshness-dot good"></div>
+                                        <div class="freshness-info">
+                                            <div class="freshness-label">Trend</div>
+                                            <div class="freshness-value">increasing (strong)</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+
+        // Accordion toggle
+        function toggleAccordion(header) {
+            const accordion = header.closest('.accordion');
+            accordion.classList.toggle('open');
+        }
+
+        // Column row toggle
+        function toggleColumnRow(row) {
+            row.classList.toggle('expanded');
+        }
+
+        // Column search
+        function filterColumns(query) {
+            const rows = document.querySelectorAll('.column-row');
+            const lowerQuery = query.toLowerCase();
+            rows.forEach(row => {
+                const text = row.textContent.toLowerCase();
+                row.style.display = text.includes(lowerQuery) ? '' : 'none';
+            });
+        }
+
+        // Copy YAML to clipboard
+        function copyYaml(yamlContent) {
+            navigator.clipboard.writeText(yamlContent).then(() => {
+                const btn = event.target;
+                const originalText = btn.textContent;
+                btn.textContent = '✓ Copied!';
+                btn.style.background = '#10b981';
+                setTimeout(() => {
+                    btn.textContent = originalText;
+                    btn.style.background = '';
+                }, 1500);
+            });
+        }
+
+        // Copy full config to clipboard
+        function copyFullConfig() {
+            const yamlEl = document.getElementById('fullConfigYaml');
+            if (yamlEl) {
+                navigator.clipboard.writeText(yamlEl.textContent).then(() => {
+                    const btn = event.target;
+                    const originalText = btn.textContent;
+                    btn.textContent = '✓ Copied!';
+                    setTimeout(() => {
+                        btn.textContent = originalText;
+                    }, 1500);
+                });
+            }
+        }
+
+        // Chart defaults
+        const chartDefaults = {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: {
+                    labels: {
+                        color: '#94a3b8',
+                        font: { size: 11 }
+                    }
+                }
+            }
+        };
+
+        // Type Distribution Chart
+        new Chart(document.getElementById('typeChart'), {
+            type: 'doughnut',
+            data: {
+                labels: ["Integer (3)", "String (1)", "Float (1)", "Date (1)"],
+                datasets: [{
+                    data: [3, 1, 1, 1],
+                    backgroundColor: [
+                        'rgba(139, 92, 246, 0.8)',
+                        'rgba(59, 130, 246, 0.8)',
+                        'rgba(16, 185, 129, 0.8)',
+                        'rgba(245, 158, 11, 0.8)',
+                        'rgba(239, 68, 68, 0.8)'
+                    ],
+                    borderColor: 'transparent',
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                ...chartDefaults,
+                cutout: '65%',
+                plugins: {
+                    legend: {
+                        position: 'right',
+                        labels: { color: '#94a3b8', padding: 16 }
+                    }
+                }
+            }
+        });
+
+        // Quality by Column Chart
+        new Chart(document.getElementById('qualityChart'), {
+            type: 'bar',
+            data: {
+                labels: ["account_id", "account_nu", "customer_i", "account_ty", "opening_ba", "opening_da"],
+                datasets: [{
+                    label: 'Quality Score',
+                    data: [98.0, 97.4, 91.32451612903225, 65.16326530612244, 96.38, 98.56],
+                    backgroundColor: function(context) {
+                        const value = context.raw;
+                        if (value >= 80) return 'rgba(16, 185, 129, 0.8)';
+                        if (value >= 70) return 'rgba(59, 130, 246, 0.8)';
+                        if (value >= 60) return 'rgba(245, 158, 11, 0.8)';
+                        return 'rgba(239, 68, 68, 0.8)';
+                    },
+                    borderRadius: 4
+                }]
+            },
+            options: {
+                ...chartDefaults,
+                plugins: { legend: { display: false } },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 100,
+                        grid: { color: 'rgba(148, 163, 184, 0.1)' },
+                        ticks: {
+                            color: '#64748b',
+                            callback: value => value + '%'
+                        }
+                    },
+                    x: {
+                        grid: { display: false },
+                        ticks: {
+                            color: '#64748b',
+                            maxRotation: 45,
+                            font: { size: 9 }
+                        }
+                    }
+                }
+            }
+        });
+
+        // Bubble Chart
+        new Chart(document.getElementById('bubbleChart'), {
+            type: 'bubble',
+            data: {
+                datasets: [{
+                    label: 'Columns',
+                    data: [{"x": 100.0, "y": 100.0, "r": 5, "label": "account_id"}, {"x": 100.0, "y": 100.0, "r": 5, "label": "account_number"}, {"x": 99.2, "y": 100.0, "r": 5, "label": "customer_id"}, {"x": 98.0, "y": 100.0, "r": 5, "label": "account_type"}, {"x": 100.0, "y": 99.4, "r": 5, "label": "opening_balance"}, {"x": 100.0, "y": 100.0, "r": 5, "label": "opening_date"}],
+                    backgroundColor: function(context) {
+                        const y = context.raw?.y;
+                        if (!y) return 'rgba(148, 163, 184, 0.5)';
+                        if (y >= 95) return 'rgba(16, 185, 129, 0.6)';
+                        if (y >= 90) return 'rgba(59, 130, 246, 0.6)';
+                        return 'rgba(245, 158, 11, 0.6)';
+                    }
+                }]
+            },
+            options: {
+                ...chartDefaults,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return context.raw.label + ': ' + context.raw.y + '% validity';
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        title: { display: true, text: 'Completeness %', color: '#64748b' },
+                        min: Math.max(0, Math.min(...[100.0, 100.0, 99.2, 98.0, 100.0, 100.0]) - 5),
+                        max: 101,
+                        grid: { color: 'rgba(148, 163, 184, 0.1)' },
+                        ticks: { color: '#64748b' }
+                    },
+                    y: {
+                        title: { display: true, text: 'Validity %', color: '#64748b' },
+                        min: Math.max(0, Math.min(...[100.0, 100.0, 100.0, 100.0, 99.4, 100.0]) - 5),
+                        max: 101,
+                        grid: { color: 'rgba(148, 163, 184, 0.1)' },
+                        ticks: { color: '#64748b' }
+                    }
+                }
+            }
+        });
+
+        // Word Cloud
+        const wordCloudContainer = document.getElementById('wordCloudContainer');
+        if (wordCloudContainer && typeof WordCloud !== 'undefined') {
+            const wordCloudData = [["SAVINGS", 133], ["CHECKING", 126], ["CREDIT", 117], ["INVESTMENT", 114]];
+            if (wordCloudData.length > 0) {
+                // Normalize weights to a reasonable range for display
+                const maxWeight = Math.max(...wordCloudData.map(w => w[1]));
+                const normalizedData = wordCloudData.map(w => [w[0], (w[1] / maxWeight) * 100]);
+
+                WordCloud(wordCloudContainer, {
+                    list: normalizedData,
+                    gridSize: 4,
+                    weightFactor: function(size) {
+                        return Math.max(14, size * 0.5);
+                    },
+                    fontFamily: 'system-ui, -apple-system, sans-serif',
+                    color: function(word, weight) {
+                        if (weight > 80) return '#8b5cf6';
+                        if (weight > 50) return '#60a5fa';
+                        if (weight > 25) return '#10b981';
+                        return '#94a3b8';
+                    },
+                    backgroundColor: 'transparent',
+                    rotateRatio: 0.2,
+                    rotationSteps: 2,
+                    shuffle: true,
+                    drawOutOfBound: false,
+                    shrinkToFit: true
+                });
+            }
+        }
+
+    </script>
+</body>
+</html>
