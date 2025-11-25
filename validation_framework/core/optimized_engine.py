@@ -162,7 +162,11 @@ class SinglePassValidationState:
 
     def process_chunk(self, chunk: pd.DataFrame, chunk_idx: int) -> None:
         """
-        Process a single chunk of data.
+        Process a single chunk of data incrementally.
+
+        OPTIMIZED: Instead of storing all chunks in memory, we run the validation
+        on each chunk and aggregate results. This keeps memory O(1) per validation
+        instead of O(N) where N is the number of chunks.
 
         Args:
             chunk: DataFrame chunk
@@ -173,11 +177,54 @@ class SinglePassValidationState:
             offset = chunk_idx * len(chunk)
             self.sampler.add_chunk(chunk, offset=offset)
         else:
-            # Process full chunk (implementation depends on validation type)
-            # For now, store chunk for later processing
-            if 'chunks' not in self.state:
-                self.state['chunks'] = []
-            self.state['chunks'].append((chunk_idx, chunk))
+            # INCREMENTAL PROCESSING: Run validation on this chunk and aggregate results
+            # This avoids storing all chunks in memory
+            def single_chunk_iterator():
+                yield chunk
+
+            try:
+                chunk_result = self.validation.validate(single_chunk_iterator(), self.context)
+
+                # Initialize aggregate state on first chunk
+                if 'aggregate' not in self.state:
+                    self.state['aggregate'] = {
+                        'total_count': 0,
+                        'failed_count': 0,
+                        'sample_failures': [],
+                        'passed': True,
+                        'messages': []
+                    }
+
+                # Aggregate results
+                agg = self.state['aggregate']
+                agg['total_count'] += chunk_result.total_count
+                agg['failed_count'] += chunk_result.failed_count
+
+                # Keep sample failures up to max limit
+                if len(agg['sample_failures']) < self.max_samples:
+                    remaining = self.max_samples - len(agg['sample_failures'])
+                    agg['sample_failures'].extend(chunk_result.sample_failures[:remaining])
+
+                # Track if any chunk failed
+                if not chunk_result.passed:
+                    agg['passed'] = False
+
+                # Collect unique messages
+                if chunk_result.message and chunk_result.message not in agg['messages']:
+                    agg['messages'].append(chunk_result.message)
+
+            except Exception as e:
+                logger.error(f"Error processing chunk {chunk_idx}: {str(e)}")
+                if 'aggregate' not in self.state:
+                    self.state['aggregate'] = {
+                        'total_count': 0,
+                        'failed_count': 0,
+                        'sample_failures': [],
+                        'passed': False,
+                        'messages': [f"Error processing chunk {chunk_idx}: {str(e)}"]
+                    }
+                else:
+                    self.state['aggregate']['passed'] = False
 
         self.total_rows += len(chunk)
 
@@ -208,13 +255,52 @@ class SinglePassValidationState:
 
             return result
         else:
-            # Validate full dataset using stored chunks
-            def chunk_iterator():
-                for _, chunk in self.state.get('chunks', []):
-                    yield chunk
+            # Use aggregated results from incremental chunk processing
+            agg = self.state.get('aggregate', {})
 
-            result = self.validation.validate(chunk_iterator(), self.context)
-            result.execution_time = execution_time
+            if not agg:
+                # No chunks processed - return empty result
+                from validation_framework.core.results import ValidationResult, Severity
+                severity = Severity[self.validation_config["severity"]] if isinstance(self.validation_config["severity"], str) else self.validation_config["severity"]
+                result = ValidationResult(
+                    rule_name=self.validation.name,
+                    severity=severity,
+                    passed=True,
+                    message="No data to validate",
+                    failed_count=0,
+                    total_count=0,
+                    sample_failures=[],
+                    execution_time=execution_time
+                )
+                return result
+
+            # Build aggregated result
+            from validation_framework.core.results import ValidationResult, Severity
+
+            # Calculate success rate for message
+            total_count = agg['total_count']
+            failed_count = agg['failed_count']
+            success_rate = ((total_count - failed_count) / total_count * 100) if total_count > 0 else 100.0
+
+            # Build summary message
+            if agg['passed']:
+                message = f"All {total_count:,} values passed validation"
+            else:
+                message = f"Found {failed_count:,} failures out of {total_count:,} values ({100-success_rate:.2f}% failure rate)"
+
+            # Convert severity string to Severity enum if needed
+            severity = Severity[self.validation_config["severity"]] if isinstance(self.validation_config["severity"], str) else self.validation_config["severity"]
+
+            result = ValidationResult(
+                rule_name=self.validation.name,
+                severity=severity,
+                passed=agg['passed'],
+                message=message,
+                failed_count=failed_count,
+                total_count=total_count,
+                sample_failures=agg['sample_failures'],
+                execution_time=execution_time
+            )
             result.is_sampled = False
 
             return result
