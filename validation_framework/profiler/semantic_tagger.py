@@ -211,10 +211,16 @@ class SemanticTagger:
         for tag_name, tag_def in self.tag_definitions.items():
             # Check if column name matches any patterns
             patterns = tag_def.get('patterns', [])
-            pattern_match = any(
-                re.search(pattern, column_name)
-                for pattern in patterns
-            )
+            pattern_match = False
+            for pattern in patterns:
+                try:
+                    if re.search(pattern, column_name):
+                        pattern_match = True
+                        break
+                except re.error as e:
+                    # Log invalid regex patterns but continue
+                    logger.debug(f"Invalid regex pattern '{pattern}' for tag {tag_name}: {e}")
+                    continue
 
             if not pattern_match:
                 continue

@@ -1251,6 +1251,9 @@ class ProfileHTMLReporter:
             </ul>
         </div>
 
+        <!-- FIBO Methodology Section -->
+        {self._generate_fibo_methodology_section(profile)}
+
         <!-- Unified Summary Section -->
         <div id="summary"></div>
         {self._generate_unified_summary(profile)}
@@ -2128,6 +2131,85 @@ class ProfileHTMLReporter:
             """)
 
         return "".join(html_parts)
+
+    def _generate_fibo_methodology_section(self, profile: ProfileResult) -> str:
+        """Generate FIBO methodology explanation section."""
+        # Count columns with semantic understanding
+        semantic_columns = [
+            col for col in profile.columns
+            if col.semantic_info and col.semantic_info.get('primary_tag') != 'unknown'
+        ]
+
+        if not semantic_columns:
+            return ""
+
+        # Categorize semantic matches
+        fibo_matched = [
+            col for col in semantic_columns
+            if col.semantic_info.get('evidence', {}).get('fibo_match')
+        ]
+
+        # Get unique semantic categories
+        categories = set()
+        for col in semantic_columns:
+            tag = col.semantic_info.get('primary_tag', '')
+            if '.' in tag:
+                categories.add(tag.split('.')[0])
+            else:
+                categories.add(tag)
+
+        categories_list = sorted(categories)[:6]  # Limit to 6 categories
+        categories_html = " ".join([
+            f'<span style="display: inline-block; background: #374151; color: #9ca3af; padding: 4px 10px; border-radius: 12px; font-size: 0.8em; margin: 2px;">{cat}</span>'
+            for cat in categories_list
+        ])
+
+        return f'''
+        <div class="section" style="background: linear-gradient(135deg, #312e81 0%, #1e293b 100%); padding: 20px; margin-bottom: 20px; border-left: 4px solid #8b5cf6;">
+            <h3 style="color: #c4b5fd; margin-bottom: 12px; font-size: 1em;">
+                🏦 FIBO Semantic Analysis
+            </h3>
+            <div style="color: #cbd5e0; font-size: 0.9em; line-height: 1.6;">
+                <p style="margin-bottom: 12px;">
+                    This report uses <strong style="color: #a5b4fc;">FIBO</strong> (Financial Industry Business Ontology) - an industry-standard
+                    semantic framework maintained by the EDM Council - to automatically understand the meaning and purpose of your data columns.
+                </p>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-top: 16px;">
+                    <div style="background: #1e293b; padding: 12px; border-radius: 6px; text-align: center;">
+                        <div style="color: #9ca3af; font-size: 0.75em; text-transform: uppercase; margin-bottom: 4px;">Columns Analyzed</div>
+                        <div style="color: #c4b5fd; font-size: 1.3em; font-weight: 600;">{len(semantic_columns)}</div>
+                        <div style="color: #6b7280; font-size: 0.7em; margin-top: 2px;">of {len(profile.columns)} total</div>
+                    </div>
+                    <div style="background: #1e293b; padding: 12px; border-radius: 6px; text-align: center;">
+                        <div style="color: #9ca3af; font-size: 0.75em; text-transform: uppercase; margin-bottom: 4px;">FIBO Pattern Matches</div>
+                        <div style="color: #c4b5fd; font-size: 1.3em; font-weight: 600;">{len(fibo_matched)}</div>
+                        <div style="color: #6b7280; font-size: 0.7em; margin-top: 2px;">mapped to ontology</div>
+                    </div>
+                    <div style="background: #1e293b; padding: 12px; border-radius: 6px; text-align: center;">
+                        <div style="color: #9ca3af; font-size: 0.75em; text-transform: uppercase; margin-bottom: 4px;">Categories Detected</div>
+                        <div style="color: #c4b5fd; font-size: 1.3em; font-weight: 600;">{len(categories)}</div>
+                        <div style="color: #6b7280; font-size: 0.7em; margin-top: 2px;">semantic domains</div>
+                    </div>
+                </div>
+                <div style="margin-top: 16px;">
+                    <div style="color: #9ca3af; font-size: 0.8em; margin-bottom: 6px;">Detected categories:</div>
+                    {categories_html}
+                </div>
+                <div style="margin-top: 16px; padding: 10px; background: #1f2937; border-radius: 6px; border-left: 3px solid #667eea;">
+                    <div style="color: #9ca3af; font-size: 0.8em;">
+                        💡 <strong>What this means:</strong> DataK9 automatically suggests context-aware validations based on the semantic
+                        understanding of each column. For example, a column identified as "money.amount" will receive validations
+                        appropriate for financial data, such as non-negative checks and decimal precision rules.
+                    </div>
+                </div>
+                <div style="margin-top: 12px; color: #6b7280; font-size: 0.75em;">
+                    <a href="https://spec.edmcouncil.org/fibo/" target="_blank" style="color: #8b5cf6; text-decoration: none;">
+                        Learn more about FIBO →
+                    </a>
+                </div>
+            </div>
+        </div>
+        '''
 
     def _generate_unified_summary(self, profile: ProfileResult) -> str:
         """Generate unified compact summary combining basic stats and Phase 2 findings."""

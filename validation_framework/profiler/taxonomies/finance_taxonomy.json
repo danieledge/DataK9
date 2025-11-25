@@ -24,9 +24,13 @@
             "(?i).*(balance|principal|interest).*"
           ],
           "data_properties": {
-            "type": ["float", "decimal", "integer"],
+            "type": [
+              "float",
+              "decimal",
+              "integer"
+            ],
             "min_value": 0,
-            "cardinality_min": 0.3
+            "cardinality_min": 0.001
           },
           "validation_rules": [
             "NonNegativeCheck",
@@ -44,15 +48,28 @@
             "(?i)^(iso.*currency|currency.*code)$"
           ],
           "data_properties": {
-            "type": ["string"],
-            "string_length": [3, 3],
+            "type": [
+              "string"
+            ],
+            "string_length": [
+              3,
+              3
+            ],
             "cardinality_max": 0.01
           },
           "validation_rules": [
             "StringLengthCheck",
             "ValidValuesCheck"
           ],
-          "expected_values": ["USD", "EUR", "GBP", "JPY", "CHF", "CAD", "AUD"]
+          "expected_values": [
+            "USD",
+            "EUR",
+            "GBP",
+            "JPY",
+            "CHF",
+            "CAD",
+            "AUD"
+          ]
         },
         "money.price": {
           "fibo_class": "fibo-fnd-acc-cur:Price",
@@ -62,9 +79,12 @@
             "(?i).*(rate|premium).*"
           ],
           "data_properties": {
-            "type": ["float", "decimal"],
+            "type": [
+              "float",
+              "decimal"
+            ],
             "min_value": 0,
-            "cardinality_min": 0.3
+            "cardinality_min": 0.001
           },
           "validation_rules": [
             "NonNegativeCheck",
@@ -79,7 +99,10 @@
             "(?i).*(yield|coupon.*rate).*"
           ],
           "data_properties": {
-            "type": ["float", "decimal"],
+            "type": [
+              "float",
+              "decimal"
+            ],
             "min_value": 0,
             "max_value": 100
           },
@@ -102,11 +125,9 @@
             "(?i)^(account.*number|account.*id|acct.*num)$"
           ],
           "data_properties": {
-            "cardinality_min": 0.8,
-            "unique_percentage_min": 80
+            "cardinality_min": 0.001
           },
           "validation_rules": [
-            "UniqueKeyCheck",
             "MandatoryFieldCheck"
           ]
         },
@@ -140,8 +161,7 @@
             "(?i)^(transaction.*id|trans.*id|txn.*id)$"
           ],
           "data_properties": {
-            "cardinality_min": 0.95,
-            "unique_percentage_min": 95
+            "cardinality_min": 0.001
           },
           "validation_rules": [
             "UniqueKeyCheck",
@@ -187,8 +207,14 @@
             "(?i).*(swift|bic|iban).*"
           ],
           "data_properties": {
-            "type": ["string", "integer"],
-            "string_length": [8, 11]
+            "type": [
+              "string",
+              "integer"
+            ],
+            "string_length": [
+              8,
+              11
+            ]
           },
           "validation_rules": [
             "StringLengthCheck",
@@ -209,7 +235,7 @@
             "(?i).*(mortgage.*id|mortgage.*number).*"
           ],
           "data_properties": {
-            "cardinality_min": 0.9
+            "cardinality_min": 0.001
           },
           "validation_rules": [
             "UniqueKeyCheck",
@@ -224,7 +250,10 @@
             "(?i).*(outstanding.*balance|loan.*balance).*"
           ],
           "data_properties": {
-            "type": ["float", "decimal"],
+            "type": [
+              "float",
+              "decimal"
+            ],
             "min_value": 0
           },
           "validation_rules": [
@@ -246,7 +275,7 @@
             "(?i).*(isin|cusip|sedol).*"
           ],
           "data_properties": {
-            "cardinality_min": 0.8
+            "cardinality_min": 0.001
           },
           "validation_rules": [
             "MandatoryFieldCheck"
@@ -259,8 +288,13 @@
             "(?i).*(ticker|symbol|stock.*symbol).*"
           ],
           "data_properties": {
-            "type": ["string"],
-            "string_length": [1, 5],
+            "type": [
+              "string"
+            ],
+            "string_length": [
+              1,
+              5
+            ],
             "cardinality_max": 0.5
           },
           "validation_rules": [
@@ -276,7 +310,10 @@
             "(?i).*(close.*price|open.*price|last.*price).*"
           ],
           "data_properties": {
-            "type": ["float", "decimal"],
+            "type": [
+              "float",
+              "decimal"
+            ],
             "min_value": 0
           },
           "validation_rules": [
@@ -297,7 +334,7 @@
             "(?i).*(user.*id|member.*id).*"
           ],
           "data_properties": {
-            "cardinality_min": 0.7
+            "cardinality_min": 0.001
           },
           "validation_rules": [
             "MandatoryFieldCheck"
@@ -327,9 +364,14 @@
             "(?i).*(uuid|guid).*"
           ],
           "data_properties": {
-            "type": ["string"],
-            "string_length": [36, 36],
-            "cardinality_min": 0.99
+            "type": [
+              "string"
+            ],
+            "string_length": [
+              36,
+              36
+            ],
+            "cardinality_min": 0.001
           },
           "validation_rules": [
             "UniqueKeyCheck",
@@ -361,7 +403,10 @@
             "(?i).*(trade.*date|settlement.*date).*"
           ],
           "data_properties": {
-            "type": ["datetime", "date"]
+            "type": [
+              "datetime",
+              "date"
+            ]
           },
           "validation_rules": [
             "DateFormatCheck",
@@ -377,7 +422,10 @@
             "(?i).*(due.*date|payoff.*date).*"
           ],
           "data_properties": {
-            "type": ["datetime", "date"]
+            "type": [
+              "datetime",
+              "date"
+            ]
           },
           "validation_rules": [
             "DateFormatCheck",
@@ -398,7 +446,9 @@
             "(?i).*(payment.*type|transfer.*type).*"
           ],
           "data_properties": {
-            "type": ["string"],
+            "type": [
+              "string"
+            ],
             "cardinality_max": 0.05
           },
           "validation_rules": [
@@ -413,7 +463,9 @@
             "(?i).*(account.*type|acct.*type).*"
           ],
           "data_properties": {
-            "type": ["string"],
+            "type": [
+              "string"
+            ],
             "cardinality_max": 0.01
           },
           "validation_rules": [
@@ -428,13 +480,21 @@
             "(?i).*(payment.*method|pay.*method|payment.*type).*"
           ],
           "data_properties": {
-            "type": ["string"],
+            "type": [
+              "string"
+            ],
             "cardinality_max": 0.05
           },
           "validation_rules": [
             "ValidValuesCheck"
           ],
-          "expected_values": ["wire", "ach", "check", "card", "cash"]
+          "expected_values": [
+            "wire",
+            "ach",
+            "check",
+            "card",
+            "cash"
+          ]
         }
       }
     },
@@ -450,7 +510,9 @@
             "(?i).*(risk.*score|score).*"
           ],
           "data_properties": {
-            "type": ["integer"],
+            "type": [
+              "integer"
+            ],
             "min_value": 300,
             "max_value": 850
           },
@@ -465,7 +527,10 @@
             "(?i).*(exposure|amount.*at.*risk).*"
           ],
           "data_properties": {
-            "type": ["float", "decimal"],
+            "type": [
+              "float",
+              "decimal"
+            ],
             "min_value": 0
           },
           "validation_rules": [
