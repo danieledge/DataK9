@@ -174,6 +174,9 @@ class ExecutiveHTMLReporter:
                 <!-- Validation Suggestions Accordion -->
                 {self._generate_suggestions_accordion(profile)}
 
+                <!-- Full Validation Config Accordion -->
+                {self._generate_full_config_accordion(profile)}
+
                 <!-- Temporal Analysis Accordion (if temporal columns exist) -->
                 {self._generate_temporal_accordion(temporal_columns) if temporal_columns else ''}
             </div>
@@ -726,12 +729,35 @@ class ExecutiveHTMLReporter:
         }
 
         .column-row-header {
-            display: flex;
+            display: grid;
+            grid-template-columns: auto auto 1fr auto auto auto;
             align-items: center;
             gap: 12px;
             padding: 12px 16px;
             cursor: pointer;
             transition: background var(--transition-fast);
+        }
+
+        @media (min-width: 1200px) {
+            .column-row-header {
+                grid-template-columns: auto auto minmax(200px, 1fr) minmax(150px, auto) minmax(200px, auto) auto;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .column-row-header {
+                grid-template-columns: auto auto 1fr auto;
+                grid-template-rows: auto auto;
+            }
+            .column-quick-stats {
+                grid-column: 3 / -1;
+                grid-row: 2;
+                justify-self: start;
+            }
+            .column-tags {
+                grid-column: 1 / -1;
+                grid-row: 3;
+            }
         }
 
         .column-row-header:hover {
@@ -804,6 +830,17 @@ class ExecutiveHTMLReporter:
         .column-tag.pii { background: var(--critical-soft); color: var(--critical); }
         .column-tag.temporal { background: var(--warning-soft); color: var(--warning); }
         .column-tag.semantic { background: var(--info-soft); color: var(--info); }
+        .column-tag.fibo {
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.15) 0%, rgba(59, 130, 246, 0.15) 100%);
+            color: #7c3aed;
+            border: 1px solid rgba(139, 92, 246, 0.3);
+        }
+        .column-tag.fibo .fibo-icon { margin-right: 4px; }
+        .column-tag.fibo-domain {
+            background: rgba(59, 130, 246, 0.1);
+            color: #3b82f6;
+            font-size: 0.6em;
+        }
 
         .column-quality-score {
             padding: 4px 10px;
@@ -935,6 +972,42 @@ class ExecutiveHTMLReporter:
             margin-bottom: 12px;
         }
 
+        .suggestion-field {
+            font-size: 0.8em;
+            color: var(--text-muted);
+            margin-bottom: 6px;
+            padding: 4px 8px;
+            background: var(--bg-card);
+            border-radius: var(--radius-sm);
+            display: inline-block;
+        }
+
+        .suggestion-field strong {
+            color: var(--accent);
+        }
+
+        .suggestion-yaml-container {
+            display: flex;
+            gap: 8px;
+            align-items: flex-start;
+            margin-top: 8px;
+        }
+
+        .suggestion-yaml {
+            flex: 1;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            padding: 10px 12px;
+            font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+            font-size: 0.75em;
+            color: var(--text-secondary);
+            margin: 0;
+            white-space: pre-wrap;
+            word-break: break-word;
+            overflow-x: auto;
+        }
+
         .copy-yaml-btn {
             background: var(--accent-soft);
             color: var(--accent);
@@ -949,6 +1022,47 @@ class ExecutiveHTMLReporter:
         .copy-yaml-btn:hover {
             background: var(--accent);
             color: #fff;
+        }
+
+        /* Full Config Section */
+        .full-config-container {
+            margin-top: 12px;
+        }
+
+        .config-actions {
+            margin-bottom: 10px;
+        }
+
+        .copy-config-btn {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: #fff;
+            border: none;
+            padding: 10px 20px;
+            border-radius: var(--radius-md);
+            font-size: 0.85em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all var(--transition-fast);
+        }
+
+        .copy-config-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+        }
+
+        .full-config-yaml {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            padding: 16px;
+            font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+            font-size: 0.8em;
+            color: var(--text-secondary);
+            margin: 0;
+            white-space: pre;
+            overflow-x: auto;
+            max-height: 500px;
+            overflow-y: auto;
         }
 
         .pii-risk-card {
@@ -1143,6 +1257,21 @@ class ExecutiveHTMLReporter:
                     btn.style.background = '';
                 }}, 1500);
             }});
+        }}
+
+        // Copy full config to clipboard
+        function copyFullConfig() {{
+            const yamlEl = document.getElementById('fullConfigYaml');
+            if (yamlEl) {{
+                navigator.clipboard.writeText(yamlEl.textContent).then(() => {{
+                    const btn = event.target;
+                    const originalText = btn.textContent;
+                    btn.textContent = '✓ Copied!';
+                    setTimeout(() => {{
+                        btn.textContent = originalText;
+                    }}, 1500);
+                }});
+            }}
         }}
 
         // Chart defaults
@@ -1751,7 +1880,12 @@ class ExecutiveHTMLReporter:
             tags += '<span class="column-tag pii">PII</span>'
         if col.temporal_analysis and col.temporal_analysis.get('available'):
             tags += '<span class="column-tag temporal">TEMPORAL</span>'
-        if col.statistics.semantic_type and col.statistics.semantic_type != 'unknown':
+        # Show FIBO classification if available (primary_tag like "money.amount")
+        if col.semantic_info and col.semantic_info.get('primary_tag') and col.semantic_info.get('primary_tag') != 'unknown':
+            fibo_tag = col.semantic_info.get('primary_tag')
+            tags += f'<span class="column-tag fibo">{fibo_tag}</span>'
+        elif col.statistics.semantic_type and col.statistics.semantic_type != 'unknown':
+            # Fallback to generic semantic type if no FIBO tag
             tags += f'<span class="column-tag semantic">{col.statistics.semantic_type.upper()}</span>'
 
         # Stats
@@ -1861,9 +1995,15 @@ class ExecutiveHTMLReporter:
             return ''
 
         suggestion_cards = ''
-        for i, sugg in enumerate(profile.suggested_validations[:10]):  # Limit to 10
+        for i, sugg in enumerate(profile.suggested_validations):
             yaml_content = self._generate_yaml_snippet(sugg)
+            # Escape for HTML display
+            yaml_display = yaml_content.replace('\\n', '\n')
             priority_class = 'high-priority' if sugg.confidence > 80 else ''
+
+            # Extract field name from params if present
+            field_name = sugg.params.get('field') or sugg.params.get('fields', [None])[0] if sugg.params.get('fields') else None
+            field_display = f'<div class="suggestion-field">Field: <strong>{field_name}</strong></div>' if field_name else ''
 
             suggestion_cards += f'''
                             <div class="suggestion-card {priority_class}">
@@ -1871,8 +2011,12 @@ class ExecutiveHTMLReporter:
                                     <div class="suggestion-type">{sugg.validation_type}</div>
                                     <div class="suggestion-confidence">{sugg.confidence:.0f}% confidence</div>
                                 </div>
+                                {field_display}
                                 <div class="suggestion-reason">{sugg.reason}</div>
-                                <button class="copy-yaml-btn" onclick="copyYaml(`{yaml_content.replace('`', '\\`')}`)">📋 Copy YAML</button>
+                                <div class="suggestion-yaml-container">
+                                    <pre class="suggestion-yaml">{yaml_display}</pre>
+                                    <button class="copy-yaml-btn" onclick="copyYaml(`{yaml_content.replace('`', '\\`')}`)">📋 Copy</button>
+                                </div>
                             </div>'''
 
         return f'''
@@ -1894,9 +2038,51 @@ class ExecutiveHTMLReporter:
                         <div class="accordion-content">
                             <div class="hint-box">
                                 <strong>💡 Smart Suggestions:</strong> Based on the data profile, these validations are recommended.
-                                Click "Copy YAML" to add them to your validation config.
+                                Copy individual snippets or use the full config below.
                             </div>
                             {suggestion_cards}
+                        </div>
+                    </div>
+                </div>'''
+
+    def _generate_full_config_accordion(self, profile: ProfileResult) -> str:
+        """Generate full validation configuration YAML accordion."""
+        if not profile.generated_config_yaml:
+            return ''
+
+        # Escape HTML entities in YAML
+        yaml_escaped = (profile.generated_config_yaml
+                       .replace('&', '&amp;')
+                       .replace('<', '&lt;')
+                       .replace('>', '&gt;'))
+
+        return f'''
+                <div class="accordion" data-accordion="config">
+                    <div class="accordion-header" onclick="toggleAccordion(this)">
+                        <div class="accordion-title-group">
+                            <div class="accordion-icon quality">⚙️</div>
+                            <div>
+                                <div class="accordion-title">Full Validation Configuration</div>
+                                <div class="accordion-subtitle">Ready-to-use YAML config file</div>
+                            </div>
+                        </div>
+                        <div class="accordion-meta">
+                            <span class="accordion-badge good">Ready</span>
+                            <span class="accordion-chevron">▼</span>
+                        </div>
+                    </div>
+                    <div class="accordion-body">
+                        <div class="accordion-content">
+                            <div class="hint-box">
+                                <strong>📋 Complete Configuration:</strong> Copy this YAML and save it as a <code>.yaml</code> file
+                                to run validations with DataK9 CLI: <code>python3 -m validation_framework.cli validate config.yaml</code>
+                            </div>
+                            <div class="full-config-container">
+                                <div class="config-actions">
+                                    <button class="copy-config-btn" onclick="copyFullConfig()">📋 Copy Full Config</button>
+                                </div>
+                                <pre class="full-config-yaml" id="fullConfigYaml">{yaml_escaped}</pre>
+                            </div>
                         </div>
                     </div>
                 </div>'''
