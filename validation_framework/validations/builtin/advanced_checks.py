@@ -241,7 +241,7 @@ class StatisticalOutlierCheck(BackendAwareValidationRule):
 
         # Create new data iterator for second pass
         backend = BackendManager.get_default_backend()
-        loader = LoaderFactory.get_loader(file_config, backend=backend)
+        loader = LoaderFactory.create_loader(file_config.get('path', ''), chunk_size=context.get('chunk_size', 50000))
         data_iterator_pass2 = loader.load()
 
         failed_rows = []
@@ -367,7 +367,7 @@ class StatisticalOutlierCheck(BackendAwareValidationRule):
             )
 
         backend = BackendManager.get_default_backend()
-        loader = LoaderFactory.get_loader(file_config, backend=backend)
+        loader = LoaderFactory.create_loader(file_config.get('path', ''), chunk_size=context.get('chunk_size', 50000))
         data_iterator = loader.load()
 
         # Collect values (with or without sampling)

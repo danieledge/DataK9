@@ -672,7 +672,7 @@
             </div>
             <h1>Validation for accounts.csv</h1>
             <div class="header-meta">
-                <span>🕐 2025-11-25 14:14:58</span>
+                <span>🕐 2025-11-25 14:20:42</span>
                 <span>⏱️ 0.07s</span>
                 <span>📁 1 file</span>
                 <span>🔍 12 validations</span>
@@ -707,7 +707,7 @@
             </div>
 
             <div class="kpi-card warnings">
-                <div class="kpi-value">5</div>
+                <div class="kpi-value">3</div>
                 <div class="kpi-label">Warnings</div>
                 <div class="kpi-trend warning">
                     Review suggested
@@ -715,9 +715,9 @@
             </div>
 
             <div class="kpi-card passed">
-                <div class="kpi-value">7</div>
+                <div class="kpi-value">9</div>
                 <div class="kpi-label">Passed</div>
-                <div class="kpi-trend good">58.3% success rate</div>
+                <div class="kpi-trend good">75.0% success rate</div>
             </div>
         </section>
 
@@ -798,7 +798,7 @@
                 <div class="accordion-meta">
                     
                     
-                    <span class="accordion-badge warning">5 warnings</span>
+                    <span class="accordion-badge warning">3 warnings</span>
                     
                     
                     <span class="accordion-chevron">▼</span>
@@ -1530,23 +1530,23 @@
                         </div>
                     </div>
                     
-                    <div class="validation-item failed">
+                    <div class="validation-item ">
                         <div class="validation-header" onclick="toggleValidation('validation-accounts-11')">
                             <div class="validation-title">
                                 <span class="validation-icon">
-                                    ❌
+                                    ✅
                                 </span>
                                 <div>
                                     <div class="validation-name">StatisticalOutlierCheck</div>
-                                    <span class="severity-badge severity-warning">
-                                        WARNING
+                                    <span class="severity-badge severity-success">
+                                        PASSED
                                     </span>
                                 </div>
                             </div>
                             <div class="validation-stats">
                                 
-                                    <span style="color: var(--error);">1 failures</span>
                                 
+                                    <span style="color: var(--text-muted);">100.0% pass rate</span>
                                 
                                 <span class="toggle-icon" id="toggle-validation-accounts-11">▼</span>
                             </div>
@@ -1554,30 +1554,30 @@
 
                         <div class="validation-details" id="validation-accounts-11">
                             <div class="validation-message">
-                                <strong>Result:</strong> Error executing validation: type object 'LoaderFactory' has no attribute 'get_loader'
+                                <strong>Result:</strong> No outliers detected in 500 values (zscore method)
                             </div>
 
                             
                         </div>
                     </div>
                     
-                    <div class="validation-item failed">
+                    <div class="validation-item ">
                         <div class="validation-header" onclick="toggleValidation('validation-accounts-12')">
                             <div class="validation-title">
                                 <span class="validation-icon">
-                                    ❌
+                                    ✅
                                 </span>
                                 <div>
                                     <div class="validation-name">StatisticalOutlierCheck</div>
-                                    <span class="severity-badge severity-warning">
-                                        WARNING
+                                    <span class="severity-badge severity-success">
+                                        PASSED
                                     </span>
                                 </div>
                             </div>
                             <div class="validation-stats">
                                 
-                                    <span style="color: var(--error);">1 failures</span>
                                 
+                                    <span style="color: var(--text-muted);">100.0% pass rate</span>
                                 
                                 <span class="toggle-icon" id="toggle-validation-accounts-12">▼</span>
                             </div>
@@ -1585,7 +1585,7 @@
 
                         <div class="validation-details" id="validation-accounts-12">
                             <div class="validation-message">
-                                <strong>Result:</strong> Error executing validation: type object 'LoaderFactory' has no attribute 'get_loader'
+                                <strong>Result:</strong> No outliers detected in 500 values (zscore method)
                             </div>
 
                             
@@ -1628,9 +1628,9 @@
                     labels: ['Passed', 'Errors', 'Warnings'],
                     datasets: [{
                         data: [
-                            7,
+                            9,
                             0,
-                            5
+                            3
                         ],
                         backgroundColor: [
                             colors.success,
@@ -1679,7 +1679,7 @@
         if (severityCtx) {
             // Calculate severity breakdown
             const errorCount = 0;
-            const warningCount = 5;
+            const warningCount = 3;
 
             new Chart(severityCtx, {
                 type: 'bar',
@@ -1738,7 +1738,7 @@
 
             const fileWarnings = [
                 
-                5
+                3
                 
             ];
 
