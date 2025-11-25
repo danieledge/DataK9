@@ -13,6 +13,7 @@ from datetime import datetime
 from pathlib import Path
 
 from validation_framework.core.engine import ValidationEngine
+from validation_framework.core.optimized_engine import OptimizedValidationEngine
 from validation_framework.core.registry import get_registry
 from validation_framework.core.logging_config import setup_logging, get_logger
 from validation_framework.core.pretty_output import PrettyOutput as po
@@ -44,7 +45,8 @@ def cli():
 @click.option('--log-level', type=click.Choice(['DEBUG', 'INFO', 'WARNING', 'ERROR'], case_sensitive=False),
               default='WARNING', help='Logging level')
 @click.option('--log-file', type=click.Path(), help='Optional log file path')
-def validate(config_file, html_output, json_output, verbose, fail_on_warning, log_level, log_file):
+@click.option('--no-optimize', is_flag=True, help='Disable single-pass optimization (use standard engine)')
+def validate(config_file, html_output, json_output, verbose, fail_on_warning, log_level, log_file, no_optimize):
     """
     Run data validation from a configuration file.
 
@@ -93,9 +95,14 @@ def validate(config_file, html_output, json_output, verbose, fail_on_warning, lo
     logger.info(f"Log level: {log_level}")
 
     try:
-        # Create and run validation engine
+        # Create and run validation engine (optimized by default)
         logger.debug(f"Loading configuration from {config_file}")
-        engine = ValidationEngine.from_config(config_file)
+        if no_optimize:
+            logger.info("Using standard validation engine (single-pass optimization disabled)")
+            engine = ValidationEngine.from_config(config_file)
+        else:
+            logger.info("Using optimized validation engine (single-pass mode)")
+            engine = OptimizedValidationEngine.from_config(config_file, use_single_pass=True)
         logger.info(f"Configuration loaded: {engine.config.job_name}")
 
         # Performance advisory: Check files and recommend Parquet if needed
@@ -431,8 +438,10 @@ def version():
 @click.option('--disable-pii', is_flag=True, help='Disable PII detection with privacy risk scoring')
 @click.option('--disable-correlation', is_flag=True, help='Disable enhanced multi-method correlation analysis')
 @click.option('--disable-all-enhancements', is_flag=True, help='Disable all profiler enhancements (temporal, PII, correlation)')
+@click.option('--report-style', type=click.Choice(['classic', 'executive'], case_sensitive=False),
+              default='executive', help='HTML report style: classic (detailed) or executive (dashboard view)')
 def profile(file_path, format, database, table, query, html_output, json_output, config_output, chunk_size, sample, no_memory_check, log_level,
-            disable_temporal, disable_pii, disable_correlation, disable_all_enhancements):
+            disable_temporal, disable_pii, disable_correlation, disable_all_enhancements, report_style):
     """
     Profile a data file or database table to understand its structure and quality.
 
@@ -482,6 +491,7 @@ def profile(file_path, format, database, table, query, html_output, json_output,
     """
     from validation_framework.profiler.engine import DataProfiler
     from validation_framework.profiler.html_reporter import ProfileHTMLReporter
+    from validation_framework.profiler.executive_html_reporter import ExecutiveHTMLReporter
     from validation_framework.loaders.factory import LoaderFactory
 
     # Create pattern expander with consistent timestamp for this run
@@ -635,10 +645,13 @@ def profile(file_path, format, database, table, query, html_output, json_output,
         # Compact summary
         click.echo(f"\n✓ Profile complete: {profile_result.row_count:,} rows × {profile_result.column_count} cols | Quality: {profile_result.overall_quality_score:.0f}% | {profile_result.processing_time_seconds:.1f}s")
 
-        # Generate HTML report
-        reporter = ProfileHTMLReporter()
+        # Generate HTML report (choose reporter based on style)
+        if report_style and report_style.lower() == 'classic':
+            reporter = ProfileHTMLReporter()
+        else:
+            reporter = ExecutiveHTMLReporter()
         reporter.generate_report(profile_result, html_output)
-        click.echo(f"  → HTML: {html_output}")
+        click.echo(f"  → HTML: {html_output} ({report_style or 'executive'} style)")
 
         # Generate JSON output if requested
         if json_output:
