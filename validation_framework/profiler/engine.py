@@ -1942,6 +1942,64 @@ class DataProfiler:
 
         return suggestions
 
+    def _deduplicate_mandatory_field_checks(
+        self,
+        suggestions: List[ValidationSuggestion]
+    ) -> List[ValidationSuggestion]:
+        """
+        Consolidate MandatoryFieldCheck suggestions to avoid duplicates.
+
+        Fields can be flagged as mandatory from multiple sources:
+        1. Completeness analysis (>95% completeness) - generates combined check
+        2. FIBO semantic suggestions - generates individual checks per field
+
+        This method:
+        - Collects all unique fields from MandatoryFieldCheck suggestions
+        - Creates a single MandatoryFieldCheck with all unique fields
+        - Preserves all non-MandatoryFieldCheck suggestions unchanged
+        """
+        mandatory_fields = set()
+        mandatory_reasons = []
+        other_suggestions = []
+
+        for sugg in suggestions:
+            if sugg.validation_type == "MandatoryFieldCheck":
+                # Extract fields from this suggestion
+                fields = sugg.params.get('fields', [])
+                field = sugg.params.get('field')
+
+                if fields:
+                    mandatory_fields.update(fields)
+                if field:
+                    mandatory_fields.add(field)
+
+                # Collect reasons for documentation
+                if sugg.reason and sugg.reason not in mandatory_reasons:
+                    mandatory_reasons.append(sugg.reason)
+            else:
+                other_suggestions.append(sugg)
+
+        # Create single consolidated MandatoryFieldCheck if any fields found
+        if mandatory_fields:
+            # Build combined reason
+            if len(mandatory_reasons) == 1:
+                combined_reason = mandatory_reasons[0]
+            else:
+                combined_reason = f"{len(mandatory_fields)} fields have >95% completeness"
+
+            consolidated = ValidationSuggestion(
+                validation_type="MandatoryFieldCheck",
+                severity="WARNING",
+                params={
+                    "fields": sorted(list(mandatory_fields))  # Sort for consistent output
+                },
+                reason=combined_reason,
+                confidence=95.0
+            )
+            other_suggestions.append(consolidated)
+
+        return other_suggestions
+
     def _generate_validation_suggestions(
         self,
         columns: List[ColumnProfile],
@@ -2143,6 +2201,13 @@ class DataProfiler:
                 reason=f"{len(mandatory_fields)} fields have >95% completeness",
                 confidence=95.0
             ))
+
+        # DEDUPLICATION: Consolidate MandatoryFieldCheck suggestions to avoid duplicates
+        # Fields can be flagged as mandatory from multiple sources:
+        # 1. Completeness analysis (>95% completeness)
+        # 2. FIBO semantic suggestions (banking.account, party.customer_id, etc.)
+        # Merge all into a single MandatoryFieldCheck per unique field set
+        suggestions = self._deduplicate_mandatory_field_checks(suggestions)
 
         return sorted(suggestions, key=lambda x: x.confidence, reverse=True)
 

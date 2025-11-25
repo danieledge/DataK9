@@ -1028,7 +1028,7 @@
                 <span><span class="pill-dot"></span>500 rows</span>
                 <span><span class="pill-dot"></span>22.24 KB</span>
                 <span><span class="pill-dot"></span>0.2s</span>
-                <span><span class="pill-dot"></span>2025-11-25 14:20</span>
+                <span><span class="pill-dot"></span>2025-11-25 16:42</span>
             </div>
         </div>
     </header>
@@ -1834,11 +1834,11 @@
                             <div class="accordion-icon quality">💡</div>
                             <div>
                                 <div class="accordion-title">Validation Suggestions</div>
-                                <div class="accordion-subtitle">12 suggested checks</div>
+                                <div class="accordion-subtitle">8 suggested checks</div>
                             </div>
                         </div>
                         <div class="accordion-meta">
-                            <span class="accordion-badge info">12 suggestions</span>
+                            <span class="accordion-badge info">8 suggestions</span>
                             <span class="accordion-chevron">▼</span>
                         </div>
                     </div>
@@ -1908,76 +1908,12 @@
           fields:
             - "account_id"
             - "account_number"
-            - "customer_id"
             - "account_type"
+            - "customer_id"
             - "opening_balance"
             - "opening_date"</pre>
                                     <button class="copy-yaml-btn" onclick="copyYaml(`      - type: "MandatoryFieldCheck"
-        severity: "WARNING"\n          fields:\n            - "account_id"\n            - "account_number"\n            - "customer_id"\n            - "account_type"\n            - "opening_balance"\n            - "opening_date"`)">📋 Copy</button>
-                                </div>
-                            </div>
-                            <div class="suggestion-card high-priority">
-                                <div class="suggestion-header">
-                                    <div class="suggestion-type">MandatoryFieldCheck</div>
-                                    <div class="suggestion-confidence">90% confidence</div>
-                                </div>
-                                <div class="suggestion-field">Field: <strong>account_id</strong></div>
-                                <div class="suggestion-reason">FIBO: banking.account is typically mandatory</div>
-                                <div class="suggestion-yaml-container">
-                                    <pre class="suggestion-yaml">      - type: "MandatoryFieldCheck"
-        severity: "WARNING"
-          fields:
-            - "account_id"</pre>
-                                    <button class="copy-yaml-btn" onclick="copyYaml(`      - type: "MandatoryFieldCheck"
-        severity: "WARNING"\n          fields:\n            - "account_id"`)">📋 Copy</button>
-                                </div>
-                            </div>
-                            <div class="suggestion-card high-priority">
-                                <div class="suggestion-header">
-                                    <div class="suggestion-type">MandatoryFieldCheck</div>
-                                    <div class="suggestion-confidence">90% confidence</div>
-                                </div>
-                                <div class="suggestion-field">Field: <strong>account_number</strong></div>
-                                <div class="suggestion-reason">FIBO: banking.account is typically mandatory</div>
-                                <div class="suggestion-yaml-container">
-                                    <pre class="suggestion-yaml">      - type: "MandatoryFieldCheck"
-        severity: "WARNING"
-          fields:
-            - "account_number"</pre>
-                                    <button class="copy-yaml-btn" onclick="copyYaml(`      - type: "MandatoryFieldCheck"
-        severity: "WARNING"\n          fields:\n            - "account_number"`)">📋 Copy</button>
-                                </div>
-                            </div>
-                            <div class="suggestion-card high-priority">
-                                <div class="suggestion-header">
-                                    <div class="suggestion-type">MandatoryFieldCheck</div>
-                                    <div class="suggestion-confidence">90% confidence</div>
-                                </div>
-                                <div class="suggestion-field">Field: <strong>customer_id</strong></div>
-                                <div class="suggestion-reason">FIBO: party.customer_id is typically mandatory</div>
-                                <div class="suggestion-yaml-container">
-                                    <pre class="suggestion-yaml">      - type: "MandatoryFieldCheck"
-        severity: "WARNING"
-          fields:
-            - "customer_id"</pre>
-                                    <button class="copy-yaml-btn" onclick="copyYaml(`      - type: "MandatoryFieldCheck"
-        severity: "WARNING"\n          fields:\n            - "customer_id"`)">📋 Copy</button>
-                                </div>
-                            </div>
-                            <div class="suggestion-card high-priority">
-                                <div class="suggestion-header">
-                                    <div class="suggestion-type">MandatoryFieldCheck</div>
-                                    <div class="suggestion-confidence">90% confidence</div>
-                                </div>
-                                <div class="suggestion-field">Field: <strong>account_type</strong></div>
-                                <div class="suggestion-reason">FIBO: banking.account is typically mandatory</div>
-                                <div class="suggestion-yaml-container">
-                                    <pre class="suggestion-yaml">      - type: "MandatoryFieldCheck"
-        severity: "WARNING"
-          fields:
-            - "account_type"</pre>
-                                    <button class="copy-yaml-btn" onclick="copyYaml(`      - type: "MandatoryFieldCheck"
-        severity: "WARNING"\n          fields:\n            - "account_type"`)">📋 Copy</button>
+        severity: "WARNING"\n          fields:\n            - "account_id"\n            - "account_number"\n            - "account_type"\n            - "customer_id"\n            - "opening_balance"\n            - "opening_date"`)">📋 Copy</button>
                                 </div>
                             </div>
                             <div class="suggestion-card high-priority">
@@ -2082,7 +2018,7 @@
                                 </div>
                                 <pre class="full-config-yaml" id="fullConfigYaml"># Auto-generated validation configuration
 # Generated from profile of: accounts.csv
-# Generated at: 2025-11-25 14:20:35
+# Generated at: 2025-11-25 16:42:02
 # File size: 0.0 MB, Rows: 500
 # Recommended chunk size: 2,000,000 rows (Using maximum chunk size (2,000,000). Sufficient memory available.)
 
@@ -2091,7 +2027,7 @@ validation_job:
   description: "Auto-generated from data profile"
 
 settings:
-  chunk_size: 2000000  # Optimized for csv format, 12 validations (moderate complexity)
+  chunk_size: 2000000  # Optimized for csv format, 8 validations (moderate complexity)
   max_sample_failures: 100
 
 files:
@@ -2124,39 +2060,11 @@ files:
           fields:
             - "account_id"
             - "account_number"
-            - "customer_id"
             - "account_type"
+            - "customer_id"
             - "opening_balance"
             - "opening_date"
         # 6 fields have &gt;95% completeness
-
-      - type: "MandatoryFieldCheck"
-        severity: "WARNING"
-        params:
-          fields:
-            - "account_id"
-        # FIBO: banking.account is typically mandatory
-
-      - type: "MandatoryFieldCheck"
-        severity: "WARNING"
-        params:
-          fields:
-            - "account_number"
-        # FIBO: banking.account is typically mandatory
-
-      - type: "MandatoryFieldCheck"
-        severity: "WARNING"
-        params:
-          fields:
-            - "customer_id"
-        # FIBO: party.customer_id is typically mandatory
-
-      - type: "MandatoryFieldCheck"
-        severity: "WARNING"
-        params:
-          fields:
-            - "account_type"
-        # FIBO: banking.account is typically mandatory
 
       - type: "ValidValuesCheck"
         severity: "WARNING"

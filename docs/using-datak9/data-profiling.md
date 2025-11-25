@@ -34,7 +34,9 @@ python3 -m validation_framework.cli profile transactions.csv --enable-semantic-t
 # ✓ data_validation.yaml         (Auto-generated validation config)
 ```
 
-**[View Example Report →](../../examples/reports/profiler_example_with_semantic_tagging.html)**
+**[View Example Reports →](../../examples/sample_reports/)**
+- [Small Dataset Profile](../../examples/sample_reports/profiler_report_example.html) - 500 rows, accounts data
+- [Large Dataset Profile](../../examples/sample_reports/large_dataset_profile.html) - 179M rows, transactions
 
 ---
 
@@ -264,16 +266,21 @@ Column Quality = average of all four
 - File-Level (EmptyFileCheck, RowCountRangeCheck)
 - Field-Level (MandatoryFieldCheck, UniqueKeyCheck)
 - Format-Level (RegexCheck, DateFormatCheck)
-- Range-Level (RangeCheck, OutlierDetectionCheck)
+- Range-Level (RangeCheck, StatisticalOutlierCheck)
 - **FIBO-Level** (Semantic intelligence)
 
 **Each suggestion includes:**
 - Validation type
-- Severity recommendation (not a badge!)
+- **Field name** - clearly shows which field the validation applies to
+- Severity recommendation
 - Parameters (auto-filled from data)
 - Confidence score
 - Reasoning
-- Copy-paste YAML snippet
+- **Visible YAML snippet** - see the full config inline
+- Copy button for individual snippets
+
+**Full Configuration YAML:**
+The report includes a complete, ready-to-use validation configuration with all suggestions combined. Copy the entire config and save as a `.yaml` file to run validations immediately.
 </details>
 
 ---
@@ -562,7 +569,7 @@ python3 -m validation_framework.cli profile transactions.csv --enable-semantic-t
 
 ## 🔗 Quick Links
 
-- **[Example Report](../../examples/reports/profiler_example_with_semantic_tagging.html)** - See FIBO semantic tagging in action
+- **[Example Reports](../../examples/sample_reports/)** - See FIBO semantic tagging in action
 - **[FIBO Ontology](https://spec.edmcouncil.org/fibo/)** - Learn about FIBO (MIT License)
 - **[Performance Guide](../guides/performance/profiler-memory-optimization.md)** - Optimize for large files
 
