@@ -135,10 +135,23 @@ class ValidationResult:
         }
 
     def _calculate_success_rate(self) -> float:
-        """Calculate success rate percentage."""
+        """Calculate success rate percentage.
+
+        Returns a value between 0.0 and 100.0. For very large datasets,
+        ensures that any failures prevent the rate from showing exactly 100%.
+        """
         if self.total_count == 0:
             return 100.0 if self.passed else 0.0
-        return round(((self.total_count - self.failed_count) / self.total_count) * 100, 2)
+
+        rate = ((self.total_count - self.failed_count) / self.total_count) * 100
+        rounded_rate = round(rate, 2)
+
+        # Prevent misleading 100% when there are actual failures
+        # This handles floating point precision issues with large datasets
+        if self.failed_count > 0 and rounded_rate >= 100.0:
+            return 99.99
+
+        return rounded_rate
 
 
 @dataclass

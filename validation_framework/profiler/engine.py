@@ -2000,6 +2000,51 @@ class DataProfiler:
 
         return other_suggestions
 
+    def _deduplicate_validations_by_field(
+        self,
+        suggestions: List[ValidationSuggestion]
+    ) -> List[ValidationSuggestion]:
+        """
+        Deduplicate validations that target the same field.
+
+        For certain validation types (ValidValuesCheck, RangeCheck, StringLengthCheck),
+        multiple sources can generate identical suggestions for the same field:
+        1. FIBO semantic analysis
+        2. Statistical analysis (low cardinality, detected ranges, etc.)
+
+        This method keeps only one validation per (validation_type, field) pair,
+        preferring the one with higher confidence.
+        """
+        # Track validations by (type, field) - keep highest confidence
+        field_validations: Dict[tuple, ValidationSuggestion] = {}
+        other_suggestions = []
+
+        # Validation types that should be deduplicated by field
+        dedupe_types = {'ValidValuesCheck', 'RangeCheck', 'StringLengthCheck',
+                        'DateFormatCheck', 'RegexCheck', 'UniqueKeyCheck'}
+
+        for sugg in suggestions:
+            if sugg.validation_type in dedupe_types:
+                # Get the field this validation targets
+                field = sugg.params.get('field') or sugg.params.get('fields', [None])[0]
+                if field:
+                    key = (sugg.validation_type, field)
+                    existing = field_validations.get(key)
+
+                    # Keep the one with higher confidence, or the existing if equal
+                    if existing is None or sugg.confidence > existing.confidence:
+                        field_validations[key] = sugg
+                else:
+                    # No field specified, keep as-is
+                    other_suggestions.append(sugg)
+            else:
+                other_suggestions.append(sugg)
+
+        # Add deduplicated validations back
+        other_suggestions.extend(field_validations.values())
+
+        return other_suggestions
+
     def _generate_validation_suggestions(
         self,
         columns: List[ColumnProfile],
@@ -2208,6 +2253,13 @@ class DataProfiler:
         # 2. FIBO semantic suggestions (banking.account, party.customer_id, etc.)
         # Merge all into a single MandatoryFieldCheck per unique field set
         suggestions = self._deduplicate_mandatory_field_checks(suggestions)
+
+        # DEDUPLICATION: Remove duplicate validations targeting the same field
+        # Multiple sources can generate identical ValidValuesCheck, RangeCheck, etc:
+        # 1. FIBO semantic analysis (e.g., money.currency → ValidValuesCheck)
+        # 2. Statistical analysis (low cardinality → ValidValuesCheck)
+        # Keep only the highest confidence validation per (type, field) pair
+        suggestions = self._deduplicate_validations_by_field(suggestions)
 
         return sorted(suggestions, key=lambda x: x.confidence, reverse=True)
 

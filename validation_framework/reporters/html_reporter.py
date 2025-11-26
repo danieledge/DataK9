@@ -97,7 +97,7 @@ class HTMLReporter(Reporter):
         return template.render(**template_data)
 
 
-# Embedded HTML template with modern dark theme
+# Embedded HTML template with modern dark theme matching executive profiler report
 # Self-contained with inline CSS and JavaScript - mobile responsive
 HTML_TEMPLATE = """
 <!DOCTYPE html>
@@ -106,31 +106,35 @@ HTML_TEMPLATE = """
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ report.job_name }} - Validation Report</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        /* Modern Dark Theme - Mobile Responsive */
+        /* Modern Dark Theme - Matching Executive Profiler Report */
         :root {
-            --bg-primary: #1a1b26;
-            --bg-secondary: #24283b;
-            --bg-tertiary: #2f3549;
-            --text-primary: #c0caf5;
-            --text-secondary: #9aa5ce;
-            --text-muted: #565f89;
-            --success: #9ece6a;
-            --error: #f7768e;
-            --warning: #e0af68;
-            --info: #7aa2f7;
-            --border: #3b4261;
-            --shadow: rgba(0, 0, 0, 0.3);
+            --bg-primary: #0f172a;
+            --bg-secondary: #1e293b;
+            --bg-card: #1e293b;
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            --border: #334155;
+            --success: #10b981;
+            --success-soft: rgba(16, 185, 129, 0.1);
+            --warning: #f59e0b;
+            --warning-soft: rgba(245, 158, 11, 0.1);
+            --error: #ef4444;
+            --error-soft: rgba(239, 68, 68, 0.1);
+            --critical: #dc2626;
+            --critical-soft: rgba(220, 38, 38, 0.1);
+            --info: #3b82f6;
+            --info-soft: rgba(59, 130, 246, 0.1);
+            --accent: #8b5cf6;
+            --accent-soft: rgba(139, 92, 246, 0.1);
         }
 
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
 
         body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background: var(--bg-primary);
             color: var(--text-primary);
             line-height: 1.6;
@@ -140,428 +144,384 @@ HTML_TEMPLATE = """
         .container {
             max-width: 1400px;
             margin: 0 auto;
-            padding: 1rem;
+            padding: 24px;
         }
 
-        @media (min-width: 768px) {
-            .container {
-                padding: 2rem;
-            }
-        }
-
-        /* Header */
-        header {
-            background: linear-gradient(135deg, #1f2335 0%, #24283b 50%, #1a1b26 100%);
-            color: white;
-            padding: 0;
-            border-radius: 12px;
-            margin-bottom: 2rem;
-            box-shadow: 0 8px 32px var(--shadow);
+        /* Header - Matching Executive Style */
+        .header {
+            background: linear-gradient(135deg, var(--bg-secondary) 0%, #0f172a 100%);
             border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 32px;
+            margin-bottom: 24px;
+            position: relative;
             overflow: hidden;
         }
 
-        .header-banner {
-            background: linear-gradient(135deg, #7aa2f7 0%, #bb9af7 100%);
-            padding: 0.5rem 2rem;
+        .header::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, var(--accent) 0%, var(--info) 50%, var(--success) 100%);
+        }
+
+        .header-top {
             display: flex;
             justify-content: space-between;
-            align-items: center;
+            align-items: flex-start;
             flex-wrap: wrap;
-            gap: 1rem;
+            gap: 16px;
+            margin-bottom: 16px;
         }
 
-        .header-brand {
+        .brand {
             display: flex;
             align-items: center;
-            gap: 1rem;
+            gap: 12px;
         }
 
-        .header-icon {
-            font-size: 2.5rem;
-            animation: pulse-icon 2s infinite;
+        .brand-icon {
+            width: 48px;
+            height: 48px;
+            background: linear-gradient(135deg, var(--accent), var(--info));
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
         }
 
-        @keyframes pulse-icon {
-            0%, 100% { transform: scale(1); }
-            50% { transform: scale(1.1); }
-        }
-
-        .header-badge {
-            background: rgba(255, 255, 255, 0.2);
-            backdrop-filter: blur(10px);
-            padding: 0.5rem 1rem;
-            border-radius: 20px;
-            font-size: 0.875rem;
-            font-weight: 600;
-            border: 1px solid rgba(255, 255, 255, 0.3);
-        }
-
-        .header-content {
-            padding: 2rem;
-        }
-
-        header h1 {
-            font-size: clamp(1.5rem, 4vw, 2.5rem);
+        .brand-text {
+            font-size: 24px;
             font-weight: 700;
-            margin-bottom: 0.5rem;
-            background: linear-gradient(135deg, #7aa2f7 0%, #bb9af7 100%);
+            background: linear-gradient(135deg, var(--accent), var(--info));
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
         }
 
-        header .subtitle {
-            color: var(--text-secondary);
-            font-size: clamp(0.875rem, 2vw, 1.125rem);
-            margin-bottom: 1.5rem;
-        }
-
-        header .description {
-            color: var(--text-muted);
-            font-size: 0.938rem;
-            line-height: 1.6;
-            max-width: 800px;
-        }
-
-        /* Status Badge */
-        .status-badge {
-            display: inline-flex;
+        .header-badge {
+            display: flex;
             align-items: center;
-            padding: 0.5rem 1rem;
-            border-radius: 8px;
-            font-weight: 600;
-            font-size: 0.875rem;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            gap: 0.5rem;
-        }
-
-        .status-badge::before {
-            content: '';
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            display: block;
-        }
-
-        .status-passed {
-            background: rgba(158, 206, 106, 0.15);
-            color: var(--success);
-            border: 1px solid var(--success);
-        }
-
-        .status-passed::before {
-            background: var(--success);
-        }
-
-        .status-failed {
-            background: rgba(247, 118, 142, 0.15);
-            color: var(--error);
-            border: 1px solid var(--error);
-        }
-
-        .status-failed::before {
-            background: var(--error);
-            animation: pulse 2s infinite;
-        }
-
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
-        }
-
-        .status-warning {
-            background: rgba(224, 175, 104, 0.15);
-            color: var(--warning);
-            border: 1px solid var(--warning);
-        }
-
-        .status-warning::before {
-            background: var(--warning);
-        }
-
-        /* Summary Grid */
-        .summary-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 1rem;
-            margin-bottom: 2rem;
-        }
-
-        .summary-card {
-            background: var(--bg-secondary);
-            padding: 1.5rem;
-            border-radius: 12px;
+            gap: 8px;
+            padding: 8px 16px;
+            background: var(--bg-primary);
             border: 1px solid var(--border);
-            box-shadow: 0 4px 16px var(--shadow);
+            border-radius: 24px;
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        .header h1 {
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 8px;
+            color: var(--text-primary);
+        }
+
+        .header-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+            color: var(--text-secondary);
+            font-size: 14px;
+        }
+
+        .header-meta span {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        /* KPI Belt - Matching Executive Style */
+        .kpi-belt {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .kpi-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
             transition: transform 0.2s, box-shadow 0.2s;
         }
 
-        .summary-card:hover {
+        .kpi-card:hover {
             transform: translateY(-2px);
-            box-shadow: 0 8px 24px var(--shadow);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
         }
 
-        .summary-card h3 {
-            color: var(--text-secondary);
-            font-size: 0.75rem;
-            text-transform: uppercase;
-            letter-spacing: 0.1em;
-            margin-bottom: 0.75rem;
-            font-weight: 600;
-        }
-
-        .summary-card .value {
-            font-size: 2.5rem;
+        .kpi-value {
+            font-size: 36px;
             font-weight: 700;
             line-height: 1;
+            margin-bottom: 8px;
         }
 
-        .summary-card.highlight-passed .value {
-            color: var(--success);
+        .kpi-label {
+            font-size: 12px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 4px;
         }
 
-        .summary-card.highlight-failed .value {
-            color: var(--error);
-        }
-
-        .summary-card.highlight-warning .value {
-            color: var(--warning);
-        }
-
-        /* File Section */
-        .file-section {
-            background: var(--bg-secondary);
-            margin-bottom: 1.5rem;
+        .kpi-trend {
+            font-size: 12px;
+            padding: 4px 8px;
             border-radius: 12px;
-            border: 1px solid var(--border);
-            overflow: hidden;
-            box-shadow: 0 4px 16px var(--shadow);
+            display: inline-block;
         }
 
-        .file-header {
-            padding: 1.5rem;
-            background: var(--bg-tertiary);
-            cursor: pointer;
+        .kpi-trend.good { background: var(--success-soft); color: var(--success); }
+        .kpi-trend.warning { background: var(--warning-soft); color: var(--warning); }
+        .kpi-trend.critical { background: var(--error-soft); color: var(--error); }
+
+        .kpi-card.status .kpi-value { font-size: 24px; }
+        .kpi-card.passed .kpi-value { color: var(--success); }
+        .kpi-card.failed .kpi-value { color: var(--error); }
+        .kpi-card.warning .kpi-value { color: var(--warning); }
+        .kpi-card.errors .kpi-value { color: var(--error); }
+        .kpi-card.warnings .kpi-value { color: var(--warning); }
+
+        /* Accordion Sections */
+        .accordion {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            margin-bottom: 16px;
+            overflow: hidden;
+        }
+
+        .accordion-header {
+            padding: 20px 24px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            flex-wrap: wrap;
-            gap: 1rem;
-            border-bottom: 1px solid var(--border);
+            cursor: pointer;
             transition: background 0.2s;
+            gap: 16px;
         }
 
-        .file-header:hover {
-            background: #363b52;
+        .accordion-header:hover {
+            background: rgba(255, 255, 255, 0.02);
         }
 
-        .file-header h2 {
-            font-size: clamp(1.125rem, 3vw, 1.5rem);
+        .accordion-title-group {
             display: flex;
             align-items: center;
-            gap: 1rem;
-            flex: 1;
-            min-width: 200px;
+            gap: 16px;
         }
 
-        .file-stats {
-            display: flex;
-            gap: 1.5rem;
-            font-size: 0.875rem;
-            flex-wrap: wrap;
-        }
-
-        .stat-item {
+        .accordion-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
             display: flex;
             align-items: center;
-            gap: 0.5rem;
+            justify-content: center;
+            font-size: 20px;
         }
 
-        .stat-label {
+        .accordion-icon.file { background: var(--info-soft); }
+        .accordion-icon.passed { background: var(--success-soft); }
+        .accordion-icon.failed { background: var(--error-soft); }
+        .accordion-icon.warning { background: var(--warning-soft); }
+        .accordion-icon.chart { background: var(--accent-soft); }
+        .accordion-icon.info { background: var(--info-soft); }
+
+        .accordion-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .accordion-subtitle {
+            font-size: 13px;
             color: var(--text-muted);
+            margin-top: 2px;
         }
 
-        .stat-value {
+        .accordion-meta {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .accordion-badge {
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
             font-weight: 600;
         }
 
-        .stat-value.error {
-            color: var(--error);
-        }
+        .accordion-badge.good { background: var(--success-soft); color: var(--success); }
+        .accordion-badge.warning { background: var(--warning-soft); color: var(--warning); }
+        .accordion-badge.critical { background: var(--error-soft); color: var(--error); }
+        .accordion-badge.info { background: var(--info-soft); color: var(--info); }
 
-        .stat-value.warning {
-            color: var(--warning);
-        }
-
-        .toggle-icon {
+        .accordion-chevron {
+            color: var(--text-muted);
             transition: transform 0.3s;
-            color: var(--text-secondary);
+            font-size: 12px;
         }
 
-        .toggle-icon.rotated {
+        .accordion.open .accordion-chevron {
             transform: rotate(180deg);
         }
 
-        /* File Content */
-        .file-content {
-            padding: 1.5rem;
+        .accordion-body {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out;
         }
 
-        .file-meta {
+        .accordion.open .accordion-body {
+            max-height: 5000px;
+        }
+
+        .accordion-content {
+            padding: 0 24px 24px;
+            border-top: 1px solid var(--border);
+        }
+
+        /* File Meta Grid */
+        .file-meta-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 1rem;
-            margin-bottom: 1.5rem;
-            padding: 1rem;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 16px;
+            padding: 20px;
             background: var(--bg-primary);
             border-radius: 8px;
-            border: 1px solid var(--border);
+            margin-top: 16px;
         }
 
         .meta-item {
-            display: flex;
-            flex-direction: column;
-            gap: 0.25rem;
+            text-align: center;
         }
 
         .meta-label {
-            font-size: 0.75rem;
+            font-size: 11px;
             color: var(--text-muted);
             text-transform: uppercase;
-            letter-spacing: 0.05em;
+            letter-spacing: 0.5px;
+            margin-bottom: 4px;
         }
 
         .meta-value {
+            font-size: 14px;
             font-weight: 600;
             color: var(--text-primary);
-            word-break: break-word;
         }
 
-        /* Validation Item */
-        .validation-list {
-            margin-top: 1.5rem;
-        }
-
-        .validation-list > h3 {
-            font-size: 1.25rem;
-            margin-bottom: 1rem;
-            color: var(--text-primary);
-        }
-
+        /* Validation Results */
         .validation-item {
+            background: var(--bg-primary);
             border: 1px solid var(--border);
             border-radius: 8px;
-            margin-bottom: 1rem;
+            margin-top: 12px;
             overflow: hidden;
-            background: var(--bg-primary);
         }
 
         .validation-item.failed {
-            border-color: var(--error);
+            border-left: 3px solid var(--error);
+        }
+
+        .validation-item.warning-status {
+            border-left: 3px solid var(--warning);
+        }
+
+        .validation-item.passed-status {
+            border-left: 3px solid var(--success);
         }
 
         .validation-header {
-            padding: 1rem;
-            background: var(--bg-tertiary);
-            cursor: pointer;
+            padding: 16px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            gap: 1rem;
-            flex-wrap: wrap;
+            cursor: pointer;
             transition: background 0.2s;
+            gap: 12px;
+            flex-wrap: wrap;
         }
 
         .validation-header:hover {
-            background: #363b52;
+            background: rgba(255, 255, 255, 0.02);
         }
 
         .validation-title {
             display: flex;
             align-items: center;
-            gap: 0.75rem;
+            gap: 12px;
             flex: 1;
             min-width: 200px;
         }
 
-        .validation-icon {
-            font-size: 1.5rem;
-        }
+        .validation-icon { font-size: 20px; }
 
         .validation-name {
-            font-size: 1rem;
             font-weight: 600;
+            font-size: 14px;
         }
 
         .severity-badge {
-            display: inline-block;
-            padding: 0.25rem 0.75rem;
-            border-radius: 4px;
-            font-size: 0.75rem;
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 11px;
             font-weight: 600;
             text-transform: uppercase;
         }
 
-        .severity-error {
-            background: rgba(247, 118, 142, 0.15);
-            color: var(--error);
-            border: 1px solid var(--error);
-        }
-
-        .severity-warning {
-            background: rgba(224, 175, 104, 0.15);
-            color: var(--warning);
-            border: 1px solid var(--warning);
-        }
-
-        .severity-success {
-            background: rgba(158, 206, 106, 0.15);
-            color: var(--success);
-            border: 1px solid var(--success);
-        }
+        .severity-error { background: var(--error-soft); color: var(--error); }
+        .severity-warning { background: var(--warning-soft); color: var(--warning); }
+        .severity-success { background: var(--success-soft); color: var(--success); }
 
         .validation-stats {
             display: flex;
-            gap: 1rem;
-            font-size: 0.875rem;
+            gap: 16px;
+            font-size: 13px;
             align-items: center;
             flex-wrap: wrap;
         }
 
+        .validation-stats .stat {
+            color: var(--text-muted);
+        }
+
+        .validation-stats .stat.error { color: var(--error); }
+
         .validation-details {
-            padding: 1.5rem;
+            padding: 16px;
             background: var(--bg-secondary);
             border-top: 1px solid var(--border);
             display: none;
         }
 
-        .validation-details.show {
-            display: block;
-        }
+        .validation-details.show { display: block; }
 
         .validation-message {
-            padding: 1rem;
+            padding: 12px 16px;
             background: var(--bg-primary);
             border-left: 3px solid var(--info);
-            border-radius: 4px;
-            margin-bottom: 1.5rem;
-            font-size: 0.938rem;
-        }
-
-        .validation-message strong {
-            color: var(--info);
+            border-radius: 6px;
+            margin-bottom: 16px;
+            font-size: 14px;
         }
 
         /* Failures Table */
-        .failures-section {
-            margin-top: 1.5rem;
-        }
+        .failures-section { margin-top: 16px; }
 
         .failures-section h4 {
-            font-size: 1rem;
-            margin-bottom: 1rem;
+            font-size: 14px;
+            margin-bottom: 12px;
             color: var(--error);
         }
 
@@ -574,279 +534,338 @@ HTML_TEMPLATE = """
         .failures-table {
             width: 100%;
             border-collapse: collapse;
-            font-size: 0.875rem;
+            font-size: 13px;
         }
 
         .failures-table th {
-            background: var(--bg-tertiary);
-            padding: 0.75rem;
+            background: var(--bg-primary);
+            padding: 12px;
             text-align: left;
             font-weight: 600;
-            border-bottom: 2px solid var(--border);
-            color: var(--text-primary);
+            border-bottom: 1px solid var(--border);
+            color: var(--text-secondary);
             white-space: nowrap;
         }
 
         .failures-table td {
-            padding: 0.75rem;
+            padding: 10px 12px;
             border-bottom: 1px solid var(--border);
             color: var(--text-secondary);
         }
 
-        .failures-table tr:hover {
-            background: var(--bg-primary);
-        }
-
-        .failures-table tr:last-child td {
-            border-bottom: none;
-        }
+        .failures-table tr:hover { background: rgba(255, 255, 255, 0.02); }
+        .failures-table tr:last-child td { border-bottom: none; }
 
         .code {
-            background: var(--bg-tertiary);
-            padding: 0.25rem 0.5rem;
+            background: var(--bg-primary);
+            padding: 2px 8px;
             border-radius: 4px;
-            font-family: 'Fira Code', 'Courier New', monospace;
-            font-size: 0.875em;
+            font-family: 'SF Mono', Monaco, monospace;
+            font-size: 12px;
             color: var(--info);
-            border: 1px solid var(--border);
         }
 
-        .error-message {
-            color: var(--error);
-            font-size: 0.875rem;
-        }
-
-        /* Mobile Optimizations */
-        @media (max-width: 768px) {
-            .file-header,
-            .validation-header {
-                flex-direction: column;
-                align-items: flex-start;
-            }
-
-            .file-stats,
-            .validation-stats {
-                width: 100%;
-                justify-content: space-between;
-            }
-
-            .summary-grid {
-                grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-            }
-
-            .file-meta {
-                grid-template-columns: 1fr;
-            }
-
-            .failures-table {
-                font-size: 0.75rem;
-            }
-
-            .failures-table th,
-            .failures-table td {
-                padding: 0.5rem;
-            }
-        }
-
-        /* Print Styles */
-        @media print {
-            body {
-                background: white;
-                color: black;
-            }
-
-            .file-header,
-            .validation-header {
-                cursor: default;
-            }
-
-            .validation-details {
-                display: block !important;
-            }
-
-            .toggle-icon {
-                display: none;
-            }
-        }
-
-        /* Loading Animation */
-        @keyframes fadeIn {
-            from {
-                opacity: 0;
-                transform: translateY(20px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        .file-section,
-        .summary-card {
-            animation: fadeIn 0.5s ease-out;
-        }
+        .error-message { color: var(--error); }
 
         /* Charts Section */
-        .charts-section {
-            background: var(--bg-secondary);
-            padding: 2rem;
-            border-radius: 12px;
-            border: 1px solid var(--border);
-            margin-bottom: 2rem;
-            box-shadow: 0 4px 16px var(--shadow);
-        }
-
         .charts-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 2rem;
-            margin-top: 1.5rem;
+            gap: 20px;
+            margin-top: 16px;
         }
 
-        .chart-container {
+        .chart-card {
             background: var(--bg-primary);
-            padding: 1.5rem;
-            border-radius: 8px;
             border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 20px;
         }
 
-        .chart-container h3 {
-            font-size: 1rem;
-            margin-bottom: 1rem;
+        .chart-card h3 {
+            font-size: 14px;
+            font-weight: 600;
             color: var(--text-primary);
+            margin-bottom: 16px;
             text-align: center;
         }
 
         .chart-wrapper {
             position: relative;
-            height: 250px;
+            height: 220px;
         }
 
-        canvas {
-            max-width: 100%;
-            height: auto !important;
+        /* Status Legend */
+        .legend-section {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px 24px;
+            margin-bottom: 24px;
+        }
+
+        .legend-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .legend-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 12px;
+        }
+
+        .legend-item {
+            padding: 12px 16px;
+            background: var(--bg-primary);
+            border-radius: 8px;
+            border-left: 3px solid;
+        }
+
+        .legend-item.passed { border-color: var(--success); }
+        .legend-item.warning { border-color: var(--warning); }
+        .legend-item.failed { border-color: var(--error); }
+
+        .legend-item strong {
+            display: block;
+            margin-bottom: 4px;
+        }
+
+        .legend-item.passed strong { color: var(--success); }
+        .legend-item.warning strong { color: var(--warning); }
+        .legend-item.failed strong { color: var(--error); }
+
+        .legend-item p {
+            font-size: 13px;
+            color: var(--text-muted);
+            margin: 0;
+        }
+
+        /* CDA Section */
+        .cda-section {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px 24px;
+            margin-bottom: 24px;
+        }
+
+        .cda-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .cda-title {
+            font-size: 16px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .cda-metrics {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        .cda-metric {
+            text-align: center;
+            padding: 16px;
+            background: var(--bg-primary);
+            border-radius: 8px;
+        }
+
+        .cda-metric-value {
+            font-size: 24px;
+            font-weight: 700;
+        }
+
+        .cda-metric-label {
+            font-size: 11px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+        }
+
+        .cda-file {
+            padding: 12px 16px;
+            background: var(--bg-primary);
+            border-radius: 8px;
+            margin-bottom: 8px;
+            border-left: 3px solid;
+        }
+
+        .cda-file.covered { border-color: var(--success); }
+        .cda-file.gaps { border-color: var(--warning); }
+
+        .cda-file-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+
+        .cda-fields {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .cda-field {
+            padding: 4px 10px;
+            background: var(--bg-secondary);
+            border-radius: 4px;
+            font-size: 12px;
+            border: 1px solid;
+        }
+
+        .cda-field.covered { border-color: var(--success); color: var(--success); }
+        .cda-field.gap { border-color: var(--error); color: var(--error); }
+
+        /* Toggle Icon */
+        .toggle-icon {
+            transition: transform 0.3s;
+            color: var(--text-muted);
+            font-size: 12px;
+        }
+
+        .toggle-icon.rotated { transform: rotate(180deg); }
+
+        /* Mobile Optimizations */
+        @media (max-width: 768px) {
+            .container { padding: 16px; }
+            .header { padding: 20px; }
+            .kpi-belt { grid-template-columns: repeat(2, 1fr); }
+            .kpi-value { font-size: 28px; }
+            .cda-metrics { grid-template-columns: repeat(2, 1fr); }
+        }
+
+        /* Print Styles */
+        @media print {
+            body { background: white; color: black; }
+            .accordion-body { max-height: none !important; }
+            .validation-details { display: block !important; }
         }
     </style>
 </head>
 <body>
     <div class="container">
         <!-- Header -->
-        <header>
-            <div class="header-banner">
-                <div class="header-brand">
-                    <span class="header-icon">🔍</span>
-                    <span style="font-weight: 600; font-size: 1.125rem;">Data Quality Validation</span>
+        <div class="header">
+            <div class="header-top">
+                <div class="brand">
+                    <div class="brand-icon">🛡️</div>
+                    <span class="brand-text">DataK9</span>
                 </div>
                 <div class="header-badge">
-                    Report Generated
+                    <span>📋</span>
+                    <span>Validation Report</span>
                 </div>
             </div>
-            <div class="header-content">
-                <h1>{{ report.job_name }}</h1>
-                <div class="subtitle">
-                    🕐 {{ report.execution_time.strftime('%Y-%m-%d %H:%M:%S') }}
-                    | ⏱️ Duration: {{ "%.2f"|format(report.duration_seconds) }}s
-                    | 📁 {{ report.file_reports|length }} file{{ 's' if report.file_reports|length != 1 else '' }} processed
-                </div>
-                {% if report.description %}
-                <div class="description">{{ report.description }}</div>
-                {% endif %}
+            <h1>{{ report.job_name }}</h1>
+            <div class="header-meta">
+                <span>🕐 {{ report.execution_time.strftime('%Y-%m-%d %H:%M:%S') }}</span>
+                <span>⏱️ {{ "%.2f"|format(report.duration_seconds) }}s</span>
+                <span>📁 {{ report.file_reports|length }} file{{ 's' if report.file_reports|length != 1 else '' }}</span>
+                <span>🔍 {{ total_validations }} validations</span>
             </div>
-        </header>
-
-        <!-- Summary Section -->
-        <div class="summary-grid">
-            <div class="summary-card {% if report.overall_status == Status.PASSED %}highlight-passed{% elif report.overall_status == Status.FAILED %}highlight-failed{% else %}highlight-warning{% endif %}">
-                <h3>Overall Status</h3>
-                <div class="value">
-                    <span class="status-badge {% if report.overall_status == Status.PASSED %}status-passed{% elif report.overall_status == Status.FAILED %}status-failed{% else %}status-warning{% endif %}">
-                        {{ report.overall_status.value }}
-                    </span>
-                </div>
-            </div>
-
-            <div class="summary-card">
-                <h3>Total Validations</h3>
-                <div class="value">{{ total_validations }}</div>
-            </div>
-
-            <div class="summary-card highlight-failed">
-                <h3>❌ Errors</h3>
-                <div class="value">{{ report.total_errors }}</div>
-            </div>
-
-            <div class="summary-card highlight-warning">
-                <h3>⚠️ Warnings</h3>
-                <div class="value">{{ report.total_warnings }}</div>
-            </div>
-
-            <div class="summary-card highlight-passed">
-                <h3>✅ Passed</h3>
-                <div class="value">{{ passed_validations }}</div>
-            </div>
-
-            <div class="summary-card">
-                <h3>📁 Files</h3>
-                <div class="value">{{ report.file_reports|length }}</div>
-            </div>
+            {% if report.description %}
+            <p style="margin-top: 12px; color: var(--text-muted); font-size: 14px;">{{ report.description }}</p>
+            {% endif %}
         </div>
+
+        <!-- KPI Belt -->
+        <section class="kpi-belt">
+            <div class="kpi-card status {% if report.overall_status == Status.PASSED %}passed{% elif report.overall_status == Status.FAILED %}failed{% else %}warning{% endif %}">
+                <div class="kpi-value">{{ report.overall_status.value }}</div>
+                <div class="kpi-label">Overall Status</div>
+                <div class="kpi-trend {% if report.overall_status == Status.PASSED %}good{% elif report.overall_status == Status.FAILED %}critical{% else %}warning{% endif %}">
+                    {% if report.overall_status == Status.PASSED %}All checks passed{% elif report.overall_status == Status.FAILED %}Action required{% else %}Review recommended{% endif %}
+                </div>
+            </div>
+
+            <div class="kpi-card">
+                <div class="kpi-value">{{ total_validations }}</div>
+                <div class="kpi-label">Total Checks</div>
+                <div class="kpi-trend good">{{ report.file_reports|length }} files validated</div>
+            </div>
+
+            <div class="kpi-card errors">
+                <div class="kpi-value">{{ report.total_errors }}</div>
+                <div class="kpi-label">Errors</div>
+                <div class="kpi-trend {% if report.total_errors == 0 %}good{% else %}critical{% endif %}">
+                    {% if report.total_errors == 0 %}No errors{% else %}Critical issues{% endif %}
+                </div>
+            </div>
+
+            <div class="kpi-card warnings">
+                <div class="kpi-value">{{ report.total_warnings }}</div>
+                <div class="kpi-label">Warnings</div>
+                <div class="kpi-trend {% if report.total_warnings == 0 %}good{% else %}warning{% endif %}">
+                    {% if report.total_warnings == 0 %}No warnings{% else %}Review suggested{% endif %}
+                </div>
+            </div>
+
+            <div class="kpi-card passed">
+                <div class="kpi-value">{{ passed_validations }}</div>
+                <div class="kpi-label">Passed</div>
+                <div class="kpi-trend good">{{ "%.1f"|format(passed_validations / total_validations * 100 if total_validations > 0 else 0) }}% success rate</div>
+            </div>
+        </section>
 
         {% if cda_report %}
         <!-- CDA Coverage Section -->
-        <div style="background: var(--bg-secondary); padding: 1.5rem; border-radius: 8px; border: 1px solid var(--border); margin-bottom: 2rem;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 1rem;">
-                <h3 style="color: var(--text-primary); margin: 0;">🛡️ Critical Data Attribute Coverage</h3>
+        <div class="cda-section">
+            <div class="cda-header">
+                <div class="cda-title">🛡️ Critical Data Attribute Coverage</div>
                 {% if cda_report.total_gaps > 0 %}
-                <span style="background: var(--warning); color: #1a1b26; padding: 0.375rem 0.75rem; border-radius: 4px; font-size: 0.813rem; font-weight: 600;">
-                    ⚠️ Coverage Gaps
-                </span>
+                <span class="accordion-badge warning">⚠️ Coverage Gaps</span>
                 {% else %}
-                <span style="background: var(--success); color: #1a1b26; padding: 0.375rem 0.75rem; border-radius: 4px; font-size: 0.813rem; font-weight: 600;">
-                    ✓ Full Coverage
-                </span>
+                <span class="accordion-badge good">✓ Full Coverage</span>
                 {% endif %}
             </div>
 
-            <!-- CDA Summary Metrics -->
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
-                <div style="text-align: center; padding: 1rem; background: var(--bg-primary); border-radius: 6px;">
-                    <div style="font-size: 1.5rem; font-weight: 700; color: var(--info);">{{ cda_report.total_cdas }}</div>
-                    <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Total CDAs</div>
+            <div class="cda-metrics">
+                <div class="cda-metric">
+                    <div class="cda-metric-value" style="color: var(--info);">{{ cda_report.total_cdas }}</div>
+                    <div class="cda-metric-label">Total CDAs</div>
                 </div>
-                <div style="text-align: center; padding: 1rem; background: var(--bg-primary); border-radius: 6px;">
-                    <div style="font-size: 1.5rem; font-weight: 700; color: var(--success);">{{ cda_report.total_covered }}</div>
-                    <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Covered</div>
+                <div class="cda-metric">
+                    <div class="cda-metric-value" style="color: var(--success);">{{ cda_report.total_covered }}</div>
+                    <div class="cda-metric-label">Covered</div>
                 </div>
-                <div style="text-align: center; padding: 1rem; background: var(--bg-primary); border-radius: 6px;">
-                    <div style="font-size: 1.5rem; font-weight: 700; color: {% if cda_report.total_gaps > 0 %}var(--error){% else %}var(--success){% endif %};">{{ cda_report.total_gaps }}</div>
-                    <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Gaps</div>
+                <div class="cda-metric">
+                    <div class="cda-metric-value" style="color: {% if cda_report.total_gaps > 0 %}var(--error){% else %}var(--success){% endif %};">{{ cda_report.total_gaps }}</div>
+                    <div class="cda-metric-label">Gaps</div>
                 </div>
-                <div style="text-align: center; padding: 1rem; background: var(--bg-primary); border-radius: 6px;">
-                    <div style="font-size: 1.5rem; font-weight: 700; color: {% if cda_report.overall_coverage >= 90 %}var(--success){% elif cda_report.overall_coverage >= 70 %}var(--warning){% else %}var(--error){% endif %};">{{ "%.0f"|format(cda_report.overall_coverage) }}%</div>
-                    <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Coverage</div>
+                <div class="cda-metric">
+                    <div class="cda-metric-value" style="color: {% if cda_report.overall_coverage >= 90 %}var(--success){% elif cda_report.overall_coverage >= 70 %}var(--warning){% else %}var(--error){% endif %};">{{ "%.0f"|format(cda_report.overall_coverage) }}%</div>
+                    <div class="cda-metric-label">Coverage</div>
                 </div>
             </div>
 
-            <!-- Per-File CDA Coverage -->
             {% for file_result in cda_report.file_results %}
-            <div style="margin-bottom: 1rem; padding: 1rem; background: var(--bg-primary); border-radius: 6px; border-left: 3px solid {% if file_result.gap_cdas > 0 %}var(--warning){% else %}var(--success){% endif %};">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-                    <strong style="color: var(--text-primary);">{{ file_result.file_name }}</strong>
-                    <span style="font-size: 0.875rem; color: {% if file_result.gap_cdas > 0 %}var(--warning){% else %}var(--success){% endif %};">
+            <div class="cda-file {% if file_result.gap_cdas > 0 %}gaps{% else %}covered{% endif %}">
+                <div class="cda-file-header">
+                    <strong>{{ file_result.file_name }}</strong>
+                    <span style="color: {% if file_result.gap_cdas > 0 %}var(--warning){% else %}var(--success){% endif %};">
                         {{ file_result.covered_cdas }}/{{ file_result.total_cdas }} covered
                     </span>
                 </div>
-
                 {% if file_result.field_coverage %}
-                <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+                <div class="cda-fields">
                     {% for field_cov in file_result.field_coverage %}
-                    <span style="display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.25rem 0.5rem; background: var(--bg-secondary); border-radius: 4px; font-size: 0.75rem; border: 1px solid {% if field_cov.is_covered %}var(--success){% else %}var(--error){% endif %};">
-                        {% if field_cov.is_covered %}
-                        <span style="color: var(--success);">✓</span>
-                        {% else %}
-                        <span style="color: var(--error);">✗</span>
-                        {% endif %}
-                        <span style="color: var(--text-secondary);">{{ field_cov.cda.field }}</span>
+                    <span class="cda-field {% if field_cov.is_covered %}covered{% else %}gap{% endif %}">
+                        {% if field_cov.is_covered %}✓{% else %}✗{% endif %} {{ field_cov.cda.field }}
                     </span>
                     {% endfor %}
                 </div>
@@ -854,60 +873,66 @@ HTML_TEMPLATE = """
             </div>
             {% endfor %}
 
-            <p style="margin: 0; color: var(--text-muted); font-size: 0.813rem; font-style: italic;">
-                CDAs are Critical Data Attributes requiring validation coverage. Run <code style="background: var(--bg-tertiary); padding: 0.125rem 0.375rem; border-radius: 3px;">cda-analysis</code> for detailed gap report.
+            <p style="margin-top: 12px; color: var(--text-muted); font-size: 12px; font-style: italic;">
+                CDAs are Critical Data Attributes requiring validation coverage.
             </p>
         </div>
         {% endif %}
 
         <!-- Status Legend -->
-        <div style="background: var(--bg-secondary); padding: 1.5rem; border-radius: 8px; border: 1px solid var(--border); margin-bottom: 2rem;">
-            <h3 style="color: var(--text-primary); margin-bottom: 1rem;">📋 Status Definitions</h3>
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1rem;">
-                <div style="padding: 0.75rem; background: var(--bg-primary); border-radius: 6px; border-left: 3px solid var(--error);">
-                    <strong style="color: var(--error);">FAILED</strong>
-                    <p style="margin: 0.5rem 0 0 0; color: var(--text-muted); font-size: 0.875rem;">
-                        One or more ERROR-severity checks failed. Critical data quality issues detected that should prevent data load.
-                    </p>
+        <div class="legend-section">
+            <div class="legend-title">📋 Status Definitions</div>
+            <div class="legend-grid">
+                <div class="legend-item failed">
+                    <strong>FAILED</strong>
+                    <p>One or more ERROR-severity checks failed. Critical data quality issues detected.</p>
                 </div>
-                <div style="padding: 0.75rem; background: var(--bg-primary); border-radius: 6px; border-left: 3px solid var(--warning);">
-                    <strong style="color: var(--warning);">WARNING</strong>
-                    <p style="margin: 0.5rem 0 0 0; color: var(--text-muted); font-size: 0.875rem;">
-                        All ERROR checks passed, but one or more WARNING-severity checks failed. Data may be loaded with caution.
-                    </p>
+                <div class="legend-item warning">
+                    <strong>WARNING</strong>
+                    <p>All ERROR checks passed, but WARNING-severity checks failed. Review recommended.</p>
                 </div>
-                <div style="padding: 0.75rem; background: var(--bg-primary); border-radius: 6px; border-left: 3px solid var(--success);">
-                    <strong style="color: var(--success);">PASSED</strong>
-                    <p style="margin: 0.5rem 0 0 0; color: var(--text-muted); font-size: 0.875rem;">
-                        All validation checks passed successfully. Data meets all quality standards and is ready for load.
-                    </p>
+                <div class="legend-item passed">
+                    <strong>PASSED</strong>
+                    <p>All validation checks passed. Data meets quality standards and is ready for use.</p>
                 </div>
             </div>
         </div>
 
         <!-- Charts & Visualizations -->
-        <div class="charts-section">
-            <h2 style="color: var(--text-primary); margin-bottom: 0.5rem;">📊 Validation Insights</h2>
-            <p style="color: var(--text-muted); font-size: 0.938rem; margin-bottom: 1.5rem;">
-                Visual overview of validation results and data quality metrics
-            </p>
-            <div class="charts-grid">
-                <div class="chart-container">
-                    <h3>Validation Results Distribution</h3>
-                    <div class="chart-wrapper">
-                        <canvas id="resultsChart"></canvas>
+        <div class="accordion open" id="charts-accordion">
+            <div class="accordion-header" onclick="toggleAccordion('charts-accordion')">
+                <div class="accordion-title-group">
+                    <div class="accordion-icon chart">📊</div>
+                    <div>
+                        <div class="accordion-title">Validation Insights</div>
+                        <div class="accordion-subtitle">Visual overview of validation results</div>
                     </div>
                 </div>
-                <div class="chart-container">
-                    <h3>Results by Severity</h3>
-                    <div class="chart-wrapper">
-                        <canvas id="severityChart"></canvas>
-                    </div>
+                <div class="accordion-meta">
+                    <span class="accordion-chevron">▼</span>
                 </div>
-                <div class="chart-container">
-                    <h3>Files Validation Status</h3>
-                    <div class="chart-wrapper">
-                        <canvas id="filesChart"></canvas>
+            </div>
+            <div class="accordion-body">
+                <div class="accordion-content">
+                    <div class="charts-grid">
+                        <div class="chart-card">
+                            <h3>Results Distribution</h3>
+                            <div class="chart-wrapper">
+                                <canvas id="resultsChart"></canvas>
+                            </div>
+                        </div>
+                        <div class="chart-card">
+                            <h3>By Severity</h3>
+                            <div class="chart-wrapper">
+                                <canvas id="severityChart"></canvas>
+                            </div>
+                        </div>
+                        <div class="chart-card">
+                            <h3>Files Status</h3>
+                            <div class="chart-wrapper">
+                                <canvas id="filesChart"></canvas>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -915,77 +940,62 @@ HTML_TEMPLATE = """
 
         <!-- File Sections -->
         {% for file_report in report.file_reports %}
-        <div class="file-section">
-            <div class="file-header" onclick="toggleFile('file-{{ loop.index }}')">
-                <h2>
-                    <span class="status-badge {% if file_report.status == Status.PASSED %}status-passed{% elif file_report.status == Status.FAILED %}status-failed{% else %}status-warning{% endif %}">
-                        {{ file_report.status.value }}
-                    </span>
-                    {{ file_report.file_name }}
-                </h2>
-                <div class="file-stats">
-                    <div class="stat-item">
-                        <span class="stat-label">Checks:</span>
-                        <span class="stat-value">{{ file_report.total_validations }}</span>
+        <div class="accordion {% if file_report.status != Status.PASSED %}open{% endif %}" id="file-accordion-{{ loop.index }}">
+            <div class="accordion-header" onclick="toggleAccordion('file-accordion-{{ loop.index }}')">
+                <div class="accordion-title-group">
+                    <div class="accordion-icon {% if file_report.status == Status.PASSED %}passed{% elif file_report.status == Status.FAILED %}failed{% else %}warning{% endif %}">
+                        {% if file_report.status == Status.PASSED %}✓{% elif file_report.status == Status.FAILED %}✗{% else %}⚠{% endif %}
                     </div>
-                    <div class="stat-item">
-                        <span class="stat-label">Errors:</span>
-                        <span class="stat-value error">{{ file_report.error_count }}</span>
+                    <div>
+                        <div class="accordion-title">{{ file_report.file_name }}</div>
+                        <div class="accordion-subtitle">{{ file_report.total_validations }} checks • {{ file_report.file_format|upper }}</div>
                     </div>
-                    <div class="stat-item">
-                        <span class="stat-label">Warnings:</span>
-                        <span class="stat-value warning">{{ file_report.warning_count }}</span>
-                    </div>
-                    <span class="toggle-icon rotated" id="toggle-file-{{ loop.index }}">▼</span>
+                </div>
+                <div class="accordion-meta">
+                    {% if file_report.error_count > 0 %}
+                    <span class="accordion-badge critical">{{ file_report.error_count }} errors</span>
+                    {% endif %}
+                    {% if file_report.warning_count > 0 %}
+                    <span class="accordion-badge warning">{{ file_report.warning_count }} warnings</span>
+                    {% endif %}
+                    {% if file_report.status == Status.PASSED %}
+                    <span class="accordion-badge good">All passed</span>
+                    {% endif %}
+                    <span class="accordion-chevron">▼</span>
                 </div>
             </div>
+            <div class="accordion-body">
+                <div class="accordion-content">
+                    <!-- File Metadata -->
+                    <div class="file-meta-grid">
+                        <div class="meta-item">
+                            <div class="meta-label">File Path</div>
+                            <div class="meta-value" style="font-size: 12px; word-break: break-all;">{{ file_report.file_path }}</div>
+                        </div>
+                        <div class="meta-item">
+                            <div class="meta-label">Format</div>
+                            <div class="meta-value">{{ file_report.file_format|upper }}</div>
+                        </div>
+                        <div class="meta-item">
+                            <div class="meta-label">Size</div>
+                            <div class="meta-value">{% if file_report.metadata.file_size_mb %}{{ "%.2f"|format(file_report.metadata.file_size_mb) }} MB{% else %}N/A{% endif %}</div>
+                        </div>
+                        <div class="meta-item">
+                            <div class="meta-label">Rows</div>
+                            <div class="meta-value">{% if file_report.metadata.total_rows %}{{ "{:,}".format(file_report.metadata.total_rows) }}{% elif file_report.metadata.estimated_rows %}~{{ "{:,}".format(file_report.metadata.estimated_rows) }}{% else %}N/A{% endif %}</div>
+                        </div>
+                        <div class="meta-item">
+                            <div class="meta-label">Columns</div>
+                            <div class="meta-value">{{ file_report.metadata.column_count if file_report.metadata.column_count else 'N/A' }}</div>
+                        </div>
+                        <div class="meta-item">
+                            <div class="meta-label">Duration</div>
+                            <div class="meta-value">{{ "%.2f"|format(file_report.execution_time) }}s</div>
+                        </div>
+                    </div>
 
-            <div class="file-content" id="file-{{ loop.index }}" style="display: none;">
-                <!-- File Metadata -->
-                <div class="file-meta">
-                    <div class="meta-item">
-                        <span class="meta-label">File Path</span>
-                        <span class="meta-value">{{ file_report.file_path }}</span>
-                    </div>
-                    <div class="meta-item">
-                        <span class="meta-label">Format</span>
-                        <span class="meta-value">{{ file_report.file_format|upper }}</span>
-                    </div>
-                    <div class="meta-item">
-                        <span class="meta-label">File Size</span>
-                        <span class="meta-value">
-                            {% if file_report.metadata.file_size_mb %}
-                                {{ "%.2f"|format(file_report.metadata.file_size_mb) }} MB
-                            {% else %}
-                                N/A
-                            {% endif %}
-                        </span>
-                    </div>
-                    <div class="meta-item">
-                        <span class="meta-label">Rows</span>
-                        <span class="meta-value">
-                            {% if file_report.metadata.total_rows %}
-                                {{ "{:,}".format(file_report.metadata.total_rows) }}
-                            {% elif file_report.metadata.estimated_rows %}
-                                ~{{ "{:,}".format(file_report.metadata.estimated_rows) }}
-                            {% else %}
-                                N/A
-                            {% endif %}
-                        </span>
-                    </div>
-                    <div class="meta-item">
-                        <span class="meta-label">Columns</span>
-                        <span class="meta-value">{{ file_report.metadata.column_count if file_report.metadata.column_count else 'N/A' }}</span>
-                    </div>
-                    <div class="meta-item">
-                        <span class="meta-label">Duration</span>
-                        <span class="meta-value">{{ "%.2f"|format(file_report.execution_time) }}s</span>
-                    </div>
-                </div>
-
-                <!-- Validations -->
-                <div class="validation-list">
-                    <h3>🔍 Validation Results</h3>
+                    <!-- Validations -->
+                    <h4 style="margin: 20px 0 12px; font-size: 14px; color: var(--text-primary);">🔍 Validation Results</h4>
                     {% for result in file_report.validation_results %}
                     <div class="validation-item {% if not result.passed %}failed{% endif %}">
                         <div class="validation-header" onclick="toggleValidation('validation-{{ file_report.file_name }}-{{ loop.index }}')">
@@ -1060,23 +1070,26 @@ HTML_TEMPLATE = """
         {% endfor %}
     </div>
 
-    <!-- Chart.js Library (Self-Hosted) -->
-    <script src="resources/js/chart.min.js"></script>
-
     <script>
-        // Chart.js global configuration
-        Chart.defaults.color = '#9aa5ce';
-        Chart.defaults.borderColor = '#3b4261';
-        Chart.defaults.font.family = "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+        // Chart.js global configuration - updated for new color scheme
+        Chart.defaults.color = '#94a3b8';
+        Chart.defaults.borderColor = '#334155';
+        Chart.defaults.font.family = "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
 
-        // Color palette matching Tokyo Night theme
+        // Color palette matching new design
         const colors = {
-            success: '#9ece6a',
-            error: '#f7768e',
-            warning: '#e0af68',
-            info: '#7aa2f7',
-            purple: '#bb9af7',
+            success: '#10b981',
+            error: '#ef4444',
+            warning: '#f59e0b',
+            info: '#3b82f6',
+            accent: '#8b5cf6',
         };
+
+        // Accordion toggle function
+        function toggleAccordion(id) {
+            const accordion = document.getElementById(id);
+            accordion.classList.toggle('open');
+        }
 
         // Results Distribution Chart (Donut)
         const resultsCtx = document.getElementById('resultsChart');
@@ -1097,7 +1110,7 @@ HTML_TEMPLATE = """
                             colors.warning
                         ],
                         borderWidth: 2,
-                        borderColor: '#24283b'
+                        borderColor: '#1e293b'
                     }]
                 },
                 options: {
@@ -1109,14 +1122,14 @@ HTML_TEMPLATE = """
                             labels: {
                                 padding: 15,
                                 usePointStyle: true,
-                                font: { size: 12 }
+                                font: { size: 11 }
                             }
                         },
                         tooltip: {
-                            backgroundColor: '#1a1b26',
-                            titleColor: '#c0caf5',
-                            bodyColor: '#9aa5ce',
-                            borderColor: '#3b4261',
+                            backgroundColor: '#0f172a',
+                            titleColor: '#f1f5f9',
+                            bodyColor: '#94a3b8',
+                            borderColor: '#334155',
                             borderWidth: 1,
                             padding: 12,
                             displayColors: true,
@@ -1158,10 +1171,10 @@ HTML_TEMPLATE = """
                     plugins: {
                         legend: { display: false },
                         tooltip: {
-                            backgroundColor: '#1a1b26',
-                            titleColor: '#c0caf5',
-                            bodyColor: '#9aa5ce',
-                            borderColor: '#3b4261',
+                            backgroundColor: '#0f172a',
+                            titleColor: '#f1f5f9',
+                            bodyColor: '#94a3b8',
+                            borderColor: '#334155',
                             borderWidth: 1,
                             padding: 12
                         }
@@ -1170,7 +1183,7 @@ HTML_TEMPLATE = """
                         x: {
                             beginAtZero: true,
                             ticks: { precision: 0 },
-                            grid: { color: '#3b4261' }
+                            grid: { color: '#334155' }
                         },
                         y: {
                             grid: { display: false }
@@ -1229,14 +1242,14 @@ HTML_TEMPLATE = """
                             labels: {
                                 padding: 15,
                                 usePointStyle: true,
-                                font: { size: 12 }
+                                font: { size: 11 }
                             }
                         },
                         tooltip: {
-                            backgroundColor: '#1a1b26',
-                            titleColor: '#c0caf5',
-                            bodyColor: '#9aa5ce',
-                            borderColor: '#3b4261',
+                            backgroundColor: '#0f172a',
+                            titleColor: '#f1f5f9',
+                            bodyColor: '#94a3b8',
+                            borderColor: '#334155',
                             borderWidth: 1,
                             padding: 12
                         }
@@ -1250,36 +1263,23 @@ HTML_TEMPLATE = """
                             stacked: false,
                             beginAtZero: true,
                             ticks: { precision: 0 },
-                            grid: { color: '#3b4261' }
+                            grid: { color: '#334155' }
                         }
                     }
                 }
             });
         }
 
-        // File and validation toggle functions
-        function toggleFile(fileId) {
-            const content = document.getElementById(fileId);
-            const icon = document.getElementById('toggle-' + fileId);
-
-            if (content.style.display === 'none') {
-                content.style.display = 'block';
-                icon.classList.remove('rotated');
-            } else {
-                content.style.display = 'none';
-                icon.classList.add('rotated');
-            }
-        }
-
+        // Validation toggle function
         function toggleValidation(validationId) {
             const details = document.getElementById(validationId);
             const icon = document.getElementById('toggle-' + validationId);
 
             details.classList.toggle('show');
-            icon.classList.toggle('rotated');
+            if (icon) icon.classList.toggle('rotated');
         }
 
-        // Auto-expand failed validations
+        // Auto-expand failed validations on load
         document.addEventListener('DOMContentLoaded', function() {
             const failedValidations = document.querySelectorAll('.validation-item.failed');
             failedValidations.forEach(function(item) {

@@ -43,374 +43,448 @@ class DocumentGenerator:
             Complete HTML document as string
         """
         date = datetime.now().strftime('%B %d, %Y')
-
-        # Generate theme-specific CSS
-        theme_css = self._get_theme_css(theme)
+        stats = self._calculate_statistics()
 
         html = f"""<!DOCTYPE html>
-<html lang="en" data-theme="{theme}">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{self._escape_html(title)}</title>
+    <title>{self._escape_html(title)} - DataK9 Documentation</title>
     <style>
-        /* Modern professional documentation styling with theme support */
+        /* Modern Dark Theme - Matching Executive Profiler Report */
+        :root {{
+            --bg-primary: #0f172a;
+            --bg-secondary: #1e293b;
+            --bg-card: #1e293b;
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            --border: #334155;
+            --success: #10b981;
+            --success-soft: rgba(16, 185, 129, 0.1);
+            --warning: #f59e0b;
+            --warning-soft: rgba(245, 158, 11, 0.1);
+            --error: #ef4444;
+            --error-soft: rgba(239, 68, 68, 0.1);
+            --info: #3b82f6;
+            --info-soft: rgba(59, 130, 246, 0.1);
+            --accent: #8b5cf6;
+            --accent-soft: rgba(139, 92, 246, 0.1);
+        }}
+
         * {{ margin: 0; padding: 0; box-sizing: border-box; }}
 
-        {theme_css}
-
         body {{
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-            line-height: 1.7;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-primary);
             color: var(--text-primary);
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 40px 20px;
-            background: var(--bg-page);
-            transition: background-color 0.3s ease, color 0.3s ease;
-        }}
-        .document {{
-            background: var(--bg-document);
-            padding: 80px;
-            box-shadow: var(--shadow-document);
-            border-radius: 12px;
-            position: relative;
+            line-height: 1.6;
+            min-height: 100vh;
         }}
 
-        /* Theme toggle button */
-        .theme-toggle {{
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            background: var(--bg-accent);
-            border: 2px solid var(--border-color);
-            color: var(--text-primary);
-            padding: 12px 24px;
-            border-radius: 25px;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: 600;
-            box-shadow: var(--shadow-button);
-            transition: all 0.3s ease;
-            z-index: 1000;
+        .container {{
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 24px;
+        }}
+
+        /* Header - Matching Executive Style */
+        .header {{
+            background: linear-gradient(135deg, var(--bg-secondary) 0%, #0f172a 100%);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 32px;
+            margin-bottom: 24px;
+            position: relative;
+            overflow: hidden;
+        }}
+
+        .header::before {{
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, var(--accent) 0%, var(--info) 50%, var(--success) 100%);
+        }}
+
+        .header-top {{
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            flex-wrap: wrap;
+            gap: 16px;
+            margin-bottom: 16px;
+        }}
+
+        .brand {{
             display: flex;
             align-items: center;
-            gap: 8px;
-        }}
-        .theme-toggle:hover {{
-            transform: translateY(-2px);
-            box-shadow: var(--shadow-button-hover);
+            gap: 12px;
         }}
 
-        .header {{
-            padding: 32px 0 24px 0;
-            border-bottom: 2px solid var(--accent-primary);
-            margin-bottom: 40px;
-        }}
-        .header h1 {{
-            font-size: 32px;
-            color: var(--text-heading);
-            margin-bottom: 8px;
-            font-weight: 700;
-            letter-spacing: -0.5px;
-        }}
-        .header .meta {{
-            font-size: 13px;
-            color: var(--text-tertiary);
+        .brand-icon {{
+            width: 48px;
+            height: 48px;
+            background: linear-gradient(135deg, var(--accent), var(--info));
+            border-radius: 12px;
             display: flex;
-            gap: 20px;
-            flex-wrap: wrap;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
         }}
-        .header .meta-item {{
+
+        .brand-text {{
+            font-size: 24px;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--accent), var(--info));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }}
+
+        .header-meta {{
+            display: flex;
+            gap: 16px;
+            flex-wrap: wrap;
+            color: var(--text-muted);
+            font-size: 13px;
+        }}
+
+        .header-meta span {{
             display: flex;
             align-items: center;
             gap: 6px;
         }}
 
-        h2 {{
-            font-size: 32px;
-            color: var(--text-heading);
-            margin: 40px 0 20px 0;
-            padding-bottom: 10px;
-            border-bottom: 3px solid var(--border-heading);
+        .report-title {{
+            font-size: 28px;
             font-weight: 700;
-            letter-spacing: -0.5px;
-        }}
-        h3 {{
-            font-size: 24px;
-            color: var(--text-heading);
-            margin: 30px 0 14px 0;
-            font-weight: 600;
-        }}
-        h4 {{
-            font-size: 20px;
-            color: var(--accent-primary);
-            margin: 24px 0 12px 0;
-            font-weight: 600;
-        }}
-        p {{
-            margin: 12px 0;
-            color: var(--text-primary);
-            line-height: 1.8;
+            margin-bottom: 8px;
         }}
 
-        .toc {{
+        .report-subtitle {{
+            color: var(--text-secondary);
+            font-size: 14px;
+        }}
+
+        /* KPI Belt */
+        .kpi-belt {{
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }}
+
+        .kpi-card {{
             background: var(--bg-card);
-            padding: 40px;
+            border: 1px solid var(--border);
             border-radius: 12px;
-            margin: 40px 0;
-            border: 1px solid var(--border-color);
-        }}
-        .toc h2 {{
-            margin-top: 0;
-            border-bottom: none;
-        }}
-        .toc ul {{
-            list-style: none;
-            padding-left: 0;
-        }}
-        .toc li {{
-            padding: 12px 0;
-            border-bottom: 1px solid var(--border-subtle);
-        }}
-        .toc li:last-child {{
-            border-bottom: none;
-        }}
-        .toc a {{
-            color: var(--accent-primary);
-            text-decoration: none;
-            font-weight: 500;
-            transition: color 0.2s ease;
-        }}
-        .toc a:hover {{
-            color: var(--accent-hover);
-            text-decoration: underline;
-        }}
-
-        .summary-compact {{
-            display: flex;
-            gap: 24px;
-            padding: 16px 20px;
-            background: var(--bg-card);
-            border-radius: 8px;
-            border-left: 4px solid var(--accent-primary);
-            margin-bottom: 32px;
-            flex-wrap: wrap;
-        }}
-        .summary-stat {{
-            display: flex;
-            align-items: baseline;
-            gap: 8px;
-        }}
-        .summary-stat .label {{
-            font-size: 13px;
-            color: var(--text-tertiary);
-            font-weight: 500;
-        }}
-        .summary-stat .value {{
-            font-size: 20px;
-            font-weight: 700;
-            color: var(--accent-primary);
-        }}
-
-        .file-section {{
-            margin: 32px 0;
-            padding: 28px;
-            background: var(--bg-card);
-            border-radius: 10px;
-            border-left: 4px solid var(--accent-primary);
-            border: 1px solid var(--border-color);
-            border-left: 4px solid var(--accent-primary);
-        }}
-        .validation-card {{
-            background: var(--bg-card);
             padding: 20px;
-            margin: 16px 0;
-            border-radius: 8px;
-            border-left: 3px solid var(--border-color);
+            text-align: center;
+            transition: transform 0.2s, box-shadow 0.2s;
         }}
-        .validation-card.error {{ border-left-color: var(--error-color); }}
-        .validation-card.warning {{ border-left-color: var(--warning-color); }}
+
+        .kpi-card:hover {{
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+        }}
+
+        .kpi-value {{
+            font-size: 36px;
+            font-weight: 700;
+            line-height: 1;
+            margin-bottom: 8px;
+        }}
+
+        .kpi-label {{
+            font-size: 12px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }}
+
+        .kpi-card.files .kpi-value {{ color: var(--info); }}
+        .kpi-card.validations .kpi-value {{ color: var(--accent); }}
+        .kpi-card.errors .kpi-value {{ color: var(--error); }}
+        .kpi-card.warnings .kpi-value {{ color: var(--warning); }}
+
+        /* Accordion Sections */
+        .accordion {{
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            margin-bottom: 16px;
+            overflow: hidden;
+        }}
+
+        .accordion-header {{
+            padding: 20px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            transition: background 0.2s;
+            gap: 16px;
+        }}
+
+        .accordion-header:hover {{
+            background: rgba(255, 255, 255, 0.02);
+        }}
+
+        .accordion-title-group {{
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }}
+
+        .accordion-icon {{
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+        }}
+
+        .accordion-icon.file {{ background: var(--info-soft); }}
+        .accordion-icon.matrix {{ background: var(--accent-soft); }}
+        .accordion-icon.toc {{ background: var(--success-soft); }}
+
+        .accordion-title {{
+            font-size: 16px;
+            font-weight: 600;
+        }}
+
+        .accordion-subtitle {{
+            font-size: 13px;
+            color: var(--text-muted);
+        }}
+
+        .accordion-meta {{
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }}
+
+        .accordion-badge {{
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }}
+
+        .accordion-badge.error {{ background: var(--error-soft); color: var(--error); }}
+        .accordion-badge.warning {{ background: var(--warning-soft); color: var(--warning); }}
+        .accordion-badge.info {{ background: var(--info-soft); color: var(--info); }}
+
+        .accordion-chevron {{
+            color: var(--text-muted);
+            transition: transform 0.3s;
+            font-size: 20px;
+        }}
+
+        .accordion.open .accordion-chevron {{
+            transform: rotate(180deg);
+        }}
+
+        .accordion-content {{
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out;
+        }}
+
+        .accordion.open .accordion-content {{
+            max-height: 5000px;
+        }}
+
+        .accordion-body {{
+            padding: 0 24px 24px 24px;
+        }}
+
+        /* Validation Cards */
+        .validation-card {{
+            background: var(--bg-primary);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 16px 20px;
+            margin-bottom: 12px;
+            border-left: 3px solid var(--border);
+        }}
+
+        .validation-card.error {{ border-left-color: var(--error); }}
+        .validation-card.warning {{ border-left-color: var(--warning); }}
 
         .validation-header {{
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 16px;
+            margin-bottom: 8px;
         }}
+
         .validation-type {{
-            font-size: 18px;
+            font-size: 15px;
             font-weight: 600;
-            color: var(--text-heading);
         }}
+
         .severity-badge {{
-            padding: 6px 14px;
-            border-radius: 16px;
-            font-size: 11px;
+            padding: 4px 10px;
+            border-radius: 10px;
+            font-size: 10px;
             font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.8px;
-        }}
-        .severity-badge.error {{
-            background: var(--error-color);
-            color: var(--error-text);
-        }}
-        .severity-badge.warning {{
-            background: var(--warning-color);
-            color: var(--warning-text);
-        }}
-
-        .params {{
-            background: var(--bg-code);
-            padding: 16px;
-            border-radius: 8px;
-            font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', 'Courier New', monospace;
-            font-size: 14px;
-            color: var(--text-code);
-            white-space: pre-wrap;
-            line-height: 1.6;
-            border: 1px solid var(--border-color);
-        }}
-
-        table {{
-            width: 100%;
-            border-collapse: collapse;
-            margin: 24px 0;
-            border-radius: 12px;
-            overflow: hidden;
-            border: 1px solid var(--border-color);
-        }}
-        th, td {{
-            padding: 16px;
-            text-align: left;
-            border-bottom: 1px solid var(--border-table);
-        }}
-        th {{
-            background: var(--accent-primary);
-            color: white;
-            font-weight: 700;
-            font-size: 14px;
             text-transform: uppercase;
             letter-spacing: 0.5px;
         }}
-        tr:hover {{
-            background: var(--bg-hover);
+
+        .severity-badge.error {{ background: var(--error-soft); color: var(--error); }}
+        .severity-badge.warning {{ background: var(--warning-soft); color: var(--warning); }}
+
+        .validation-description {{
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin-bottom: 10px;
         }}
-        tr:last-child td {{
+
+        .validation-params {{
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 12px;
+            font-family: 'SF Mono', Monaco, monospace;
+            font-size: 12px;
+            color: var(--text-secondary);
+            line-height: 1.5;
+        }}
+
+        /* Table Styling */
+        .data-table {{
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }}
+
+        .data-table th {{
+            background: var(--bg-primary);
+            padding: 12px 16px;
+            text-align: left;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            font-size: 11px;
+            letter-spacing: 0.5px;
+            border-bottom: 1px solid var(--border);
+        }}
+
+        .data-table td {{
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border);
+        }}
+
+        .data-table tr:hover {{
+            background: rgba(255, 255, 255, 0.02);
+        }}
+
+        .data-table tr:last-child td {{
             border-bottom: none;
         }}
 
-        .footer {{
-            margin-top: 60px;
-            padding-top: 30px;
-            border-top: 2px solid var(--border-color);
-            text-align: center;
-            color: var(--text-tertiary);
+        /* File Info Row */
+        .file-info {{
+            display: flex;
+            gap: 20px;
+            margin-bottom: 16px;
+            padding: 12px 16px;
+            background: var(--bg-primary);
+            border-radius: 8px;
             font-size: 13px;
-        }}
-        .footer p {{
-            margin: 8px 0;
+            color: var(--text-secondary);
         }}
 
+        .file-info span {{
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }}
+
+        /* Footer */
+        .footer {{
+            text-align: center;
+            padding: 24px;
+            color: var(--text-muted);
+            font-size: 12px;
+            border-top: 1px solid var(--border);
+            margin-top: 24px;
+        }}
+
+        .footer a {{
+            color: var(--accent);
+            text-decoration: none;
+        }}
+
+        /* Print Styles */
         @media print {{
-            body {{ background: white !important; }}
-            .document {{ box-shadow: none; padding: 20px; }}
-            .cover {{ page-break-after: always; }}
-            .file-section {{ page-break-inside: avoid; }}
-            .theme-toggle {{ display: none; }}
+            body {{ background: white; color: black; }}
+            .header {{ background: #f8f9fa; }}
+            .accordion {{ break-inside: avoid; }}
+            .accordion-content {{ max-height: none !important; }}
         }}
 
+        /* Responsive */
         @media (max-width: 768px) {{
-            .document {{ padding: 40px 24px; }}
-            .cover {{ padding: 60px 24px; margin: -40px -24px 60px -24px; }}
-            .cover h1 {{ font-size: 36px; }}
-            h2 {{ font-size: 28px; }}
-            h3 {{ font-size: 22px; }}
-            .summary-grid {{ grid-template-columns: 1fr; }}
+            .container {{ padding: 16px; }}
+            .header {{ padding: 20px; }}
+            .kpi-belt {{ grid-template-columns: repeat(2, 1fr); }}
+            .kpi-value {{ font-size: 28px; }}
+            .report-title {{ font-size: 22px; }}
         }}
     </style>
     <script>
-        // Theme toggle functionality
-        function toggleTheme() {{
-            const html = document.documentElement;
-            const currentTheme = html.getAttribute('data-theme');
-            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
-            html.setAttribute('data-theme', newTheme);
-
-            // Update button text
-            const button = document.querySelector('.theme-toggle');
-            button.innerHTML = newTheme === 'dark'
-                ? '<span>☀️</span> Light Mode'
-                : '<span>🌙</span> Dark Mode';
-
-            // Save preference
-            localStorage.setItem('doc-theme', newTheme);
+        function toggleAccordion(id) {{
+            const accordion = document.getElementById(id);
+            accordion.classList.toggle('open');
         }}
-
-        // Load saved theme preference on page load
-        window.addEventListener('DOMContentLoaded', function() {{
-            const savedTheme = localStorage.getItem('doc-theme');
-            if (savedTheme) {{
-                document.documentElement.setAttribute('data-theme', savedTheme);
-                const button = document.querySelector('.theme-toggle');
-                button.innerHTML = savedTheme === 'dark'
-                    ? '<span>☀️</span> Light Mode'
-                    : '<span>🌙</span> Dark Mode';
-            }}
-        }});
     </script>
 </head>
 <body>
-    <button class="theme-toggle" onclick="toggleTheme()">
-        <span>☀️</span> Light Mode
-    </button>
-
-    <div class="document">
-"""
-
-        # Compact Header
-        stats = self._calculate_statistics()
-        html += f"""
-        <div class="header">
-            <h1>{self._escape_html(title)}</h1>
-            <div class="meta">
-                <div class="meta-item">
-                    <span>📅</span>
-                    <span>{date}</span>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-top">
+                <div class="brand">
+                    <div class="brand-icon">K9</div>
+                    <span class="brand-text">DataK9</span>
                 </div>
-                <div class="meta-item">
-                    <span>📦</span>
-                    <span>{self._escape_html(self.config.job_name)}</span>
-                </div>
-                <div class="meta-item">
-                    <span>🏷️</span>
+                <div class="header-meta">
+                    <span>Generated: {date}</span>
                     <span>v{self._escape_html(self.config.version or '1.0')}</span>
                 </div>
             </div>
-        </div>
-"""
+            <h1 class="report-title">{self._escape_html(title)}</h1>
+            <p class="report-subtitle">Technical Validation Specification for {self._escape_html(self.config.job_name)}</p>
+        </header>
 
-        # Compact Summary
-        if options.get('include_summary', True):
-            html += f"""
-        <div class="summary-compact">
-            <div class="summary-stat">
-                <span class="label">Files:</span>
-                <span class="value">{stats['file_count']}</span>
+        <!-- KPI Belt -->
+        <section class="kpi-belt">
+            <div class="kpi-card files">
+                <div class="kpi-value">{stats['file_count']}</div>
+                <div class="kpi-label">Files</div>
             </div>
-            <div class="summary-stat">
-                <span class="label">Validations:</span>
-                <span class="value">{stats['total_validations']}</span>
+            <div class="kpi-card validations">
+                <div class="kpi-value">{stats['total_validations']}</div>
+                <div class="kpi-label">Validations</div>
             </div>
-            <div class="summary-stat">
-                <span class="label">Errors:</span>
-                <span class="value">{stats['error_count']}</span>
+            <div class="kpi-card errors">
+                <div class="kpi-value">{stats['error_count']}</div>
+                <div class="kpi-label">Error Checks</div>
             </div>
-            <div class="summary-stat">
-                <span class="label">Warnings:</span>
-                <span class="value">{stats['warning_count']}</span>
+            <div class="kpi-card warnings">
+                <div class="kpi-value">{stats['warning_count']}</div>
+                <div class="kpi-label">Warning Checks</div>
             </div>
-        </div>
+        </section>
 """
 
         # Detailed Specifications
@@ -423,9 +497,11 @@ class DocumentGenerator:
 
         # Footer
         html += f"""
-        <div class="footer">
-            <p>Generated by DataK9 · {datetime.now().strftime('%Y-%m-%d %H:%M')}</p>
-        </div>
+        <!-- Footer -->
+        <footer class="footer">
+            <p>Generated by <strong>DataK9</strong> Data Quality Framework</p>
+            <p>{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
+        </footer>
     </div>
 </body>
 </html>
@@ -499,107 +575,150 @@ class DocumentGenerator:
         return html
 
     def _generate_html_specs(self) -> str:
-        """Generate HTML detailed specifications."""
-        html = """
-        <div id="specifications">
-            <h2>Validation Specifications</h2>
-"""
+        """Generate HTML detailed specifications with accordion sections."""
+        html = ""
 
         for file_idx, file_config in enumerate(self.config.files):
+            validations = self._get_attr(file_config, 'validations', [])
+            # Count errors and warnings for this file
+            error_count = sum(1 for v in validations if self._get_severity_value(v) == 'ERROR')
+            warning_count = sum(1 for v in validations if self._get_severity_value(v) == 'WARNING')
+
+            file_name = self._get_attr(file_config, 'name', 'Unnamed File')
+            file_path = self._get_attr(file_config, 'path', 'Path not specified')
+            file_format = self._get_attr(file_config, 'format', 'AUTO')
+            file_format_display = file_format.upper() if file_format else 'AUTO'
+
             html += f"""
-            <div class="file-section" id="file-{file_idx}">
-                <h3>{self._escape_html(file_config.name)}</h3>
-                <div style="display: flex; gap: 24px; margin-bottom: 16px; font-size: 13px; color: var(--text-secondary);">
-                    <span>📁 {self._escape_html(file_config.path or 'Not specified')}</span>
-                    <span>📊 {self._escape_html(file_config.format.upper() if file_config.format else 'AUTO')}</span>
-                    <span>✓ {len(file_config.validations)} validations</span>
+        <!-- File: {self._escape_html(file_name)} -->
+        <div class="accordion open" id="file-accordion-{file_idx}">
+            <div class="accordion-header" onclick="toggleAccordion('file-accordion-{file_idx}')">
+                <div class="accordion-title-group">
+                    <div class="accordion-icon file">📁</div>
+                    <div>
+                        <div class="accordion-title">{self._escape_html(file_name)}</div>
+                        <div class="accordion-subtitle">{self._escape_html(file_path)}</div>
+                    </div>
                 </div>
+                <div class="accordion-meta">
+                    <span class="accordion-badge info">{len(validations)} checks</span>
+"""
+            if error_count > 0:
+                html += f'                    <span class="accordion-badge error">{error_count} errors</span>\n'
+            if warning_count > 0:
+                html += f'                    <span class="accordion-badge warning">{warning_count} warnings</span>\n'
+
+            html += f"""                    <span class="accordion-chevron">▼</span>
+                </div>
+            </div>
+            <div class="accordion-content">
+                <div class="accordion-body">
+                    <div class="file-info">
+                        <span>📊 Format: {self._escape_html(file_format_display)}</span>
+                        <span>✓ {len(validations)} validations configured</span>
+                    </div>
 """
 
-            if file_config.validations:
-                for val in file_config.validations:
-                    severity = val.severity.value.lower()
+            if validations:
+                for val in validations:
+                    severity = self._get_severity_value(val).lower()
+                    val_type = self._get_attr(val, 'type', 'Unknown')
+                    val_desc = self._get_validation_description(val)
+                    val_params = self._get_attr(val, 'params', {})
 
-                    # Format parameters more concisely
+                    # Format parameters
                     params_html = ""
-                    if val.params:
+                    if val_params:
                         param_items = []
-                        for k, v in val.params.items():
+                        for k, v in val_params.items():
                             if isinstance(v, (list, dict)):
                                 import json
-                                v_str = json.dumps(v)[:100] + ('...' if len(json.dumps(v)) > 100 else '')
+                                v_str = json.dumps(v)[:80] + ('...' if len(json.dumps(v)) > 80 else '')
                             else:
                                 v_str = str(v)
-                            param_items.append(f"<span style='color: var(--text-tertiary);'>{k}:</span> {self._escape_html(v_str)}")
-                        params_html = " • ".join(param_items)
+                            param_items.append(f"{k}: {self._escape_html(v_str)}")
+                        params_html = " | ".join(param_items)
 
                     html += f"""
-                <div class="validation-card {severity}">
-                    <div class="validation-header">
-                        <div class="validation-type">{self._escape_html(val.name)}</div>
-                        <span class="severity-badge {severity}">{severity.upper()}</span>
-                    </div>
-                    <p style="margin: 8px 0; font-size: 14px;">{self._escape_html(val.get_description())}</p>
+                    <div class="validation-card {severity}">
+                        <div class="validation-header">
+                            <span class="validation-type">{self._escape_html(val_type)}</span>
+                            <span class="severity-badge {severity}">{severity.upper()}</span>
+                        </div>
+                        <p class="validation-description">{self._escape_html(val_desc)}</p>
 """
 
                     if params_html:
-                        html += f"""
-                    <div style="margin-top: 12px; padding: 12px; background: var(--bg-code); border-radius: 6px; font-size: 13px; font-family: monospace; color: var(--text-code); line-height: 1.6;">
-                        {params_html}
-                    </div>
+                        html += f"""                        <div class="validation-params">{params_html}</div>
 """
 
-                    html += """
-                </div>
+                    html += """                    </div>
 """
             else:
                 html += """
-                <p><em>No validations configured for this file.</em></p>
+                    <p style="color: var(--text-muted); font-style: italic;">No validations configured for this file.</p>
 """
 
             html += """
+                </div>
             </div>
-"""
-
-        html += """
         </div>
 """
+
         return html
 
     def _generate_html_matrix(self) -> str:
-        """Generate HTML severity matrix."""
+        """Generate HTML severity matrix with accordion style."""
         html = """
-        <div id="matrix">
-            <h2>3. Severity Matrix</h2>
-            <p>Summary of all validations organized by file and severity level.</p>
-
-            <table>
-                <thead>
-                    <tr>
-                        <th>File</th>
-                        <th>Validation Type</th>
-                        <th>Severity</th>
-                        <th>Description</th>
-                    </tr>
-                </thead>
-                <tbody>
+        <!-- Severity Matrix -->
+        <div class="accordion" id="matrix-accordion">
+            <div class="accordion-header" onclick="toggleAccordion('matrix-accordion')">
+                <div class="accordion-title-group">
+                    <div class="accordion-icon matrix">📋</div>
+                    <div>
+                        <div class="accordion-title">Severity Matrix</div>
+                        <div class="accordion-subtitle">Summary of all validations by file and severity</div>
+                    </div>
+                </div>
+                <div class="accordion-meta">
+                    <span class="accordion-chevron">▼</span>
+                </div>
+            </div>
+            <div class="accordion-content">
+                <div class="accordion-body">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>File</th>
+                                <th>Validation Type</th>
+                                <th>Severity</th>
+                                <th>Description</th>
+                            </tr>
+                        </thead>
+                        <tbody>
 """
 
         for file_config in self.config.files:
-            for val in file_config.validations:
-                severity = val.severity.value.lower()
+            file_name = self._get_attr(file_config, 'name', 'Unnamed')
+            validations = self._get_attr(file_config, 'validations', [])
+            for val in validations:
+                severity = self._get_severity_value(val).lower()
+                val_type = self._get_attr(val, 'type', 'Unknown')
+                val_desc = self._get_validation_description(val)
                 html += f"""
-                    <tr>
-                        <td>{self._escape_html(file_config.name)}</td>
-                        <td>{self._escape_html(val.name)}</td>
-                        <td><span class="severity-badge {severity}">{val.severity.value}</span></td>
-                        <td>{self._escape_html(val.get_description())}</td>
-                    </tr>
+                            <tr>
+                                <td>{self._escape_html(file_name)}</td>
+                                <td>{self._escape_html(val_type)}</td>
+                                <td><span class="severity-badge {severity}">{severity.upper()}</span></td>
+                                <td>{self._escape_html(val_desc)}</td>
+                            </tr>
 """
 
         html += """
-                </tbody>
-            </table>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </div>
 """
         return html
@@ -736,11 +855,14 @@ class DocumentGenerator:
         total_validations = 0
 
         for file_config in self.config.files:
-            total_validations += len(file_config.validations)
-            for val in file_config.validations:
-                if val.severity.value == 'ERROR':
+            validations = self._get_attr(file_config, 'validations', [])
+            total_validations += len(validations)
+            for val in validations:
+                severity = self._get_attr(val, 'severity')
+                severity_value = severity.value if hasattr(severity, 'value') else str(severity)
+                if severity_value == 'ERROR':
                     error_count += 1
-                elif val.severity.value == 'WARNING':
+                elif severity_value == 'WARNING':
                     warning_count += 1
 
         return {
@@ -749,6 +871,29 @@ class DocumentGenerator:
             'error_count': error_count,
             'warning_count': warning_count
         }
+
+    def _get_attr(self, obj, attr: str, default=None):
+        """Get attribute from object or dict."""
+        if isinstance(obj, dict):
+            return obj.get(attr, default)
+        return getattr(obj, attr, default)
+
+    def _get_severity_value(self, val) -> str:
+        """Get severity value as string from validation object or dict."""
+        severity = self._get_attr(val, 'severity')
+        if hasattr(severity, 'value'):
+            return severity.value
+        return str(severity)
+
+    def _get_validation_description(self, val) -> str:
+        """Get description from validation, handling both object and dict."""
+        desc = self._get_attr(val, 'description', '')
+        if desc:
+            return desc
+        # Try get_description method for objects
+        if hasattr(val, 'get_description'):
+            return val.get_description()
+        return self._get_attr(val, 'type', 'Validation check')
 
     def _escape_html(self, text: str) -> str:
         """Escape HTML special characters."""
@@ -764,100 +909,3 @@ class DocumentGenerator:
     def _sanitize_anchor(self, text: str) -> str:
         """Sanitize text for use in anchor links."""
         return text.lower().replace(' ', '-').replace('_', '-')
-
-    def _get_theme_css(self, theme: str) -> str:
-        """
-        Generate CSS variables for the specified theme.
-
-        Args:
-            theme: Theme name ('dark' or 'light')
-
-        Returns:
-            CSS variable definitions
-        """
-        if theme == 'dark':
-            return """
-        /* Dark Theme - Modern & Elegant */
-        :root[data-theme="dark"] {{
-            /* Background colors */
-            --bg-page: #0d1117;
-            --bg-document: #161b22;
-            --bg-cover: linear-gradient(135deg, #1a1f2e 0%, #2d3748 100%);
-            --bg-card: #1c2128;
-            --bg-code: #0d1117;
-            --bg-hover: #21262d;
-            --bg-accent: #238636;
-
-            /* Text colors */
-            --text-primary: #e6edf3;
-            --text-secondary: #8b949e;
-            --text-tertiary: #6e7681;
-            --text-heading: #f0f6fc;
-            --text-code: #79c0ff;
-
-            /* Accent colors */
-            --accent-primary: #4A90E2;
-            --accent-hover: #6ba3e8;
-
-            /* Status colors */
-            --error-color: #f85149;
-            --error-text: #ffffff;
-            --warning-color: #d29922;
-            --warning-text: #ffffff;
-
-            /* Border colors */
-            --border-color: #30363d;
-            --border-subtle: #21262d;
-            --border-heading: #30363d;
-            --border-table: #21262d;
-
-            /* Shadows */
-            --shadow-document: 0 16px 48px rgba(0, 0, 0, 0.6);
-            --shadow-button: 0 4px 12px rgba(0, 0, 0, 0.4);
-            --shadow-button-hover: 0 8px 24px rgba(0, 0, 0, 0.6);
-            --shadow-hover: 0 8px 24px rgba(0, 0, 0, 0.4);
-        }}
-        """
-        else:  # light theme
-            return """
-        /* Light Theme - Clean & Professional */
-        :root[data-theme="light"] {{
-            /* Background colors */
-            --bg-page: #f6f8fa;
-            --bg-document: #ffffff;
-            --bg-cover: linear-gradient(135deg, #e3f2fd 0%, #f5f5f5 100%);
-            --bg-card: #f9fafb;
-            --bg-code: #f6f8fa;
-            --bg-hover: #f3f4f6;
-            --bg-accent: #238636;
-
-            /* Text colors */
-            --text-primary: #1f2937;
-            --text-secondary: #6b7280;
-            --text-tertiary: #9ca3af;
-            --text-heading: #111827;
-            --text-code: #0969da;
-
-            /* Accent colors */
-            --accent-primary: #4A90E2;
-            --accent-hover: #357abd;
-
-            /* Status colors */
-            --error-color: #d73a49;
-            --error-text: #ffffff;
-            --warning-color: #f59e0b;
-            --warning-text: #ffffff;
-
-            /* Border colors */
-            --border-color: #e5e7eb;
-            --border-subtle: #f3f4f6;
-            --border-heading: #e5e7eb;
-            --border-table: #f3f4f6;
-
-            /* Shadows */
-            --shadow-document: 0 10px 30px rgba(0, 0, 0, 0.08);
-            --shadow-button: 0 2px 8px rgba(0, 0, 0, 0.1);
-            --shadow-button-hover: 0 4px 16px rgba(0, 0, 0, 0.15);
-            --shadow-hover: 0 4px 16px rgba(0, 0, 0, 0.08);
-        }}
-        """

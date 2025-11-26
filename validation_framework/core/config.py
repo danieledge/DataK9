@@ -207,8 +207,11 @@ class ValidationConfig:
         self.fail_on_error = output_config.get("fail_on_error", True)
         self.fail_on_warning = output_config.get("fail_on_warning", False)
 
-        # Processing options
-        processing = job_config.get("processing", self.raw_config.get("processing", {}))
+        # Processing options (support both 'processing' and 'settings' keys for compatibility)
+        processing = job_config.get("processing",
+                     job_config.get("settings",
+                     self.raw_config.get("processing",
+                     self.raw_config.get("settings", {}))))
         self.chunk_size = processing.get("chunk_size", DEFAULT_CHUNK_SIZE)
         self.parallel_files = processing.get("parallel_files", False)
         self.max_sample_failures = processing.get("max_sample_failures", MAX_SAMPLE_FAILURES)

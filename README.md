@@ -36,6 +36,62 @@ DataK9 is a Python framework for validating data quality before loading to datab
 
 ---
 
+## 🔥 Killer Features
+
+<details>
+<summary><b>🔍 Data Profiling</b> - Know your data before you validate</summary>
+
+| Feature | Description |
+|---------|-------------|
+| **FIBO Semantic Intelligence** | Auto-tags columns using Financial Industry Business Ontology (transaction, currency, counterparty) |
+| **ML-Powered Anomaly Detection** | Isolation Forest, DBSCAN clustering, correlation analysis find hidden issues |
+| **PII Auto-Detection** | Flags emails, phones, SSN, credit cards, account numbers automatically |
+| **Smart Validation Suggestions** | Generates ready-to-use YAML configs based on your data patterns |
+| **Memory-Efficient at Scale** | Profile 200GB+ files with ~400MB RAM (tested on 357M rows) |
+| **Executive HTML Reports** | Interactive dashboards with plain-English explanations |
+
+```bash
+python3 -m validation_framework.cli profile data.csv --beta-ml
+```
+</details>
+
+<details>
+<summary><b>✓ Data Validation</b> - 35 validations across 10 categories</summary>
+
+| Feature | Description |
+|---------|-------------|
+| **Declarative YAML** | Human-readable configs - no code required |
+| **Critical Data Attributes** | CDA gap analysis for regulatory compliance (SOX, Basel) |
+| **Cross-File Validation** | Referential integrity between related datasets |
+| **Database-Native Checks** | Primary keys, foreign keys, constraint validation |
+| **Statistical Validations** | Distribution, correlation, anomaly thresholds |
+| **Conditional Rules** | Apply validations only when conditions are met |
+| **CI/CD Integration** | Proper exit codes, JSON output, `--fail-on-gaps` flags |
+
+```bash
+python3 -m validation_framework.cli validate config.yaml --output-json results.json
+```
+</details>
+
+<details>
+<summary><b>🎨 DataK9 Studio</b> - Visual configuration, no backend required</summary>
+
+| Feature | Description |
+|---------|-------------|
+| **Zero Installation** | Single HTML file, runs in any browser |
+| **Monaco Editor** | VS Code-style YAML editing with syntax highlighting |
+| **Point-and-Click Config** | Build validations visually, no YAML knowledge needed |
+| **Import Profiles** | Load profiler JSON, auto-suggest validations |
+| **Multi-File Projects** | Manage complex validation jobs with multiple files |
+| **Responsive Design** | Works on desktop, tablet, and mobile |
+
+```
+Just open datak9-studio.html in your browser!
+```
+</details>
+
+---
+
 <a id="commercial-use"></a>
 
 ## ✅ Commercial Use

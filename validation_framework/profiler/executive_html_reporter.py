@@ -1205,6 +1205,23 @@ class ExecutiveHTMLReporter:
             font-size: 1em;
         }
 
+        .ml-hint {
+            background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+            border-left: 3px solid #0ea5e9;
+            padding: 10px 14px;
+            margin-bottom: 12px;
+            border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+            font-size: 0.9em;
+            color: #1e3a5f;
+            line-height: 1.5;
+        }
+
+        .ml-hint em {
+            font-style: normal;
+            font-weight: 600;
+            color: #0369a1;
+        }
+
         .ml-detail-item {
             display: grid;
             grid-template-columns: 150px 100px 1fr;
@@ -1236,6 +1253,38 @@ class ExecutiveHTMLReporter:
                 grid-template-columns: 1fr;
                 gap: 6px;
             }
+        }
+
+        /* Mobile-friendly sample rows */
+        .sample-rows-container {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            max-width: 100%;
+        }
+        .sample-row-card {
+            background: var(--bg-elevated);
+            border-radius: 6px;
+            padding: 8px 12px;
+            margin-bottom: 6px;
+            font-size: 11px;
+        }
+        .sample-row-card div {
+            display: flex;
+            justify-content: space-between;
+            padding: 2px 0;
+            border-bottom: 1px solid var(--border);
+        }
+        .sample-row-card div:last-child {
+            border-bottom: none;
+        }
+        .sample-row-card .field-name {
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+        .sample-row-card .field-value {
+            color: var(--text-primary);
+            text-align: right;
+            word-break: break-all;
         }
 
         .ml-charts-row {
@@ -1804,26 +1853,127 @@ class ExecutiveHTMLReporter:
         # Build detailed sections
         details_html = ''
 
-        # Numeric outliers
+        # Numeric outliers (univariate)
         numeric_outliers = ml_findings.get('numeric_outliers', {})
         if numeric_outliers:
             outlier_items = ''
             for col, data in list(numeric_outliers.items())[:5]:
                 count = data.get('anomaly_count', 0)
                 interpretation = data.get('interpretation', '')
+                contamination = data.get('contamination_used', 'auto')
                 top_values = data.get('top_anomalies', [])
-                top_display = ', '.join(f'${v:,.2f}' if isinstance(v, (int, float)) else str(v) for v in top_values[-3:])
+                top_display = ', '.join(f'{v:,.2f}' if isinstance(v, (int, float)) else str(v) for v in top_values[-3:])
+
+                # Build sample rows (mobile-friendly cards)
+                rows_table = self._build_sample_rows_html(data.get('sample_rows', []))
+
+                contamination_info = f" <span style='color:#6b7280;font-size:0.8em;'>(contamination: {contamination})</span>" if contamination != 'auto' else ""
+
                 outlier_items += f'''
                     <div class="ml-detail-item">
-                        <div class="ml-detail-col"><strong>{col}</strong></div>
+                        <div class="ml-detail-col"><strong>{col}</strong>{contamination_info}</div>
                         <div class="ml-detail-count">{count:,} outliers</div>
-                        <div class="ml-detail-desc">{interpretation or f"Top: {top_display}"}</div>
+                        <div class="ml-detail-desc">{interpretation or f"Top: {top_display}"}{rows_table}</div>
                     </div>'''
+            # Show skipped columns info if any
+            skipped_semantic = ml_findings.get('skipped_numeric_semantic', [])
+            skipped_note = ""
+            if skipped_semantic:
+                skipped_cols = ', '.join(s['column'] for s in skipped_semantic[:3])
+                skipped_note = f'''<br><br><span style="color:#2ecc71;font-size:0.9em;">✓ <em>Smart filtering:</em> {len(skipped_semantic)} column(s) skipped ({skipped_cols}) - these are numeric IDs (like bank codes), not actual measurements. Running outlier detection on IDs is meaningless.</span>'''
+
             details_html += f'''
                 <div class="ml-detail-section">
-                    <div class="ml-detail-header">🔢 Numeric Outliers (Isolation Forest)</div>
+                    <div class="ml-detail-header">🔢 Univariate Outliers (Isolation Forest)</div>
+                    <div class="ml-hint">💡 <em>What this means:</em> These are individual values that are unusually high or low compared to the rest of the data. Think of it as finding prices or amounts that stand out from the crowd - like spotting a $10,000 transaction among mostly $50 ones.{skipped_note}</div>
                     {outlier_items}
                 </div>'''
+
+        # Multivariate outliers
+        multivariate_outliers = ml_findings.get('multivariate_outliers', {})
+        if multivariate_outliers and multivariate_outliers.get('anomaly_count', 0) > 0:
+            mv_count = multivariate_outliers.get('anomaly_count', 0)
+            mv_pct = multivariate_outliers.get('anomaly_percentage', 0)
+            mv_interpretation = multivariate_outliers.get('interpretation', '')
+            contributing_cols = multivariate_outliers.get('contributing_columns', [])
+            cols_analyzed = multivariate_outliers.get('columns_analyzed', [])
+
+            contrib_html = ''
+            if contributing_cols:
+                contrib_items = []
+                for c in contributing_cols[:3]:
+                    contrib_items.append(f"{c['column']} (z-diff: {c['z_score_diff']})")
+                contrib_html = f"<br><span style='color:#9ca3af;'>Key factors: {', '.join(contrib_items)}</span>"
+
+            rows_table = self._build_sample_rows_html(multivariate_outliers.get('sample_rows', []))
+
+            details_html += f'''
+                <div class="ml-detail-section">
+                    <div class="ml-detail-header">🎯 Multivariate Outliers (Cross-Column Patterns)</div>
+                    <div class="ml-hint">💡 <em>What this means:</em> These are records where the <strong>combination</strong> of values is unusual, even if each value alone looks normal. For example, a small transaction amount going to a high-risk country might be normal separately, but together they could signal something worth investigating.</div>
+                    <div class="ml-detail-item">
+                        <div class="ml-detail-col"><strong>Combined Analysis</strong> <span style='color:#6b7280;font-size:0.8em;'>({len(cols_analyzed)} columns)</span></div>
+                        <div class="ml-detail-count">{mv_count:,} outliers ({mv_pct:.2f}%)</div>
+                        <div class="ml-detail-desc">{mv_interpretation}{contrib_html}{rows_table}</div>
+                    </div>
+                </div>'''
+
+        # Clustering analysis
+        clustering = ml_findings.get('clustering_analysis', {})
+        if clustering and (clustering.get('n_clusters', 0) > 0 or clustering.get('noise_points', 0) > 0):
+            n_clusters = clustering.get('n_clusters', 0)
+            noise_count = clustering.get('noise_points', 0)
+            noise_pct = clustering.get('noise_percentage', 0)
+            cluster_interpretation = clustering.get('interpretation', '')
+            clusters = clustering.get('clusters', [])
+
+            cluster_summary = ''
+            if clusters:
+                cluster_items = []
+                for c in clusters[:3]:
+                    cluster_items.append(f"Cluster {c['cluster_id']}: {c['size']:,} records ({c['percentage']:.1f}%)")
+                cluster_summary = f"<br><span style='color:#9ca3af;'>{'; '.join(cluster_items)}</span>"
+
+            rows_table = self._build_sample_rows_html(clustering.get('sample_noise_rows', []))
+
+            details_html += f'''
+                <div class="ml-detail-section">
+                    <div class="ml-detail-header">🔮 Cluster Analysis (DBSCAN)</div>
+                    <div class="ml-hint">💡 <em>What this means:</em> This groups similar records together to find natural patterns. Records that don't fit any group are "noise" - they might be errors, edge cases, or genuinely unusual entries worth reviewing.</div>
+                    <div class="ml-detail-item">
+                        <div class="ml-detail-col"><strong>{n_clusters} Clusters Found</strong></div>
+                        <div class="ml-detail-count">{noise_count:,} noise points ({noise_pct:.1f}%)</div>
+                        <div class="ml-detail-desc">{cluster_interpretation}{cluster_summary}{rows_table}</div>
+                    </div>
+                </div>'''
+
+        # Correlation anomalies
+        corr_anomalies = ml_findings.get('correlation_anomalies', {})
+        if corr_anomalies:
+            corr_breaks = corr_anomalies.get('correlation_breaks', [])
+            high_corr_pairs = corr_anomalies.get('high_correlation_pairs', [])
+
+            if corr_breaks:
+                corr_items = ''
+                for cb in corr_breaks[:3]:
+                    cols = ' / '.join(cb.get('columns', []))
+                    count = cb.get('anomaly_count', 0)
+                    expected_corr = cb.get('expected_correlation', 0)
+                    interpretation = cb.get('interpretation', '')
+
+                    corr_items += f'''
+                        <div class="ml-detail-item">
+                            <div class="ml-detail-col"><strong>{cols}</strong> <span style='color:#6b7280;font-size:0.8em;'>(r={expected_corr})</span></div>
+                            <div class="ml-detail-count">{count:,} breaks</div>
+                            <div class="ml-detail-desc">{interpretation}</div>
+                        </div>'''
+
+                details_html += f'''
+                    <div class="ml-detail-section">
+                        <div class="ml-detail-header">📈 Correlation Anomalies</div>
+                        <div class="ml-hint">💡 <em>What this means:</em> Some columns naturally move together (e.g., "Amount Paid" and "Amount Received" should be similar). These are records where that expected relationship breaks - one value changed but the other didn't follow as expected.</div>
+                        {corr_items}
+                    </div>'''
 
         # Format anomalies
         format_anomalies = ml_findings.get('format_anomalies', {})
@@ -1831,18 +1981,35 @@ class ExecutiveHTMLReporter:
             format_items = ''
             for col, data in list(format_anomalies.items())[:5]:
                 count = data.get('anomaly_count', 0)
-                pattern = data.get('dominant_pattern', 'Unknown')
-                samples = data.get('sample_anomalies', [])[:3]
-                samples_display = ', '.join(f'"{s}"' for s in samples) if samples else 'N/A'
+                # Use human-readable description if available, fallback to pattern
+                pattern_desc = data.get('dominant_pattern_description', data.get('dominant_pattern', 'Unknown'))
+                # Show ONE unique normal value example
+                sample_normal = data.get('sample_dominant_values', [])
+                unique_normal = list(dict.fromkeys(sample_normal))[:1]  # Dedupe, take 1
+                normal_display = f'"{unique_normal[0]}"' if unique_normal else ''
+                # Show unique anomaly examples (deduplicated)
+                sample_anomalies = data.get('sample_anomalies', [])
+                unique_anomalies = list(dict.fromkeys(sample_anomalies))[:3]  # Dedupe, take 3
+                anomaly_display = ', '.join(f'"{s}"' for s in unique_anomalies) if unique_anomalies else 'N/A'
+
+                # Build description
+                expected_part = f"Expected: {pattern_desc}"
+                if normal_display:
+                    expected_part += f" (e.g., {normal_display})"
+
+                # Build sample rows (mobile-friendly cards)
+                rows_table = self._build_sample_rows_html(data.get('sample_rows', []))
+
                 format_items += f'''
                     <div class="ml-detail-item">
                         <div class="ml-detail-col"><strong>{col}</strong></div>
                         <div class="ml-detail-count">{count:,} mismatches</div>
-                        <div class="ml-detail-desc">Expected: {pattern} | Examples: {samples_display}</div>
+                        <div class="ml-detail-desc">{expected_part}<br><span style="color:#e74c3c;">Anomalies: {anomaly_display}</span>{rows_table}</div>
                     </div>'''
             details_html += f'''
                 <div class="ml-detail-section">
                     <div class="ml-detail-header">📝 Format Inconsistencies</div>
+                    <div class="ml-hint">💡 <em>What this means:</em> Most values in this column follow a consistent pattern (like "XXX-1234"), but some don't match. This could indicate data entry errors, system migration issues, or records that need manual review.</div>
                     {format_items}
                 </div>'''
 
@@ -1854,15 +2021,33 @@ class ExecutiveHTMLReporter:
                 rare_vals = data.get('rare_values', [])
                 total_count = data.get('total_rare_count', 0)
                 examples = ', '.join(f'"{v["value"]}"' for v in rare_vals[:3])
+
+                # Show semantic intelligence applied
+                semantic_behavior = data.get('semantic_behavior', 'default')
+                semantic_reason = data.get('semantic_reason')
+                ref_skipped = data.get('reference_values_skipped', 0)
+                valid_skipped = data.get('valid_values_skipped', 0)
+
+                # Build context message based on behavior
+                context_msg = ""
+                if semantic_behavior == 'strict_threshold':
+                    context_msg = f'<br><span style="color:#2ecc71;font-size:0.85em;">✓ Strict threshold applied (FIBO: counterparty/entity detection)</span>'
+                elif semantic_behavior == 'reference_validate' and ref_skipped > 0:
+                    context_msg = f'<br><span style="color:#2ecc71;font-size:0.85em;">✓ {ref_skipped} valid reference values excluded (FIBO semantic validation)</span>'
+                elif valid_skipped > 0:
+                    context_msg = f'<br><span style="color:#2ecc71;font-size:0.85em;">✓ {valid_skipped} known valid values excluded (domain detection)</span>'
+
                 rare_items += f'''
                     <div class="ml-detail-item">
                         <div class="ml-detail-col"><strong>{col}</strong></div>
                         <div class="ml-detail-count">{total_count:,} rare values</div>
-                        <div class="ml-detail-desc">Examples: {examples}</div>
+                        <div class="ml-detail-desc">Examples: {examples}{context_msg}</div>
                     </div>'''
             details_html += f'''
                 <div class="ml-detail-section">
                     <div class="ml-detail-header">⚠️ Rare/Suspicious Categories</div>
+                    <div class="ml-hint">💡 <em>What this means:</em> These category values appear very infrequently compared to others. This could indicate typos (e.g., "Londn" instead of "London"), test data left in production, or genuinely rare but valid entries that may need verification.<br><br>
+                    <em>Smart filtering:</em> The analyzer uses FIBO (Financial Industry Business Ontology) semantic tags to intelligently exclude valid but rare values. For example, rare currencies like "NOK" or "MXN" won't be flagged if the column is recognized as a currency field. Counterparty columns use stricter thresholds since diversity is expected.</div>
                     {rare_items}
                 </div>'''
 
@@ -1874,15 +2059,20 @@ class ExecutiveHTMLReporter:
                 cols = ' / '.join(issue.get('columns', []))
                 count = issue.get('total_issues', 0)
                 interpretation = issue.get('interpretation', '')
+
+                # Build sample rows (mobile-friendly cards)
+                rows_table = self._build_sample_rows_html(issue.get('sample_rows', []))
+
                 cross_items += f'''
                     <div class="ml-detail-item">
                         <div class="ml-detail-col"><strong>{cols}</strong></div>
                         <div class="ml-detail-count">{count:,} issues</div>
-                        <div class="ml-detail-desc">{interpretation}</div>
+                        <div class="ml-detail-desc">{interpretation}{rows_table}</div>
                     </div>'''
             details_html += f'''
                 <div class="ml-detail-section">
                     <div class="ml-detail-header">🔗 Cross-Column Consistency</div>
+                    <div class="ml-hint">💡 <em>What this means:</em> These columns have an expected relationship (e.g., "End Date" should be after "Start Date"), but some records violate that rule. This often indicates data entry errors or process issues.</div>
                     {cross_items}
                 </div>'''
 
@@ -1893,19 +2083,27 @@ class ExecutiveHTMLReporter:
             temporal_items = ''
             for col, data in list(temporal_warnings.items())[:3]:
                 interpretation = data.get('interpretation', 'Suspicious pattern detected')
+
+                # Build sample rows (mobile-friendly cards)
+                rows_table = self._build_sample_rows_html(data.get('sample_rows', []))
+
                 temporal_items += f'''
                     <div class="ml-detail-item">
                         <div class="ml-detail-col"><strong>{col}</strong></div>
-                        <div class="ml-detail-desc">{interpretation}</div>
+                        <div class="ml-detail-desc">{interpretation}{rows_table}</div>
                     </div>'''
             details_html += f'''
                 <div class="ml-detail-section">
                     <div class="ml-detail-header">⏰ Temporal Anomalies</div>
+                    <div class="ml-hint">💡 <em>What this means:</em> The timing of records shows unusual patterns - like too many transactions at midnight (potential batch processing artifacts), unexpected gaps on weekends, or activity spikes that don't match normal business hours.</div>
                     {temporal_items}
                 </div>'''
 
         # Prepare chart data
         outlier_count = sum(f.get('anomaly_count', 0) for f in numeric_outliers.values())
+        mv_outlier_count = multivariate_outliers.get('anomaly_count', 0) if multivariate_outliers else 0
+        cluster_noise = clustering.get('noise_points', 0) if clustering else 0
+        corr_break_count = sum(b.get('anomaly_count', 0) for b in corr_anomalies.get('correlation_breaks', [])) if corr_anomalies else 0
         format_count = sum(f.get('anomaly_count', 0) for f in format_anomalies.values())
         rare_count = sum(f.get('total_rare_count', 0) for f in rare_categories.values())
         cross_count = sum(i.get('total_issues', 0) for i in cross_issues)
@@ -1919,9 +2117,19 @@ class ExecutiveHTMLReporter:
                 'count': data.get('anomaly_count', 0)
             })
 
-        # Chart JS data
-        chart_labels = ['Numeric Outliers', 'Format Issues', 'Rare Categories', 'Cross-Column', 'Temporal']
-        chart_values = [outlier_count, format_count, rare_count, cross_count, temporal_count]
+        # Chart JS data - include all ML categories
+        chart_labels = ['Univariate', 'Multivariate', 'Clustering', 'Correlation', 'Format', 'Rare', 'Cross-Col', 'Temporal']
+        chart_values = [outlier_count, mv_outlier_count, cluster_noise, corr_break_count, format_count, rare_count, cross_count, temporal_count]
+
+        # Filter out zero values for cleaner chart
+        non_zero_data = [(l, v) for l, v in zip(chart_labels, chart_values) if v > 0]
+        if non_zero_data:
+            chart_labels, chart_values = zip(*non_zero_data)
+            chart_labels = list(chart_labels)
+            chart_values = list(chart_values)
+        else:
+            chart_labels = ['No Issues']
+            chart_values = [0]
 
         return f'''
         <div class="accordion open" data-accordion="ml-analysis">
@@ -1941,7 +2149,7 @@ class ExecutiveHTMLReporter:
             <div class="accordion-body">
                 <div class="accordion-content">
                     <div class="hint-box">
-                        <strong>🧠 About ML Analysis:</strong> This analysis uses Isolation Forest, pattern detection, and statistical methods to identify potential anomalies that traditional profiling might miss.
+                        <strong>🧠 About ML Analysis:</strong> Uses Isolation Forest (univariate & multivariate), DBSCAN clustering, correlation analysis, and pattern detection to identify anomalies.
                         Analyzed {sample_info.get('analyzed_rows', 0):,} rows ({sample_info.get('sample_percentage', 0):.1f}% of data) in {analysis_time:.1f}s.
                     </div>
 
@@ -1991,9 +2199,12 @@ class ExecutiveHTMLReporter:
                             backgroundColor: [
                                 'rgba(139, 92, 246, 0.8)',
                                 'rgba(236, 72, 153, 0.8)',
+                                'rgba(6, 182, 212, 0.8)',
+                                'rgba(34, 197, 94, 0.8)',
                                 'rgba(245, 158, 11, 0.8)',
+                                'rgba(239, 68, 68, 0.8)',
                                 'rgba(59, 130, 246, 0.8)',
-                                'rgba(16, 185, 129, 0.8)'
+                                'rgba(168, 85, 247, 0.8)'
                             ],
                             borderWidth: 0
                         }}]
@@ -2600,6 +2811,32 @@ class ExecutiveHTMLReporter:
         severity: "{sugg.severity}"{params_str if params_str else ""}'''
 
     # Helper methods
+    def _build_sample_rows_html(self, sample_rows: List[Dict], max_rows: int = 3) -> str:
+        """
+        Build mobile-friendly sample rows HTML using cards instead of tables.
+        On mobile devices, tables can overflow; cards stack vertically.
+        """
+        if not sample_rows:
+            return ''
+
+        headers = list(sample_rows[0].keys()) if sample_rows else []
+        if not headers:
+            return ''
+
+        # Build cards for each row - fully stacked vertical layout for mobile
+        cards_html = ''
+        for i, row in enumerate(sample_rows[:max_rows]):
+            fields_html = ''
+            for h in headers:
+                val = str(row.get(h, ''))[:50]  # Truncate long values
+                fields_html += f'<div style="margin-bottom:4px;"><div style="color:var(--text-muted);font-size:9px;text-transform:uppercase;">{h}</div><div style="font-size:11px;overflow-wrap:break-word;word-wrap:break-word;">{val}</div></div>'
+            cards_html += f'<div style="background:var(--bg-tertiary);border-radius:4px;padding:10px;margin-bottom:8px;max-width:100%;overflow:hidden;">{fields_html}</div>'
+
+        return f'''<details style="margin-top:8px;">
+            <summary style="cursor:pointer;color:var(--primary);font-size:12px;">View sample rows ({len(sample_rows[:max_rows])})</summary>
+            <div style="margin-top:8px;max-width:100%;overflow:hidden;">{cards_html}</div>
+        </details>'''
+
     def _format_file_size(self, bytes: int) -> str:
         """Format file size for display."""
         if bytes >= 1024 * 1024 * 1024:

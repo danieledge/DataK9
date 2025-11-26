@@ -62,14 +62,12 @@
             "ValidValuesCheck"
           ],
           "expected_values": [
-            "USD",
-            "EUR",
-            "GBP",
-            "JPY",
-            "CHF",
-            "CAD",
-            "AUD"
-          ]
+            "USD", "EUR", "GBP", "JPY", "CHF", "CAD", "AUD", "CNY", "INR", "BRL",
+            "MXN", "KRW", "SGD", "HKD", "NOK", "SEK", "DKK", "PLN", "THB", "IDR",
+            "MYR", "PHP", "CZK", "ILS", "ZAR", "TRY", "AED", "SAR", "RUB", "NZD"
+          ],
+          "ml_rare_behavior": "reference_validate",
+          "ml_rare_reason": "Only flag currencies not matching valid ISO codes - rare but valid currencies are legitimate"
         },
         "money.price": {
           "fibo_class": "fibo-fnd-acc-cur:Price",
@@ -129,7 +127,9 @@
           },
           "validation_rules": [
             "MandatoryFieldCheck"
-          ]
+          ],
+          "ml_rare_behavior": "skip",
+          "ml_rare_reason": "Account identifiers have high cardinality by design"
         },
         "banking.account.checking": {
           "fibo_class": "fibo-fbc-pas-caa:CheckingAccount",
@@ -166,7 +166,9 @@
           "validation_rules": [
             "UniqueKeyCheck",
             "MandatoryFieldCheck"
-          ]
+          ],
+          "ml_rare_behavior": "skip",
+          "ml_rare_reason": "Transaction identifiers are expected to be unique"
         },
         "banking.payment": {
           "fibo_class": "fibo-fbc-pay-pmt:Payment",
@@ -331,25 +333,32 @@
           "definition": "An identifier for a party to a contract or transaction",
           "patterns": [
             "(?i).*(customer.*id|client.*id|party.*id).*",
-            "(?i).*(user.*id|member.*id).*"
+            "(?i).*(user.*id|member.*id).*",
+            "(?i)^entity.*id$"
           ],
           "data_properties": {
             "cardinality_min": 0.001
           },
           "validation_rules": [
             "MandatoryFieldCheck"
-          ]
+          ],
+          "ml_rare_behavior": "skip",
+          "ml_rare_reason": "Party identifiers have high cardinality by design"
         },
         "party.counterparty": {
           "fibo_class": "fibo-fnd-pty-pty:Counterparty",
           "definition": "A party to a contract or transaction",
           "patterns": [
             "(?i).*(counterparty|counter.*party).*",
-            "(?i).*(from.*bank|to.*bank).*"
+            "(?i).*(from.*bank|to.*bank).*",
+            "(?i)^bank.*id$",
+            "(?i)^(source|dest|sender|receiver).*bank.*$"
           ],
           "validation_rules": [
             "MandatoryFieldCheck"
-          ]
+          ],
+          "ml_rare_behavior": "strict_threshold",
+          "ml_rare_reason": "Counterparties are expected to be diverse - only flag extremely rare values"
         }
       }
     },
@@ -376,7 +385,9 @@
           "validation_rules": [
             "UniqueKeyCheck",
             "RegexPatternCheck"
-          ]
+          ],
+          "ml_rare_behavior": "skip",
+          "ml_rare_reason": "UUIDs are unique by design"
         },
         "identifier.code": {
           "fibo_class": "fibo-fnd-id-id:Code",
@@ -387,7 +398,9 @@
           ],
           "validation_rules": [
             "MandatoryFieldCheck"
-          ]
+          ],
+          "ml_rare_behavior": "skip",
+          "ml_rare_reason": "Code fields typically have high cardinality"
         }
       }
     },
@@ -454,7 +467,9 @@
           "validation_rules": [
             "ValidValuesCheck",
             "MandatoryFieldCheck"
-          ]
+          ],
+          "ml_rare_behavior": "default",
+          "ml_rare_reason": "Transaction types should be validated - rare types may indicate data issues"
         },
         "category.account_type": {
           "fibo_class": "fibo-fbc-pas-caa:AccountType",
@@ -471,7 +486,9 @@
           "validation_rules": [
             "ValidValuesCheck",
             "MandatoryFieldCheck"
-          ]
+          ],
+          "ml_rare_behavior": "default",
+          "ml_rare_reason": "Account types should be validated - rare types may indicate data issues"
         },
         "category.payment_method": {
           "fibo_class": "fibo-fbc-pay-pmt:PaymentMethod",
@@ -489,12 +506,11 @@
             "ValidValuesCheck"
           ],
           "expected_values": [
-            "wire",
-            "ach",
-            "check",
-            "card",
-            "cash"
-          ]
+            "wire", "ach", "check", "card", "cash", "transfer", "debit", "credit",
+            "direct_debit", "standing_order", "crypto", "bank_transfer"
+          ],
+          "ml_rare_behavior": "reference_validate",
+          "ml_rare_reason": "Only flag payment methods not in standard list - rare but valid methods are legitimate"
         }
       }
     },

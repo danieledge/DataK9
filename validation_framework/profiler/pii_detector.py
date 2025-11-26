@@ -143,7 +143,7 @@ class PIIDetector:
             'pii_type': 'date_of_birth'
         },
         'account': {
-            'keywords': ['account_number', 'account_num', 'acct_num', 'bank_account'],
+            'keywords': ['account_number', 'account_num', 'acct_num', 'bank_account', 'account', 'acct'],
             'risk_score': 85,
             'pii_type': 'account_number'
         },
@@ -292,10 +292,21 @@ class PIIDetector:
             Dict with match info if PII indicator found, None otherwise
         """
         column_name_lower = column_name.lower().strip()
+        # Normalize separators to underscores for word boundary matching
+        # e.g., "credit-card" -> "credit_card", "credit card" -> "credit_card"
+        column_name_normalized = re.sub(r'[\s\-\.]+', '_', column_name_lower)
+        # Split into individual words/tokens for exact matching
+        column_tokens = set(column_name_normalized.split('_'))
+        # Also include the full normalized name for multi-word keyword matching
+        column_tokens.add(column_name_normalized)
 
         for category, info in self.COLUMN_NAME_INDICATORS.items():
             for keyword in info['keywords']:
-                if keyword in column_name_lower:
+                # Use word boundary matching to avoid false positives like 'cc' in 'account'
+                # Check if keyword matches a full token OR if keyword (with underscores)
+                # appears as a complete substring bounded by underscores or string edges
+                keyword_pattern = r'(?:^|_)' + re.escape(keyword) + r'(?:_|$)'
+                if keyword in column_tokens or re.search(keyword_pattern, column_name_normalized):
                     return {
                         "pii_type": info['pii_type'],
                         "name": category.title(),
