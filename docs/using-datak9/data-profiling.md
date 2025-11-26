@@ -11,6 +11,10 @@ DataK9's profiler analyzes your data files to understand their structure, qualit
 - [Quick Start](#-quick-start) - Get profiling in 30 seconds
 - [Why Profile First?](#-why-profile-first) - The compelling reason
 - [Key Features](#-key-features) - What makes DataK9's profiler unique
+  - [FIBO Semantic Intelligence](#-fibo-semantic-intelligence-new)
+  - [Auto-Generated Validations](#-auto-generated-validations)
+  - [Comprehensive Analysis](#-comprehensive-analysis)
+  - [ML-Based Anomaly Detection](#-ml-based-anomaly-detection-beta) - NEW!
 - [Understanding Reports](#-understanding-reports) - Read your profile results
 - [How It Works](#-how-it-works) - Under the hood (10 stages)
 - [Command Reference](#-command-reference) - All options and examples
@@ -156,6 +160,124 @@ What DataK9 profiles:
 | **🚨 Anomalies** | Outliers, unusual patterns | 5 outliers detected |
 | **🔐 Privacy** | PII detection (email, phone, SSN) | 2 PII fields flagged |
 | **⏱️ Temporal** | Date ranges, gaps, trends | Jan 2024 - Dec 2024 |
+
+---
+
+### 🧠 ML-Based Anomaly Detection (Beta)
+
+**Enable with `--beta-ml` flag for machine learning-powered anomaly detection.**
+
+DataK9's ML analyzer uses industry-standard algorithms to find patterns that traditional profiling might miss:
+
+```bash
+# Enable ML analysis
+python3 -m validation_framework.cli profile data.csv --beta-ml -o report.html
+```
+
+#### What ML Analysis Detects
+
+| Analysis Type | What It Finds | Plain English |
+|---------------|---------------|---------------|
+| **🔢 Univariate Outliers** | Individual values that deviate significantly | "This $50,000 transaction stands out among mostly $50 ones" |
+| **🎯 Multivariate Outliers** | Unusual combinations of values | "Small amount + high-risk country together is suspicious" |
+| **🔮 Cluster Analysis** | Natural groupings and noise points | "Most data falls into 3 groups; these 500 records don't fit any" |
+| **📈 Correlation Anomalies** | Broken relationships between columns | "Amount Paid and Amount Received should match but don't here" |
+| **📝 Format Inconsistencies** | Values that don't match the dominant pattern | "99% use format XXX-1234, but these 50 records don't" |
+| **⚠️ Rare Categories** | Suspiciously infrequent values | "This category appears only 3 times - could be a typo" |
+| **🔗 Cross-Column Issues** | Violated business rules between columns | "End Date is before Start Date in 12 records" |
+| **⏰ Temporal Anomalies** | Suspicious time patterns | "Too many transactions at midnight - batch processing artifact?" |
+
+#### Algorithms Used
+
+| Algorithm | Purpose | When It's Used |
+|-----------|---------|----------------|
+| **Isolation Forest** | Outlier detection | Numeric columns with >500 rows |
+| **DBSCAN** | Clustering & noise detection | Finding natural groupings |
+| **IQR Statistical** | Fallback outlier detection | When sklearn unavailable |
+| **Pearson Correlation** | Relationship analysis | Pairs of numeric columns |
+
+#### Smart Features
+
+**Adaptive Contamination:** The ML analyzer automatically estimates the expected outlier rate based on your data's characteristics, using IQR-based calculation with dataset size adjustments.
+
+**Binary Column Skip:** Binary/boolean columns (like flags with only 0/1 values) are automatically excluded from outlier detection - a rare value in a flag isn't an anomaly.
+
+**FIBO-Based Semantic Intelligence:** The ML analyzer integrates with FIBO (Financial Industry Business Ontology) semantic tags to intelligently handle different column types:
+
+**For Rare Category Detection:**
+
+| Semantic Type | Behavior | Example |
+|---------------|----------|---------|
+| **Identifiers** (`banking.account`, `banking.transaction`, `party.customer_id`) | Skip rare detection | Account IDs are expected to be diverse |
+| **Reference Domains** (`money.currency`, `category.payment_method`) | Validate against reference list | Only flag unknown values like "FAKE_XYZ" |
+| **Counterparties** (`party.counterparty`) | Use strict threshold (10x stricter) | Rare banks are normal in international trade |
+| **Categories** (`category.transaction_type`) | Default rare detection | Rare types may indicate data issues |
+
+**For Numeric Outlier Detection (Isolation Forest):**
+
+Columns that are numeric but semantically categorical are excluded:
+
+| Semantic Type | Behavior | Why |
+|---------------|----------|-----|
+| **`party.counterparty`** | Skip outlier detection | Bank ID 1099 isn't an "outlier" just because most use 1-100 |
+| **`banking.account`** | Skip outlier detection | Account numbers are identifiers, not measurements |
+| **`category`** | Skip outlier detection | Category codes stored as numbers aren't continuous data |
+| **`flag.binary`** | Skip outlier detection | Binary flags have only 2 values by design |
+
+**For Correlation & Multivariate Analysis:**
+
+The same semantic filtering applies to correlation detection and multivariate outlier analysis. Correlations between numeric IDs (like Bank ID and Account Number) are meaningless statistically, so these columns are excluded.
+
+This means:
+- ✅ Account number `ACC-00047839` → NOT flagged (identifier, high cardinality expected)
+- ✅ Currency `NOK` (Norwegian Krone) → NOT flagged (valid ISO currency code)
+- ✅ Counterparty `BANK-0001` appearing once → NOT flagged (strict threshold for entities)
+- ✅ Bank ID `1099` → NOT flagged for outliers (numeric but categorical)
+- ✅ Bank ID / Account correlation → NOT analyzed (meaningless for IDs)
+- ⚠️ Currency `FAKE_XYZ` → FLAGGED (not a valid reference code)
+- ⚠️ Payment type `Typo` → FLAGGED (not in known payment methods)
+
+**Known Domain Detection:** For columns named "currency", "country", etc., the analyzer recognizes valid but rare values:
+- ✅ UK Pound, Yen, Bitcoin → Valid currencies, not flagged
+- ⚠️ "FAKE_XYZ" → Unknown, flagged for review
+
+**Confidence Scoring:** Each finding includes a confidence level (Very High, High, Medium, Low) based on:
+- Detection method reliability
+- Sample size adequacy
+- Anomaly percentage reasonableness
+
+#### Sample Output
+
+```
+🧠 Running ML-based anomaly detection (beta)...
+  🔴 ML Analysis: 2,847 potential issues (medium severity)
+    • Univariate outliers: 1,250 detected (worst: transaction_amount)
+    • Multivariate outliers: 500 records with unusual value combinations
+    • Cluster analysis: 5 clusters found, 847 noise points (3.4%)
+    • Rare values: 12 potentially suspicious categorical values
+  → Analyzed 250,000 rows in 45.2s
+```
+
+#### Interpreting Results
+
+**High Issue Count ≠ Bad Data**
+
+The ML analyzer flags values for human review. High counts may indicate:
+- Legitimate but unusual business transactions
+- Data from multiple sources with different patterns
+- Historical data with different formats
+- Genuinely problematic records
+
+**Review the sample rows** provided in each section to determine which findings need action.
+
+#### Configuration & Limits
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `ML_SAMPLE_SIZE` | 250,000 | Max rows analyzed (larger files sampled) |
+| `MIN_ROWS_FOR_ML` | 500 | Minimum rows required for reliable ML |
+| `Max Contamination` | 5% | Upper limit for outlier detection rate |
+| `DBSCAN min_samples` | 10 | Minimum cluster size |
 
 ---
 
@@ -451,6 +573,7 @@ python3 -m validation_framework.cli profile <file_path>
 | `-c`, `--config` | YAML config path | `-c validation.yaml` |
 | `-j`, `--json` | JSON export path | `-j profile.json` |
 | `--enable-semantic-tagging` | Enable FIBO analysis | `--enable-semantic-tagging` |
+| `--beta-ml` | Enable ML anomaly detection | `--beta-ml` |
 | `--format` | Explicit format | `--format csv` |
 | `--sample-rows` | Sample N rows | `--sample-rows 1000000` |
 | `--sample-percent` | Sample N% rows | `--sample-percent 10` |
@@ -482,9 +605,23 @@ python3 -m validation_framework.cli profile data.csv \
 # 5. Custom chunk size for memory control
 python3 -m validation_framework.cli profile large.csv \
   --chunk-size 25000
+
+# 6. ML-based anomaly detection (beta)
+python3 -m validation_framework.cli profile transactions.csv \
+  --beta-ml \
+  -o profile_with_ml.html
+
+# 7. Full analysis: FIBO + ML + all outputs
+python3 -m validation_framework.cli profile financial_data.parquet \
+  --enable-semantic-tagging \
+  --beta-ml \
+  -o profile.html \
+  -j profile.json
 ```
 
-**💡 Tip:** Always use `--enable-semantic-tagging` for financial datasets to get FIBO intelligence!
+**💡 Tips:**
+- Always use `--enable-semantic-tagging` for financial datasets to get FIBO intelligence!
+- Use `--beta-ml` when you want to detect outliers, clusters, and anomalies that basic profiling might miss
 
 ---
 

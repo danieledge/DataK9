@@ -7,7 +7,7 @@ memory usage when profiling large datasets.
 
 import numpy as np
 import random
-from typing import List, Any, Optional
+from typing import List, Any, Optional, Dict
 
 
 class ReservoirSampler:
@@ -338,3 +338,263 @@ class QuantileTracker:
             result[f'p{int(q*100)}'] = float(val)
 
         return result
+
+
+class CardinalityEstimator:
+    """
+    Approximate cardinality estimation using HyperLogLog.
+
+    Uses Polars' built-in approx_n_unique (HyperLogLog) when available,
+    falls back to exact counting on samples for pandas.
+
+    This solves the problem of unique value counts being capped at sample size
+    (e.g., showing "10,000 unique" when actual is 2 million).
+    """
+
+    @staticmethod
+    def estimate_cardinality_polars(
+        file_path: str,
+        columns: Optional[List[str]] = None
+    ) -> Dict[str, int]:
+        """
+        Estimate cardinality for all columns using Polars HyperLogLog.
+
+        This is memory-efficient and fast - scans data in chunks without
+        loading the entire dataset into memory.
+
+        Args:
+            file_path: Path to parquet/csv file
+            columns: Optional list of columns to analyze (default: all)
+
+        Returns:
+            Dict mapping column name to approximate unique count
+        """
+        try:
+            import polars as pl
+
+            # Use lazy scan for memory efficiency
+            if file_path.endswith('.parquet'):
+                lf = pl.scan_parquet(file_path)
+            elif file_path.endswith('.csv'):
+                lf = pl.scan_csv(file_path)
+            else:
+                # For other formats, try to load with pandas and convert
+                return {}
+
+            # Get column names if not specified
+            if columns is None:
+                columns = lf.columns
+
+            # Compute approximate unique counts for all columns
+            result = lf.select([
+                pl.col(c).approx_n_unique().alias(f'{c}')
+                for c in columns
+            ]).collect()
+
+            return {c: result[c][0] for c in columns}
+
+        except ImportError:
+            return {}
+        except Exception:
+            return {}
+
+    @staticmethod
+    def estimate_cardinality_chunked(
+        data_iterator,
+        columns: List[str],
+        sample_rate: float = 0.01
+    ) -> Dict[str, int]:
+        """
+        Estimate cardinality using chunked processing with sampling.
+
+        Falls back method when Polars lazy scan is not available.
+        Uses probabilistic counting with random sampling.
+
+        Args:
+            data_iterator: Iterator yielding data chunks (pandas DataFrames)
+            columns: Columns to estimate cardinality for
+            sample_rate: Fraction of rows to sample (default 1%)
+
+        Returns:
+            Dict mapping column name to estimated unique count
+        """
+        # Track unique values using sets with reservoir sampling
+        unique_trackers: Dict[str, set] = {col: set() for col in columns}
+        max_tracked = 100000  # Max unique values to track per column
+        total_rows = 0
+
+        for chunk in data_iterator:
+            chunk_size = len(chunk)
+            total_rows += chunk_size
+
+            # Sample rows from this chunk
+            if sample_rate < 1.0:
+                sample_size = max(1, int(chunk_size * sample_rate))
+                if hasattr(chunk, 'sample'):
+                    chunk = chunk.sample(n=min(sample_size, len(chunk)), random_state=42)
+
+            for col in columns:
+                if col not in chunk.columns:
+                    continue
+
+                # Add values to tracker
+                values = chunk[col].dropna().unique()
+
+                if len(unique_trackers[col]) < max_tracked:
+                    for v in values:
+                        if len(unique_trackers[col]) < max_tracked:
+                            unique_trackers[col].add(v)
+                        else:
+                            break
+
+        # Estimate actual cardinality from sampled cardinality
+        # If we hit the max, extrapolate based on sample rate
+        result = {}
+        for col, tracker in unique_trackers.items():
+            tracked_count = len(tracker)
+            if tracked_count >= max_tracked:
+                # Extrapolate: if we found max_tracked in sample_rate of data,
+                # actual unique count is likely much higher
+                result[col] = int(tracked_count / sample_rate)
+            else:
+                result[col] = tracked_count
+
+        return result
+
+
+class AdaptiveSamplingStrategy:
+    """
+    Intelligent sampling strategy that adapts based on column characteristics.
+
+    Combines multiple signals to determine optimal sampling:
+    1. Column name semantics (id, date, amount, category)
+    2. Approximate cardinality (from HyperLogLog)
+    3. Data type (string, numeric, date)
+    4. Dataset size
+
+    Strategies:
+    - LOW_CARDINALITY: Full value distribution (< 100 unique values)
+    - MEDIUM_CARDINALITY: Reservoir sampling with stratification (100-10K unique)
+    - HIGH_CARDINALITY: Random sampling for statistics only (> 10K unique)
+    """
+
+    # Cardinality thresholds
+    LOW_CARDINALITY_THRESHOLD = 100
+    MEDIUM_CARDINALITY_THRESHOLD = 10000
+    HIGH_CARDINALITY_THRESHOLD = 100000
+
+    @classmethod
+    def determine_strategy(
+        cls,
+        column_name: str,
+        approx_cardinality: int,
+        total_rows: int,
+        data_type: str
+    ) -> Dict[str, Any]:
+        """
+        Determine optimal sampling strategy for a column.
+
+        Args:
+            column_name: Column name
+            approx_cardinality: Approximate unique value count
+            total_rows: Total rows in dataset
+            data_type: Data type (string, integer, float, date, etc.)
+
+        Returns:
+            Dict with:
+                - strategy: 'full', 'stratified', or 'random'
+                - sample_size: Recommended sample size
+                - reasoning: Human-readable explanation
+                - full_scan_metrics: List of metrics to compute on full data
+                - sample_metrics: List of metrics to compute on sample
+        """
+        cardinality_ratio = approx_cardinality / total_rows if total_rows > 0 else 0
+
+        # Low cardinality: enumerate all values
+        if approx_cardinality <= cls.LOW_CARDINALITY_THRESHOLD:
+            return {
+                'strategy': 'full',
+                'sample_size': total_rows,
+                'reasoning': f'Low cardinality ({approx_cardinality} unique values) - collecting full distribution',
+                'full_scan_metrics': ['value_counts', 'null_count', 'row_count'],
+                'sample_metrics': []
+            }
+
+        # Medium cardinality: stratified sampling to capture all values
+        elif approx_cardinality <= cls.MEDIUM_CARDINALITY_THRESHOLD:
+            # Sample enough to capture most unique values
+            sample_size = min(approx_cardinality * 10, 50000, total_rows)
+            return {
+                'strategy': 'stratified',
+                'sample_size': sample_size,
+                'reasoning': f'Medium cardinality ({approx_cardinality:,} unique) - stratified sampling to capture value distribution',
+                'full_scan_metrics': ['null_count', 'row_count', 'approx_unique'],
+                'sample_metrics': ['value_counts', 'statistics', 'patterns']
+            }
+
+        # High cardinality: random sampling for statistics
+        else:
+            # For high cardinality, focus on statistics not value enumeration
+            sample_size = min(10000, total_rows)
+            return {
+                'strategy': 'random',
+                'sample_size': sample_size,
+                'reasoning': f'High cardinality ({approx_cardinality:,} unique) - sampling for statistics only',
+                'full_scan_metrics': ['null_count', 'row_count', 'approx_unique', 'min', 'max'],
+                'sample_metrics': ['statistics', 'patterns', 'top_values']
+            }
+
+    @classmethod
+    def get_full_scan_expressions_polars(cls, columns: List[str]) -> List:
+        """
+        Get Polars expressions for metrics that should be computed on full data.
+
+        These are cheap O(n) operations that don't require sorting or grouping.
+
+        Args:
+            columns: List of column names
+
+        Returns:
+            List of Polars expressions
+        """
+        try:
+            import polars as pl
+
+            expressions = []
+            for col in columns:
+                expressions.extend([
+                    pl.col(col).count().alias(f'{col}__count'),
+                    pl.col(col).null_count().alias(f'{col}__null_count'),
+                    pl.col(col).approx_n_unique().alias(f'{col}__approx_unique'),
+                ])
+
+            return expressions
+        except ImportError:
+            return []
+
+    @classmethod
+    def get_numeric_full_scan_expressions_polars(cls, columns: List[str]) -> List:
+        """
+        Get Polars expressions for numeric columns (min, max, mean, std).
+
+        Args:
+            columns: List of numeric column names
+
+        Returns:
+            List of Polars expressions
+        """
+        try:
+            import polars as pl
+
+            expressions = []
+            for col in columns:
+                expressions.extend([
+                    pl.col(col).min().alias(f'{col}__min'),
+                    pl.col(col).max().alias(f'{col}__max'),
+                    pl.col(col).mean().alias(f'{col}__mean'),
+                    pl.col(col).std().alias(f'{col}__std'),
+                ])
+
+            return expressions
+        except ImportError:
+            return []

@@ -673,8 +673,18 @@ def profile(file_path, format, database, table, query, html_output, json_output,
                         if len(sample_df) > ml_sample_size:
                             sample_df = sample_df.head(ml_sample_size)
 
-                        # Run ML analysis
-                        ml_findings = run_ml_analysis(sample_df, sample_size=ml_sample_size)
+                        # Extract semantic info from profile_result for intelligent ML analysis
+                        column_semantic_info = {}
+                        for col_profile in profile_result.columns:
+                            if col_profile.semantic_info:
+                                column_semantic_info[col_profile.name] = col_profile.semantic_info
+
+                        # Run ML analysis with semantic context
+                        ml_findings = run_ml_analysis(
+                            sample_df,
+                            sample_size=ml_sample_size,
+                            column_semantic_info=column_semantic_info
+                        )
                         profile_result.ml_findings = ml_findings
 
                         # Display summary
