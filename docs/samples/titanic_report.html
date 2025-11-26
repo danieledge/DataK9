@@ -1310,8 +1310,8 @@
                 <span class="file-name-pill">titanic.csv</span>
                 <span><span class="pill-dot"></span>891 rows</span>
                 <span><span class="pill-dot"></span>58.89 KB</span>
-                <span><span class="pill-dot"></span>1.5s</span>
-                <span><span class="pill-dot"></span>2025-11-26 22:48</span>
+                <span><span class="pill-dot"></span>2.8s</span>
+                <span><span class="pill-dot"></span>2025-11-26 23:06</span>
             </div>
         </div>
     </header>
@@ -1457,7 +1457,7 @@
             <div class="fibo-content">
                 <div class="fibo-stats-grid">
                     <div class="fibo-stat">
-                        <div class="fibo-stat-value">5</div>
+                        <div class="fibo-stat-value">2</div>
                         <div class="fibo-stat-label">Columns Classified</div>
                         <div class="fibo-stat-note">of 12 total</div>
                     </div>
@@ -1467,14 +1467,14 @@
                         <div class="fibo-stat-note">mapped to ontology</div>
                     </div>
                     <div class="fibo-stat">
-                        <div class="fibo-stat-value">3</div>
+                        <div class="fibo-stat-value">2</div>
                         <div class="fibo-stat-label">Semantic Domains</div>
                         <div class="fibo-stat-note">detected categories</div>
                     </div>
                 </div>
                 <div class="fibo-categories">
                     <span class="fibo-categories-label">Detected domains:</span>
-                    <span class="fibo-category-tag">category</span><span class="fibo-category-tag">flag</span><span class="fibo-category-tag">identifier</span>
+                    <span class="fibo-category-tag">flag</span><span class="fibo-category-tag">identifier</span>
                 </div>
                 <details style="margin-top: 12px;">
                     <summary style="cursor: pointer; color: var(--text-secondary); font-size: 0.9em; padding: 8px 0;">ℹ️ What is FIBO and how does it help?</summary>
@@ -1679,17 +1679,17 @@
                     <div class="hint-box">
                         <strong>🧠 About ML Analysis:</strong> A tiered approach to finding data issues:<br>
                         <strong>Tier 1</strong> checks if data is real (Benford's Law) • <strong>Tier 2</strong> finds problematic records (Outliers, Autoencoder) • <strong>Tier 3</strong> detects quality issues (Format, Rare values) • <strong>Tier 4</strong> reveals patterns (Temporal, Correlation).<br>
-                        Analyzed 891 rows (100.0% of data) in 1.1s.
+                        Analyzed 891 rows (100.0% of data) in 2.4s.
                     </div>
 
                     <div class="ml-charts-row">
                         <div class="ml-summary-card">
                             <div class="ml-summary-header">
-                                <div class="ml-summary-count">64</div>
+                                <div class="ml-summary-count">78</div>
                                 <div class="ml-summary-label">Potential Issues Found</div>
                             </div>
                             <div class="ml-findings-list">
-                                <div class="ml-finding-item">• 🎯 Outliers: 46 extreme values detected (worst: Fare)</div><div class="ml-finding-item">• 🧠 Deep Learning: 37 records (5.18%) with unusual patterns</div><div class="ml-finding-item">• ℹ️ Data Structure: 2 natural clusters identified</div>
+                                <div class="ml-finding-item">• 🎯 Outliers: 59 extreme values detected (worst: Fare)</div><div class="ml-finding-item">• 🧠 Deep Learning: 39 records (5.46%) with unusual patterns</div><div class="ml-finding-item">• ℹ️ Data Structure: 2 natural clusters identified</div>
                             </div>
                         </div>
 
@@ -1714,7 +1714,7 @@
                 </div>
                 <div class="ml-detail-section">
                     <div class="ml-detail-header">🔢 Extreme Values (Isolation Forest)</div>
-                    <details class="ml-hint-collapse"><summary>💡 What this means...</summary><div class="ml-hint-content">Individual values that are unusually high or low. Like spotting a $10,000 transaction among mostly $50 ones. These could be data entry errors, exceptional cases, or legitimate but unusual activity.<br><br><span style="color:#2ecc71;font-size:0.9em;">✓ <em>Smart filtering:</em> 5 column(s) skipped (PassengerId, Survived, Pclass) - these are IDs, not measurements.</span></div></details>
+                    <details class="ml-hint-collapse"><summary>💡 What this means...</summary><div class="ml-hint-content">Individual values that are unusually high or low. Like spotting a $10,000 transaction among mostly $50 ones. These could be data entry errors, exceptional cases, or legitimate but unusual activity.<br><br><span style="color:#2ecc71;font-size:0.9em;">✓ <em>Smart filtering:</em> 2 column(s) skipped (PassengerId, Survived) - these are IDs, not measurements.</span></div></details>
                     
                     <div class="ml-detail-item">
                         <div class="ml-detail-col"><strong>Age</strong> <span style='color:#6b7280;font-size:0.8em;'>(sensitivity: 0.005)</span></div>
@@ -1876,6 +1876,256 @@
                 </div><div style="margin-bottom:6px;">
                     <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Embarked</div>
                     <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">C</div>
+                </div>
+            </div></div>
+        </details></div>
+                    </div>
+                    <div class="ml-detail-item">
+                        <div class="ml-detail-col"><strong>SibSp</strong> <span style='color:#6b7280;font-size:0.8em;'>(sensitivity: 0.0162)</span></div>
+                        <div class="ml-detail-count">12 outliers</div>
+                        <div class="ml-detail-desc">Found 12 outliers (1.35%) - range: 5.00 to 8.00<details style="margin-top:10px;" open>
+            <summary style="cursor:pointer;color:#8b5cf6;font-size:13px;font-weight:500;">📋 View 5 example records</summary>
+            <div style="margin-top:10px;max-width:100%;overflow:hidden;"><div style="background:var(--card-bg);border:1px solid var(--border-color);border-radius:6px;padding:12px;margin-bottom:8px;max-width:100%;overflow:hidden;">
+                <div style="color:var(--text-tertiary);font-size:10px;margin-bottom:8px;">Row #1</div>
+                <div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">PassengerId</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">181</div>
+                </div><div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Survived</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">0</div>
+                </div><div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Pclass</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">3</div>
+                </div><div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Name</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">Sage, Miss. Constance Gladys</div>
+                </div><div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Sex</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">female</div>
+                </div><div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Age</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">nan</div>
+                </div><div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">SibSp</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">8</div>
+                </div><div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Parch</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">2</div>
+                </div><div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Ticket</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">CA. 2343</div>
+                </div><div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Fare</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">69.55</div>
+                </div><div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Cabin</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">nan</div>
+                </div><div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Embarked</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">S</div>
+                </div>
+            </div><div style="background:var(--card-bg);border:1px solid var(--border-color);border-radius:6px;padding:12px;margin-bottom:8px;max-width:100%;overflow:hidden;">
+                <div style="color:var(--text-tertiary);font-size:10px;margin-bottom:8px;">Row #2</div>
+                <div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">PassengerId</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">160</div>
+                </div><div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Survived</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">0</div>
+                </div><div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Pclass</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">3</div>
+                </div><div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Name</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">Sage, Master. Thomas Henry</div>
+                </div><div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Sex</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">male</div>
+                </div><div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Age</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">nan</div>
+                </div><div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">SibSp</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">8</div>
+                </div><div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Parch</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">2</div>
+                </div><div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Ticket</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">CA. 2343</div>
+                </div><div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Fare</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">69.55</div>
+                </div><div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Cabin</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">nan</div>
+                </div><div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Embarked</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">S</div>
+                </div>
+            </div><div style="background:var(--card-bg);border:1px solid var(--border-color);border-radius:6px;padding:12px;margin-bottom:8px;max-width:100%;overflow:hidden;">
+                <div style="color:var(--text-tertiary);font-size:10px;margin-bottom:8px;">Row #3</div>
+                <div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">PassengerId</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">325</div>
+                </div><div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Survived</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">0</div>
+                </div><div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Pclass</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">3</div>
+                </div><div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Name</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">Sage, Mr. George John Jr</div>
+                </div><div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Sex</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">male</div>
+                </div><div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Age</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">nan</div>
+                </div><div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">SibSp</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">8</div>
+                </div><div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Parch</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">2</div>
+                </div><div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Ticket</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">CA. 2343</div>
+                </div><div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Fare</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">69.55</div>
+                </div><div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Cabin</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">nan</div>
+                </div><div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Embarked</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">S</div>
+                </div>
+            </div><div style="background:var(--card-bg);border:1px solid var(--border-color);border-radius:6px;padding:12px;margin-bottom:8px;max-width:100%;overflow:hidden;">
+                <div style="color:var(--text-tertiary);font-size:10px;margin-bottom:8px;">Row #4</div>
+                <div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">PassengerId</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">202</div>
+                </div><div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Survived</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">0</div>
+                </div><div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Pclass</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">3</div>
+                </div><div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Name</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">Sage, Mr. Frederick</div>
+                </div><div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Sex</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">male</div>
+                </div><div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Age</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">nan</div>
+                </div><div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">SibSp</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">8</div>
+                </div><div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Parch</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">2</div>
+                </div><div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Ticket</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">CA. 2343</div>
+                </div><div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Fare</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">69.55</div>
+                </div><div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Cabin</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">nan</div>
+                </div><div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Embarked</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">S</div>
+                </div>
+            </div><div style="background:var(--card-bg);border:1px solid var(--border-color);border-radius:6px;padding:12px;margin-bottom:8px;max-width:100%;overflow:hidden;">
+                <div style="color:var(--text-tertiary);font-size:10px;margin-bottom:8px;">Row #5</div>
+                <div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">PassengerId</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">847</div>
+                </div><div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Survived</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">0</div>
+                </div><div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Pclass</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">3</div>
+                </div><div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Name</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">Sage, Mr. Douglas Bullen</div>
+                </div><div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Sex</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">male</div>
+                </div><div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Age</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">nan</div>
+                </div><div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">SibSp</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">8</div>
+                </div><div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Parch</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">2</div>
+                </div><div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Ticket</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">CA. 2343</div>
+                </div><div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Fare</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">69.55</div>
+                </div><div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Cabin</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">nan</div>
+                </div><div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Embarked</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">S</div>
+                </div>
+            </div></div>
+        </details></div>
+                    </div>
+                    <div class="ml-detail-item">
+                        <div class="ml-detail-col"><strong>Parch</strong> <span style='color:#6b7280;font-size:0.8em;'>(sensitivity: 0.005)</span></div>
+                        <div class="ml-detail-count">1 outliers</div>
+                        <div class="ml-detail-desc">Found 1 outliers (0.11%) - range: 6.00 to 6.00<details style="margin-top:10px;" open>
+            <summary style="cursor:pointer;color:#8b5cf6;font-size:13px;font-weight:500;">📋 View 1 example records</summary>
+            <div style="margin-top:10px;max-width:100%;overflow:hidden;"><div style="background:var(--card-bg);border:1px solid var(--border-color);border-radius:6px;padding:12px;margin-bottom:8px;max-width:100%;overflow:hidden;">
+                <div style="color:var(--text-tertiary);font-size:10px;margin-bottom:8px;">Row #1</div>
+                <div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">PassengerId</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">679</div>
+                </div><div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Survived</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">0</div>
+                </div><div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Pclass</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">3</div>
+                </div><div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Name</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">Goodwin, Mrs. Frederick (Augusta Tyler)</div>
+                </div><div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Sex</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">female</div>
+                </div><div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Age</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">43.0</div>
+                </div><div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">SibSp</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">1</div>
+                </div><div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Parch</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">6</div>
+                </div><div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Ticket</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">CA 2144</div>
+                </div><div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Fare</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">46.9</div>
+                </div><div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Cabin</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">nan</div>
+                </div><div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Embarked</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">S</div>
                 </div>
             </div></div>
         </details></div>
@@ -2088,16 +2338,25 @@
                     <div class="ml-detail-header">🧠 Deep Learning Analysis (Autoencoder)</div>
                     <details class="ml-hint-collapse"><summary>💡 What this means...</summary><div class="ml-hint-content">An autoencoder is like a 'data compressor' that learns what normal data looks like. When it can't compress and decompress a record accurately, it means that record has unusual patterns - combinations of values that don't match the rest of your data.</div></details>
                     <div class="ml-detail-item">
-                        <div class="ml-detail-col"><strong>Neural Network</strong> <span style='color:#6b7280;font-size:0.8em;'>(Input(2) -> (2, 2, 2) -> Output(2))</span></div>
-                        <div class="ml-detail-count">37 anomalies (5.18%)</div>
+                        <div class="ml-detail-col"><strong>Neural Network</strong> <span style='color:#6b7280;font-size:0.8em;'>(Input(5) -> (5, 2, 5) -> Output(5))</span></div>
+                        <div class="ml-detail-count">39 anomalies (5.46%)</div>
                         <div class="ml-detail-desc">
-                            Found 37 records (5.18%) that are difficult to reconstruct. These have unusual combinations of values that don't fit the learned patterns.<br><span style="font-size:0.85em;color:#6b7280;">Key contributing columns: Fare</span><details style="margin-top:10px;" open>
+                            Found 39 records (5.46%) that are difficult to reconstruct. These have unusual combinations of values that don't fit the learned patterns.<br><span style="font-size:0.85em;color:#6b7280;">Key contributing columns: Fare, Parch</span><details style="margin-top:10px;" open>
             <summary style="cursor:pointer;color:#8b5cf6;font-size:13px;font-weight:500;">📋 View 5 example records</summary>
             <div style="margin-top:10px;max-width:100%;overflow:hidden;"><div style="background:var(--card-bg);border:1px solid var(--border-color);border-radius:6px;padding:12px;margin-bottom:8px;max-width:100%;overflow:hidden;">
                 <div style="color:var(--text-tertiary);font-size:10px;margin-bottom:8px;">Row #1</div>
                 <div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Pclass</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">1.00</div>
+                </div><div style="margin-bottom:6px;">
                     <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Age</div>
-                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">36.00</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">35.00</div>
+                </div><div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">SibSp</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">0.00</div>
+                </div><div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Parch</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">0.00</div>
                 </div><div style="margin-bottom:6px;">
                     <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Fare</div>
                     <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">512.33</div>
@@ -2105,8 +2364,17 @@
             </div><div style="background:var(--card-bg);border:1px solid var(--border-color);border-radius:6px;padding:12px;margin-bottom:8px;max-width:100%;overflow:hidden;">
                 <div style="color:var(--text-tertiary);font-size:10px;margin-bottom:8px;">Row #2</div>
                 <div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Pclass</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">1.00</div>
+                </div><div style="margin-bottom:6px;">
                     <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Age</div>
                     <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">35.00</div>
+                </div><div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">SibSp</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">0.00</div>
+                </div><div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Parch</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">0.00</div>
                 </div><div style="margin-bottom:6px;">
                     <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Fare</div>
                     <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">512.33</div>
@@ -2114,8 +2382,17 @@
             </div><div style="background:var(--card-bg);border:1px solid var(--border-color);border-radius:6px;padding:12px;margin-bottom:8px;max-width:100%;overflow:hidden;">
                 <div style="color:var(--text-tertiary);font-size:10px;margin-bottom:8px;">Row #3</div>
                 <div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Pclass</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">1.00</div>
+                </div><div style="margin-bottom:6px;">
                     <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Age</div>
-                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">35.00</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">36.00</div>
+                </div><div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">SibSp</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">0.00</div>
+                </div><div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Parch</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">1.00</div>
                 </div><div style="margin-bottom:6px;">
                     <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Fare</div>
                     <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">512.33</div>
@@ -2123,20 +2400,38 @@
             </div><div style="background:var(--card-bg);border:1px solid var(--border-color);border-radius:6px;padding:12px;margin-bottom:8px;max-width:100%;overflow:hidden;">
                 <div style="color:var(--text-tertiary);font-size:10px;margin-bottom:8px;">Row #4</div>
                 <div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Pclass</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">3.00</div>
+                </div><div style="margin-bottom:6px;">
                     <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Age</div>
-                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">64.00</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">43.00</div>
+                </div><div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">SibSp</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">1.00</div>
+                </div><div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Parch</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">6.00</div>
                 </div><div style="margin-bottom:6px;">
                     <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Fare</div>
-                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">263.00</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">46.90</div>
                 </div>
             </div><div style="background:var(--card-bg);border:1px solid var(--border-color);border-radius:6px;padding:12px;margin-bottom:8px;max-width:100%;overflow:hidden;">
                 <div style="color:var(--text-tertiary);font-size:10px;margin-bottom:8px;">Row #5</div>
                 <div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Pclass</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">3.00</div>
+                </div><div style="margin-bottom:6px;">
                     <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Age</div>
-                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">19.00</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">39.00</div>
+                </div><div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">SibSp</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">0.00</div>
+                </div><div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Parch</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">5.00</div>
                 </div><div style="margin-bottom:6px;">
                     <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Fare</div>
-                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">263.00</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">29.12</div>
                 </div>
             </div></div>
         </details>
@@ -2156,7 +2451,7 @@
                             <div style="color: var(--text-secondary); font-size: 0.9em;">Natural Clusters</div>
                         </div>
                         <div style="background: var(--card-bg); border-radius: 8px; padding: 16px; border: 1px solid var(--border-color);">
-                            <div style="font-size: 2em; font-weight: bold; color: #f59e0b;">6</div>
+                            <div style="font-size: 2em; font-weight: bold; color: #f59e0b;">4</div>
                             <div style="color: var(--text-secondary); font-size: 0.9em;">Noise Points (unique records)</div>
                         </div>
                     </div>
@@ -2170,12 +2465,21 @@
                     </div>
 
                     <div style="margin-top: 16px;"><div style="color: var(--text-secondary); font-size: 0.85em; margin-bottom: 8px;">📋 Sample Noise Points (unique records worth reviewing):</div><details style="margin-top:10px;" open>
-            <summary style="cursor:pointer;color:#8b5cf6;font-size:13px;font-weight:500;">📋 View 5 example records</summary>
+            <summary style="cursor:pointer;color:#8b5cf6;font-size:13px;font-weight:500;">📋 View 4 example records</summary>
             <div style="margin-top:10px;max-width:100%;overflow:hidden;"><div style="background:var(--card-bg);border:1px solid var(--border-color);border-radius:6px;padding:12px;margin-bottom:8px;max-width:100%;overflow:hidden;">
                 <div style="color:var(--text-tertiary);font-size:10px;margin-bottom:8px;">Row #1</div>
                 <div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Pclass</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">1.00</div>
+                </div><div style="margin-bottom:6px;">
                     <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Age</div>
                     <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">35.00</div>
+                </div><div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">SibSp</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">0.00</div>
+                </div><div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Parch</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">0.00</div>
                 </div><div style="margin-bottom:6px;">
                     <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Fare</div>
                     <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">512.33</div>
@@ -2183,35 +2487,53 @@
             </div><div style="background:var(--card-bg);border:1px solid var(--border-color);border-radius:6px;padding:12px;margin-bottom:8px;max-width:100%;overflow:hidden;">
                 <div style="color:var(--text-tertiary);font-size:10px;margin-bottom:8px;">Row #2</div>
                 <div style="margin-bottom:6px;">
-                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Age</div>
-                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">50.00</div>
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Pclass</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">1.00</div>
                 </div><div style="margin-bottom:6px;">
-                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Fare</div>
-                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">247.52</div>
-                </div>
-            </div><div style="background:var(--card-bg);border:1px solid var(--border-color);border-radius:6px;padding:12px;margin-bottom:8px;max-width:100%;overflow:hidden;">
-                <div style="color:var(--text-tertiary);font-size:10px;margin-bottom:8px;">Row #3</div>
-                <div style="margin-bottom:6px;">
-                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Age</div>
-                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">0.92</div>
-                </div><div style="margin-bottom:6px;">
-                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Fare</div>
-                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">151.55</div>
-                </div>
-            </div><div style="background:var(--card-bg);border:1px solid var(--border-color);border-radius:6px;padding:12px;margin-bottom:8px;max-width:100%;overflow:hidden;">
-                <div style="color:var(--text-tertiary);font-size:10px;margin-bottom:8px;">Row #4</div>
-                <div style="margin-bottom:6px;">
                     <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Age</div>
                     <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">64.00</div>
+                </div><div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">SibSp</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">1.00</div>
+                </div><div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Parch</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">4.00</div>
                 </div><div style="margin-bottom:6px;">
                     <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Fare</div>
                     <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">263.00</div>
                 </div>
             </div><div style="background:var(--card-bg);border:1px solid var(--border-color);border-radius:6px;padding:12px;margin-bottom:8px;max-width:100%;overflow:hidden;">
-                <div style="color:var(--text-tertiary);font-size:10px;margin-bottom:8px;">Row #5</div>
+                <div style="color:var(--text-tertiary);font-size:10px;margin-bottom:8px;">Row #3</div>
                 <div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Pclass</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">1.00</div>
+                </div><div style="margin-bottom:6px;">
                     <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Age</div>
                     <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">36.00</div>
+                </div><div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">SibSp</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">0.00</div>
+                </div><div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Parch</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">1.00</div>
+                </div><div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Fare</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">512.33</div>
+                </div>
+            </div><div style="background:var(--card-bg);border:1px solid var(--border-color);border-radius:6px;padding:12px;margin-bottom:8px;max-width:100%;overflow:hidden;">
+                <div style="color:var(--text-tertiary);font-size:10px;margin-bottom:8px;">Row #4</div>
+                <div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Pclass</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">1.00</div>
+                </div><div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Age</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">35.00</div>
+                </div><div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">SibSp</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">0.00</div>
+                </div><div style="margin-bottom:6px;">
+                    <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Parch</div>
+                    <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">0.00</div>
                 </div><div style="margin-bottom:6px;">
                     <div style="color:var(--text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Fare</div>
                     <div style="font-size:12px;color:var(--text-primary);overflow-wrap:break-word;word-wrap:break-word;">512.33</div>
@@ -2234,7 +2556,7 @@
                     data: {
                         labels: ['Outliers', 'Autoencoder'],
                         datasets: [{
-                            data: [46, 37],
+                            data: [59, 39],
                             backgroundColor: [
                                 'rgba(139, 92, 246, 0.8)',
                                 'rgba(236, 72, 153, 0.8)',
@@ -2268,7 +2590,7 @@
             // Outlier Bar Chart
             const outlierCtx = document.getElementById('mlOutlierChart');
             if (outlierCtx) {
-                const outlierData = [{'column': 'Fare', 'count': 42}, {'column': 'Age', 'count': 4}];
+                const outlierData = [{'column': 'Fare', 'count': 42}, {'column': 'SibSp', 'count': 12}, {'column': 'Age', 'count': 4}, {'column': 'Parch', 'count': 1}];
                 new Chart(outlierCtx, {
                     type: 'bar',
                     data: {
@@ -2893,7 +3215,7 @@
                                             <span>0.34% unique</span>
                                         </div>
                                         <div class="column-tags">
-                                            <span class="column-tag fibo">category</span>
+                                            <span class="column-tag semantic">CATEGORY</span>
                                         </div>
                                         <span class="column-quality-score good">80%</span>
                                     </div>
@@ -3181,7 +3503,7 @@
                                             <span>0.79% unique</span>
                                         </div>
                                         <div class="column-tags">
-                                            <span class="column-tag fibo">category</span>
+                                            
                                         </div>
                                         <span class="column-quality-score good">80%</span>
                                     </div>
@@ -3262,7 +3584,7 @@
                                             <span>0.79% unique</span>
                                         </div>
                                         <div class="column-tags">
-                                            <span class="column-tag fibo">category</span>
+                                            
                                         </div>
                                         <span class="column-quality-score good">80%</span>
                                     </div>
@@ -3663,7 +3985,7 @@
                                 </div>
                                 <pre class="full-config-yaml" id="fullConfigYaml"># Auto-generated validation configuration
 # Generated from profile of: titanic.csv
-# Generated at: 2025-11-26 22:48:55
+# Generated at: 2025-11-26 23:06:18
 # File size: 0.1 MB, Rows: 891
 # Recommended chunk size: 2,000,000 rows (Using maximum chunk size (2,000,000). Sufficient memory available.)
 

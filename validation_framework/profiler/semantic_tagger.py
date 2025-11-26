@@ -362,9 +362,23 @@ class SemanticTagger:
                     refined_tags.append('identifier.code')
 
         # Rule: Low cardinality numeric → might be categorical
+        # BUT: Exclude count/quantity fields which are numeric measures even with low cardinality
         if unique_count <= 20 and inferred_type in ['integer', 'float']:
-            if not any(tag.startswith('category.') for tag in current_tags):
-                refined_tags.append('category')
+            name_lower = column_name.lower()
+            # Check if this looks like a count/quantity field (should be analyzed as measure)
+            count_keywords = ['count', 'cnt', 'num', 'qty', 'quantity', 'total', 'sum',
+                              'sib', 'par', 'child', 'spouse', 'depend', 'member']
+            is_count_field = any(kw in name_lower for kw in count_keywords)
+
+            # Also check if values are sequential from 0 or 1 (typical of counts)
+            is_sequential_from_zero = (min_val is not None and max_val is not None and
+                                       min_val >= 0 and max_val < 20 and
+                                       unique_count > (max_val - min_val) * 0.7)  # Most values present
+
+            # Only tag as category if it doesn't look like a count field
+            if not is_count_field and not is_sequential_from_zero:
+                if not any(tag.startswith('category.') for tag in current_tags):
+                    refined_tags.append('category')
 
         # Rule: Binary values (0/1 or True/False) → flag
         if unique_count == 2 and inferred_type in ['integer', 'boolean']:
