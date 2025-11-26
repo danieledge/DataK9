@@ -7,6 +7,18 @@ This document compares the DataK9 Profiler's automated findings against well-kno
 
 ---
 
+## Sample Reports
+
+View the actual profiler reports for each benchmark dataset:
+
+| Dataset | Report Link |
+|---------|-------------|
+| Titanic | [View Report](https://htmlpreview.github.io/?https://github.com/danieledge/DataK9/blob/main/docs/samples/titanic_report.html) |
+| Adult Census | [View Report](https://htmlpreview.github.io/?https://github.com/danieledge/DataK9/blob/main/docs/samples/adult_census_report.html) |
+| COVID-19 OWID | [View Report](https://htmlpreview.github.io/?https://github.com/danieledge/DataK9/blob/main/docs/samples/covid_report.html) |
+
+---
+
 ## Summary Scorecard
 
 | Dataset | Known Issues | Detected | Detection Rate | Notes |
