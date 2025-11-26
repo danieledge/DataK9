@@ -13,9 +13,9 @@ View the actual profiler reports for each benchmark dataset:
 
 | Dataset | Report Link |
 |---------|-------------|
-| Titanic | [View Report](https://htmlpreview.github.io/?https://github.com/danieledge/DataK9/blob/main/docs/samples/titanic_report.html) |
-| Adult Census | [View Report](https://htmlpreview.github.io/?https://github.com/danieledge/DataK9/blob/main/docs/samples/adult_census_report.html) |
-| COVID-19 OWID | [View Report](https://htmlpreview.github.io/?https://github.com/danieledge/DataK9/blob/main/docs/samples/covid_report.html) |
+| Titanic | [View Report](https://danieledge.github.io/DataK9/samples/titanic_report.html) |
+| Adult Census | [View Report](https://danieledge.github.io/DataK9/samples/adult_census_report.html) |
+| COVID-19 OWID | [View Report](https://danieledge.github.io/DataK9/samples/covid_report.html) |
 
 ---
 
