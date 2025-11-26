@@ -378,6 +378,7 @@ class ProfileResult:
     enhanced_correlations: Optional[Dict[str, Any]] = None
     dataset_privacy_risk: Optional[Dict[str, Any]] = None
     file_metadata: Optional[Dict[str, Any]] = None
+    ml_findings: Optional[Dict[str, Any]] = None  # Beta ML analysis results
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary representation."""
@@ -405,5 +406,9 @@ class ProfileResult:
             result["dataset_privacy_risk"] = convert_numpy_types(self.dataset_privacy_risk)
         if self.file_metadata:
             result["file_metadata"] = convert_numpy_types(self.file_metadata)
+
+        # Add ML findings if present (beta feature)
+        if self.ml_findings:
+            result["ml_findings"] = convert_numpy_types(self.ml_findings)
 
         return result

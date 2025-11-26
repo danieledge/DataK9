@@ -440,8 +440,9 @@ def version():
 @click.option('--disable-all-enhancements', is_flag=True, help='Disable all profiler enhancements (temporal, PII, correlation)')
 @click.option('--report-style', type=click.Choice(['classic', 'executive'], case_sensitive=False),
               default='executive', help='HTML report style: classic (detailed) or executive (dashboard view)')
+@click.option('--beta-ml', is_flag=True, help='[BETA] Enable ML-based anomaly detection and data quality analysis')
 def profile(file_path, format, database, table, query, html_output, json_output, config_output, chunk_size, sample, no_memory_check, log_level,
-            disable_temporal, disable_pii, disable_correlation, disable_all_enhancements, report_style):
+            disable_temporal, disable_pii, disable_correlation, disable_all_enhancements, report_style, beta_ml):
     """
     Profile a data file or database table to understand its structure and quality.
 
@@ -644,6 +645,63 @@ def profile(file_path, format, database, table, query, html_output, json_output,
 
         # Compact summary
         click.echo(f"\n✓ Profile complete: {profile_result.row_count:,} rows × {profile_result.column_count} cols | Quality: {profile_result.overall_quality_score:.0f}% | {profile_result.processing_time_seconds:.1f}s")
+
+        # Run ML analysis if --beta-ml flag is set
+        if beta_ml:
+            click.echo("\n🧠 Running ML-based anomaly detection (beta)...")
+            try:
+                from validation_framework.profiler.ml_analyzer import run_ml_analysis
+
+                # Load sample data for ML analysis
+                ml_sample_size = 250_000
+                loader = LoaderFactory.create_loader(file_path, format) if file_path else None
+
+                if loader:
+                    # Load sample for ML analysis
+                    sample_df = None
+                    rows_loaded = 0
+                    chunks = []
+                    for chunk in loader.load():
+                        chunks.append(chunk)
+                        rows_loaded += len(chunk)
+                        if rows_loaded >= ml_sample_size:
+                            break
+
+                    if chunks:
+                        import pandas as pd
+                        sample_df = pd.concat(chunks, ignore_index=True)
+                        if len(sample_df) > ml_sample_size:
+                            sample_df = sample_df.head(ml_sample_size)
+
+                        # Run ML analysis
+                        ml_findings = run_ml_analysis(sample_df, sample_size=ml_sample_size)
+                        profile_result.ml_findings = ml_findings
+
+                        # Display summary
+                        summary = ml_findings.get("summary", {})
+                        total_issues = summary.get("total_issues", 0)
+                        severity = summary.get("severity", "none")
+                        key_findings = summary.get("key_findings", [])
+
+                        severity_icons = {"high": "🔴", "medium": "🟡", "low": "🟢", "none": "✓"}
+                        icon = severity_icons.get(severity, "•")
+
+                        click.echo(f"  {icon} ML Analysis: {total_issues:,} potential issues ({severity} severity)")
+                        for finding in key_findings[:3]:
+                            click.echo(f"    • {finding}")
+
+                        click.echo(f"  → Analyzed {ml_findings.get('sample_info', {}).get('analyzed_rows', 0):,} rows in {ml_findings.get('analysis_time_seconds', 0):.1f}s")
+
+                        # Clean up
+                        del sample_df
+                        import gc
+                        gc.collect()
+
+            except ImportError as e:
+                click.echo(f"  ⚠ ML analysis requires scikit-learn: {e}")
+            except Exception as e:
+                click.echo(f"  ⚠ ML analysis failed: {e}")
+                logger.debug(f"ML analysis error: {e}", exc_info=True)
 
         # Generate HTML report (choose reporter based on style)
         if report_style and report_style.lower() == 'classic':
