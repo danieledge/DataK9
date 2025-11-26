@@ -121,6 +121,15 @@ class ExecutiveHTMLReporter:
                 <h1>Data Quality & Completeness</h1>
                 <p>Snapshot of overall health, completeness and key risks across this dataset.</p>
             </div>
+            <div class="benchmark-links" style="margin-top: 12px; padding: 10px 16px; background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.2); border-radius: 8px; font-size: 0.85em;">
+                <span style="color: var(--text-secondary); margin-right: 8px;">📊 Benchmark:</span>
+                <a href="https://github.com/danieledge/DataK9/blob/main/docs/benchmark.md" target="_blank" style="color: #60a5fa; text-decoration: none; margin-right: 16px;">Profiler Accuracy (93%)</a>
+                <span style="color: var(--text-muted); margin-right: 8px;">|</span>
+                <span style="color: var(--text-secondary); margin-right: 8px;">Sample Reports:</span>
+                <a href="https://htmlpreview.github.io/?https://github.com/danieledge/DataK9/blob/main/docs/samples/titanic_report.html" target="_blank" style="color: #60a5fa; text-decoration: none; margin-right: 12px;">Titanic</a>
+                <a href="https://htmlpreview.github.io/?https://github.com/danieledge/DataK9/blob/main/docs/samples/adult_census_report.html" target="_blank" style="color: #60a5fa; text-decoration: none; margin-right: 12px;">Adult Census</a>
+                <a href="https://htmlpreview.github.io/?https://github.com/danieledge/DataK9/blob/main/docs/samples/covid_report.html" target="_blank" style="color: #60a5fa; text-decoration: none;">COVID-19</a>
+            </div>
         </section>
 
         <!-- KPI Belt -->
