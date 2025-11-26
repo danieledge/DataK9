@@ -178,14 +178,20 @@ class MLAnalyzer:
                 "sampled": sampled,
                 "sample_percentage": round(len(df) / original_rows * 100, 2) if original_rows > 0 else 100
             },
+            # Tier 1: Data Authenticity
+            "benford_analysis": {},
+            # Tier 2: Record Anomalies
             "numeric_outliers": {},
-            "multivariate_outliers": {},
-            "clustering_analysis": {},
-            "format_anomalies": {},
+            "autoencoder_anomalies": {},
+            # Tier 3: Data Quality Issues
             "rare_categories": {},
+            "format_anomalies": {},
             "cross_column_issues": [],
-            "correlation_anomalies": {},
+            # Tier 4: Pattern Analysis
             "temporal_patterns": {},
+            "correlation_anomalies": {},
+            # Informational (not counted as issues)
+            "clustering_analysis": {},
             "summary": {
                 "total_issues": 0,
                 "severity": "low",
@@ -220,16 +226,12 @@ class MLAnalyzer:
             if outlier_result and outlier_result.get("anomaly_count", 0) > 0:
                 findings["numeric_outliers"][col] = outlier_result
 
-        # 2. Multivariate outlier detection (if multiple true numeric columns)
-        if len(actual_numeric_cols) >= 2 and self._sklearn_available:
-            multivariate_result = self._detect_multivariate_outliers(df, actual_numeric_cols)
-            if multivariate_result:
-                findings["multivariate_outliers"] = multivariate_result
-
-        # 3. Clustering analysis (only on true numeric columns)
+        # 2. Clustering analysis (INFORMATIONAL ONLY - shows data structure, not anomalies)
+        # Note: Noise points are NOT counted as issues - they overlap with outlier detection
         if len(actual_numeric_cols) >= 2 and self._sklearn_available:
             clustering_result = self._analyze_clusters(df, actual_numeric_cols)
             if clustering_result:
+                clustering_result["is_informational"] = True  # Flag as informational
                 findings["clustering_analysis"] = clustering_result
 
         # 4. Format pattern analysis (skip low cardinality columns)
@@ -276,6 +278,19 @@ class MLAnalyzer:
             temporal_result = self._analyze_temporal_patterns(df, col)
             if temporal_result:
                 findings["temporal_patterns"][col] = temporal_result
+
+        # 9. Benford's Law analysis (only on FIBO money-related columns)
+        for col in numeric_cols:
+            if self._should_apply_benford(col):
+                benford_result = self._detect_benford_anomalies(df, col)
+                if benford_result and benford_result.get("is_suspicious"):
+                    findings["benford_analysis"][col] = benford_result
+
+        # 10. Autoencoder anomaly detection (on true numeric columns)
+        if len(actual_numeric_cols) >= 2 and self._sklearn_available:
+            autoencoder_result = self._detect_autoencoder_anomalies(df, actual_numeric_cols)
+            if autoencoder_result:
+                findings["autoencoder_anomalies"] = autoencoder_result
 
         # Generate summary
         findings["summary"] = self._generate_summary(findings)
@@ -1288,10 +1303,21 @@ class MLAnalyzer:
                 anomaly_count = anomaly_mask.sum()
 
                 if anomaly_count > 0:
+                    # Get sample rows for anomalies
+                    anomaly_indices = np.where(anomaly_mask)[0][:5]
+                    sample_rows = []
+                    for idx in anomaly_indices:
+                        if idx < len(subset):
+                            row = subset.iloc[idx]
+                            row_dict = {str(k)[:25]: f"{v:.2f}" if isinstance(v, (int, float)) else str(v)[:50]
+                                       for k, v in row.items()}
+                            sample_rows.append(row_dict)
+
                     anomalies.append({
                         "columns": [col1, col2],
                         "expected_correlation": round(corr, 3),
                         "anomaly_count": int(anomaly_count),
+                        "sample_rows": sample_rows,
                         "interpretation": f"{anomaly_count} records deviate from expected {col1}/{col2} relationship"
                     })
 
@@ -1457,79 +1483,398 @@ class MLAnalyzer:
 
         return "; ".join(interpretations) if interpretations else "Temporal patterns detected"
 
+    def _should_apply_benford(self, col_name: str) -> bool:
+        """
+        Check if Benford's Law should be applied to this column.
+
+        Only applies to FIBO money-related columns (amounts, prices, values)
+        NOT to identifiers, counts, or categorical data stored as numbers.
+
+        Returns:
+            True if Benford's Law analysis is appropriate for this column
+        """
+        # Get semantic info for this column
+        sem_info = self._column_semantic_info.get(col_name, {})
+        primary_tag = sem_info.get('primary_tag', '')
+
+        # FIBO tags that should use Benford's Law (financial amounts)
+        benford_tags = {
+            'money.amount',
+            'money.price',
+            'money.interest_rate',
+            'money.balance',
+            'money.fee',
+        }
+
+        # Check if tagged as money-related
+        if primary_tag in benford_tags:
+            return True
+
+        # Fallback: check column name patterns for amount-like columns
+        col_lower = col_name.lower()
+        amount_keywords = ['amount', 'price', 'value', 'total', 'sum', 'paid', 'received',
+                          'balance', 'fee', 'cost', 'revenue', 'sales', 'income']
+
+        # Exclude keywords that suggest identifiers
+        exclude_keywords = ['id', 'code', 'number', 'count', 'qty', 'quantity', 'bank', 'account']
+
+        if any(kw in col_lower for kw in exclude_keywords):
+            return False
+
+        if any(kw in col_lower for kw in amount_keywords):
+            return True
+
+        return False
+
+    def _detect_benford_anomalies(self, df: pd.DataFrame, col_name: str) -> Optional[Dict[str, Any]]:
+        """
+        Detect anomalies using Benford's Law.
+
+        Benford's Law states that in naturally occurring datasets, the first digit
+        follows a specific distribution: 1 appears ~30.1%, 2 appears ~17.6%, etc.
+
+        Violations often indicate:
+        - Fabricated/synthetic data
+        - Fraud or manipulation
+        - Poor test data generation
+        - Data transformation errors
+
+        Args:
+            df: DataFrame to analyze
+            col_name: Column name to check
+
+        Returns:
+            Dictionary with Benford analysis results or None if not applicable
+        """
+        series = df[col_name].dropna()
+
+        # Need sufficient positive values for meaningful analysis
+        positive_values = series[series > 0]
+        if len(positive_values) < MIN_ROWS_FOR_ML:
+            return None
+
+        # Extract first digits
+        first_digits = positive_values.apply(lambda x: int(str(abs(x)).lstrip('0').lstrip('.')[0])
+                                              if str(abs(x)).lstrip('0').lstrip('.') and
+                                              str(abs(x)).lstrip('0').lstrip('.')[0].isdigit() else 0)
+        first_digits = first_digits[first_digits > 0]  # Only digits 1-9
+
+        if len(first_digits) < MIN_ROWS_FOR_ML:
+            return None
+
+        # Expected Benford distribution
+        benford_expected = {
+            1: 0.301, 2: 0.176, 3: 0.125, 4: 0.097,
+            5: 0.079, 6: 0.067, 7: 0.058, 8: 0.051, 9: 0.046
+        }
+
+        # Observed distribution
+        observed_counts = first_digits.value_counts().sort_index()
+        total = len(first_digits)
+
+        observed_dist = {}
+        for digit in range(1, 10):
+            observed_dist[digit] = observed_counts.get(digit, 0) / total
+
+        # Chi-square test for goodness of fit
+        chi_square = 0
+        deviations = {}
+        for digit in range(1, 10):
+            expected = benford_expected[digit]
+            observed = observed_dist[digit]
+            deviation = observed - expected
+            deviations[digit] = {
+                "expected": round(expected * 100, 2),
+                "observed": round(observed * 100, 2),
+                "deviation": round(deviation * 100, 2)
+            }
+            # Chi-square contribution
+            expected_count = expected * total
+            observed_count = observed * total
+            if expected_count > 0:
+                chi_square += (observed_count - expected_count) ** 2 / expected_count
+
+        # Degrees of freedom = 8 (9 digits - 1)
+        # Critical values: 15.51 (p=0.05), 20.09 (p=0.01)
+        is_suspicious = chi_square > 15.51
+        confidence = "Very High" if chi_square > 26.12 else "High" if chi_square > 20.09 else "Medium" if chi_square > 15.51 else "Low"
+
+        # Find worst deviations
+        worst_deviations = sorted(deviations.items(), key=lambda x: abs(x[1]["deviation"]), reverse=True)[:3]
+
+        # Calculate Mean Absolute Deviation (MAD) - simpler metric
+        mad = np.mean([abs(deviations[d]["deviation"]) for d in range(1, 10)])
+
+        # Determine interpretation
+        if not is_suspicious:
+            interpretation = f"Distribution follows Benford's Law (χ²={chi_square:.1f}, MAD={mad:.2f}%). Data appears naturally occurring."
+        elif mad > 10:
+            interpretation = f"STRONG deviation from Benford's Law (χ²={chi_square:.1f}, MAD={mad:.2f}%). Data may be fabricated, manipulated, or synthetic."
+        else:
+            interpretation = f"Moderate deviation from Benford's Law (χ²={chi_square:.1f}, MAD={mad:.2f}%). Warrants investigation."
+
+        return {
+            "method": "benford_law",
+            "sample_size": total,
+            "chi_square": round(chi_square, 2),
+            "mean_absolute_deviation": round(mad, 2),
+            "is_suspicious": is_suspicious,
+            "confidence": confidence,
+            "digit_distribution": deviations,
+            "worst_deviations": [
+                {"digit": d, **dev} for d, dev in worst_deviations
+            ],
+            "interpretation": interpretation,
+            "plain_english": (
+                "Benford's Law says naturally occurring numbers (like financial transactions) "
+                "follow a predictable pattern - '1' appears as the first digit about 30% of the time, "
+                "'2' about 17%, and so on. When data doesn't follow this pattern, it often means "
+                "the numbers were made up, manipulated, or generated incorrectly."
+            )
+        }
+
+    def _detect_autoencoder_anomalies(self, df: pd.DataFrame, numeric_cols: List[str]) -> Optional[Dict[str, Any]]:
+        """
+        Detect anomalies using an Autoencoder neural network.
+
+        Autoencoders learn to compress and reconstruct data. Records that are
+        hard to reconstruct (high reconstruction error) are likely anomalies.
+
+        This catches complex, non-linear relationships that Isolation Forest misses.
+
+        Args:
+            df: DataFrame to analyze
+            numeric_cols: List of numeric columns to include
+
+        Returns:
+            Dictionary with autoencoder anomaly results or None if not applicable
+        """
+        try:
+            from sklearn.preprocessing import StandardScaler
+            from sklearn.neural_network import MLPRegressor
+        except ImportError:
+            logger.debug("sklearn not available for autoencoder")
+            return None
+
+        # Need at least 2 columns and sufficient rows
+        if len(numeric_cols) < 2:
+            return None
+
+        # Prepare data - drop rows with any nulls
+        subset_df = df[numeric_cols].dropna()
+        if len(subset_df) < MIN_ROWS_FOR_ML:
+            return None
+
+        # Limit columns to avoid curse of dimensionality
+        if len(numeric_cols) > 10:
+            # Select columns with highest variance
+            variances = subset_df.var()
+            numeric_cols = variances.nlargest(10).index.tolist()
+            subset_df = subset_df[numeric_cols]
+
+        try:
+            # Standardize features
+            scaler = StandardScaler()
+            X_scaled = scaler.fit_transform(subset_df)
+
+            n_features = X_scaled.shape[1]
+
+            # Autoencoder architecture: compress to bottleneck, then expand
+            # For simplicity, use sklearn's MLPRegressor as autoencoder
+            # Hidden layers: input -> compress -> bottleneck -> expand -> output
+            bottleneck_size = max(2, n_features // 3)
+            hidden_layers = (n_features, bottleneck_size, n_features)
+
+            # Train autoencoder (predict X from X)
+            autoencoder = MLPRegressor(
+                hidden_layer_sizes=hidden_layers,
+                activation='relu',
+                solver='adam',
+                max_iter=200,
+                random_state=42,
+                early_stopping=True,
+                validation_fraction=0.1,
+                n_iter_no_change=10,
+                verbose=False
+            )
+
+            autoencoder.fit(X_scaled, X_scaled)
+
+            # Get reconstructions
+            X_reconstructed = autoencoder.predict(X_scaled)
+
+            # Calculate reconstruction error (MSE per row)
+            reconstruction_errors = np.mean((X_scaled - X_reconstructed) ** 2, axis=1)
+
+            # Identify anomalies using adaptive threshold
+            # Use IQR method on reconstruction errors
+            q1, q3 = np.percentile(reconstruction_errors, [25, 75])
+            iqr = q3 - q1
+            threshold = q3 + 2.5 * iqr  # More conservative than 1.5*IQR
+
+            anomaly_mask = reconstruction_errors > threshold
+            anomaly_count = anomaly_mask.sum()
+
+            if anomaly_count == 0:
+                return None
+
+            anomaly_pct = anomaly_count / len(reconstruction_errors) * 100
+
+            # Get top anomalies by reconstruction error
+            anomaly_indices = np.where(anomaly_mask)[0]
+            sorted_by_error = np.argsort(reconstruction_errors[anomaly_mask])[::-1]
+            top_anomaly_indices = anomaly_indices[sorted_by_error[:10]]
+
+            # Calculate which features contribute most to anomalies
+            anomaly_data = X_scaled[anomaly_mask]
+            anomaly_reconstructed = X_reconstructed[anomaly_mask]
+            feature_errors = np.mean((anomaly_data - anomaly_reconstructed) ** 2, axis=0)
+
+            contributing_features = []
+            for i, col in enumerate(numeric_cols):
+                if feature_errors[i] > np.mean(feature_errors):
+                    contributing_features.append({
+                        "column": col,
+                        "error_contribution": round(feature_errors[i], 4)
+                    })
+            contributing_features.sort(key=lambda x: x["error_contribution"], reverse=True)
+
+            # Get sample anomalous rows
+            sample_rows = []
+            for idx in top_anomaly_indices[:5]:
+                if idx < len(subset_df):
+                    row = subset_df.iloc[idx]
+                    row_dict = {str(k)[:25]: f"{v:.2f}" if isinstance(v, (int, float)) else str(v)[:50]
+                               for k, v in row.items()}
+                    row_dict["_reconstruction_error"] = f"{reconstruction_errors[idx]:.4f}"
+                    sample_rows.append(row_dict)
+
+            # Confidence based on anomaly percentage
+            if anomaly_pct < 1:
+                confidence = "Very High"
+            elif anomaly_pct < 3:
+                confidence = "High"
+            elif anomaly_pct < 5:
+                confidence = "Medium"
+            else:
+                confidence = "Low"
+
+            return {
+                "method": "autoencoder",
+                "architecture": f"Input({n_features}) -> {hidden_layers} -> Output({n_features})",
+                "rows_analyzed": len(subset_df),
+                "columns_analyzed": numeric_cols,
+                "anomaly_count": int(anomaly_count),
+                "anomaly_percentage": round(anomaly_pct, 4),
+                "confidence": confidence,
+                "threshold": round(threshold, 4),
+                "error_stats": {
+                    "mean": round(np.mean(reconstruction_errors), 4),
+                    "std": round(np.std(reconstruction_errors), 4),
+                    "max": round(np.max(reconstruction_errors), 4),
+                    "anomaly_min_error": round(reconstruction_errors[anomaly_mask].min(), 4)
+                },
+                "contributing_features": contributing_features[:5],
+                "sample_rows": sample_rows,
+                "interpretation": (
+                    f"Found {anomaly_count:,} records ({anomaly_pct:.2f}%) that are difficult to reconstruct. "
+                    f"These have unusual combinations of values that don't fit the learned patterns."
+                ),
+                "plain_english": (
+                    "An autoencoder is like a 'data compressor' that learns what normal data looks like. "
+                    "When it can't compress and decompress a record accurately, it means that record "
+                    "has unusual patterns - combinations of values that don't match the rest of your data."
+                )
+            }
+
+        except Exception as e:
+            logger.debug(f"Error in autoencoder analysis: {e}")
+            return None
+
     def _generate_summary(self, findings: Dict[str, Any]) -> Dict[str, Any]:
         """
         Generate overall summary of ML findings.
 
-        Note: We avoid double-counting between different detection methods.
-        Cluster noise and multivariate outliers likely overlap significantly
-        with univariate outliers, so we use max() for the "outlier-type" issues.
+        Organized into tiers:
+        - Tier 1: Data Authenticity (Benford's Law)
+        - Tier 2: Record Anomalies (Outliers, Autoencoder)
+        - Tier 3: Data Quality Issues (Rare values, Format, Cross-column)
+        - Tier 4: Pattern Analysis (Temporal, Correlation)
+        - Informational: Clustering (not counted as issues)
         """
         key_findings = []
+        total_issues = 0
 
-        # Count univariate outliers
+        # === TIER 1: DATA AUTHENTICITY ===
+        benford_violations = findings.get("benford_analysis", {})
+        if benford_violations:
+            suspicious_cols = [col for col, data in benford_violations.items() if data.get("is_suspicious")]
+            if suspicious_cols:
+                worst = max(benford_violations.items(), key=lambda x: x[1].get("chi_square", 0))
+                key_findings.append(f"📊 Benford's Law: {len(suspicious_cols)} column(s) may contain fabricated/synthetic data")
+                # Informational - doesn't add to total_issues
+
+        # === TIER 2: RECORD ANOMALIES ===
+        # Univariate outliers (extreme values per column)
         outlier_count = sum(
             f.get("anomaly_count", 0)
             for f in findings["numeric_outliers"].values()
         )
         if outlier_count > 0:
-            if findings["numeric_outliers"]:
-                worst_col = max(
-                    findings["numeric_outliers"].items(),
-                    key=lambda x: x[1].get("anomaly_count", 0)
-                )
-                key_findings.append(f"Univariate outliers: {outlier_count:,} detected (worst: {worst_col[0]})")
+            worst_col = max(
+                findings["numeric_outliers"].items(),
+                key=lambda x: x[1].get("anomaly_count", 0)
+            )
+            key_findings.append(f"🎯 Outliers: {outlier_count:,} extreme values detected (worst: {worst_col[0]})")
+            total_issues += outlier_count
 
-        # Count multivariate outliers (don't add to total - likely overlaps with univariate)
-        mv_outliers = findings.get("multivariate_outliers", {})
-        mv_count = 0
-        if mv_outliers:
-            mv_count = mv_outliers.get("anomaly_count", 0)
-            if mv_count > 0:
-                key_findings.append(f"Multivariate outliers: {mv_count:,} records with unusual value combinations")
+        # Autoencoder (complex pattern anomalies)
+        autoencoder = findings.get("autoencoder_anomalies", {})
+        if autoencoder:
+            ae_count = autoencoder.get("anomaly_count", 0)
+            if ae_count > 0:
+                ae_pct = autoencoder.get("anomaly_percentage", 0)
+                key_findings.append(f"🧠 Deep Learning: {ae_count:,} records ({ae_pct:.2f}%) with unusual patterns")
+                # Note: May overlap with outliers, but captures different anomalies
+                # Only add non-overlapping portion (estimate 50% overlap)
+                total_issues += ae_count // 2
 
-        # Clustering noise points (don't add to total - informational only)
-        clustering = findings.get("clustering_analysis", {})
-        cluster_noise = 0
-        if clustering:
-            cluster_noise = clustering.get("noise_points", 0)
-            n_clusters = clustering.get("n_clusters", 0)
-            noise_pct = clustering.get("noise_percentage", 0)
-            # Only report if meaningful clusters found or significant noise
-            if n_clusters > 0 or (cluster_noise > 0 and noise_pct < 50):
-                key_findings.append(f"Cluster analysis: {n_clusters} clusters found, {cluster_noise:,} noise points ({noise_pct:.1f}%)")
-
-        # Use max of outlier-type methods to avoid double counting
-        # These methods detect similar anomalies
-        outlier_total = max(outlier_count, mv_count)
-        total_issues = outlier_total
-
-        # Count format anomalies
-        format_count = sum(
-            f.get("anomaly_count", 0)
-            for f in findings["format_anomalies"].values()
-        )
-        if format_count > 0:
-            total_issues += format_count
-            key_findings.append(f"Format inconsistencies: {format_count:,} values don't match expected patterns")
-
-        # Count rare categories
+        # === TIER 3: DATA QUALITY ISSUES ===
+        # Rare categories (typos, invalid values)
         rare_count = sum(
             f.get("total_rare_count", 0)
             for f in findings["rare_categories"].values()
         )
         if rare_count > 0:
             total_issues += rare_count
-            key_findings.append(f"Rare values: {rare_count:,} potentially suspicious categorical values")
+            key_findings.append(f"📝 Rare Values: {rare_count:,} potentially invalid categorical values")
 
-        # Count cross-column issues
+        # Format anomalies
+        format_count = sum(
+            f.get("anomaly_count", 0)
+            for f in findings["format_anomalies"].values()
+        )
+        if format_count > 0:
+            total_issues += format_count
+            key_findings.append(f"📋 Format Issues: {format_count:,} values don't match expected patterns")
+
+        # Cross-column issues
         cross_col_count = sum(
             issue.get("total_issues", 0)
             for issue in findings["cross_column_issues"]
         )
         if cross_col_count > 0:
             total_issues += cross_col_count
-            key_findings.append(f"Cross-column issues: {cross_col_count:,} records with unexpected ratios")
+            key_findings.append(f"🔗 Cross-Column: {cross_col_count:,} records with unexpected ratios")
+
+        # === TIER 4: PATTERN ANALYSIS ===
+        # Temporal anomalies
+        temporal_warnings = [
+            f for f in findings["temporal_patterns"].values()
+            if f.get("warning") or f.get("warnings")
+        ]
+        if temporal_warnings:
+            key_findings.append(f"⏰ Temporal: {len(temporal_warnings)} column(s) with suspicious time patterns")
 
         # Correlation anomalies
         corr_anomalies = findings.get("correlation_anomalies", {})
@@ -1538,15 +1883,14 @@ class MLAnalyzer:
             corr_count = sum(b.get("anomaly_count", 0) for b in corr_breaks)
             if corr_count > 0:
                 total_issues += corr_count
-                key_findings.append(f"Correlation breaks: {corr_count:,} records deviate from expected relationships")
+                key_findings.append(f"📈 Correlations: {corr_count:,} records break expected relationships")
 
-        # Check temporal warnings
-        temporal_warnings = [
-            f for f in findings["temporal_patterns"].values()
-            if f.get("warning") or f.get("warnings")
-        ]
-        if temporal_warnings:
-            key_findings.append(f"Temporal anomalies: {len(temporal_warnings)} columns with suspicious time patterns")
+        # === INFORMATIONAL (not counted as issues) ===
+        clustering = findings.get("clustering_analysis", {})
+        if clustering:
+            n_clusters = clustering.get("n_clusters", 0)
+            if n_clusters > 0:
+                key_findings.append(f"ℹ️ Data Structure: {n_clusters} natural clusters identified")
 
         # Determine severity based on percentage of issues
         sample_info = findings.get("sample_info", {})

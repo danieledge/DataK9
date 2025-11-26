@@ -55,6 +55,14 @@ except ImportError:
     SEMANTIC_TAGGING_AVAILABLE = False
     # Semantic tagging is optional
 
+# Phase 3: ML-based Anomaly Detection (Beta)
+try:
+    from validation_framework.profiler.ml_analyzer import MLAnalyzer
+    ML_ANALYSIS_AVAILABLE = True
+except ImportError:
+    ML_ANALYSIS_AVAILABLE = False
+    # ML analysis is optional
+
 try:
     from visions.functional import detect_type
     from visions.types import Float, Integer, String, Boolean, Object
@@ -87,6 +95,7 @@ class DataProfiler:
         enable_pii_detection: bool = True,
         enable_enhanced_correlation: bool = True,
         enable_semantic_tagging: bool = True,
+        enable_ml_analysis: bool = True,
         disable_memory_safety: bool = False
     ):
         """
@@ -99,6 +108,7 @@ class DataProfiler:
             enable_pii_detection: Enable Phase 1 PII detection (default: True)
             enable_enhanced_correlation: Enable Phase 1 enhanced correlation (default: True)
             enable_semantic_tagging: Enable Phase 2 FIBO-based semantic tagging (default: True)
+            enable_ml_analysis: Enable Phase 3 ML-based anomaly detection (default: True, Beta)
             disable_memory_safety: Disable memory safety termination (default: False, USE WITH CAUTION)
         """
         self.chunk_size = chunk_size  # None means auto-calculate
@@ -119,6 +129,10 @@ class DataProfiler:
 
         # Initialize Phase 2: Semantic tagger
         self.semantic_tagger = SemanticTagger() if self.enable_semantic_tagging else None
+
+        # Initialize Phase 3: ML analyzer (Beta)
+        self.enable_ml_analysis = enable_ml_analysis and ML_ANALYSIS_AVAILABLE
+        self.ml_analyzer = MLAnalyzer() if self.enable_ml_analysis else None
 
         # Memory safety configuration
         self.disable_memory_safety = disable_memory_safety  # WARNING: Only for development/testing
@@ -770,6 +784,49 @@ class DataProfiler:
         )
         phase_timings['generate_config'] = time.time() - config_start
 
+        # Phase 3: ML-based Anomaly Detection (Beta)
+        ml_findings = None
+        if self.enable_ml_analysis and self.ml_analyzer:
+            ml_start = time.time()
+            logger.debug("🧠 Running ML-based anomaly detection (Beta)...")
+            try:
+                # Load a sample of data for ML analysis
+                ml_sample_size = min(50000, row_count)  # Cap at 50K rows for ML
+
+                if file_format == 'parquet':
+                    # Parquet: efficient random sampling
+                    import pyarrow.parquet as pq
+                    table = pq.read_table(file_path)
+                    if table.num_rows > ml_sample_size:
+                        indices = np.random.choice(table.num_rows, ml_sample_size, replace=False)
+                        indices = np.sort(indices)
+                        ml_df = table.take(indices).to_pandas()
+                    else:
+                        ml_df = table.to_pandas()
+                else:
+                    # CSV/other: read with skiprows to sample
+                    ml_df = pd.read_csv(file_path, nrows=ml_sample_size)
+
+                # Build semantic info from columns for intelligent analysis
+                column_semantic_info = {}
+                for col in columns:
+                    if hasattr(col, 'semantic_info') and col.semantic_info:
+                        column_semantic_info[col.name] = col.semantic_info
+
+                # Run ML analysis with semantic context
+                ml_findings = self.ml_analyzer.analyze(ml_df, column_semantic_info=column_semantic_info)
+
+                # Clean up
+                del ml_df
+                gc.collect()
+
+                phase_timings['ml_analysis'] = time.time() - ml_start
+                logger.debug(f"🧠 ML analysis complete: {ml_findings.get('summary', {}).get('total_issues', 0)} potential issues found")
+            except Exception as e:
+                logger.warning(f"ML analysis failed: {e}")
+                import traceback
+                logger.debug(traceback.format_exc())
+
         processing_time = time.time() - start_time
         logger.debug(f"⏱  Profile completed in {processing_time:.2f} seconds")
 
@@ -796,7 +853,8 @@ class DataProfiler:
             generated_config_command=config_command,
             enhanced_correlations=enhanced_correlations,
             dataset_privacy_risk=dataset_privacy_risk,
-            file_metadata=file_metadata if file_metadata else None
+            file_metadata=file_metadata if file_metadata else None,
+            ml_findings=ml_findings
         )
 
     def _initialize_column_profile(
@@ -852,6 +910,40 @@ class DataProfiler:
             if whitespace_count > 0:
                 series = series.copy()  # Avoid modifying original
                 series[whitespace_mask] = np.nan
+
+            # Detect placeholder values that represent missing data
+            # Common placeholders: ?, N/A, NA, null, NULL, none, None, -, n/a, unknown, Unknown, NaN, nan
+            placeholder_patterns = {'?', 'n/a', 'na', 'null', 'none', '-', 'unknown', 'nan', 'missing', 'undefined', '.', '..', '...', 'n.a.', 'n.a', '#n/a', '#na', 'not available', 'not applicable'}
+
+            # Initialize placeholder tracking
+            if "placeholder_null_count" not in profile:
+                profile["placeholder_null_count"] = 0
+                profile["placeholder_values_found"] = {}
+
+            # Check for placeholders (case-insensitive, stripped)
+            still_not_null = series.notna()
+            if still_not_null.any():
+                stripped_lower = series[still_not_null].str.strip().str.lower()
+                placeholder_mask_values = stripped_lower.isin(placeholder_patterns)
+
+                if placeholder_mask_values.any():
+                    # Count placeholders
+                    placeholder_count = placeholder_mask_values.sum()
+                    profile["placeholder_null_count"] += placeholder_count
+
+                    # Track which placeholder values were found
+                    found_placeholders = stripped_lower[placeholder_mask_values].value_counts()
+                    for val, count in found_placeholders.items():
+                        profile["placeholder_values_found"][val] = profile["placeholder_values_found"].get(val, 0) + count
+
+                    # Create full mask for replacement
+                    full_placeholder_mask = pd.Series(False, index=series.index)
+                    full_placeholder_mask[still_not_null] = placeholder_mask_values.values
+
+                    # Replace placeholders with NaN
+                    if not series._is_copy:
+                        series = series.copy()
+                    series[full_placeholder_mask] = np.nan
 
         # Count nulls (now includes whitespace-only values)
         null_mask = series.isna()
@@ -1202,6 +1294,8 @@ class DataProfiler:
         stats.null_count = null_count
         stats.null_percentage = 100 * null_count / total_rows if total_rows > 0 else 0
         stats.whitespace_null_count = profile_data.get("whitespace_null_count", 0)
+        stats.placeholder_null_count = profile_data.get("placeholder_null_count", 0)
+        stats.placeholder_values_found = profile_data.get("placeholder_values_found", {})
 
         # Enhanced semantic type detection using visions (if available)
         visions_semantic_type = self._detect_semantic_type_with_visions(profile_data["sample_values"])

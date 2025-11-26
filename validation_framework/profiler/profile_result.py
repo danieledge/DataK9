@@ -102,6 +102,8 @@ class ColumnStatistics:
     null_count: int = 0
     null_percentage: float = 0.0
     whitespace_null_count: int = 0
+    placeholder_null_count: int = 0  # Count of placeholder values (?, N/A, etc.) treated as null
+    placeholder_values_found: Dict[str, int] = field(default_factory=dict)  # Which placeholders were found
     unique_count: int = 0
     unique_percentage: float = 0.0
     cardinality: float = 0.0
@@ -139,6 +141,8 @@ class ColumnStatistics:
             "null_count": int(self.null_count) if self.null_count is not None else 0,
             "null_percentage": round(float(self.null_percentage), 2),
             "whitespace_null_count": int(self.whitespace_null_count) if self.whitespace_null_count is not None else 0,
+            "placeholder_null_count": int(self.placeholder_null_count) if self.placeholder_null_count is not None else 0,
+            "placeholder_values_found": self.placeholder_values_found or {},
             "unique_count": int(self.unique_count) if self.unique_count is not None else 0,
             "unique_percentage": round(float(self.unique_percentage), 2),
             "cardinality": round(float(self.cardinality), 3),
