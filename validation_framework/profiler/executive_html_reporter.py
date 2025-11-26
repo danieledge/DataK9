@@ -156,6 +156,9 @@ class ExecutiveHTMLReporter:
         <!-- PII Risk Section (if PII detected) -->
         {self._generate_pii_section(pii_columns) if pii_count > 0 else ''}
 
+        <!-- ML Analysis Section (if ML analysis was run) -->
+        {self._generate_ml_section(profile.ml_findings) if profile.ml_findings else ''}
+
         <!-- Main Layout -->
         <div class="layout-grid">
             <div class="main-column">
@@ -1129,6 +1132,137 @@ class ExecutiveHTMLReporter:
             font-weight: 600;
         }
 
+        /* ML Analysis Section Styles */
+        .beta-badge {
+            background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
+            color: white;
+            font-size: 0.6em;
+            padding: 2px 6px;
+            border-radius: 4px;
+            margin-left: 8px;
+            font-weight: 600;
+            vertical-align: middle;
+        }
+
+        .accordion-icon.ml {
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.1) 0%, rgba(99, 102, 241, 0.1) 100%);
+            color: #8b5cf6;
+        }
+
+        .ml-summary-card {
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.1) 0%, rgba(99, 102, 241, 0.05) 100%);
+            border: 1px solid rgba(139, 92, 246, 0.2);
+            border-radius: var(--radius-md);
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .ml-summary-header {
+            text-align: center;
+            margin-bottom: 16px;
+        }
+
+        .ml-summary-count {
+            font-size: 2.5em;
+            font-weight: 700;
+            color: #8b5cf6;
+            line-height: 1;
+        }
+
+        .ml-summary-label {
+            font-size: 0.9em;
+            color: var(--text-secondary);
+            margin-top: 4px;
+        }
+
+        .ml-findings-list {
+            border-top: 1px solid rgba(139, 92, 246, 0.15);
+            padding-top: 12px;
+        }
+
+        .ml-finding-item {
+            padding: 8px 0;
+            color: var(--text-secondary);
+            font-size: 0.9em;
+            border-bottom: 1px solid rgba(139, 92, 246, 0.08);
+        }
+
+        .ml-finding-item:last-child {
+            border-bottom: none;
+        }
+
+        .ml-detail-section {
+            background: var(--bg-elevated);
+            border-radius: var(--radius-md);
+            padding: 16px;
+            margin-bottom: 16px;
+        }
+
+        .ml-detail-header {
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 12px;
+            font-size: 1em;
+        }
+
+        .ml-detail-item {
+            display: grid;
+            grid-template-columns: 150px 100px 1fr;
+            gap: 12px;
+            padding: 10px;
+            background: var(--bg-main);
+            border-radius: var(--radius-sm);
+            margin-bottom: 8px;
+            align-items: center;
+        }
+
+        .ml-detail-col {
+            color: var(--text-primary);
+        }
+
+        .ml-detail-count {
+            color: #8b5cf6;
+            font-weight: 600;
+            font-size: 0.85em;
+        }
+
+        .ml-detail-desc {
+            color: var(--text-secondary);
+            font-size: 0.85em;
+        }
+
+        @media (max-width: 768px) {
+            .ml-detail-item {
+                grid-template-columns: 1fr;
+                gap: 6px;
+            }
+        }
+
+        .ml-charts-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+
+        .ml-chart-card {
+            background: var(--bg-elevated);
+            border-radius: var(--radius-md);
+            padding: 16px;
+        }
+
+        .ml-chart-title {
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 12px;
+            font-size: 0.9em;
+        }
+
+        .ml-chart-container {
+            position: relative;
+            height: 200px;
+        }
+
         .freshness-content {
             padding: 0;
         }
@@ -1637,6 +1771,297 @@ class ExecutiveHTMLReporter:
                 </div>
             </div>
         </div>'''
+
+    def _generate_ml_section(self, ml_findings: Dict) -> str:
+        """Generate the ML Analysis section (beta feature)."""
+        if not ml_findings:
+            return ''
+
+        summary = ml_findings.get('summary', {})
+        total_issues = summary.get('total_issues', 0)
+        severity = summary.get('severity', 'none')
+        key_findings = summary.get('key_findings', [])
+        sample_info = ml_findings.get('sample_info', {})
+        analysis_time = ml_findings.get('analysis_time_seconds', 0)
+
+        # Determine severity badge style
+        severity_map = {
+            'high': ('critical', 'HIGH RISK'),
+            'medium': ('warning', 'MEDIUM'),
+            'low': ('good', 'LOW'),
+            'none': ('good', 'CLEAN')
+        }
+        badge_class, badge_text = severity_map.get(severity, ('good', 'UNKNOWN'))
+
+        # Build findings list
+        findings_html = ''
+        for finding in key_findings[:5]:
+            findings_html += f'<div class="ml-finding-item">• {finding}</div>'
+
+        if not findings_html:
+            findings_html = '<div class="ml-finding-item">✓ No significant anomalies detected</div>'
+
+        # Build detailed sections
+        details_html = ''
+
+        # Numeric outliers
+        numeric_outliers = ml_findings.get('numeric_outliers', {})
+        if numeric_outliers:
+            outlier_items = ''
+            for col, data in list(numeric_outliers.items())[:5]:
+                count = data.get('anomaly_count', 0)
+                interpretation = data.get('interpretation', '')
+                top_values = data.get('top_anomalies', [])
+                top_display = ', '.join(f'${v:,.2f}' if isinstance(v, (int, float)) else str(v) for v in top_values[-3:])
+                outlier_items += f'''
+                    <div class="ml-detail-item">
+                        <div class="ml-detail-col"><strong>{col}</strong></div>
+                        <div class="ml-detail-count">{count:,} outliers</div>
+                        <div class="ml-detail-desc">{interpretation or f"Top: {top_display}"}</div>
+                    </div>'''
+            details_html += f'''
+                <div class="ml-detail-section">
+                    <div class="ml-detail-header">🔢 Numeric Outliers (Isolation Forest)</div>
+                    {outlier_items}
+                </div>'''
+
+        # Format anomalies
+        format_anomalies = ml_findings.get('format_anomalies', {})
+        if format_anomalies:
+            format_items = ''
+            for col, data in list(format_anomalies.items())[:5]:
+                count = data.get('anomaly_count', 0)
+                pattern = data.get('dominant_pattern', 'Unknown')
+                samples = data.get('sample_anomalies', [])[:3]
+                samples_display = ', '.join(f'"{s}"' for s in samples) if samples else 'N/A'
+                format_items += f'''
+                    <div class="ml-detail-item">
+                        <div class="ml-detail-col"><strong>{col}</strong></div>
+                        <div class="ml-detail-count">{count:,} mismatches</div>
+                        <div class="ml-detail-desc">Expected: {pattern} | Examples: {samples_display}</div>
+                    </div>'''
+            details_html += f'''
+                <div class="ml-detail-section">
+                    <div class="ml-detail-header">📝 Format Inconsistencies</div>
+                    {format_items}
+                </div>'''
+
+        # Rare categories
+        rare_categories = ml_findings.get('rare_categories', {})
+        if rare_categories:
+            rare_items = ''
+            for col, data in list(rare_categories.items())[:5]:
+                rare_vals = data.get('rare_values', [])
+                total_count = data.get('total_rare_count', 0)
+                examples = ', '.join(f'"{v["value"]}"' for v in rare_vals[:3])
+                rare_items += f'''
+                    <div class="ml-detail-item">
+                        <div class="ml-detail-col"><strong>{col}</strong></div>
+                        <div class="ml-detail-count">{total_count:,} rare values</div>
+                        <div class="ml-detail-desc">Examples: {examples}</div>
+                    </div>'''
+            details_html += f'''
+                <div class="ml-detail-section">
+                    <div class="ml-detail-header">⚠️ Rare/Suspicious Categories</div>
+                    {rare_items}
+                </div>'''
+
+        # Cross-column issues
+        cross_issues = ml_findings.get('cross_column_issues', [])
+        if cross_issues:
+            cross_items = ''
+            for issue in cross_issues[:3]:
+                cols = ' / '.join(issue.get('columns', []))
+                count = issue.get('total_issues', 0)
+                interpretation = issue.get('interpretation', '')
+                cross_items += f'''
+                    <div class="ml-detail-item">
+                        <div class="ml-detail-col"><strong>{cols}</strong></div>
+                        <div class="ml-detail-count">{count:,} issues</div>
+                        <div class="ml-detail-desc">{interpretation}</div>
+                    </div>'''
+            details_html += f'''
+                <div class="ml-detail-section">
+                    <div class="ml-detail-header">🔗 Cross-Column Consistency</div>
+                    {cross_items}
+                </div>'''
+
+        # Temporal patterns
+        temporal_patterns = ml_findings.get('temporal_patterns', {})
+        temporal_warnings = {k: v for k, v in temporal_patterns.items() if v.get('warning')}
+        if temporal_warnings:
+            temporal_items = ''
+            for col, data in list(temporal_warnings.items())[:3]:
+                interpretation = data.get('interpretation', 'Suspicious pattern detected')
+                temporal_items += f'''
+                    <div class="ml-detail-item">
+                        <div class="ml-detail-col"><strong>{col}</strong></div>
+                        <div class="ml-detail-desc">{interpretation}</div>
+                    </div>'''
+            details_html += f'''
+                <div class="ml-detail-section">
+                    <div class="ml-detail-header">⏰ Temporal Anomalies</div>
+                    {temporal_items}
+                </div>'''
+
+        # Prepare chart data
+        outlier_count = sum(f.get('anomaly_count', 0) for f in numeric_outliers.values())
+        format_count = sum(f.get('anomaly_count', 0) for f in format_anomalies.values())
+        rare_count = sum(f.get('total_rare_count', 0) for f in rare_categories.values())
+        cross_count = sum(i.get('total_issues', 0) for i in cross_issues)
+        temporal_count = len(temporal_warnings)
+
+        # Build outlier bar chart data (top 5 columns by outlier count)
+        outlier_chart_data = []
+        for col, data in sorted(numeric_outliers.items(), key=lambda x: x[1].get('anomaly_count', 0), reverse=True)[:5]:
+            outlier_chart_data.append({
+                'column': col[:15] + '...' if len(col) > 15 else col,
+                'count': data.get('anomaly_count', 0)
+            })
+
+        # Chart JS data
+        chart_labels = ['Numeric Outliers', 'Format Issues', 'Rare Categories', 'Cross-Column', 'Temporal']
+        chart_values = [outlier_count, format_count, rare_count, cross_count, temporal_count]
+
+        return f'''
+        <div class="accordion open" data-accordion="ml-analysis">
+            <div class="accordion-header" onclick="toggleAccordion(this)">
+                <div class="accordion-title-group">
+                    <div class="accordion-icon ml">🧠</div>
+                    <div>
+                        <div class="accordion-title">ML-Based Anomaly Detection <span class="beta-badge">BETA</span></div>
+                        <div class="accordion-subtitle">Machine learning analysis of data patterns</div>
+                    </div>
+                </div>
+                <div class="accordion-meta">
+                    <span class="accordion-badge {badge_class}">{badge_text}</span>
+                    <span class="accordion-chevron">▼</span>
+                </div>
+            </div>
+            <div class="accordion-body">
+                <div class="accordion-content">
+                    <div class="hint-box">
+                        <strong>🧠 About ML Analysis:</strong> This analysis uses Isolation Forest, pattern detection, and statistical methods to identify potential anomalies that traditional profiling might miss.
+                        Analyzed {sample_info.get('analyzed_rows', 0):,} rows ({sample_info.get('sample_percentage', 0):.1f}% of data) in {analysis_time:.1f}s.
+                    </div>
+
+                    <div class="ml-charts-row">
+                        <div class="ml-summary-card">
+                            <div class="ml-summary-header">
+                                <div class="ml-summary-count">{total_issues:,}</div>
+                                <div class="ml-summary-label">Potential Issues Found</div>
+                            </div>
+                            <div class="ml-findings-list">
+                                {findings_html}
+                            </div>
+                        </div>
+
+                        <div class="ml-chart-card">
+                            <div class="ml-chart-title">Issue Breakdown</div>
+                            <div class="ml-chart-container">
+                                <canvas id="mlBreakdownChart"></canvas>
+                            </div>
+                        </div>
+
+                        {f"""<div class="ml-chart-card">
+                            <div class="ml-chart-title">Top Outlier Columns</div>
+                            <div class="ml-chart-container">
+                                <canvas id="mlOutlierChart"></canvas>
+                            </div>
+                        </div>""" if outlier_chart_data else ""}
+                    </div>
+
+                    {details_html}
+                </div>
+            </div>
+        </div>
+
+        <script>
+        // ML Charts initialization
+        document.addEventListener('DOMContentLoaded', function() {{
+            // Issue Breakdown Doughnut Chart
+            const breakdownCtx = document.getElementById('mlBreakdownChart');
+            if (breakdownCtx) {{
+                new Chart(breakdownCtx, {{
+                    type: 'doughnut',
+                    data: {{
+                        labels: {chart_labels},
+                        datasets: [{{
+                            data: {chart_values},
+                            backgroundColor: [
+                                'rgba(139, 92, 246, 0.8)',
+                                'rgba(236, 72, 153, 0.8)',
+                                'rgba(245, 158, 11, 0.8)',
+                                'rgba(59, 130, 246, 0.8)',
+                                'rgba(16, 185, 129, 0.8)'
+                            ],
+                            borderWidth: 0
+                        }}]
+                    }},
+                    options: {{
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {{
+                            legend: {{
+                                position: 'bottom',
+                                labels: {{
+                                    color: getComputedStyle(document.documentElement).getPropertyValue('--text-secondary'),
+                                    font: {{ size: 11 }},
+                                    padding: 8
+                                }}
+                            }}
+                        }}
+                    }}
+                }});
+            }}
+
+            // Outlier Bar Chart
+            const outlierCtx = document.getElementById('mlOutlierChart');
+            if (outlierCtx) {{
+                const outlierData = {outlier_chart_data};
+                new Chart(outlierCtx, {{
+                    type: 'bar',
+                    data: {{
+                        labels: outlierData.map(d => d.column),
+                        datasets: [{{
+                            label: 'Outliers',
+                            data: outlierData.map(d => d.count),
+                            backgroundColor: 'rgba(139, 92, 246, 0.7)',
+                            borderColor: 'rgba(139, 92, 246, 1)',
+                            borderWidth: 1,
+                            borderRadius: 4
+                        }}]
+                    }},
+                    options: {{
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        indexAxis: 'y',
+                        plugins: {{
+                            legend: {{ display: false }}
+                        }},
+                        scales: {{
+                            x: {{
+                                beginAtZero: true,
+                                grid: {{
+                                    color: 'rgba(148, 163, 184, 0.1)'
+                                }},
+                                ticks: {{
+                                    color: getComputedStyle(document.documentElement).getPropertyValue('--text-secondary')
+                                }}
+                            }},
+                            y: {{
+                                grid: {{ display: false }},
+                                ticks: {{
+                                    color: getComputedStyle(document.documentElement).getPropertyValue('--text-secondary'),
+                                    font: {{ size: 11 }}
+                                }}
+                            }}
+                        }}
+                    }}
+                }});
+            }}
+        }});
+        </script>'''
 
     def _generate_overview_accordion(self, profile: ProfileResult, type_counts: Dict,
                                      avg_completeness: float, avg_validity: float,
