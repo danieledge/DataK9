@@ -808,7 +808,21 @@ class DataProfiler:
 
         # Phase 3: ML-based Anomaly Detection (Beta)
         ml_findings = None
+        skip_ml_analysis = False
         if self.enable_ml_analysis and self.ml_analyzer:
+            # Memory check before ML analysis
+            try:
+                system_memory = psutil.virtual_memory()
+                if system_memory.percent >= self.memory_critical_threshold:
+                    logger.warning(f"⚠️  Skipping ML analysis: Memory usage {system_memory.percent:.1f}% exceeds threshold {self.memory_critical_threshold}%")
+                    logger.warning(f"⚠️  Profiling will continue without ML anomaly detection")
+                    skip_ml_analysis = True
+                else:
+                    logger.debug(f"💾 Memory check before ML: {system_memory.percent:.1f}% (threshold: {self.memory_critical_threshold}%)")
+            except Exception:
+                pass  # Continue if we can't check memory
+
+        if self.enable_ml_analysis and self.ml_analyzer and not skip_ml_analysis:
             ml_start = time.time()
             logger.debug("🧠 Running ML-based anomaly detection (Beta)...")
             try:
@@ -822,15 +836,45 @@ class DataProfiler:
                     ml_sample_size = min(ANALYSIS_SAMPLE_SIZE, row_count)  # Cap at 50K rows for ML
 
                     if file_format == 'parquet':
-                        # Parquet: efficient random sampling
+                        # Parquet: MEMORY-EFFICIENT sampling using row groups
+                        # CRITICAL: Do NOT load entire file - use row group sampling
                         import pyarrow.parquet as pq
-                        table = pq.read_table(file_path)
-                        if table.num_rows > ml_sample_size:
-                            indices = np.random.choice(table.num_rows, ml_sample_size, replace=False)
-                            indices = np.sort(indices)
-                            ml_df = table.take(indices).to_pandas()
+                        parquet_file = pq.ParquetFile(file_path)
+                        total_rows = parquet_file.metadata.num_rows
+                        num_row_groups = parquet_file.metadata.num_row_groups
+
+                        if total_rows <= ml_sample_size:
+                            # Small file - safe to load entirely
+                            ml_df = parquet_file.read().to_pandas()
                         else:
-                            ml_df = table.to_pandas()
+                            # Large file - sample from random row groups
+                            # Calculate how many row groups to read to get ~ml_sample_size rows
+                            avg_rows_per_group = total_rows / num_row_groups
+                            groups_needed = max(1, int(ml_sample_size / avg_rows_per_group) + 1)
+                            groups_to_read = min(groups_needed, num_row_groups)
+
+                            # Randomly select row groups
+                            selected_groups = np.random.choice(num_row_groups, groups_to_read, replace=False)
+                            selected_groups = np.sort(selected_groups)
+
+                            # Read only selected row groups
+                            tables = [parquet_file.read_row_group(i) for i in selected_groups]
+                            import pyarrow as pa
+                            combined_table = pa.concat_tables(tables)
+
+                            # Sample from the loaded data if still too large
+                            if combined_table.num_rows > ml_sample_size:
+                                indices = np.random.choice(combined_table.num_rows, ml_sample_size, replace=False)
+                                indices = np.sort(indices)
+                                ml_df = combined_table.take(indices).to_pandas()
+                            else:
+                                ml_df = combined_table.to_pandas()
+
+                            # Clean up intermediate tables
+                            del tables, combined_table
+                            gc.collect()
+
+                        logger.debug(f"💾 ML sampling: loaded {len(ml_df):,} rows from {groups_to_read if total_rows > ml_sample_size else num_row_groups} row groups (vs {total_rows:,} total)")
                     else:
                         # CSV/other: read with nrows limit
                         ml_df = pd.read_csv(file_path, nrows=ml_sample_size)
