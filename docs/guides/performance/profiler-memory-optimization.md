@@ -16,27 +16,34 @@ The profiler automatically monitors system memory usage during profiling operati
 # Memory checks every 10 chunks
 self.memory_check_interval = 10
 
-# Warning threshold: 75% system memory
-self.memory_warning_threshold = 75
+# Warning threshold: 70% system memory
+self.memory_warning_threshold = 70
 
-# Critical threshold: 85% system memory (auto-terminate)
-self.memory_critical_threshold = 85
+# Critical threshold: 80% system memory (auto-terminate)
+self.memory_critical_threshold = 80
 ```
 
 **How It Works:**
 - Checks memory usage every 10 chunks to minimize overhead
-- Warns when system memory exceeds 75%
-- Automatically terminates profiling at 85% to prevent system crashes
+- Warns when system memory exceeds 70%
+- Automatically terminates profiling at 80% to prevent system crashes
 - Provides actionable error messages with suggestions
+- Can be disabled with `--no-memory-check` flag (use with caution)
 
 **Example Output:**
 ```
-⚠️  High memory usage: 76.5% (threshold: 75%)
+⚠️  High memory usage: 71.5% (threshold: 70%)
 ⚠️  Process using 3245.2MB, 25,000,000 rows processed
 
-🚨 CRITICAL: Memory usage 85.2% exceeds threshold 85%
+🚨 CRITICAL: Memory usage 81.2% exceeds threshold 80%
 🚨 Process: 4521.8MB, Available: 1243.5MB
 🚨 Terminating profiler to prevent system instability at 45,000,000 rows
+```
+
+**Disabling Memory Safety (Advanced):**
+```bash
+# Warning: Only use on dedicated systems with ample resources
+python3 -m validation_framework.cli profile large_file.parquet --no-memory-check
 ```
 
 ### 2. Intelligent Sampling Limits
@@ -284,17 +291,20 @@ MAX_STRING_LENGTH_SAMPLES = 10_000  # Length distribution
 Adjust safety thresholds in ProfilerEngine.__init__:
 
 ```python
-# In validation_framework/profiler/engine.py (line ~96)
+# In validation_framework/profiler/engine.py
 
 self.memory_check_interval = 10  # Check every N chunks
-self.memory_warning_threshold = 75  # Warn at 75% memory
-self.memory_critical_threshold = 85  # Terminate at 85%
+self.memory_warning_threshold = 70  # Warn at 70% memory
+self.memory_critical_threshold = 80  # Terminate at 80%
 ```
 
 **For Different Systems:**
 - **Shared systems**: Lower thresholds (65% warning, 75% critical)
 - **Dedicated systems**: Higher thresholds (80% warning, 90% critical)
-- **Production**: Keep conservative defaults
+- **Production**: Keep conservative defaults (70%/80%)
+
+**CLI Override:**
+Use `--no-memory-check` to disable automatic termination (use with caution on dedicated systems only).
 
 ## Best Practices
 

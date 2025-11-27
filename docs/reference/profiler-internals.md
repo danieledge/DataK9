@@ -424,7 +424,7 @@ DataK9 profiler has **hard memory limits** to prevent exhaustion:
 
 ### Default Behavior (All Enabled by Default)
 
-Since our recent change, **all enhancements are enabled by default**:
+Since v1.54, **all enhancements are enabled by default**:
 
 ```bash
 # This command now runs ALL enhancements automatically:
@@ -436,15 +436,26 @@ python3 -m validation_framework.cli profile data.csv
 - ✅ PII detection (privacy risk scoring, sensitive data flagging)
 - ✅ Enhanced correlation (Pearson, Spearman, Cramér's V)
 - ✅ Semantic pattern detection (email, phone, URL, IP, credit cards, SSN)
+- ✅ FIBO semantic tagging (financial ontology-based column classification)
 
 **To disable** (if needed for performance):
 ```bash
 # Disable specific enhancements
 python3 -m validation_framework.cli profile data.csv --disable-pii
 python3 -m validation_framework.cli profile data.csv --disable-temporal
+python3 -m validation_framework.cli profile data.csv --disable-correlation
 
 # Disable all enhancements
 python3 -m validation_framework.cli profile data.csv --disable-all-enhancements
+```
+
+**ML Analysis** (Beta - requires `--beta-ml` flag):
+```bash
+# Enable ML-based anomaly detection
+python3 -m validation_framework.cli profile data.csv --beta-ml
+
+# Full analysis mode (no internal sampling, more accurate but slower)
+python3 -m validation_framework.cli profile data.csv --beta-ml --full-analysis
 ```
 
 ### Enhancement Processing Order
@@ -846,6 +857,84 @@ DataK9 implements these features **without external libraries** to avoid depende
 
 ---
 
+## Insight Engine
+
+The Insight Engine transforms raw profiling data into structured, actionable findings with executive summaries and detailed sections.
+
+### Architecture
+
+```
+ProfileResult → RuleEngine → Issues → TextGenerator → Report Sections
+```
+
+### Components
+
+| Component | Purpose | Output |
+|-----------|---------|--------|
+| **RuleEngine** | Analyzes profile data against configurable thresholds | List of Issues with severity |
+| **TextGenerator** | Renders issue templates into human-readable text | Prose explanations |
+| **ExecutiveSummaryGenerator** | Selects diverse top issues for executives | Summary with key findings |
+| **DetailedSectionsGenerator** | Groups issues by category | Markdown-formatted sections |
+
+### Issue Categories
+
+| Category | What It Detects |
+|----------|-----------------|
+| `pii` | Personal identifiable information |
+| `outliers` | Statistical outliers (numeric columns) |
+| `authenticity` | Benford's Law violations |
+| `label_quality` | Class imbalance in categorical columns |
+| `temporal` | Time series gaps and patterns |
+| `cross_column` | Multi-column consistency issues |
+| `completeness` | Missing values / null patterns |
+| `validity` | Type/format validity issues |
+| `ml_analysis` | Autoencoder and ML-based findings |
+
+### Severity Levels
+
+| Level | Priority | Meaning |
+|-------|----------|---------|
+| `critical` | 0 | Immediate action required |
+| `high` | 1 | Significant issue |
+| `medium` | 2 | Notable issue |
+| `low` | 3 | Minor issue |
+| `info` | 4 | Informational finding |
+
+### Configurable Thresholds
+
+The Insight Engine uses configurable thresholds for all detections:
+
+```python
+# Example threshold configuration
+InsightThresholds(
+    quality_excellent=0.90,    # 90%+ = excellent
+    quality_good=0.80,         # 80%+ = good
+    null_critical=0.50,        # 50%+ nulls = critical
+    null_high=0.20,            # 20%+ nulls = high
+    outlier_critical=0.01,     # 1%+ outliers = critical
+    pii_high_risk=70,          # Risk score 70+ = high
+    validity_low=0.80,         # Below 80% validity = flagged
+)
+```
+
+### 50K Sampling Policy
+
+The Insight Engine implements a consistent sampling policy:
+
+- **Datasets < 50,000 rows**: Full dataset analysis
+- **Datasets ≥ 50,000 rows**: 50,000 row sample for statistical/ML analysis
+
+**Full dataset metrics** (always exact):
+- Row count, null count, column metadata
+
+**Sampled metrics** (statistical validity maintained):
+- Validity checks, pattern analysis
+- ML anomaly detection, Benford analysis
+- Outlier detection, distribution analysis
+- Cross-column consistency checks
+
+---
+
 ## Summary
 
 ### What's ALWAYS Processed (No Sampling)
@@ -880,4 +969,4 @@ DataK9 implements these features **without external libraries** to avoid depende
 
 ---
 
-**Updated**: 2025-11-23 (v1.54 - Default enhancements enabled)
+**Updated**: 2025-11-27 (v1.54 - Added Insight Engine documentation, corrected memory thresholds)
