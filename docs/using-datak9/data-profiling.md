@@ -27,16 +27,25 @@ DataK9's profiler analyzes your data files to understand their structure, qualit
 **30 seconds to your first profile:**
 
 ```bash
-# Basic profiling
+# Basic profiling (all enhancements enabled by default)
 python3 -m validation_framework.cli profile data.csv
 
-# With FIBO semantic intelligence (recommended for financial data)
-python3 -m validation_framework.cli profile transactions.csv --enable-semantic-tagging
+# Financial data profiling (FIBO semantic tagging enabled by default)
+python3 -m validation_framework.cli profile transactions.csv -o profile.html
+
+# With ML-based anomaly detection (beta)
+python3 -m validation_framework.cli profile transactions.csv --beta-ml -o report.html
 
 # Generated files:
 # ✓ data_profile_report.html    (Interactive visual report)
 # ✓ data_validation.yaml         (Auto-generated validation config)
 ```
+
+**Note:** Since v1.54, all profiler enhancements are **enabled by default**:
+- FIBO semantic tagging
+- PII detection
+- Temporal analysis
+- Enhanced correlation analysis
 
 **[View Example Reports →](../../examples/sample_reports/)**
 - [Small Dataset Profile](../../examples/sample_reports/profiler_report_example.html) - 500 rows, accounts data
@@ -572,56 +581,68 @@ python3 -m validation_framework.cli profile <file_path>
 | `-o`, `--output` | HTML report path | `-o profile.html` |
 | `-c`, `--config` | YAML config path | `-c validation.yaml` |
 | `-j`, `--json` | JSON export path | `-j profile.json` |
-| `--enable-semantic-tagging` | Enable FIBO analysis | `--enable-semantic-tagging` |
 | `--beta-ml` | Enable ML anomaly detection | `--beta-ml` |
+| `--full-analysis` | Disable internal sampling for ML (slower, more accurate) | `--full-analysis` |
+| `--no-memory-check` | Disable memory safety termination (use with caution) | `--no-memory-check` |
 | `--format` | Explicit format | `--format csv` |
 | `--sample-rows` | Sample N rows | `--sample-rows 1000000` |
 | `--sample-percent` | Sample N% rows | `--sample-percent 10` |
-| `--chunk-size` | Rows per chunk | `--chunk-size 50000` |
+| `--chunk-size` | Rows per chunk (auto-calculated if omitted) | `--chunk-size 50000` |
+| `--disable-pii` | Disable PII detection | `--disable-pii` |
+| `--disable-temporal` | Disable temporal analysis | `--disable-temporal` |
+| `--disable-correlation` | Disable correlation analysis | `--disable-correlation` |
+| `--disable-all-enhancements` | Minimal profiling (fastest) | `--disable-all-enhancements` |
+
+**Note:** Semantic tagging, PII detection, temporal analysis, and correlation are all enabled by default since v1.54.
 
 ### Common Examples
 
 ```bash
-# 1. Basic profiling
-python3 -m validation_framework.cli profile data.csv
+# 1. Basic profiling (all enhancements enabled by default)
+python3 -m validation_framework.cli profile data.csv -o profile.html
 
-# 2. Financial data with FIBO semantic tagging (recommended)
-python3 -m validation_framework.cli profile transactions.csv \
-  --enable-semantic-tagging \
-  -o profile.html
+# 2. Large file profiling (auto-optimized chunk size)
+python3 -m validation_framework.cli profile huge.parquet -o profile.html
 
-# 3. Large file with sampling
+# 3. Large file with sampling (profile subset for quick overview)
 python3 -m validation_framework.cli profile huge.parquet \
   --sample-rows 1000000 \
-  --enable-semantic-tagging
+  -o quick_profile.html
 
 # 4. Complete output (HTML + YAML + JSON)
 python3 -m validation_framework.cli profile data.csv \
-  --enable-semantic-tagging \
   -o profile.html \
   -c validation.yaml \
   -j profile.json
 
 # 5. Custom chunk size for memory control
 python3 -m validation_framework.cli profile large.csv \
-  --chunk-size 25000
+  --chunk-size 25000 \
+  -o profile.html
 
 # 6. ML-based anomaly detection (beta)
 python3 -m validation_framework.cli profile transactions.csv \
   --beta-ml \
   -o profile_with_ml.html
 
-# 7. Full analysis: FIBO + ML + all outputs
+# 7. Full analysis mode (slower but more accurate ML)
 python3 -m validation_framework.cli profile financial_data.parquet \
-  --enable-semantic-tagging \
   --beta-ml \
-  -o profile.html \
-  -j profile.json
+  --full-analysis \
+  -o full_analysis.html \
+  -j analysis.json
+
+# 8. Minimal profiling (fastest, disable all enhancements)
+python3 -m validation_framework.cli profile data.csv \
+  --disable-all-enhancements \
+  -o minimal.html
 ```
 
 **💡 Tips:**
-- Always use `--enable-semantic-tagging` for financial datasets to get FIBO intelligence!
+- All enhancements (FIBO, PII, temporal, correlation) are **enabled by default** - no flags needed!
 - Use `--beta-ml` when you want to detect outliers, clusters, and anomalies that basic profiling might miss
+- Use `--full-analysis` with `--beta-ml` for comprehensive anomaly detection on large datasets
+- Use `--disable-all-enhancements` when you only need basic statistics quickly
 
 ---
 
@@ -638,7 +659,7 @@ python3 -m validation_framework.cli profile financial_data.parquet \
 5. Deploy → Run in production
 ```
 
-### 2. Start with FIBO Semantic Tagging
+### 2. FIBO Semantic Tagging is Automatic
 
 For financial data, semantic tagging provides:
 - ✓ Industry-standard validation rules
@@ -647,8 +668,11 @@ For financial data, semantic tagging provides:
 - ✓ Plain-language explanations
 
 ```bash
-# Always use --enable-semantic-tagging for financial data
-python3 -m validation_framework.cli profile transactions.csv --enable-semantic-tagging
+# FIBO semantic tagging is enabled by default (v1.54+)
+python3 -m validation_framework.cli profile transactions.csv -o profile.html
+
+# To disable if not needed:
+python3 -m validation_framework.cli profile non_financial_data.csv --disable-all-enhancements
 ```
 
 ### 3. Review and Customize Auto-Generated Configs
