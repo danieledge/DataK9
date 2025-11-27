@@ -57,7 +57,7 @@ except ImportError:
 
 # Phase 3: ML-based Anomaly Detection (Beta)
 try:
-    from validation_framework.profiler.ml_analyzer import MLAnalyzer
+    from validation_framework.profiler.ml_analyzer import MLAnalyzer, ChunkedMLAccumulator
     ML_ANALYSIS_AVAILABLE = True
 except ImportError:
     ML_ANALYSIS_AVAILABLE = False
@@ -96,7 +96,8 @@ class DataProfiler:
         enable_enhanced_correlation: bool = True,
         enable_semantic_tagging: bool = True,
         enable_ml_analysis: bool = True,
-        disable_memory_safety: bool = False
+        disable_memory_safety: bool = False,
+        full_analysis: bool = False
     ):
         """
         Initialize data profiler.
@@ -110,6 +111,7 @@ class DataProfiler:
             enable_semantic_tagging: Enable Phase 2 FIBO-based semantic tagging (default: True)
             enable_ml_analysis: Enable Phase 3 ML-based anomaly detection (default: True, Beta)
             disable_memory_safety: Disable memory safety termination (default: False, USE WITH CAUTION)
+            full_analysis: Disable internal sampling for ML analysis (default: False, slower but more accurate)
         """
         self.chunk_size = chunk_size  # None means auto-calculate
         self.max_correlation_columns = max_correlation_columns
@@ -137,8 +139,11 @@ class DataProfiler:
         # Memory safety configuration
         self.disable_memory_safety = disable_memory_safety  # WARNING: Only for development/testing
         self.memory_check_interval = 10  # Check memory every N chunks
-        self.memory_warning_threshold = 75  # Warn at 75% memory usage
-        self.memory_critical_threshold = 85  # Terminate at 85% memory usage
+        self.memory_warning_threshold = 70  # Warn at 70% memory usage
+        self.memory_critical_threshold = 80  # Terminate at 80% memory usage (failsafe)
+
+        # Full analysis mode - disable internal sampling for ML
+        self.full_analysis = full_analysis
 
     def _check_memory_safety(self, chunk_idx: int, row_count: int) -> bool:
         """
@@ -439,9 +444,13 @@ class DataProfiler:
         # Track timing for each phase
         phase_timings = {}
 
-        # Track sampling for memory efficiency
+        # 50k Sampling Policy:
+        # Datasets >= 50k rows use a 50k sample for statistical/ML analysis.
+        # This provides strong statistical accuracy (±0.5-1%) while keeping processing fast.
+        # Row counts, null counts, and metadata always use the full dataset.
+        ANALYSIS_SAMPLE_SIZE = 50_000  # Fixed sample size for ML and statistical analysis
         MAX_CORRELATION_SAMPLES = 100_000  # Limit numeric samples for correlation analysis
-        MAX_TEMPORAL_SAMPLES = 50_000      # Limit datetime samples for temporal analysis
+        MAX_TEMPORAL_SAMPLES = ANALYSIS_SAMPLE_SIZE  # Limit datetime samples for temporal analysis
         sampling_triggered = {}  # Track which columns hit sampling limit
 
         # Get file metadata
@@ -481,6 +490,14 @@ class DataProfiler:
         # Phase 1 enhancement accumulators
         datetime_data: Dict[str, List] = {}  # For temporal analysis
         all_column_data: Dict[str, List] = {}  # For PII detection (sample-based)
+
+        # Phase 3: Chunked ML accumulator for full analysis mode
+        # When full_analysis=True, we accumulate ML stats during chunk processing
+        # instead of loading all data at once (which would cause OOM on large datasets)
+        ml_accumulator = None
+        if self.full_analysis and self.enable_ml_analysis and ML_ANALYSIS_AVAILABLE:
+            ml_accumulator = ChunkedMLAccumulator()
+            logger.info("📊 Full analysis mode: ML stats will be accumulated during chunk processing")
 
         # Try to get metadata for enhanced profiling (works for Parquet and other formats)
         total_chunks_str = "?"
@@ -628,6 +645,11 @@ class DataProfiler:
                     if len(all_column_data[col]) < 1000:
                         samples_needed = 1000 - len(all_column_data[col])
                         all_column_data[col].extend(chunk[col].dropna().head(samples_needed).tolist())
+
+            # Process chunk for ML analysis (full_analysis mode)
+            # This accumulates ML stats without loading all data at once
+            if ml_accumulator is not None:
+                ml_accumulator.process_chunk(chunk, chunk_idx)
 
         # Record chunk processing time
         phase_timings['chunk_processing'] = time.time() - chunk_processing_start
@@ -790,35 +812,41 @@ class DataProfiler:
             ml_start = time.time()
             logger.debug("🧠 Running ML-based anomaly detection (Beta)...")
             try:
-                # Load a sample of data for ML analysis
-                ml_sample_size = min(50000, row_count)  # Cap at 50K rows for ML
-
-                if file_format == 'parquet':
-                    # Parquet: efficient random sampling
-                    import pyarrow.parquet as pq
-                    table = pq.read_table(file_path)
-                    if table.num_rows > ml_sample_size:
-                        indices = np.random.choice(table.num_rows, ml_sample_size, replace=False)
-                        indices = np.sort(indices)
-                        ml_df = table.take(indices).to_pandas()
-                    else:
-                        ml_df = table.to_pandas()
+                # Check if we used chunked ML accumulation (full_analysis mode)
+                if ml_accumulator is not None:
+                    # Full analysis: finalize accumulated stats from all chunks
+                    logger.info(f"📊 Finalizing ML analysis from {row_count:,} rows (chunked processing)")
+                    ml_findings = ml_accumulator.finalize(self.ml_analyzer)
                 else:
-                    # CSV/other: read with skiprows to sample
-                    ml_df = pd.read_csv(file_path, nrows=ml_sample_size)
+                    # Standard mode: sample data and run ML analysis (50k policy)
+                    ml_sample_size = min(ANALYSIS_SAMPLE_SIZE, row_count)  # Cap at 50K rows for ML
 
-                # Build semantic info from columns for intelligent analysis
-                column_semantic_info = {}
-                for col in columns:
-                    if hasattr(col, 'semantic_info') and col.semantic_info:
-                        column_semantic_info[col.name] = col.semantic_info
+                    if file_format == 'parquet':
+                        # Parquet: efficient random sampling
+                        import pyarrow.parquet as pq
+                        table = pq.read_table(file_path)
+                        if table.num_rows > ml_sample_size:
+                            indices = np.random.choice(table.num_rows, ml_sample_size, replace=False)
+                            indices = np.sort(indices)
+                            ml_df = table.take(indices).to_pandas()
+                        else:
+                            ml_df = table.to_pandas()
+                    else:
+                        # CSV/other: read with nrows limit
+                        ml_df = pd.read_csv(file_path, nrows=ml_sample_size)
 
-                # Run ML analysis with semantic context
-                ml_findings = self.ml_analyzer.analyze(ml_df, column_semantic_info=column_semantic_info)
+                    # Build semantic info from columns for intelligent analysis
+                    column_semantic_info = {}
+                    for col in columns:
+                        if hasattr(col, 'semantic_info') and col.semantic_info:
+                            column_semantic_info[col.name] = col.semantic_info
 
-                # Clean up
-                del ml_df
-                gc.collect()
+                    # Run ML analysis with semantic context
+                    ml_findings = self.ml_analyzer.analyze(ml_df, column_semantic_info=column_semantic_info)
+
+                    # Clean up
+                    del ml_df
+                    gc.collect()
 
                 phase_timings['ml_analysis'] = time.time() - ml_start
                 logger.debug(f"🧠 ML analysis complete: {ml_findings.get('summary', {}).get('total_issues', 0)} potential issues found")
