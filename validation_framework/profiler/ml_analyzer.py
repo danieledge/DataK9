@@ -32,6 +32,543 @@ ML_SAMPLE_SIZE = 250_000
 MIN_ROWS_FOR_ML = 500
 
 
+class ChunkedMLAccumulator:
+    """
+    Accumulates ML analysis statistics across chunks for memory-efficient processing.
+
+    Instead of loading all data at once, this class collects statistics during
+    the main chunk processing loop and finalizes analysis after all chunks.
+    """
+
+    def __init__(self, column_semantic_info: Optional[Dict[str, Dict[str, Any]]] = None):
+        """Initialize accumulators for each ML analysis type."""
+        self._column_semantic_info = column_semantic_info or {}
+        self._fibo_taxonomy = self._load_fibo_taxonomy()
+
+        # Accumulators
+        self.total_rows = 0
+        self.benford_digit_counts: Dict[str, Counter] = {}  # col -> Counter of first digits
+        self.value_counts: Dict[str, Counter] = {}  # col -> Counter of values (for rare categories)
+        self.format_pattern_counts: Dict[str, Counter] = {}  # col -> Counter of patterns
+        self.numeric_stats: Dict[str, Dict] = {}  # col -> {sum, sum_sq, count, min, max, samples}
+        self.numeric_samples: Dict[str, List] = {}  # col -> sampled values for outlier detection
+        self.column_types: Dict[str, str] = {}  # col -> 'numeric' or 'string'
+
+        # Sample reservoir for autoencoder (reservoir sampling)
+        self.reservoir_size = 50000
+        self.reservoir_samples: List[Dict] = []
+        self.seen_count = 0
+
+    def _load_fibo_taxonomy(self) -> Dict[str, Any]:
+        """Load FIBO taxonomy for intelligent analysis."""
+        import json
+        from pathlib import Path
+        taxonomy_path = Path(__file__).parent / "taxonomies" / "finance_taxonomy.json"
+        try:
+            with open(taxonomy_path, 'r') as f:
+                taxonomy = json.load(f)
+                flattened = {}
+                for category, cat_data in taxonomy.get("taxonomy", {}).items():
+                    for tag_name, tag_def in cat_data.get("tags", {}).items():
+                        flattened[tag_name] = tag_def
+                return flattened
+        except Exception:
+            return {}
+
+    def process_chunk(self, chunk: pd.DataFrame, chunk_idx: int) -> None:
+        """
+        Process a chunk of data and accumulate statistics.
+
+        Args:
+            chunk: DataFrame chunk to process
+            chunk_idx: Index of current chunk (0-based)
+        """
+        self.total_rows += len(chunk)
+
+        # Identify column types on first chunk
+        if chunk_idx == 0:
+            for col in chunk.columns:
+                if pd.api.types.is_numeric_dtype(chunk[col]):
+                    self.column_types[col] = 'numeric'
+                    self.benford_digit_counts[col] = Counter()
+                    self.numeric_stats[col] = {'sum': 0, 'sum_sq': 0, 'count': 0, 'min': float('inf'), 'max': float('-inf')}
+                    self.numeric_samples[col] = []
+                else:
+                    self.column_types[col] = 'string'
+                    self.value_counts[col] = Counter()
+                    self.format_pattern_counts[col] = Counter()
+
+        # Process each column
+        for col in chunk.columns:
+            if self.column_types.get(col) == 'numeric':
+                self._accumulate_numeric(col, chunk[col])
+            else:
+                self._accumulate_string(col, chunk[col])
+
+        # Reservoir sampling for autoencoder training
+        self._reservoir_sample(chunk)
+
+    def _accumulate_numeric(self, col: str, series: pd.Series) -> None:
+        """Accumulate statistics for a numeric column."""
+        valid = series.dropna()
+        if len(valid) == 0:
+            return
+
+        # Running statistics for outlier detection
+        stats = self.numeric_stats[col]
+        stats['sum'] += valid.sum()
+        stats['sum_sq'] += (valid ** 2).sum()
+        stats['count'] += len(valid)
+        stats['min'] = min(stats['min'], valid.min())
+        stats['max'] = max(stats['max'], valid.max())
+
+        # Sample values for IQR/Isolation Forest (keep ~10K samples per column)
+        if len(self.numeric_samples[col]) < 10000:
+            sample_size = min(1000, len(valid))
+            if sample_size > 0:
+                samples = valid.sample(n=sample_size, random_state=42).tolist()
+                self.numeric_samples[col].extend(samples)
+
+        # Benford's law - count first digits
+        positive_vals = valid[valid > 0]
+        if len(positive_vals) > 0:
+            # Extract first digit
+            first_digits = positive_vals.apply(lambda x: int(str(abs(x)).lstrip('0').replace('.', '')[0]) if x != 0 else 0)
+            first_digits = first_digits[first_digits > 0]  # Benford only applies to 1-9
+            self.benford_digit_counts[col].update(first_digits.tolist())
+
+    def _accumulate_string(self, col: str, series: pd.Series) -> None:
+        """Accumulate statistics for a string column."""
+        valid = series.dropna().astype(str)
+        if len(valid) == 0:
+            return
+
+        # Value counts for rare category detection (cap at 10K unique values)
+        # MEMORY FIX: Use pandas value_counts() then update Counter instead of .tolist()
+        # This avoids creating a massive list in memory
+        if len(self.value_counts[col]) < 10000:
+            # Sample if series is large to prevent memory issues
+            if len(valid) > 10000:
+                valid_sample = valid.sample(n=10000, random_state=42)
+            else:
+                valid_sample = valid
+            # Use pandas value_counts() - much more memory efficient
+            val_counts = valid_sample.value_counts()
+            for val, count in val_counts.items():
+                if len(self.value_counts[col]) >= 10000:
+                    break
+                self.value_counts[col][val] += count
+
+        # Format pattern counts - sample to limit memory
+        # MEMORY FIX: Only sample first 5K values for pattern detection
+        pattern_sample = valid.head(5000) if len(valid) > 5000 else valid
+        patterns = pattern_sample.apply(self._extract_pattern)
+        # Use pandas value_counts() instead of .tolist()
+        pattern_counts = patterns.value_counts()
+        for pattern, count in pattern_counts.items():
+            self.format_pattern_counts[col][pattern] += count
+
+    def _extract_pattern(self, value: str) -> str:
+        """Extract format pattern from string value."""
+        if not value or pd.isna(value):
+            return "EMPTY"
+        pattern = re.sub(r'[A-Z]', 'A', str(value))
+        pattern = re.sub(r'[a-z]', 'a', pattern)
+        pattern = re.sub(r'[0-9]', '9', pattern)
+        # Collapse repeated chars
+        pattern = re.sub(r'A+', 'A+', pattern)
+        pattern = re.sub(r'a+', 'a+', pattern)
+        pattern = re.sub(r'9+', '9+', pattern)
+        return pattern[:50]  # Limit length
+
+    def _reservoir_sample(self, chunk: pd.DataFrame) -> None:
+        """Reservoir sampling for autoencoder training data.
+
+        MEMORY FIX: Use vectorized sampling instead of row-by-row iteration.
+        Row-by-row iteration with to_dict() is extremely slow and memory intensive.
+        """
+        import random
+
+        chunk_size = len(chunk)
+
+        # If reservoir not full, add samples directly (batch operation)
+        if len(self.reservoir_samples) < self.reservoir_size:
+            spaces_available = self.reservoir_size - len(self.reservoir_samples)
+            samples_to_take = min(spaces_available, chunk_size)
+
+            if samples_to_take > 0:
+                # Take samples from beginning of chunk (faster than random)
+                sample_chunk = chunk.head(samples_to_take)
+                # Convert to list of dicts in one vectorized operation
+                self.reservoir_samples.extend(sample_chunk.to_dict('records'))
+        else:
+            # Reservoir is full - use probabilistic replacement
+            # Calculate how many replacements to make based on reservoir sampling theory
+            # For each element in chunk, probability of selection = reservoir_size / (seen_count + position)
+            # Approximate with batch sampling for efficiency
+            replacement_prob = self.reservoir_size / (self.seen_count + chunk_size)
+            expected_replacements = int(chunk_size * replacement_prob)
+
+            if expected_replacements > 0:
+                # Sample rows to potentially add
+                sample_size = min(expected_replacements, chunk_size, 100)  # Cap at 100 per chunk
+                if sample_size > 0:
+                    sample_indices = random.sample(range(chunk_size), sample_size)
+                    replacement_positions = random.sample(range(self.reservoir_size), sample_size)
+
+                    # Batch extract rows and replace
+                    sample_rows = chunk.iloc[sample_indices].to_dict('records')
+                    for i, row_dict in enumerate(sample_rows):
+                        self.reservoir_samples[replacement_positions[i]] = row_dict
+
+        self.seen_count += chunk_size
+
+    def finalize(self, ml_analyzer: 'MLAnalyzer') -> Dict[str, Any]:
+        """
+        Finalize ML analysis after all chunks processed.
+
+        Args:
+            ml_analyzer: MLAnalyzer instance for running final analyses
+
+        Returns:
+            Dictionary containing ML findings
+        """
+        logger.info(f"ML Analysis: Finalizing analysis for {self.total_rows:,} rows (chunked processing)")
+
+        findings = {
+            "sample_info": {
+                "original_rows": self.total_rows,
+                "analyzed_rows": self.total_rows,
+                "sampled": False,
+                "sample_percentage": 100.0,
+                "processing_mode": "chunked"
+            },
+            "benford_analysis": {},
+            "numeric_outliers": {},
+            "autoencoder_anomalies": {},
+            "rare_categories": {},
+            "format_anomalies": {},
+            "cross_column_issues": [],
+            "temporal_patterns": {},
+            "correlation_anomalies": {},
+            "clustering_analysis": {},
+            "summary": {
+                "total_issues": 0,
+                "severity": "low",
+                "key_findings": []
+            }
+        }
+
+        # 1. Benford's law analysis from accumulated digit counts
+        for col, digit_counts in self.benford_digit_counts.items():
+            if sum(digit_counts.values()) >= MIN_ROWS_FOR_ML:
+                benford_result = self._analyze_benford_from_counts(col, digit_counts)
+                if benford_result and benford_result.get("is_suspicious"):
+                    findings["benford_analysis"][col] = benford_result
+
+        # 2. Numeric outliers from accumulated statistics
+        for col, stats in self.numeric_stats.items():
+            if stats['count'] >= MIN_ROWS_FOR_ML and len(self.numeric_samples.get(col, [])) > 100:
+                outlier_result = self._analyze_outliers_from_stats(col, stats, self.numeric_samples[col])
+                if outlier_result and outlier_result.get("anomaly_count", 0) > 0:
+                    findings["numeric_outliers"][col] = outlier_result
+
+        # 3. Rare category detection from accumulated value counts
+        for col, counts in self.value_counts.items():
+            if len(counts) > 1:
+                rare_result = self._analyze_rare_categories(col, counts, self.total_rows)
+                if rare_result and rare_result.get("anomaly_count", 0) > 0:
+                    findings["rare_categories"][col] = rare_result
+
+        # 4. Format anomalies from accumulated pattern counts
+        for col, pattern_counts in self.format_pattern_counts.items():
+            if len(pattern_counts) > 1:
+                format_result = self._analyze_format_from_counts(col, pattern_counts)
+                if format_result and format_result.get("anomaly_count", 0) > 0:
+                    findings["format_anomalies"][col] = format_result
+
+        # 5. Autoencoder on reservoir samples (if sklearn available)
+        if self.reservoir_samples and ml_analyzer._sklearn_available:
+            try:
+                reservoir_df = pd.DataFrame(self.reservoir_samples)
+                numeric_cols = [c for c in reservoir_df.columns if pd.api.types.is_numeric_dtype(reservoir_df[c])]
+                if len(numeric_cols) >= 2:
+                    ae_result = ml_analyzer._detect_autoencoder_anomalies(reservoir_df, numeric_cols)
+                    if ae_result:
+                        findings["autoencoder_anomalies"] = ae_result
+            except Exception as e:
+                logger.debug(f"Autoencoder analysis failed: {e}")
+
+        # Calculate summary
+        total_issues = (
+            len(findings["benford_analysis"]) +
+            sum(r.get("anomaly_count", 0) for r in findings["numeric_outliers"].values()) +
+            sum(r.get("anomaly_count", 0) for r in findings["rare_categories"].values()) +
+            sum(r.get("anomaly_count", 0) for r in findings["format_anomalies"].values())
+        )
+        findings["summary"]["total_issues"] = total_issues
+        findings["summary"]["severity"] = "high" if total_issues > 10 else "medium" if total_issues > 3 else "low"
+
+        # 6. Generate visualization data for advanced charts
+        findings["visualizations"] = self._generate_visualization_data(findings, ml_analyzer)
+
+        return findings
+
+    def _generate_visualization_data(self, findings: Dict, ml_analyzer: 'MLAnalyzer') -> Dict[str, Any]:
+        """
+        Generate data for advanced visualizations.
+
+        Returns dict with:
+        - amount_distributions: Log-scaled histogram data for amount fields
+        - amount_scatter: Paired samples for Amount Received vs Amount Paid scatter
+        - class_imbalance: Class distribution for binary/categorical target fields
+        - temporal_density: Event density over time for activity timeline
+        - anomaly_scores: Distribution of isolation forest anomaly scores
+        - reconstruction_errors: Distribution of autoencoder reconstruction errors
+        """
+        viz_data = {
+            "amount_distributions": {},
+            "amount_scatter": None,
+            "class_imbalance": {},
+            "temporal_density": {},
+            "anomaly_scores": {},
+            "reconstruction_errors": None,
+            "sample_info": {
+                "total_rows": self.total_rows,
+                "sample_size": len(self.reservoir_samples) if self.reservoir_samples else self.total_rows,
+                "is_sampled": len(self.reservoir_samples) < self.total_rows if self.reservoir_samples else False
+            }
+        }
+
+        # 1. Amount field distributions (log-scaled histograms)
+        amount_keywords = ['amount', 'price', 'cost', 'fee', 'total', 'balance', 'value', 'sum', 'payment', 'fare']
+        for col, samples in self.numeric_samples.items():
+            col_lower = col.lower()
+            # Check if column looks like an amount field
+            is_amount = any(kw in col_lower for kw in amount_keywords)
+            if is_amount and len(samples) >= 100:
+                viz_data["amount_distributions"][col] = self._compute_log_histogram(col, samples)
+
+        # 2. Amount scatter plot (find Amount Received vs Amount Paid pairs)
+        received_col = None
+        paid_col = None
+        for col in self.numeric_samples.keys():
+            col_lower = col.lower()
+            if 'received' in col_lower or 'recv' in col_lower or 'in' in col_lower.split('_'):
+                received_col = col
+            elif 'paid' in col_lower or 'sent' in col_lower or 'out' in col_lower.split('_'):
+                paid_col = col
+
+        if received_col and paid_col and self.reservoir_samples:
+            try:
+                scatter_data = []
+                for row in self.reservoir_samples[:5000]:  # Limit scatter points
+                    recv_val = row.get(received_col)
+                    paid_val = row.get(paid_col)
+                    if recv_val is not None and paid_val is not None:
+                        try:
+                            scatter_data.append({
+                                "x": float(recv_val),
+                                "y": float(paid_val)
+                            })
+                        except (ValueError, TypeError):
+                            pass
+                if scatter_data:
+                    viz_data["amount_scatter"] = {
+                        "x_column": received_col,
+                        "y_column": paid_col,
+                        "points": scatter_data[:2000],  # Limit for performance
+                        "total_points": len(scatter_data)
+                    }
+            except Exception as e:
+                logger.debug(f"Scatter plot data generation failed: {e}")
+
+        # 3. Class imbalance data (for binary/low-cardinality columns)
+        target_keywords = ['target', 'label', 'class', 'survived', 'churn', 'fraud', 'default', 'laundering', 'is_', 'has_']
+        for col, counts in self.value_counts.items():
+            col_lower = col.lower()
+            is_target = any(kw in col_lower for kw in target_keywords)
+            # Include low-cardinality categorical columns
+            if len(counts) <= 10 and (is_target or len(counts) == 2):
+                total = sum(counts.values())
+                viz_data["class_imbalance"][col] = {
+                    "classes": [{"value": str(v), "count": c, "percentage": round(c/total*100, 2)}
+                               for v, c in counts.most_common(10)],
+                    "is_binary": len(counts) == 2,
+                    "is_target_like": is_target,
+                    "total": total
+                }
+
+        # 4. Anomaly score distributions from isolation forest results
+        for col, outlier_data in findings.get("numeric_outliers", {}).items():
+            if "anomaly_score_range" in outlier_data:
+                score_range = outlier_data["anomaly_score_range"]
+                viz_data["anomaly_scores"][col] = {
+                    "min_score": score_range.get("min", 0),
+                    "max_score": score_range.get("max", 0),
+                    "anomaly_count": outlier_data.get("anomaly_count", 0),
+                    "total_analyzed": outlier_data.get("total_analyzed", self.total_rows)
+                }
+
+        # 5. Reconstruction error distribution from autoencoder
+        ae_data = findings.get("autoencoder_anomalies", {})
+        if ae_data and "error_stats" in ae_data:
+            error_stats = ae_data["error_stats"]
+            viz_data["reconstruction_errors"] = {
+                "mean": error_stats.get("mean", 0),
+                "std": error_stats.get("std", 0),
+                "max": error_stats.get("max", 0),
+                "threshold": ae_data.get("threshold", 0),
+                "anomaly_count": ae_data.get("anomaly_count", 0),
+                "anomaly_percentage": ae_data.get("anomaly_percentage", 0),
+                "anomaly_min_error": error_stats.get("anomaly_min_error", 0)
+            }
+
+        return viz_data
+
+    def _compute_log_histogram(self, col: str, samples: List, bins: int = 30) -> Dict[str, Any]:
+        """Compute log-scaled histogram for amount field."""
+        try:
+            arr = np.array([s for s in samples if s is not None and s > 0], dtype=float)
+            if len(arr) < 10:
+                return {}
+
+            # Handle zeros and negatives for log scale
+            min_positive = arr[arr > 0].min() if np.any(arr > 0) else 1
+            arr_shifted = np.where(arr > 0, arr, min_positive / 10)
+
+            # Compute log-scaled bins
+            log_arr = np.log10(arr_shifted)
+            hist, bin_edges = np.histogram(log_arr, bins=bins)
+
+            # Convert back to original scale for display
+            return {
+                "histogram": hist.tolist(),
+                "bin_edges_log": bin_edges.tolist(),
+                "bin_edges": (10 ** bin_edges).tolist(),
+                "min_value": float(arr.min()),
+                "max_value": float(arr.max()),
+                "median": float(np.median(arr)),
+                "mean": float(np.mean(arr)),
+                "has_zeros": int(np.sum(samples == 0)) if hasattr(samples, '__len__') else 0,
+                "total_samples": len(arr),
+                "log_scale_explanation": "Values transformed using log10 scale to visualize skewed distributions"
+            }
+        except Exception as e:
+            logger.debug(f"Log histogram computation failed for {col}: {e}")
+            return {}
+
+    def _analyze_benford_from_counts(self, col: str, digit_counts: Counter) -> Optional[Dict]:
+        """Analyze Benford's law from accumulated digit counts."""
+        total = sum(digit_counts.values())
+        if total < MIN_ROWS_FOR_ML:
+            return None
+
+        # Expected Benford distribution
+        benford_expected = {d: np.log10(1 + 1/d) for d in range(1, 10)}
+
+        # Calculate observed distribution
+        observed = {d: digit_counts.get(d, 0) / total for d in range(1, 10)}
+
+        # Chi-square test
+        chi_sq = sum((observed.get(d, 0) - benford_expected[d])**2 / benford_expected[d] for d in range(1, 10))
+
+        # Threshold for suspicion (chi-square critical value for df=8, p=0.05 is ~15.5)
+        is_suspicious = chi_sq > 15.5
+
+        return {
+            "chi_square": round(chi_sq, 2),
+            "is_suspicious": is_suspicious,
+            "total_values": total,
+            "observed_distribution": {str(d): round(observed.get(d, 0) * 100, 1) for d in range(1, 10)},
+            "expected_distribution": {str(d): round(benford_expected[d] * 100, 1) for d in range(1, 10)}
+        }
+
+    def _analyze_outliers_from_stats(self, col: str, stats: Dict, samples: List) -> Optional[Dict]:
+        """Analyze numeric outliers from accumulated statistics."""
+        if stats['count'] < MIN_ROWS_FOR_ML:
+            return None
+
+        # Calculate mean and std from running stats
+        mean = stats['sum'] / stats['count']
+        variance = (stats['sum_sq'] / stats['count']) - (mean ** 2)
+        std = np.sqrt(max(0, variance))
+
+        if std == 0:
+            return None
+
+        # Use IQR method on samples
+        samples_arr = np.array(samples)
+        q1, q3 = np.percentile(samples_arr, [25, 75])
+        iqr = q3 - q1
+        lower_bound = q1 - 1.5 * iqr
+        upper_bound = q3 + 1.5 * iqr
+
+        # Count outliers in samples and extrapolate
+        sample_outliers = np.sum((samples_arr < lower_bound) | (samples_arr > upper_bound))
+        outlier_rate = sample_outliers / len(samples_arr)
+        estimated_outliers = int(outlier_rate * stats['count'])
+
+        if estimated_outliers == 0:
+            return None
+
+        return {
+            "method": "IQR (chunked)",
+            "anomaly_count": estimated_outliers,
+            "anomaly_percentage": round(outlier_rate * 100, 2),
+            "bounds": {"lower": round(lower_bound, 2), "upper": round(upper_bound, 2)},
+            "statistics": {"mean": round(mean, 2), "std": round(std, 2), "min": round(stats['min'], 2), "max": round(stats['max'], 2)}
+        }
+
+    def _analyze_rare_categories(self, col: str, counts: Counter, total_rows: int) -> Optional[Dict]:
+        """Analyze rare categories from accumulated value counts."""
+        total = sum(counts.values())
+        if total < MIN_ROWS_FOR_ML:
+            return None
+
+        # Find rare categories (< 0.1% of data)
+        threshold = max(1, total * 0.001)
+        rare = [(val, cnt) for val, cnt in counts.items() if cnt < threshold]
+
+        if not rare:
+            return None
+
+        rare_count = sum(cnt for _, cnt in rare)
+
+        return {
+            "anomaly_count": len(rare),
+            "rare_value_count": rare_count,
+            "anomaly_percentage": round(rare_count / total * 100, 2),
+            "total_categories": len(counts),
+            "rare_examples": [{"value": str(v)[:50], "count": c} for v, c in sorted(rare, key=lambda x: x[1])[:10]]
+        }
+
+    def _analyze_format_from_counts(self, col: str, pattern_counts: Counter) -> Optional[Dict]:
+        """Analyze format anomalies from accumulated pattern counts."""
+        total = sum(pattern_counts.values())
+        if total < MIN_ROWS_FOR_ML or len(pattern_counts) <= 1:
+            return None
+
+        # Find dominant pattern
+        dominant_pattern, dominant_count = pattern_counts.most_common(1)[0]
+        dominant_pct = dominant_count / total
+
+        # If dominant pattern is > 90%, others are anomalies
+        if dominant_pct < 0.9:
+            return None
+
+        anomaly_count = total - dominant_count
+        anomaly_patterns = [(p, c) for p, c in pattern_counts.items() if p != dominant_pattern]
+
+        return {
+            "anomaly_count": anomaly_count,
+            "anomaly_percentage": round((1 - dominant_pct) * 100, 2),
+            "dominant_pattern": dominant_pattern,
+            "dominant_percentage": round(dominant_pct * 100, 1),
+            "anomaly_patterns": [{"pattern": p, "count": c} for p, c in sorted(anomaly_patterns, key=lambda x: -x[1])[:5]]
+        }
+
+
 class MLAnalyzer:
     """
     Machine learning-based data quality analyzer.
@@ -292,11 +829,263 @@ class MLAnalyzer:
             if autoencoder_result:
                 findings["autoencoder_anomalies"] = autoencoder_result
 
+        # 11. NEW: Duplicate detection
+        duplicate_result = self._detect_duplicates(df)
+        if duplicate_result:
+            findings["duplicate_analysis"] = duplicate_result
+
+        # 12. NEW: Referential integrity checks
+        ref_integrity = self._check_referential_integrity(df)
+        if ref_integrity:
+            findings["referential_integrity"] = ref_integrity
+
+        # 13. NEW: Distribution fitting (on key numeric columns)
+        findings["distribution_analysis"] = {}
+        for col in actual_numeric_cols[:5]:  # Limit to first 5 numeric columns for performance
+            values = df[col].dropna().values
+            if len(values) >= 100:
+                dist_result = self._fit_distribution(values)
+                if dist_result and dist_result.get("best_fit"):
+                    findings["distribution_analysis"][col] = dist_result
+
         # Generate summary
         findings["summary"] = self._generate_summary(findings)
         findings["analysis_time_seconds"] = round(time.time() - start_time, 2)
 
+        # Generate visualization data
+        findings["visualizations"] = self._generate_visualization_data_direct(df, findings, numeric_cols, string_cols)
+
         return findings
+
+    def _generate_visualization_data_direct(self, df: pd.DataFrame, findings: Dict,
+                                            numeric_cols: List[str], string_cols: List[str]) -> Dict[str, Any]:
+        """
+        Generate visualization data directly from DataFrame (for non-chunked processing).
+
+        Args:
+            df: DataFrame to analyze
+            findings: Current findings dict
+            numeric_cols: List of numeric column names
+            string_cols: List of string column names
+
+        Returns:
+            Dictionary with visualization data
+        """
+        viz_data = {
+            "amount_distributions": {},
+            "amount_scatter": None,
+            "class_imbalance": {},
+            "temporal_density": {},
+            "anomaly_scores": {},
+            "reconstruction_errors": None,
+            "sample_info": {
+                "total_rows": len(df),
+                "sample_size": len(df),
+                "is_sampled": findings.get("sample_info", {}).get("sampled", False)
+            }
+        }
+
+        # 1. Amount field distributions (log-scaled histograms)
+        amount_keywords = ['amount', 'price', 'cost', 'fee', 'total', 'balance', 'value', 'sum', 'payment', 'fare']
+        for col in numeric_cols:
+            col_lower = col.lower()
+            is_amount = any(kw in col_lower for kw in amount_keywords)
+            if is_amount:
+                values = df[col].dropna().values
+                if len(values) >= 100:
+                    viz_data["amount_distributions"][col] = self._compute_log_histogram_direct(values)
+
+        # 2. Amount scatter plot (find Received vs Paid pairs)
+        received_col = None
+        paid_col = None
+        for col in numeric_cols:
+            col_lower = col.lower()
+            if 'received' in col_lower or 'recv' in col_lower:
+                received_col = col
+            elif 'paid' in col_lower or 'sent' in col_lower:
+                paid_col = col
+
+        if received_col and paid_col:
+            try:
+                scatter_df = df[[received_col, paid_col]].dropna()
+                if len(scatter_df) > 0:
+                    scatter_data = [{"x": float(row[received_col]), "y": float(row[paid_col])}
+                                   for _, row in scatter_df.sample(min(2000, len(scatter_df))).iterrows()]
+                    viz_data["amount_scatter"] = {
+                        "x_column": received_col,
+                        "y_column": paid_col,
+                        "points": scatter_data,
+                        "total_points": len(scatter_df)
+                    }
+            except Exception as e:
+                logger.debug(f"Scatter plot generation failed: {e}")
+
+        # 3. Class imbalance data (for binary/low-cardinality columns)
+        target_keywords = ['target', 'label', 'class', 'survived', 'churn', 'fraud', 'default', 'laundering', 'is_', 'has_', 'pclass', 'sex', 'embarked']
+        for col in df.columns:
+            col_lower = col.lower()
+            is_target = any(kw in col_lower for kw in target_keywords)
+
+            try:
+                unique_count = df[col].nunique()
+                if unique_count <= 10 and (is_target or unique_count == 2):
+                    value_counts = df[col].value_counts()
+                    total = len(df[col].dropna())
+                    if total > 0:
+                        viz_data["class_imbalance"][col] = {
+                            "classes": [{"value": str(v), "count": int(c), "percentage": round(c/total*100, 2)}
+                                       for v, c in value_counts.items()],
+                            "is_binary": unique_count == 2,
+                            "is_target_like": is_target,
+                            "total": total
+                        }
+            except Exception:
+                pass
+
+        # 4. Reconstruction error distribution from autoencoder findings
+        ae_data = findings.get("autoencoder_anomalies", {})
+        if ae_data and "error_stats" in ae_data:
+            error_stats = ae_data["error_stats"]
+            viz_data["reconstruction_errors"] = {
+                "mean": error_stats.get("mean", 0),
+                "std": error_stats.get("std", 0),
+                "max": error_stats.get("max", 0),
+                "threshold": ae_data.get("threshold", 0),
+                "anomaly_count": ae_data.get("anomaly_count", 0),
+                "anomaly_percentage": ae_data.get("anomaly_percentage", 0),
+                "anomaly_min_error": error_stats.get("anomaly_min_error", 0)
+            }
+
+        # 5. Anomaly score info from isolation forest
+        for col, outlier_data in findings.get("numeric_outliers", {}).items():
+            if "anomaly_score_range" in outlier_data:
+                score_range = outlier_data["anomaly_score_range"]
+                viz_data["anomaly_scores"][col] = {
+                    "min_score": score_range.get("min", 0),
+                    "max_score": score_range.get("max", 0),
+                    "anomaly_count": outlier_data.get("anomaly_count", 0),
+                    "total_analyzed": len(df)
+                }
+
+        # 6. Temporal density (activity timeline) for datetime columns
+        temporal_cols = df.select_dtypes(include=['datetime64']).columns.tolist()
+
+        # Also check string columns that look like dates
+        for col in string_cols:
+            if self._looks_like_datetime(df[col]):
+                temporal_cols.append(col)
+
+        for col in temporal_cols[:2]:  # Limit to first 2 temporal columns
+            try:
+                temporal_data = self._compute_temporal_density(df, col)
+                if temporal_data:
+                    viz_data["temporal_density"][col] = temporal_data
+            except Exception as e:
+                logger.debug(f"Temporal density computation failed for {col}: {e}")
+
+        return viz_data
+
+    def _compute_temporal_density(self, df: pd.DataFrame, col: str, bins: int = 50) -> Dict[str, Any]:
+        """
+        Compute temporal density (activity timeline) for a datetime column.
+
+        Args:
+            df: DataFrame
+            col: Column name
+            bins: Number of time bins
+
+        Returns:
+            Dictionary with temporal density data for charting
+        """
+        try:
+            # Convert to datetime if needed
+            if df[col].dtype == 'object':
+                dates = pd.to_datetime(df[col], errors='coerce')
+            else:
+                dates = df[col]
+
+            dates = dates.dropna()
+            if len(dates) < 10:
+                return {}
+
+            # Convert to numeric (timestamps)
+            timestamps = dates.astype(np.int64) // 10**9  # Convert to seconds
+
+            # Compute histogram
+            hist, bin_edges = np.histogram(timestamps, bins=bins)
+
+            # Convert bin edges back to datetime strings for display
+            bin_dates = pd.to_datetime(bin_edges, unit='s')
+
+            # Determine appropriate time format based on date range
+            date_range = dates.max() - dates.min()
+            if date_range.days > 365:
+                date_format = '%Y-%m'
+            elif date_range.days > 30:
+                date_format = '%Y-%m-%d'
+            elif date_range.days > 1:
+                date_format = '%m-%d %H:%M'
+            else:
+                date_format = '%H:%M'
+
+            labels = [d.strftime(date_format) for d in bin_dates[:-1]]
+
+            # Detect gaps (bins with zero or very low activity)
+            mean_activity = np.mean(hist)
+            gap_threshold = mean_activity * 0.1  # Less than 10% of mean
+            gaps = []
+            for i, count in enumerate(hist):
+                if count <= gap_threshold and i < len(labels):
+                    gaps.append(labels[i])
+
+            # Calculate peak activity
+            peak_idx = np.argmax(hist)
+            peak_label = labels[peak_idx] if peak_idx < len(labels) else labels[-1]
+
+            return {
+                "histogram": hist.tolist(),
+                "labels": labels,
+                "min_date": str(dates.min()),
+                "max_date": str(dates.max()),
+                "total_records": len(dates),
+                "peak_activity": {
+                    "label": peak_label,
+                    "count": int(hist[peak_idx])
+                },
+                "gaps_detected": len(gaps),
+                "gap_labels": gaps[:10],  # Limit to first 10 gaps
+                "date_range_days": date_range.days,
+                "mean_per_bin": round(float(mean_activity), 1)
+            }
+        except Exception as e:
+            logger.debug(f"Temporal density computation failed: {e}")
+            return {}
+
+    def _compute_log_histogram_direct(self, values: np.ndarray, bins: int = 30) -> Dict[str, Any]:
+        """Compute log-scaled histogram from numpy array."""
+        try:
+            arr = values[values > 0]  # Filter to positive values only
+            if len(arr) < 10:
+                return {}
+
+            # Compute log-scaled bins
+            log_arr = np.log10(arr)
+            hist, bin_edges = np.histogram(log_arr, bins=bins)
+
+            return {
+                "histogram": hist.tolist(),
+                "bin_edges_log": bin_edges.tolist(),
+                "bin_edges": (10 ** bin_edges).tolist(),
+                "min_value": float(arr.min()),
+                "max_value": float(arr.max()),
+                "median": float(np.median(arr)),
+                "mean": float(np.mean(arr)),
+                "total_samples": len(arr),
+                "log_scale_explanation": "Values transformed using log10 scale to visualize skewed distributions"
+            }
+        except Exception as e:
+            logger.debug(f"Log histogram computation failed: {e}")
+            return {}
 
     def _estimate_contamination(self, values: np.ndarray) -> float:
         """
@@ -1526,6 +2315,85 @@ class MLAnalyzer:
 
         return False
 
+    def _get_benford_applicability(self, col_name: str) -> Dict[str, Any]:
+        """
+        Assess whether Benford's Law is applicable to this column.
+
+        Benford's Law works well for:
+        - Independent observations (not cumulative totals)
+        - Data spanning multiple orders of magnitude
+        - Financial amounts, population data, invoice amounts
+
+        Benford's Law does NOT work well for:
+        - Cumulative/running totals (e.g., total_cases, running_sum)
+        - Sequential counts that grow from zero
+        - Data with hard minimum/maximum bounds
+        - Assigned numbers (IDs, zip codes)
+
+        Returns:
+            Dict with applicability assessment and explanation
+        """
+        col_lower = col_name.lower()
+
+        # Patterns indicating cumulative/running totals - Benford NOT applicable
+        cumulative_patterns = [
+            'total_', '_total', 'cumulative', 'running_', '_running',
+            'sum_', '_sum', 'aggregate', 'accumulated', 'ytd', 'mtd',
+            'to_date', 'todate', 'all_time', 'lifetime'
+        ]
+
+        # Patterns indicating per-unit/transactional data - Benford applicable
+        transactional_patterns = [
+            'new_', '_new', 'daily_', '_daily', 'weekly_', '_weekly',
+            'per_', '_per', 'each', 'unit_', '_unit', 'transaction',
+            'smoothed', '_avg', 'average'
+        ]
+
+        # Check for cumulative patterns
+        is_cumulative = any(pattern in col_lower for pattern in cumulative_patterns)
+
+        # Check for transactional patterns (overrides cumulative if present)
+        is_transactional = any(pattern in col_lower for pattern in transactional_patterns)
+
+        # Specific column name checks
+        if col_lower.startswith('total') and not is_transactional:
+            is_cumulative = True
+
+        if is_cumulative and not is_transactional:
+            return {
+                "applicable": False,
+                "reason": "cumulative_data",
+                "explanation": (
+                    "Benford's Law is NOT applicable to cumulative/running totals. "
+                    "Cumulative data starts from zero and grows monotonically, which naturally "
+                    "skews the first-digit distribution toward lower digits. This is expected "
+                    "behavior, not an indicator of data quality issues."
+                ),
+                "recommendation": "For authenticity analysis, examine the underlying incremental values (e.g., new_cases instead of total_cases)."
+            }
+
+        # Check semantic info for additional context
+        sem_info = self._column_semantic_info.get(col_name, {})
+        primary_tag = sem_info.get('primary_tag', '')
+
+        # Good candidates for Benford's Law
+        benford_good_tags = {'money.amount', 'money.price', 'money.fee', 'money.balance'}
+        if primary_tag in benford_good_tags:
+            return {
+                "applicable": True,
+                "reason": "financial_amount",
+                "explanation": "Financial amounts typically follow Benford's Law when representing independent transactions.",
+                "recommendation": None
+            }
+
+        # Default: applicable but with standard caveats
+        return {
+            "applicable": True,
+            "reason": "general_numeric",
+            "explanation": "Benford's Law analysis performed. Results are most meaningful for data spanning multiple orders of magnitude.",
+            "recommendation": None
+        }
+
     def _detect_benford_anomalies(self, df: pd.DataFrame, col_name: str) -> Optional[Dict[str, Any]]:
         """
         Detect anomalies using Benford's Law.
@@ -1613,6 +2481,19 @@ class MLAnalyzer:
         else:
             interpretation = f"Moderate deviation from Benford's Law (χ²={chi_square:.1f}, MAD={mad:.2f}%). Warrants investigation."
 
+        # Get applicability assessment for this column
+        applicability = self._get_benford_applicability(col_name)
+
+        # Adjust interpretation if Benford's Law is not applicable
+        if not applicability["applicable"]:
+            interpretation = (
+                f"⚠️ NOT APPLICABLE: {applicability['explanation']} "
+                f"The deviation (χ²={chi_square:.1f}, MAD={mad:.2f}%) is expected for cumulative data."
+            )
+            # Don't mark as suspicious if not applicable
+            is_suspicious = False
+            confidence = "Not Applicable"
+
         return {
             "method": "benford_law",
             "sample_size": total,
@@ -1625,11 +2506,13 @@ class MLAnalyzer:
                 {"digit": d, **dev} for d, dev in worst_deviations
             ],
             "interpretation": interpretation,
+            "applicability": applicability,
             "plain_english": (
                 "Benford's Law says naturally occurring numbers (like financial transactions) "
                 "follow a predictable pattern - '1' appears as the first digit about 30% of the time, "
                 "'2' about 17%, and so on. When data doesn't follow this pattern, it often means "
-                "the numbers were made up, manipulated, or generated incorrectly."
+                "the numbers were made up, manipulated, or generated incorrectly. "
+                "NOTE: This law does NOT apply to cumulative totals, sequential counts, or assigned numbers."
             )
         }
 
@@ -1791,6 +2674,548 @@ class MLAnalyzer:
             logger.debug(f"Error in autoencoder analysis: {e}")
             return None
 
+    # =========================================================================
+    # NEW ML CAPABILITIES - Data Drift, Duplicates, Anomaly Explanation,
+    # Referential Integrity, Distribution Fitting
+    # =========================================================================
+
+    def detect_data_drift(self, current_df: pd.DataFrame,
+                          baseline_stats: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Detect distribution drift between current data and baseline statistics.
+
+        Uses Population Stability Index (PSI) and Kolmogorov-Smirnov tests.
+
+        Args:
+            current_df: Current DataFrame to check
+            baseline_stats: Baseline statistics from previous profile
+
+        Returns:
+            Dictionary with drift metrics per column
+        """
+        drift_results = {
+            "columns_analyzed": 0,
+            "columns_with_drift": 0,
+            "drift_details": {},
+            "overall_drift_score": 0.0,
+            "interpretation": "",
+            "plain_english": (
+                "Data drift means your new data looks different from what you had before. "
+                "Like if your customer ages suddenly skewed younger, or transaction amounts "
+                "changed dramatically. This can break ML models and indicate data quality issues."
+            )
+        }
+
+        try:
+            from scipy import stats
+        except ImportError:
+            drift_results["error"] = "scipy not available for drift detection"
+            return drift_results
+
+        numeric_cols = current_df.select_dtypes(include=[np.number]).columns.tolist()
+        drift_scores = []
+
+        for col in numeric_cols:
+            if col not in baseline_stats:
+                continue
+
+            baseline = baseline_stats[col]
+            current_values = current_df[col].dropna().values
+
+            if len(current_values) < 100:
+                continue
+
+            drift_results["columns_analyzed"] += 1
+            col_drift = {"column": col, "metrics": {}}
+
+            # Calculate PSI (Population Stability Index)
+            try:
+                baseline_mean = baseline.get("mean", 0)
+                baseline_std = baseline.get("std_dev", 1) or 1
+                current_mean = np.mean(current_values)
+                current_std = np.std(current_values) or 1
+
+                # Simplified PSI using mean/std comparison
+                mean_shift = abs(current_mean - baseline_mean) / baseline_std
+                std_ratio = max(current_std / baseline_std, baseline_std / current_std)
+
+                psi_approx = mean_shift + abs(np.log(std_ratio))
+                col_drift["metrics"]["psi"] = round(psi_approx, 4)
+                col_drift["metrics"]["mean_shift_sigma"] = round(mean_shift, 2)
+                col_drift["metrics"]["std_ratio"] = round(std_ratio, 2)
+
+                # PSI interpretation
+                if psi_approx < 0.1:
+                    col_drift["psi_status"] = "stable"
+                elif psi_approx < 0.25:
+                    col_drift["psi_status"] = "moderate_drift"
+                else:
+                    col_drift["psi_status"] = "significant_drift"
+                    drift_results["columns_with_drift"] += 1
+
+                drift_scores.append(psi_approx)
+
+            except Exception as e:
+                logger.debug(f"PSI calculation failed for {col}: {e}")
+
+            # KS Test against expected distribution
+            try:
+                baseline_min = baseline.get("min_value")
+                baseline_max = baseline.get("max_value")
+                if baseline_min is not None and baseline_max is not None:
+                    # Normalize to 0-1 range for comparison
+                    baseline_range = float(baseline_max) - float(baseline_min)
+                    if baseline_range > 0:
+                        normalized = (current_values - float(baseline_min)) / baseline_range
+                        # KS test against uniform (if data was uniform in baseline)
+                        ks_stat, ks_pvalue = stats.kstest(normalized, 'uniform')
+                        col_drift["metrics"]["ks_statistic"] = round(ks_stat, 4)
+                        col_drift["metrics"]["ks_pvalue"] = round(ks_pvalue, 6)
+
+                        if ks_pvalue < 0.01:
+                            col_drift["ks_status"] = "significant_change"
+                        elif ks_pvalue < 0.05:
+                            col_drift["ks_status"] = "moderate_change"
+                        else:
+                            col_drift["ks_status"] = "no_significant_change"
+
+            except Exception as e:
+                logger.debug(f"KS test failed for {col}: {e}")
+
+            drift_results["drift_details"][col] = col_drift
+
+        # Overall drift score
+        if drift_scores:
+            drift_results["overall_drift_score"] = round(np.mean(drift_scores), 4)
+            if drift_results["overall_drift_score"] < 0.1:
+                drift_results["interpretation"] = "Data distribution is stable - no significant drift detected."
+            elif drift_results["overall_drift_score"] < 0.25:
+                drift_results["interpretation"] = f"Moderate drift in {drift_results['columns_with_drift']} column(s). Monitor for trends."
+            else:
+                drift_results["interpretation"] = f"Significant drift detected in {drift_results['columns_with_drift']} column(s). Investigate data source changes."
+
+        return drift_results
+
+    def _detect_duplicates(self, df: pd.DataFrame,
+                           key_columns: Optional[List[str]] = None) -> Dict[str, Any]:
+        """
+        Detect exact and near-duplicate records.
+
+        Args:
+            df: DataFrame to check
+            key_columns: Optional list of columns to use as keys (default: all)
+
+        Returns:
+            Dictionary with duplicate detection results
+        """
+        results = {
+            "exact_duplicates": {"count": 0, "percentage": 0.0, "sample_indices": []},
+            "fuzzy_duplicates": {"count": 0, "percentage": 0.0, "sample_pairs": []},
+            "potential_key_columns": [],
+            "interpretation": "",
+            "plain_english": (
+                "Duplicate detection finds records that are identical or nearly identical. "
+                "Exact duplicates are perfect copies. Fuzzy duplicates are almost the same "
+                "(like 'John Smith' vs 'John  Smith' with extra space). Both can indicate "
+                "data entry errors, failed deduplication, or merge issues."
+            )
+        }
+
+        total_rows = len(df)
+        if total_rows < 10:
+            results["interpretation"] = "Dataset too small for duplicate analysis."
+            return results
+
+        # 1. Exact duplicate detection
+        try:
+            check_cols = key_columns if key_columns else df.columns.tolist()
+            # Limit columns for performance
+            check_cols = check_cols[:20]
+
+            duplicate_mask = df.duplicated(subset=check_cols, keep=False)
+            exact_dup_count = duplicate_mask.sum()
+
+            if exact_dup_count > 0:
+                # Get indices of duplicates
+                dup_indices = df[duplicate_mask].index.tolist()
+                results["exact_duplicates"] = {
+                    "count": int(exact_dup_count),
+                    "percentage": round(exact_dup_count / total_rows * 100, 2),
+                    "sample_indices": dup_indices[:10]
+                }
+        except Exception as e:
+            logger.debug(f"Exact duplicate detection failed: {e}")
+
+        # 2. Fuzzy duplicate detection (on string columns)
+        string_cols = df.select_dtypes(include=['object']).columns.tolist()[:5]
+        if string_cols and total_rows < 50000:  # Limit for performance
+            try:
+                # Simple fuzzy matching using normalized strings
+                fuzzy_pairs = []
+                sample_size = min(5000, total_rows)
+                sample_df = df.sample(n=sample_size, random_state=42) if total_rows > sample_size else df
+
+                for col in string_cols[:3]:  # Check first 3 string columns
+                    values = sample_df[col].dropna().astype(str)
+                    # Normalize: lowercase, strip whitespace, remove extra spaces
+                    normalized = values.str.lower().str.strip().str.replace(r'\s+', ' ', regex=True)
+
+                    # Find values that become identical after normalization
+                    value_counts = normalized.value_counts()
+                    duplicated_normalized = value_counts[value_counts > 1].index.tolist()
+
+                    for norm_val in duplicated_normalized[:5]:
+                        original_values = values[normalized == norm_val].unique().tolist()
+                        if len(original_values) > 1:  # Different original values normalize to same
+                            fuzzy_pairs.append({
+                                "column": col,
+                                "normalized_value": norm_val,
+                                "original_variants": original_values[:5],
+                                "count": int(value_counts[norm_val])
+                            })
+
+                if fuzzy_pairs:
+                    fuzzy_count = sum(p["count"] for p in fuzzy_pairs)
+                    results["fuzzy_duplicates"] = {
+                        "count": fuzzy_count,
+                        "percentage": round(fuzzy_count / sample_size * 100, 2),
+                        "sample_pairs": fuzzy_pairs[:10]
+                    }
+            except Exception as e:
+                logger.debug(f"Fuzzy duplicate detection failed: {e}")
+
+        # 3. Identify potential key columns (high uniqueness)
+        for col in df.columns[:20]:
+            try:
+                unique_ratio = df[col].nunique() / total_rows
+                if unique_ratio > 0.95:
+                    results["potential_key_columns"].append({
+                        "column": col,
+                        "uniqueness": round(unique_ratio * 100, 2)
+                    })
+            except Exception:
+                pass
+
+        # Generate interpretation
+        exact_count = results["exact_duplicates"]["count"]
+        fuzzy_count = results["fuzzy_duplicates"]["count"]
+
+        if exact_count == 0 and fuzzy_count == 0:
+            results["interpretation"] = "No duplicate records detected. Data appears to be properly deduplicated."
+        elif exact_count > 0 and fuzzy_count > 0:
+            results["interpretation"] = (
+                f"Found {exact_count:,} exact duplicates and {fuzzy_count:,} fuzzy duplicates. "
+                "Review for data entry issues or failed deduplication processes."
+            )
+        elif exact_count > 0:
+            results["interpretation"] = (
+                f"Found {exact_count:,} exact duplicate records ({results['exact_duplicates']['percentage']:.1f}%). "
+                "Consider deduplication if these are unintended."
+            )
+        else:
+            results["interpretation"] = (
+                f"Found {fuzzy_count:,} near-duplicate values. "
+                "May indicate data entry inconsistencies or normalization issues."
+            )
+
+        return results
+
+    def _explain_anomaly(self, record_values: np.ndarray, column_names: List[str],
+                         model_stats: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Explain why a record is flagged as anomalous using feature contribution analysis.
+
+        Uses a simplified SHAP-like approach based on deviation from expected values.
+
+        Args:
+            record_values: Array of values for the anomalous record
+            column_names: Names of columns
+            model_stats: Statistics from the baseline (mean, std per column)
+
+        Returns:
+            Dictionary with feature contributions
+        """
+        contributions = []
+
+        for i, (col, val) in enumerate(zip(column_names, record_values)):
+            if col not in model_stats:
+                continue
+
+            try:
+                col_stats = model_stats[col]
+                mean = col_stats.get("mean", 0)
+                std = col_stats.get("std_dev", 1) or 1
+
+                # Z-score as contribution measure
+                z_score = (val - mean) / std
+                abs_z = abs(z_score)
+
+                contribution = {
+                    "column": col,
+                    "value": float(val) if not np.isnan(val) else None,
+                    "expected_mean": round(mean, 2),
+                    "z_score": round(z_score, 2),
+                    "contribution_score": round(abs_z, 2),
+                    "direction": "high" if z_score > 0 else "low"
+                }
+
+                # Plain English explanation
+                if abs_z > 3:
+                    contribution["explanation"] = f"Extremely {'high' if z_score > 0 else 'low'} - {abs_z:.1f} standard deviations from normal"
+                elif abs_z > 2:
+                    contribution["explanation"] = f"Unusually {'high' if z_score > 0 else 'low'} - well outside typical range"
+                elif abs_z > 1:
+                    contribution["explanation"] = f"Somewhat {'high' if z_score > 0 else 'low'} - borderline unusual"
+                else:
+                    contribution["explanation"] = "Within normal range"
+
+                contributions.append(contribution)
+
+            except Exception as e:
+                logger.debug(f"Feature contribution failed for {col}: {e}")
+
+        # Sort by contribution (most anomalous first)
+        contributions.sort(key=lambda x: x["contribution_score"], reverse=True)
+
+        # Top contributors
+        top_contributors = contributions[:5]
+
+        return {
+            "feature_contributions": contributions,
+            "top_contributors": top_contributors,
+            "primary_driver": top_contributors[0] if top_contributors else None,
+            "explanation_summary": self._summarize_anomaly_explanation(top_contributors),
+            "plain_english": (
+                "This shows WHY a record is flagged as unusual. Each feature gets a 'contribution score' "
+                "based on how far it deviates from typical values. Higher scores mean that feature "
+                "is more responsible for making this record look anomalous."
+            )
+        }
+
+    def _summarize_anomaly_explanation(self, contributors: List[Dict]) -> str:
+        """Generate a human-readable summary of anomaly contributors."""
+        if not contributors:
+            return "Unable to determine anomaly cause."
+
+        top = contributors[0]
+        summary = f"Primary anomaly driver: {top['column']} is {top['direction']} "
+        summary += f"({top['z_score']:.1f} std devs from mean). "
+
+        if len(contributors) > 1:
+            others = [c['column'] for c in contributors[1:3]]
+            summary += f"Also contributing: {', '.join(others)}."
+
+        return summary
+
+    def _check_referential_integrity(self, df: pd.DataFrame,
+                                     reference_data: Optional[Dict[str, set]] = None) -> Dict[str, Any]:
+        """
+        Check for orphan records and broken references.
+
+        Args:
+            df: DataFrame to check
+            reference_data: Optional dict mapping column names to sets of valid values
+
+        Returns:
+            Dictionary with referential integrity results
+        """
+        results = {
+            "potential_foreign_keys": [],
+            "orphan_analysis": [],
+            "self_referential_issues": [],
+            "interpretation": "",
+            "plain_english": (
+                "Referential integrity ensures that references between tables are valid. "
+                "Like if you have an 'employee_id' in the orders table, that employee should "
+                "actually exist in the employees table. Orphan records are those pointing to "
+                "non-existent references - they often indicate data sync issues or deletions."
+            )
+        }
+
+        # 1. Identify potential foreign key columns (naming patterns)
+        fk_patterns = ['_id', 'id_', '_key', '_code', '_ref', 'fk_']
+        potential_fks = []
+
+        for col in df.columns:
+            col_lower = col.lower()
+            if any(pattern in col_lower for pattern in fk_patterns):
+                unique_ratio = df[col].nunique() / len(df) if len(df) > 0 else 0
+                null_ratio = df[col].isna().sum() / len(df) if len(df) > 0 else 0
+
+                potential_fks.append({
+                    "column": col,
+                    "unique_values": df[col].nunique(),
+                    "unique_ratio": round(unique_ratio, 4),
+                    "null_ratio": round(null_ratio, 4),
+                    "likely_type": "foreign_key" if unique_ratio < 0.5 else "primary_key"
+                })
+
+        results["potential_foreign_keys"] = potential_fks
+
+        # 2. Check against provided reference data
+        if reference_data:
+            for col, valid_values in reference_data.items():
+                if col in df.columns:
+                    col_values = set(df[col].dropna().unique())
+                    orphans = col_values - valid_values
+                    if orphans:
+                        results["orphan_analysis"].append({
+                            "column": col,
+                            "orphan_count": len(orphans),
+                            "sample_orphans": list(orphans)[:10],
+                            "total_affected_rows": int(df[col].isin(orphans).sum())
+                        })
+
+        # 3. Self-referential checks (e.g., parent_id referencing same table's id)
+        id_cols = [c for c in df.columns if c.lower().endswith('_id') or c.lower() == 'id']
+        parent_cols = [c for c in df.columns if 'parent' in c.lower() or 'manager' in c.lower()]
+
+        for parent_col in parent_cols:
+            for id_col in id_cols:
+                if parent_col != id_col:
+                    try:
+                        valid_ids = set(df[id_col].dropna().unique())
+                        parent_values = set(df[parent_col].dropna().unique())
+                        invalid_parents = parent_values - valid_ids - {0, None, '', 'NULL', 'null'}
+
+                        if invalid_parents and len(invalid_parents) < len(parent_values) * 0.5:
+                            results["self_referential_issues"].append({
+                                "parent_column": parent_col,
+                                "id_column": id_col,
+                                "invalid_references": len(invalid_parents),
+                                "sample_invalid": list(invalid_parents)[:5]
+                            })
+                    except Exception:
+                        pass
+
+        # Generate interpretation
+        fk_count = len(potential_fks)
+        orphan_count = len(results["orphan_analysis"])
+        self_ref_issues = len(results["self_referential_issues"])
+
+        if orphan_count > 0 or self_ref_issues > 0:
+            results["interpretation"] = (
+                f"Found {orphan_count} columns with orphan records and {self_ref_issues} self-referential issues. "
+                "Review data synchronization and deletion cascades."
+            )
+        elif fk_count > 0:
+            results["interpretation"] = (
+                f"Identified {fk_count} potential foreign key columns. "
+                "Provide reference data to check for orphan records."
+            )
+        else:
+            results["interpretation"] = "No obvious foreign key columns detected."
+
+        return results
+
+    def _fit_distribution(self, values: np.ndarray) -> Dict[str, Any]:
+        """
+        Identify the best-fit statistical distribution for numeric data.
+
+        Tests common distributions and returns goodness-of-fit metrics.
+
+        Args:
+            values: Array of numeric values
+
+        Returns:
+            Dictionary with distribution fitting results
+        """
+        results = {
+            "best_fit": None,
+            "distributions_tested": [],
+            "interpretation": "",
+            "plain_english": (
+                "Distribution fitting tells you what 'shape' your data has. Normal (bell curve) "
+                "is common for natural measurements. Exponential is common for waiting times. "
+                "Log-normal is common for financial data. Knowing the distribution helps set "
+                "appropriate thresholds and detect true anomalies."
+            )
+        }
+
+        try:
+            from scipy import stats
+        except ImportError:
+            results["error"] = "scipy not available for distribution fitting"
+            return results
+
+        # Clean data
+        values = values[~np.isnan(values)]
+        if len(values) < 100:
+            results["interpretation"] = "Not enough data for reliable distribution fitting."
+            return results
+
+        # Distributions to test
+        distributions = [
+            ('normal', stats.norm),
+            ('lognormal', stats.lognorm),
+            ('exponential', stats.expon),
+            ('uniform', stats.uniform),
+            ('gamma', stats.gamma),
+        ]
+
+        fit_results = []
+
+        for name, dist in distributions:
+            try:
+                # Fit the distribution
+                if name == 'lognormal' and np.any(values <= 0):
+                    continue  # Skip lognormal for non-positive data
+
+                params = dist.fit(values)
+
+                # KS test for goodness of fit
+                ks_stat, ks_pvalue = stats.kstest(values, dist.cdf, args=params)
+
+                # AIC approximation (lower is better)
+                log_likelihood = np.sum(dist.logpdf(values, *params))
+                n_params = len(params)
+                aic = 2 * n_params - 2 * log_likelihood
+
+                fit_results.append({
+                    "distribution": name,
+                    "parameters": {f"param_{i}": round(p, 4) for i, p in enumerate(params)},
+                    "ks_statistic": round(ks_stat, 4),
+                    "ks_pvalue": round(ks_pvalue, 6),
+                    "aic": round(aic, 2),
+                    "good_fit": ks_pvalue > 0.05
+                })
+
+            except Exception as e:
+                logger.debug(f"Distribution fitting failed for {name}: {e}")
+
+        if fit_results:
+            # Sort by AIC (lower is better)
+            fit_results.sort(key=lambda x: x["aic"])
+            results["distributions_tested"] = fit_results
+            results["best_fit"] = fit_results[0]
+
+            best = fit_results[0]
+            if best["good_fit"]:
+                results["interpretation"] = (
+                    f"Data best fits a {best['distribution']} distribution (p={best['ks_pvalue']:.4f}). "
+                    f"This is a statistically good fit."
+                )
+            else:
+                results["interpretation"] = (
+                    f"Best match is {best['distribution']} distribution, but fit is not statistically strong. "
+                    f"Data may have a mixed or non-standard distribution."
+                )
+
+            # Add practical implications
+            dist_implications = {
+                'normal': "Standard statistical tests and z-scores are appropriate.",
+                'lognormal': "Consider log-transforming for analysis. Common in financial data.",
+                'exponential': "Data represents waiting times or decay. Mean = standard deviation.",
+                'uniform': "Values are evenly spread. May indicate synthetic or categorical data.",
+                'gamma': "Right-skewed positive data. Common for income, insurance claims."
+            }
+
+            best_dist = best['distribution']
+            if best_dist in dist_implications:
+                results["practical_implication"] = dist_implications[best_dist]
+
+        return results
+
     def _generate_summary(self, findings: Dict[str, Any]) -> Dict[str, Any]:
         """
         Generate overall summary of ML findings.
@@ -1884,6 +3309,39 @@ class MLAnalyzer:
             if corr_count > 0:
                 total_issues += corr_count
                 key_findings.append(f"📈 Correlations: {corr_count:,} records break expected relationships")
+
+        # === NEW CAPABILITIES ===
+        # Duplicate detection
+        duplicates = findings.get("duplicate_analysis", {})
+        if duplicates:
+            exact_dups = duplicates.get("exact_duplicates", {}).get("count", 0)
+            fuzzy_dups = duplicates.get("fuzzy_duplicates", {}).get("count", 0)
+            if exact_dups > 0:
+                total_issues += exact_dups
+                key_findings.append(f"📋 Duplicates: {exact_dups:,} exact duplicate records found")
+            if fuzzy_dups > 0:
+                key_findings.append(f"📋 Near-Duplicates: {fuzzy_dups:,} fuzzy matches detected")
+
+        # Referential integrity
+        ref_integrity = findings.get("referential_integrity", {})
+        if ref_integrity:
+            orphans = ref_integrity.get("orphan_analysis", [])
+            self_ref = ref_integrity.get("self_referential_issues", [])
+            if orphans:
+                orphan_count = sum(o.get("total_affected_rows", 0) for o in orphans)
+                if orphan_count > 0:
+                    total_issues += orphan_count
+                    key_findings.append(f"🔗 Orphan Records: {orphan_count:,} records with broken references")
+            if self_ref:
+                key_findings.append(f"🔗 Self-Reference Issues: {len(self_ref)} circular reference problems")
+
+        # Distribution analysis (informational)
+        dist_analysis = findings.get("distribution_analysis", {})
+        if dist_analysis:
+            non_normal = [col for col, d in dist_analysis.items()
+                         if d.get("best_fit", {}).get("distribution") != "normal"]
+            if non_normal:
+                key_findings.append(f"📈 Distributions: {len(non_normal)} column(s) are not normally distributed")
 
         # === INFORMATIONAL (not counted as issues) ===
         clustering = findings.get("clustering_analysis", {})

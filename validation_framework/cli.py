@@ -441,8 +441,9 @@ def version():
 @click.option('--report-style', type=click.Choice(['classic', 'executive'], case_sensitive=False),
               default='executive', help='HTML report style: classic (detailed) or executive (dashboard view)')
 @click.option('--beta-ml', is_flag=True, help='[BETA] Enable ML-based anomaly detection and data quality analysis')
+@click.option('--full-analysis', is_flag=True, help='Disable internal sampling - analyze full dataset (slower but more accurate for ML analysis)')
 def profile(file_path, format, database, table, query, html_output, json_output, config_output, chunk_size, sample, no_memory_check, log_level,
-            disable_temporal, disable_pii, disable_correlation, disable_all_enhancements, report_style, beta_ml):
+            disable_temporal, disable_pii, disable_correlation, disable_all_enhancements, report_style, beta_ml, full_analysis):
     """
     Profile a data file or database table to understand its structure and quality.
 
@@ -529,7 +530,8 @@ def profile(file_path, format, database, table, query, html_output, json_output,
             enable_temporal_analysis=not disable_temporal,
             enable_pii_detection=not disable_pii,
             enable_enhanced_correlation=not disable_correlation,
-            disable_memory_safety=no_memory_check  # Pass through the --no-memory-check flag
+            disable_memory_safety=no_memory_check,  # Pass through the --no-memory-check flag
+            full_analysis=full_analysis  # Disable internal sampling for ML analysis
         )
 
         # DATABASE MODE

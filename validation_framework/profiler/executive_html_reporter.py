@@ -11,10 +11,12 @@ Generates a modern, executive-style dashboard with:
 """
 
 import json
+import re
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 from validation_framework.profiler.profile_result import ProfileResult, ColumnProfile
+from validation_framework.profiler.insight_engine import InsightEngine, generate_insights
 import logging
 import math
 
@@ -80,14 +82,18 @@ class ExecutiveHTMLReporter:
         # Get sampling info
         sampling_info = self._get_sampling_info(profile.columns)
 
+        # Run insight engine for narrative insights
+        profile_dict = profile.to_dict()
+        insights = generate_insights(profile_dict)
+
         html = f'''<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8" />
     <title>Data Quality Report - {profile.file_name}</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/wordcloud@1.2.2/src/wordcloud2.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/wordcloud@1.2.2/src/wordcloud2.min.js" defer></script>
 
     <style>
 {self._get_css()}
@@ -114,9 +120,23 @@ class ExecutiveHTMLReporter:
         </div>
     </header>
 
+    <!-- Sticky Section Navigator -->
+    <nav class="sticky-nav" id="stickyNav">
+        <div class="sticky-nav-inner">
+            <button class="nav-btn active" data-section="summary">Summary</button>
+            <button class="nav-btn" data-section="alerts">Alerts</button>
+            <button class="nav-btn" data-section="ml">ML Analysis</button>
+            <button class="nav-btn" data-section="columns">Columns</button>
+            <button class="nav-btn" data-section="config">Config</button>
+        </div>
+    </nav>
+
     <main class="page">
+        <!-- EXECUTIVE SUMMARY - At-a-Glance Verdict -->
+        {self._generate_executive_summary(profile, pii_count, avg_completeness)}
+
         <!-- Page Header -->
-        <section class="page-header">
+        <section class="page-header" id="section-summary">
             <div class="page-title-block">
                 <h1>Data Quality & Completeness</h1>
                 <p>Snapshot of overall health, completeness and key risks across this dataset.</p>
@@ -147,8 +167,11 @@ class ExecutiveHTMLReporter:
             </div>
         </section>
 
-        <!-- Sampling Summary -->
-        {self._generate_sampling_summary(profile, sampling_info)}
+        <!-- Sampling Summary (Enhanced with Insight Engine) -->
+        {self._generate_sampling_summary_enhanced(profile, sampling_info, insights)}
+
+        <!-- Key Insights from Insight Engine -->
+        {self._generate_key_insights_section(insights)}
 
         <!-- Data Quality Alerts (if any critical issues) -->
         {self._generate_quality_alerts(profile)}
@@ -180,13 +203,16 @@ class ExecutiveHTMLReporter:
         <!-- ═══════════════════════════════════════════════════════════════ -->
         <!-- SECTION: INTELLIGENT ANALYSIS - ML and pattern detection        -->
         <!-- ═══════════════════════════════════════════════════════════════ -->
-        <div class="section-divider" style="margin: 24px 0 16px 0; padding: 12px 20px; background: linear-gradient(135deg, #4c1d95 0%, #2e1065 100%); border-radius: 8px; border-left: 4px solid #8b5cf6;">
+        <div class="section-divider" id="section-ml" style="margin: 24px 0 16px 0; padding: 12px 20px; background: linear-gradient(135deg, #4c1d95 0%, #2e1065 100%); border-radius: 8px; border-left: 4px solid #8b5cf6;">
             <h2 style="margin: 0; font-size: 1.1em; color: #f1f5f9; font-weight: 600;">🧠 INTELLIGENT ANALYSIS</h2>
             <p style="margin: 4px 0 0 0; font-size: 0.85em; color: #c4b5fd;">Machine learning anomaly detection and pattern analysis</p>
         </div>
 
         <!-- ML Analysis Section (if ML analysis was run) -->
         {self._generate_ml_section(profile.ml_findings) if profile.ml_findings else ''}
+
+        <!-- Advanced Visualizations Section -->
+        {self._generate_advanced_visualizations(profile.ml_findings) if profile.ml_findings and profile.ml_findings.get('visualizations') else ''}
 
         <!-- Temporal Analysis Accordion -->
         {self._generate_temporal_accordion(temporal_columns) if temporal_columns else ''}
@@ -1508,12 +1534,482 @@ class ExecutiveHTMLReporter:
             border-color: var(--accent);
         }
 
+        /* ======================================================
+           STICKY NAVIGATION
+           ====================================================== */
+        .sticky-nav {
+            position: sticky;
+            top: 60px;
+            z-index: 99;
+            background: var(--bg-main);
+            border-bottom: 1px solid var(--border-subtle);
+            padding: 0;
+            margin: 0 -32px;
+            padding: 0 32px;
+        }
+
+        .sticky-nav-inner {
+            display: flex;
+            gap: 8px;
+            padding: 12px 0;
+            overflow-x: auto;
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+        }
+
+        .sticky-nav-inner::-webkit-scrollbar {
+            display: none;
+        }
+
+        .nav-btn {
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            color: var(--text-secondary);
+            padding: 8px 16px;
+            border-radius: var(--radius-md);
+            font-size: 0.85em;
+            font-weight: 500;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: all 0.2s ease;
+        }
+
+        .nav-btn:hover {
+            background: var(--bg-hover);
+            border-color: var(--accent);
+            color: var(--text-primary);
+        }
+
+        .nav-btn.active {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: white;
+        }
+
+        /* ======================================================
+           EXECUTIVE SUMMARY
+           ====================================================== */
+        .executive-summary {
+            background: linear-gradient(135deg, var(--bg-card) 0%, rgba(74, 144, 226, 0.08) 100%);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-lg);
+            padding: 24px;
+            margin-bottom: 24px;
+            display: grid;
+            grid-template-columns: 1fr auto;
+            grid-template-rows: auto auto;
+            gap: 20px;
+        }
+
+        .summary-verdict {
+            grid-column: 1 / -1;
+            padding: 16px 20px;
+            border-radius: var(--radius-md);
+            border-left: 4px solid;
+        }
+
+        .summary-verdict.good {
+            background: rgba(16, 185, 129, 0.1);
+            border-left-color: var(--good);
+        }
+
+        .summary-verdict.warning {
+            background: rgba(251, 191, 36, 0.1);
+            border-left-color: var(--warning);
+        }
+
+        .summary-verdict.critical {
+            background: rgba(239, 68, 68, 0.1);
+            border-left-color: var(--critical);
+        }
+
+        .verdict-text {
+            font-size: 1.25em;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 4px;
+        }
+
+        .verdict-detail {
+            font-size: 0.9em;
+            color: var(--text-secondary);
+        }
+
+        .summary-stats {
+            display: flex;
+            gap: 24px;
+        }
+
+        .stat-item {
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 1.5em;
+            font-weight: 700;
+            color: var(--text-primary);
+            line-height: 1.2;
+        }
+
+        .stat-label {
+            font-size: 0.75em;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .priority-actions {
+            grid-column: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .actions-header {
+            font-size: 0.8em;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 4px;
+        }
+
+        .action-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 14px;
+            background: var(--bg-main);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-md);
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 0.9em;
+            transition: all 0.2s ease;
+        }
+
+        .action-item:hover {
+            background: var(--bg-hover);
+            border-color: var(--accent);
+            color: var(--text-primary);
+        }
+
+        .action-icon {
+            font-size: 1.1em;
+        }
+
+        .action-text {
+            flex: 1;
+        }
+
+        .action-arrow {
+            color: var(--accent);
+            font-weight: bold;
+        }
+
+        .summary-tools {
+            display: flex;
+            align-items: flex-end;
+        }
+
+        .export-btn {
+            background: var(--accent);
+            color: white;
+            border: none;
+            padding: 10px 18px;
+            border-radius: var(--radius-md);
+            font-size: 0.9em;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            white-space: nowrap;
+        }
+
+        .export-btn:hover {
+            background: var(--accent-hover);
+            transform: translateY(-1px);
+        }
+
+        /* ======================================================
+           COLUMN QUALITY HEATMAP
+           ====================================================== */
+        .column-heatmap {
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-lg);
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .heatmap-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .heatmap-title {
+            font-size: 1em;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .heatmap-legend {
+            display: flex;
+            gap: 16px;
+            font-size: 0.8em;
+            color: var(--text-muted);
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .legend-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 3px;
+        }
+
+        .heatmap-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+            gap: 8px;
+        }
+
+        .heatmap-cell {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 10px 6px;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            transition: transform 0.15s ease, box-shadow 0.15s ease;
+        }
+
+        .heatmap-cell:hover {
+            transform: scale(1.05);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+
+        .heatmap-name {
+            font-size: 0.75em;
+            color: rgba(255,255,255,0.9);
+            text-align: center;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            max-width: 100%;
+        }
+
+        .heatmap-score {
+            font-size: 1.1em;
+            font-weight: 700;
+            color: white;
+        }
+
+        .heatmap-good, .legend-dot.heatmap-good { background: linear-gradient(135deg, #10b981, #059669); }
+        .heatmap-ok, .legend-dot.heatmap-ok { background: linear-gradient(135deg, #3b82f6, #2563eb); }
+        .heatmap-warning, .legend-dot.heatmap-warning { background: linear-gradient(135deg, #f59e0b, #d97706); }
+        .heatmap-critical, .legend-dot.heatmap-critical { background: linear-gradient(135deg, #ef4444, #dc2626); }
+
+        /* ======================================================
+           COLUMN SEARCH AND FILTER CONTROLS
+           ====================================================== */
+        .column-controls {
+            display: flex;
+            gap: 16px;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .search-box {
+            position: relative;
+            flex: 1;
+            min-width: 200px;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 10px 14px 10px 36px;
+            background: var(--bg-main);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-md);
+            color: var(--text-primary);
+            font-size: 0.9em;
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        .search-icon {
+            position: absolute;
+            left: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-muted);
+            font-size: 0.9em;
+        }
+
+        .filter-buttons {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+
+        .filter-btn {
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            color: var(--text-secondary);
+            padding: 8px 12px;
+            border-radius: var(--radius-sm);
+            font-size: 0.8em;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            white-space: nowrap;
+        }
+
+        .filter-btn:hover {
+            background: var(--bg-hover);
+            border-color: var(--accent);
+        }
+
+        .filter-btn.active {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: white;
+        }
+
+        .sort-controls {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .sort-select {
+            padding: 8px 12px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-sm);
+            color: var(--text-primary);
+            font-size: 0.85em;
+            cursor: pointer;
+        }
+
+        /* ======================================================
+           MOBILE RESPONSIVE STYLES
+           ====================================================== */
         @media (max-width: 768px) {
             .page { padding: 16px; }
             .top-inner { padding: 12px 16px; }
             .file-meta { display: none; }
             .column-quick-stats { display: none; }
             .column-tags { display: none; }
+
+            /* Sticky nav adjustments */
+            .sticky-nav {
+                margin: 0 -16px;
+                padding: 0 16px;
+                top: 56px;
+            }
+
+            .nav-btn {
+                padding: 6px 12px;
+                font-size: 0.8em;
+            }
+
+            /* Executive summary mobile */
+            .executive-summary {
+                display: flex;
+                flex-direction: column;
+                padding: 16px;
+            }
+
+            .summary-stats {
+                flex-wrap: wrap;
+                justify-content: space-around;
+                gap: 16px;
+            }
+
+            .stat-value {
+                font-size: 1.25em;
+            }
+
+            .priority-actions {
+                width: 100%;
+            }
+
+            .summary-tools {
+                width: 100%;
+                justify-content: center;
+            }
+
+            .export-btn {
+                width: 100%;
+            }
+
+            /* Heatmap mobile */
+            .heatmap-header {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .heatmap-grid {
+                grid-template-columns: repeat(auto-fill, minmax(70px, 1fr));
+            }
+
+            .heatmap-cell {
+                padding: 8px 4px;
+            }
+
+            .heatmap-name {
+                font-size: 0.65em;
+            }
+
+            .heatmap-score {
+                font-size: 0.95em;
+            }
+
+            /* Column controls mobile */
+            .column-controls {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .search-box {
+                width: 100%;
+            }
+
+            .filter-buttons {
+                justify-content: flex-start;
+            }
+
+            .sort-controls {
+                width: 100%;
+            }
+
+            .sort-select {
+                width: 100%;
+            }
+        }
+
+        /* Tablet adjustments */
+        @media (min-width: 769px) and (max-width: 1024px) {
+            .executive-summary {
+                grid-template-columns: 1fr;
+            }
+
+            .summary-tools {
+                justify-content: flex-start;
+            }
         }'''
 
     def _get_javascript(self, profile: ProfileResult, type_counts: Dict[str, int], categorical_columns: List[Dict]) -> str:
@@ -1555,15 +2051,233 @@ class ExecutiveHTMLReporter:
             row.classList.toggle('expanded');
         }}
 
-        // Column search
-        function filterColumns(query) {{
+        // ======================================================
+        // STICKY NAVIGATION
+        // ======================================================
+        const navBtns = document.querySelectorAll('.nav-btn');
+        const sections = {{
+            'summary': document.getElementById('section-summary'),
+            'alerts': document.getElementById('section-alerts'),
+            'ml': document.getElementById('section-ml'),
+            'columns': document.getElementById('section-columns'),
+            'config': document.getElementById('section-config')
+        }};
+
+        navBtns.forEach(btn => {{
+            btn.addEventListener('click', function() {{
+                const sectionId = this.dataset.section;
+                const section = sections[sectionId];
+                if (section) {{
+                    // Update active state
+                    navBtns.forEach(b => b.classList.remove('active'));
+                    this.classList.add('active');
+                    // Smooth scroll to section
+                    section.scrollIntoView({{ behavior: 'smooth', block: 'start' }});
+                }}
+            }});
+        }});
+
+        // Update nav on scroll
+        let scrollTimeout;
+        window.addEventListener('scroll', function() {{
+            clearTimeout(scrollTimeout);
+            scrollTimeout = setTimeout(function() {{
+                let currentSection = 'summary';
+                const scrollPos = window.scrollY + 150;
+
+                for (const [name, el] of Object.entries(sections)) {{
+                    if (el && el.offsetTop <= scrollPos) {{
+                        currentSection = name;
+                    }}
+                }}
+
+                navBtns.forEach(btn => {{
+                    btn.classList.toggle('active', btn.dataset.section === currentSection);
+                }});
+            }}, 50);
+        }});
+
+        // ======================================================
+        // COLUMN SEARCH AND FILTER
+        // ======================================================
+        let currentFilter = 'all';
+        let currentSort = 'name';
+
+        function filterColumns() {{
+            const query = document.getElementById('columnSearch')?.value?.toLowerCase() || '';
             const rows = document.querySelectorAll('.column-row');
-            const lowerQuery = query.toLowerCase();
+
             rows.forEach(row => {{
                 const text = row.textContent.toLowerCase();
-                row.style.display = text.includes(lowerQuery) ? '' : 'none';
+                const type = row.dataset?.type || '';
+                const hasIssues = row.dataset?.issues === 'true';
+
+                // Apply text search
+                let showBySearch = !query || text.includes(query);
+
+                // Apply filter
+                let showByFilter = true;
+                switch(currentFilter) {{
+                    case 'issues':
+                        showByFilter = hasIssues;
+                        break;
+                    case 'numeric':
+                        showByFilter = ['integer', 'float'].includes(type);
+                        break;
+                    case 'string':
+                        showByFilter = type === 'string';
+                        break;
+                    case 'date':
+                        showByFilter = ['date', 'datetime'].includes(type);
+                        break;
+                    default:
+                        showByFilter = true;
+                }}
+
+                row.style.display = (showBySearch && showByFilter) ? '' : 'none';
             }});
         }}
+
+        function filterByType(type) {{
+            currentFilter = type;
+
+            // Update button states
+            document.querySelectorAll('.filter-btn').forEach(btn => {{
+                btn.classList.toggle('active', btn.textContent.toLowerCase().includes(type) ||
+                    (type === 'all' && btn.textContent === 'All'));
+            }});
+
+            filterColumns();
+        }}
+
+        function sortColumns() {{
+            const sortBy = document.getElementById('columnSort')?.value || 'name';
+            currentSort = sortBy;
+
+            const container = document.querySelector('.column-explorer .accordion-content');
+            if (!container) return;
+
+            const rows = Array.from(container.querySelectorAll('.column-row'));
+
+            rows.sort((a, b) => {{
+                switch(sortBy) {{
+                    case 'quality':
+                        return parseFloat(b.dataset?.quality || 0) - parseFloat(a.dataset?.quality || 0);
+                    case 'completeness':
+                        return parseFloat(b.dataset?.completeness || 0) - parseFloat(a.dataset?.completeness || 0);
+                    case 'issues':
+                        const aIssues = a.dataset?.issues === 'true' ? 1 : 0;
+                        const bIssues = b.dataset?.issues === 'true' ? 1 : 0;
+                        return bIssues - aIssues;
+                    default:
+                        return (a.dataset?.name || '').localeCompare(b.dataset?.name || '');
+                }}
+            }});
+
+            rows.forEach(row => container.appendChild(row));
+        }}
+
+        // ======================================================
+        // EXPORT ANOMALIES TO CSV
+        // ======================================================
+        function exportAnomalies() {{
+            // Gather all issues from the report
+            const issues = [];
+
+            // Collect column issues
+            document.querySelectorAll('.column-row').forEach(row => {{
+                const colName = row.dataset?.name || 'Unknown';
+                const quality = row.dataset?.quality || 'N/A';
+                row.querySelectorAll('.issue-item, .alert-item').forEach(issue => {{
+                    issues.push({{
+                        column: colName,
+                        quality_score: quality,
+                        issue_type: 'Column Issue',
+                        description: issue.textContent.trim()
+                    }});
+                }});
+            }});
+
+            // Collect ML findings
+            document.querySelectorAll('.ml-finding-card').forEach(card => {{
+                const title = card.querySelector('.finding-title')?.textContent || 'ML Finding';
+                card.querySelectorAll('.anomaly-item, .alert-text').forEach(item => {{
+                    issues.push({{
+                        column: 'ML Analysis',
+                        quality_score: 'N/A',
+                        issue_type: title,
+                        description: item.textContent.trim()
+                    }});
+                }});
+            }});
+
+            // Collect alerts
+            document.querySelectorAll('.alert-badge').forEach(alert => {{
+                issues.push({{
+                    column: 'Alert',
+                    quality_score: 'N/A',
+                    issue_type: alert.classList.contains('critical') ? 'Critical' :
+                               alert.classList.contains('warning') ? 'Warning' : 'Info',
+                    description: alert.textContent.trim()
+                }});
+            }});
+
+            if (issues.length === 0) {{
+                alert('No issues found to export.');
+                return;
+            }}
+
+            // Generate CSV
+            const headers = ['Column', 'Quality Score', 'Issue Type', 'Description'];
+            const csvRows = [headers.join(',')];
+
+            issues.forEach(issue => {{
+                const row = [
+                    '"' + (issue.column || '').replace(/"/g, '""') + '"',
+                    issue.quality_score,
+                    '"' + (issue.issue_type || '').replace(/"/g, '""') + '"',
+                    '"' + (issue.description || '').replace(/"/g, '""') + '"'
+                ];
+                csvRows.push(row.join(','));
+            }});
+
+            const csvContent = csvRows.join('\\n');
+
+            // Download CSV
+            const blob = new Blob([csvContent], {{ type: 'text/csv;charset=utf-8;' }});
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = 'data_quality_issues.csv';
+            link.click();
+
+            // Update button to show success
+            const btn = event?.target;
+            if (btn) {{
+                const originalText = btn.textContent;
+                btn.textContent = '✓ Exported!';
+                btn.style.background = '#10b981';
+                setTimeout(() => {{
+                    btn.textContent = originalText;
+                    btn.style.background = '';
+                }}, 1500);
+            }}
+        }}
+
+        // ======================================================
+        // HEATMAP CLICK TO SCROLL
+        // ======================================================
+        document.querySelectorAll('.heatmap-cell').forEach(cell => {{
+            cell.addEventListener('click', function() {{
+                const colName = this.title.split(':')[0];
+                const row = document.querySelector(`.column-row[data-name="${{colName}}"]`);
+                if (row) {{
+                    row.scrollIntoView({{ behavior: 'smooth', block: 'center' }});
+                    row.classList.add('expanded');
+                    setTimeout(() => row.style.outline = '2px solid var(--accent)', 300);
+                    setTimeout(() => row.style.outline = '', 1500);
+                }}
+            }});
+        }});
 
         // Copy YAML to clipboard
         function copyYaml(yamlContent) {{
@@ -1833,7 +2547,14 @@ class ExecutiveHTMLReporter:
                 })
 
             # Very low uniqueness for string columns (might indicate data quality issue)
-            if col.type_info.inferred_type == 'string' and col.statistics.unique_percentage < 1 and col.statistics.unique_count > 1:
+            # Skip ID-like columns - they're expected to have limited unique values relative to row count
+            col_lower = col.name.lower()
+            is_id_column = any(kw in col_lower for kw in ['account', 'id', 'key', 'code', 'num', 'number', 'ref'])
+            if (col.type_info.inferred_type == 'string' and
+                col.statistics.unique_percentage < 1 and
+                col.statistics.unique_count > 1 and
+                col.statistics.unique_count < 100 and  # Only flag truly low cardinality
+                not is_id_column):
                 alerts.append({
                     'severity': 'info',
                     'icon': 'ℹ️',
@@ -1857,7 +2578,12 @@ class ExecutiveHTMLReporter:
                 })
 
             # Zero-inflated distribution (for numeric columns)
-            if col.statistics.top_values and col.type_info.inferred_type in ['integer', 'float', 'number']:
+            # Skip binary flags (unique_count == 2) - they're expected to be imbalanced
+            is_binary_flag = col.statistics.unique_count == 2
+            is_flag_column = any(kw in col.name.lower() for kw in ['flag', 'is_', 'has_', 'launder', 'fraud', 'active', 'enabled'])
+            if (col.statistics.top_values and
+                col.type_info.inferred_type in ['integer', 'float', 'number'] and
+                not is_binary_flag and not is_flag_column):
                 top_value = col.statistics.top_values[0] if col.statistics.top_values else None
                 if top_value:
                     top_val = top_value.get('value')
@@ -1940,7 +2666,7 @@ class ExecutiveHTMLReporter:
         header_style = 'background: linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, var(--bg-card) 100%); border: 1px solid rgba(239, 68, 68, 0.3);' if critical_count > 0 else 'background: linear-gradient(135deg, rgba(245, 158, 11, 0.1) 0%, var(--bg-card) 100%); border: 1px solid rgba(245, 158, 11, 0.2);'
 
         return f'''
-        <section class="quality-alerts-section" style="{header_style} border-radius: var(--radius-lg); padding: 16px 20px; margin-bottom: 16px;">
+        <section class="quality-alerts-section" id="section-alerts" style="{header_style} border-radius: var(--radius-lg); padding: 16px 20px; margin-bottom: 16px;">
             <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
                 <span style="font-size: 1.3em;">{'🚨' if critical_count > 0 else '⚠️'}</span>
                 <div>
@@ -2660,6 +3386,620 @@ class ExecutiveHTMLReporter:
         }});
         </script>'''
 
+    def _generate_advanced_visualizations(self, ml_findings: Dict) -> str:
+        """
+        Generate advanced visualization section with interactive charts.
+
+        Includes:
+        1. Log-scaled distribution plots for amount fields
+        2. Scatterplot for Amount Received vs Amount Paid
+        3. Class imbalance bar chart
+        4. Anomaly score distribution
+        5. Reconstruction error distribution
+        """
+        if not ml_findings:
+            return ''
+
+        viz_data = ml_findings.get('visualizations', {})
+        if not viz_data:
+            return ''
+
+        sample_info = viz_data.get('sample_info', {})
+        sample_note = ""
+        if sample_info.get('is_sampled'):
+            sample_note = f"<span style='color: var(--text-muted); font-size: 0.85em;'>(Based on {sample_info.get('sample_size', 0):,} sample of {sample_info.get('total_rows', 0):,} rows)</span>"
+
+        sections_html = []
+
+        # ═══════════════════════════════════════════════════════════════
+        # 1. AMOUNT FIELD DISTRIBUTIONS (Log-scaled)
+        # ═══════════════════════════════════════════════════════════════
+        amount_dists = viz_data.get('amount_distributions', {})
+        if amount_dists:
+            charts_html = ''
+            chart_scripts = []
+            for idx, (col, dist_data) in enumerate(list(amount_dists.items())[:4]):
+                if not dist_data or not dist_data.get('histogram'):
+                    continue
+
+                chart_id = f'amountLogHist_{idx}'
+                min_val = dist_data.get('min_value', 0)
+                max_val = dist_data.get('max_value', 0)
+                median_val = dist_data.get('median', 0)
+                mean_val = dist_data.get('mean', 0)
+
+                charts_html += f'''
+                    <div style="flex: 1; min-width: 300px; background: var(--bg-card); border-radius: 8px; padding: 16px; border: 1px solid var(--border-subtle);">
+                        <h4 style="margin: 0 0 8px 0; font-size: 0.95em; color: var(--text-primary);">{col}</h4>
+                        <div style="font-size: 0.8em; color: var(--text-muted); margin-bottom: 12px;">
+                            Min: {min_val:,.2f} | Max: {max_val:,.2f} | Median: {median_val:,.2f}
+                        </div>
+                        <div style="height: 180px;">
+                            <canvas id="{chart_id}"></canvas>
+                        </div>
+                    </div>'''
+
+                histogram = dist_data.get('histogram', [])
+                bin_edges = dist_data.get('bin_edges', [])
+                labels = [f'{bin_edges[i]:,.0f}' if bin_edges[i] >= 1 else f'{bin_edges[i]:.2f}'
+                          for i in range(len(bin_edges)-1)] if len(bin_edges) > 1 else []
+
+                chart_scripts.append({
+                    'id': chart_id,
+                    'labels': labels[:len(histogram)],
+                    'data': histogram
+                })
+
+            if charts_html:
+                sections_html.append(f'''
+                    <div class="accordion" data-accordion="viz-amounts">
+                        <div class="accordion-header" onclick="toggleAccordion(this)">
+                            <div class="accordion-title-group">
+                                <div class="accordion-icon" style="background: linear-gradient(135deg, #10b981, #059669);">📊</div>
+                                <div>
+                                    <div class="accordion-title">Amount Distributions (Log Scale)</div>
+                                    <div class="accordion-subtitle">Visualize skewed financial data distributions</div>
+                                </div>
+                            </div>
+                            <div class="accordion-meta">
+                                <span class="accordion-badge info">{len(amount_dists)} Fields</span>
+                                <span class="accordion-chevron">▼</span>
+                            </div>
+                        </div>
+                        <div class="accordion-content">
+                            <p style="color: var(--text-secondary); margin-bottom: 16px;">
+                                <strong>Why log scale?</strong> Financial data often spans multiple orders of magnitude.
+                                Log scaling reveals patterns in both small and large values that would be hidden in linear plots.
+                                {sample_note}
+                            </p>
+                            <div style="display: flex; flex-wrap: wrap; gap: 16px;">
+                                {charts_html}
+                            </div>
+                            <script>
+                            document.addEventListener('DOMContentLoaded', function() {{
+                                const amountCharts = {json.dumps(chart_scripts)};
+                                amountCharts.forEach(chart => {{
+                                    const ctx = document.getElementById(chart.id);
+                                    if (ctx) {{
+                                        new Chart(ctx, {{
+                                            type: 'bar',
+                                            data: {{
+                                                labels: chart.labels,
+                                                datasets: [{{
+                                                    label: 'Frequency',
+                                                    data: chart.data,
+                                                    backgroundColor: 'rgba(16, 185, 129, 0.6)',
+                                                    borderColor: 'rgba(16, 185, 129, 1)',
+                                                    borderWidth: 1
+                                                }}]
+                                            }},
+                                            options: {{
+                                                responsive: true,
+                                                maintainAspectRatio: false,
+                                                plugins: {{ legend: {{ display: false }} }},
+                                                scales: {{
+                                                    x: {{
+                                                        title: {{ display: true, text: 'Value (log scale)', color: '#64748b' }},
+                                                        ticks: {{ display: false }},
+                                                        grid: {{ color: 'rgba(148, 163, 184, 0.1)' }}
+                                                    }},
+                                                    y: {{
+                                                        title: {{ display: true, text: 'Count', color: '#64748b' }},
+                                                        grid: {{ color: 'rgba(148, 163, 184, 0.1)' }},
+                                                        ticks: {{ color: '#64748b' }}
+                                                    }}
+                                                }}
+                                            }}
+                                        }});
+                                    }}
+                                }});
+                            }});
+                            </script>
+                        </div>
+                    </div>''')
+
+        # ═══════════════════════════════════════════════════════════════
+        # 2. AMOUNT SCATTER PLOT (Received vs Paid)
+        # ═══════════════════════════════════════════════════════════════
+        scatter_data = viz_data.get('amount_scatter')
+        if scatter_data and scatter_data.get('points'):
+            x_col = scatter_data.get('x_column', 'Received')
+            y_col = scatter_data.get('y_column', 'Paid')
+            points = scatter_data.get('points', [])
+            total_points = scatter_data.get('total_points', len(points))
+
+            sections_html.append(f'''
+                <div class="accordion" data-accordion="viz-scatter">
+                    <div class="accordion-header" onclick="toggleAccordion(this)">
+                        <div class="accordion-title-group">
+                            <div class="accordion-icon" style="background: linear-gradient(135deg, #3b82f6, #1d4ed8);">⚡</div>
+                            <div>
+                                <div class="accordion-title">{x_col} vs {y_col}</div>
+                                <div class="accordion-subtitle">Identify mismatches between related amount fields</div>
+                            </div>
+                        </div>
+                        <div class="accordion-meta">
+                            <span class="accordion-badge info">{total_points:,} Points</span>
+                            <span class="accordion-chevron">▼</span>
+                        </div>
+                    </div>
+                    <div class="accordion-content">
+                        <p style="color: var(--text-secondary); margin-bottom: 16px;">
+                            <strong>Interpretation:</strong> Points should cluster near the diagonal line (y=x) if received and paid amounts match.
+                            Deviations indicate potential currency conversion, fees, or data issues. {sample_note}
+                        </p>
+                        <div style="height: 400px; background: var(--bg-card); border-radius: 8px; padding: 16px;">
+                            <canvas id="amountScatterChart"></canvas>
+                        </div>
+                        <script>
+                        document.addEventListener('DOMContentLoaded', function() {{
+                            const scatterCtx = document.getElementById('amountScatterChart');
+                            if (scatterCtx) {{
+                                const scatterPoints = {json.dumps(points[:1000])};
+                                const maxVal = Math.max(...scatterPoints.map(p => Math.max(p.x, p.y)));
+                                new Chart(scatterCtx, {{
+                                    type: 'scatter',
+                                    data: {{
+                                        datasets: [
+                                            {{
+                                                label: 'Transactions',
+                                                data: scatterPoints,
+                                                backgroundColor: 'rgba(59, 130, 246, 0.5)',
+                                                borderColor: 'rgba(59, 130, 246, 0.8)',
+                                                pointRadius: 3
+                                            }},
+                                            {{
+                                                label: 'y = x (Expected)',
+                                                data: [{{x: 0, y: 0}}, {{x: maxVal, y: maxVal}}],
+                                                type: 'line',
+                                                borderColor: 'rgba(239, 68, 68, 0.7)',
+                                                borderDash: [5, 5],
+                                                borderWidth: 2,
+                                                pointRadius: 0,
+                                                fill: false
+                                            }}
+                                        ]
+                                    }},
+                                    options: {{
+                                        responsive: true,
+                                        maintainAspectRatio: false,
+                                        plugins: {{
+                                            legend: {{ position: 'top', labels: {{ color: '#94a3b8' }} }}
+                                        }},
+                                        scales: {{
+                                            x: {{
+                                                title: {{ display: true, text: '{x_col}', color: '#64748b' }},
+                                                grid: {{ color: 'rgba(148, 163, 184, 0.1)' }},
+                                                ticks: {{ color: '#64748b' }}
+                                            }},
+                                            y: {{
+                                                title: {{ display: true, text: '{y_col}', color: '#64748b' }},
+                                                grid: {{ color: 'rgba(148, 163, 184, 0.1)' }},
+                                                ticks: {{ color: '#64748b' }}
+                                            }}
+                                        }}
+                                    }}
+                                }});
+                            }}
+                        }});
+                        </script>
+                    </div>
+                </div>''')
+
+        # ═══════════════════════════════════════════════════════════════
+        # 3. CLASS IMBALANCE CHARTS
+        # ═══════════════════════════════════════════════════════════════
+        class_data = viz_data.get('class_imbalance', {})
+        if class_data:
+            imbalance_charts = ''
+            imbalance_scripts = []
+
+            for idx, (col, data) in enumerate(list(class_data.items())[:4]):
+                classes = data.get('classes', [])
+                if not classes:
+                    continue
+
+                chart_id = f'classImbalance_{idx}'
+                is_target = data.get('is_target_like', False)
+                is_binary = data.get('is_binary', False)
+                total = data.get('total', 0)
+
+                # Check for imbalance
+                if is_binary and len(classes) >= 2:
+                    minority_pct = min(c['percentage'] for c in classes)
+                    imbalance_status = 'critical' if minority_pct < 10 else 'warning' if minority_pct < 30 else 'good'
+                    imbalance_note = f"Minority class: {minority_pct:.1f}%"
+                else:
+                    imbalance_status = 'info'
+                    imbalance_note = f"{len(classes)} classes"
+
+                imbalance_charts += f'''
+                    <div style="flex: 1; min-width: 280px; background: var(--bg-card); border-radius: 8px; padding: 16px; border: 1px solid var(--border-subtle);">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                            <h4 style="margin: 0; font-size: 0.95em; color: var(--text-primary);">{col}</h4>
+                            <span class="accordion-badge {imbalance_status}">{imbalance_note}</span>
+                        </div>
+                        <div style="height: 200px;">
+                            <canvas id="{chart_id}"></canvas>
+                        </div>
+                        <div style="font-size: 0.8em; color: var(--text-muted); margin-top: 8px; text-align: center;">
+                            {'🎯 Likely ML target' if is_target else ''} Total: {total:,}
+                        </div>
+                    </div>'''
+
+                imbalance_scripts.append({
+                    'id': chart_id,
+                    'labels': [c['value'] for c in classes],
+                    'data': [c['count'] for c in classes],
+                    'percentages': [c['percentage'] for c in classes]
+                })
+
+            if imbalance_charts:
+                sections_html.append(f'''
+                    <div class="accordion" data-accordion="viz-imbalance">
+                        <div class="accordion-header" onclick="toggleAccordion(this)">
+                            <div class="accordion-title-group">
+                                <div class="accordion-icon" style="background: linear-gradient(135deg, #f59e0b, #d97706);">⚖️</div>
+                                <div>
+                                    <div class="accordion-title">Class Distribution & Imbalance</div>
+                                    <div class="accordion-subtitle">Target variable distributions for ML readiness</div>
+                                </div>
+                            </div>
+                            <div class="accordion-meta">
+                                <span class="accordion-badge info">{len(class_data)} Fields</span>
+                                <span class="accordion-chevron">▼</span>
+                            </div>
+                        </div>
+                        <div class="accordion-content">
+                            <p style="color: var(--text-secondary); margin-bottom: 16px;">
+                                <strong>Why this matters:</strong> Severely imbalanced classes (&lt;10% minority) can cause ML models
+                                to ignore the minority class entirely. Consider resampling, class weights, or alternative metrics.
+                                {sample_note}
+                            </p>
+                            <div style="display: flex; flex-wrap: wrap; gap: 16px;">
+                                {imbalance_charts}
+                            </div>
+                            <script>
+                            document.addEventListener('DOMContentLoaded', function() {{
+                                const imbalanceCharts = {json.dumps(imbalance_scripts)};
+                                const colors = ['rgba(139, 92, 246, 0.8)', 'rgba(59, 130, 246, 0.8)', 'rgba(16, 185, 129, 0.8)',
+                                               'rgba(245, 158, 11, 0.8)', 'rgba(239, 68, 68, 0.8)', 'rgba(236, 72, 153, 0.8)'];
+                                imbalanceCharts.forEach(chart => {{
+                                    const ctx = document.getElementById(chart.id);
+                                    if (ctx) {{
+                                        new Chart(ctx, {{
+                                            type: 'bar',
+                                            data: {{
+                                                labels: chart.labels,
+                                                datasets: [{{
+                                                    label: 'Count',
+                                                    data: chart.data,
+                                                    backgroundColor: colors.slice(0, chart.labels.length),
+                                                    borderWidth: 0,
+                                                    borderRadius: 4
+                                                }}]
+                                            }},
+                                            options: {{
+                                                responsive: true,
+                                                maintainAspectRatio: false,
+                                                plugins: {{
+                                                    legend: {{ display: false }},
+                                                    tooltip: {{
+                                                        callbacks: {{
+                                                            label: function(context) {{
+                                                                const pct = chart.percentages[context.dataIndex];
+                                                                return `Count: ${{context.raw.toLocaleString()}} (${{pct}}%)`;
+                                                            }}
+                                                        }}
+                                                    }}
+                                                }},
+                                                scales: {{
+                                                    x: {{
+                                                        grid: {{ display: false }},
+                                                        ticks: {{ color: '#94a3b8', font: {{ size: 11 }} }}
+                                                    }},
+                                                    y: {{
+                                                        grid: {{ color: 'rgba(148, 163, 184, 0.1)' }},
+                                                        ticks: {{ color: '#64748b' }}
+                                                    }}
+                                                }}
+                                            }}
+                                        }});
+                                    }}
+                                }});
+                            }});
+                            </script>
+                        </div>
+                    </div>''')
+
+        # ═══════════════════════════════════════════════════════════════
+        # 4. ACTIVITY TIMELINE (Temporal Density)
+        # ═══════════════════════════════════════════════════════════════
+        temporal_density = viz_data.get('temporal_density', {})
+        if temporal_density:
+            timeline_charts = ''
+            timeline_scripts = []
+
+            for idx, (col, data) in enumerate(list(temporal_density.items())[:2]):
+                if not data or not data.get('histogram'):
+                    continue
+
+                chart_id = f'activityTimeline_{idx}'
+                min_date = data.get('min_date', '')
+                max_date = data.get('max_date', '')
+                total_records = data.get('total_records', 0)
+                gaps_detected = data.get('gaps_detected', 0)
+                peak = data.get('peak_activity', {})
+                date_range_days = data.get('date_range_days', 0)
+
+                gap_badge = f'<span class="accordion-badge warning">{gaps_detected} Gaps</span>' if gaps_detected > 0 else ''
+
+                timeline_charts += f'''
+                    <div style="background: var(--bg-card); border-radius: 8px; padding: 16px; margin-bottom: 16px; border: 1px solid var(--border-subtle);">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                            <h4 style="margin: 0; font-size: 0.95em; color: var(--text-primary);">📅 {col}</h4>
+                            {gap_badge}
+                        </div>
+                        <div style="font-size: 0.8em; color: var(--text-muted); margin-bottom: 12px;">
+                            Range: {date_range_days} days | Peak: {peak.get('label', 'N/A')} ({peak.get('count', 0):,} events)
+                        </div>
+                        <div style="height: 200px;">
+                            <canvas id="{chart_id}"></canvas>
+                        </div>
+                    </div>'''
+
+                histogram = data.get('histogram', [])
+                labels = data.get('labels', [])
+
+                timeline_scripts.append({
+                    'id': chart_id,
+                    'labels': labels,
+                    'data': histogram,
+                    'gaps': data.get('gap_labels', [])
+                })
+
+            if timeline_charts:
+                sections_html.append(f'''
+                    <div class="accordion" data-accordion="viz-timeline">
+                        <div class="accordion-header" onclick="toggleAccordion(this)">
+                            <div class="accordion-title-group">
+                                <div class="accordion-icon" style="background: linear-gradient(135deg, #8b5cf6, #6d28d9);">📈</div>
+                                <div>
+                                    <div class="accordion-title">Activity Timeline</div>
+                                    <div class="accordion-subtitle">Event density over time - detect coverage gaps</div>
+                                </div>
+                            </div>
+                            <div class="accordion-meta">
+                                <span class="accordion-badge info">{len(temporal_density)} Temporal Fields</span>
+                                <span class="accordion-chevron">▼</span>
+                            </div>
+                        </div>
+                        <div class="accordion-content">
+                            <p style="color: var(--text-secondary); margin-bottom: 16px;">
+                                <strong>What this shows:</strong> The distribution of events/transactions over time.
+                                Gaps indicate periods with missing or low data coverage - potential ingestion issues or business seasonality.
+                                {sample_note}
+                            </p>
+                            {timeline_charts}
+                            <script>
+                            document.addEventListener('DOMContentLoaded', function() {{
+                                const timelineCharts = {json.dumps(timeline_scripts)};
+                                timelineCharts.forEach(chart => {{
+                                    const ctx = document.getElementById(chart.id);
+                                    if (ctx) {{
+                                        // Color bars - highlight gaps in red
+                                        const bgColors = chart.data.map((val, idx) => {{
+                                            return chart.gaps.includes(chart.labels[idx]) ? 'rgba(239, 68, 68, 0.7)' : 'rgba(139, 92, 246, 0.6)';
+                                        }});
+
+                                        new Chart(ctx, {{
+                                            type: 'bar',
+                                            data: {{
+                                                labels: chart.labels,
+                                                datasets: [{{
+                                                    label: 'Events',
+                                                    data: chart.data,
+                                                    backgroundColor: bgColors,
+                                                    borderWidth: 0
+                                                }}]
+                                            }},
+                                            options: {{
+                                                responsive: true,
+                                                maintainAspectRatio: false,
+                                                plugins: {{ legend: {{ display: false }} }},
+                                                scales: {{
+                                                    x: {{
+                                                        title: {{ display: true, text: 'Time Period', color: '#64748b' }},
+                                                        ticks: {{
+                                                            maxRotation: 45,
+                                                            minRotation: 45,
+                                                            color: '#64748b',
+                                                            font: {{ size: 9 }},
+                                                            maxTicksLimit: 15
+                                                        }},
+                                                        grid: {{ display: false }}
+                                                    }},
+                                                    y: {{
+                                                        title: {{ display: true, text: 'Event Count', color: '#64748b' }},
+                                                        grid: {{ color: 'rgba(148, 163, 184, 0.1)' }},
+                                                        ticks: {{ color: '#64748b' }}
+                                                    }}
+                                                }}
+                                            }}
+                                        }});
+                                    }}
+                                }});
+                            }});
+                            </script>
+                        </div>
+                    </div>''')
+
+        # ═══════════════════════════════════════════════════════════════
+        # 5. RECONSTRUCTION ERROR DISTRIBUTION (Autoencoder)
+        # ═══════════════════════════════════════════════════════════════
+        recon_errors = viz_data.get('reconstruction_errors')
+        if recon_errors:
+            mean_err = recon_errors.get('mean', 0)
+            std_err = recon_errors.get('std', 0)
+            threshold = recon_errors.get('threshold', 0)
+            anomaly_count = recon_errors.get('anomaly_count', 0)
+            anomaly_pct = recon_errors.get('anomaly_percentage', 0)
+
+            sections_html.append(f'''
+                <div class="accordion" data-accordion="viz-autoencoder">
+                    <div class="accordion-header" onclick="toggleAccordion(this)">
+                        <div class="accordion-title-group">
+                            <div class="accordion-icon" style="background: linear-gradient(135deg, #ec4899, #be185d);">🧠</div>
+                            <div>
+                                <div class="accordion-title">Autoencoder Reconstruction Errors</div>
+                                <div class="accordion-subtitle">Deep learning anomaly detection threshold</div>
+                            </div>
+                        </div>
+                        <div class="accordion-meta">
+                            <span class="accordion-badge {'critical' if anomaly_pct > 5 else 'warning' if anomaly_pct > 1 else 'good'}">{anomaly_count:,} Anomalies</span>
+                            <span class="accordion-chevron">▼</span>
+                        </div>
+                    </div>
+                    <div class="accordion-content">
+                        <p style="color: var(--text-secondary); margin-bottom: 16px;">
+                            <strong>What this shows:</strong> The autoencoder learns normal patterns and measures how well it can
+                            reconstruct each record. High reconstruction error indicates the record is unusual.
+                            Records above the threshold ({threshold:.4f}) are flagged as anomalies.
+                            {sample_note}
+                        </p>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 16px; margin-bottom: 20px;">
+                            <div style="background: var(--bg-card); padding: 16px; border-radius: 8px; text-align: center;">
+                                <div style="font-size: 1.5em; font-weight: bold; color: var(--text-primary);">{mean_err:.4f}</div>
+                                <div style="font-size: 0.85em; color: var(--text-muted);">Mean Error</div>
+                            </div>
+                            <div style="background: var(--bg-card); padding: 16px; border-radius: 8px; text-align: center;">
+                                <div style="font-size: 1.5em; font-weight: bold; color: var(--text-primary);">{std_err:.4f}</div>
+                                <div style="font-size: 0.85em; color: var(--text-muted);">Std Dev</div>
+                            </div>
+                            <div style="background: var(--bg-card); padding: 16px; border-radius: 8px; text-align: center;">
+                                <div style="font-size: 1.5em; font-weight: bold; color: var(--critical);">{threshold:.4f}</div>
+                                <div style="font-size: 0.85em; color: var(--text-muted);">Threshold</div>
+                            </div>
+                            <div style="background: var(--bg-card); padding: 16px; border-radius: 8px; text-align: center;">
+                                <div style="font-size: 1.5em; font-weight: bold; color: var(--warning);">{anomaly_pct:.2f}%</div>
+                                <div style="font-size: 0.85em; color: var(--text-muted);">Anomaly Rate</div>
+                            </div>
+                        </div>
+                        <div style="background: var(--bg-card); border-radius: 8px; padding: 16px; height: 200px;">
+                            <canvas id="reconErrorChart"></canvas>
+                        </div>
+                        <script>
+                        document.addEventListener('DOMContentLoaded', function() {{
+                            const reconCtx = document.getElementById('reconErrorChart');
+                            if (reconCtx) {{
+                                // Generate simulated distribution based on stats
+                                const mean = {mean_err};
+                                const std = {std_err};
+                                const threshold = {threshold};
+                                const bins = 40;
+                                const labels = [];
+                                const data = [];
+                                const bgColors = [];
+
+                                for (let i = 0; i < bins; i++) {{
+                                    const x = mean - 3*std + (6*std/bins) * i;
+                                    const y = Math.exp(-0.5 * Math.pow((x - mean) / std, 2)) * 1000;
+                                    labels.push(x.toFixed(4));
+                                    data.push(Math.max(0, y));
+                                    bgColors.push(x > threshold ? 'rgba(239, 68, 68, 0.7)' : 'rgba(139, 92, 246, 0.6)');
+                                }}
+
+                                new Chart(reconCtx, {{
+                                    type: 'bar',
+                                    data: {{
+                                        labels: labels,
+                                        datasets: [{{
+                                            label: 'Frequency',
+                                            data: data,
+                                            backgroundColor: bgColors,
+                                            borderWidth: 0
+                                        }}]
+                                    }},
+                                    options: {{
+                                        responsive: true,
+                                        maintainAspectRatio: false,
+                                        plugins: {{
+                                            legend: {{ display: false }},
+                                            annotation: {{
+                                                annotations: {{
+                                                    thresholdLine: {{
+                                                        type: 'line',
+                                                        xMin: threshold,
+                                                        xMax: threshold,
+                                                        borderColor: 'rgba(239, 68, 68, 1)',
+                                                        borderWidth: 2,
+                                                        borderDash: [5, 5],
+                                                        label: {{
+                                                            display: true,
+                                                            content: 'Threshold',
+                                                            position: 'start'
+                                                        }}
+                                                    }}
+                                                }}
+                                            }}
+                                        }},
+                                        scales: {{
+                                            x: {{
+                                                display: false
+                                            }},
+                                            y: {{
+                                                grid: {{ color: 'rgba(148, 163, 184, 0.1)' }},
+                                                ticks: {{ display: false }}
+                                            }}
+                                        }}
+                                    }}
+                                }});
+                            }}
+                        }});
+                        </script>
+                    </div>
+                </div>''')
+
+        # Combine all sections
+        if not sections_html:
+            return ''
+
+        return f'''
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <!-- ADVANCED VISUALIZATIONS                                          -->
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <div class="section-divider" style="margin: 24px 0 16px 0; padding: 12px 20px; background: linear-gradient(135deg, #0d9488 0%, #065f46 100%); border-radius: 8px; border-left: 4px solid #14b8a6;">
+            <h2 style="margin: 0; font-size: 1.1em; color: #f1f5f9; font-weight: 600;">📈 ADVANCED VISUALIZATIONS</h2>
+            <p style="margin: 4px 0 0 0; font-size: 0.85em; color: #99f6e4;">Interactive charts for deeper data understanding</p>
+        </div>
+
+        <div class="layout-grid">
+            <div class="main-column">
+                {''.join(sections_html)}
+            </div>
+        </div>
+        '''
+
     def _generate_overview_accordion(self, profile: ProfileResult, type_counts: Dict,
                                      avg_completeness: float, avg_validity: float,
                                      avg_consistency: float, avg_uniqueness: float) -> str:
@@ -2672,7 +4012,7 @@ class ExecutiveHTMLReporter:
 
         def get_hint(metric, value):
             hints = {
-                'completeness': '✓ No missing values - ready for analysis' if value >= 99 else f'{100-value:.1f}% of values are null',
+                'completeness': '✓ No missing values - ready for analysis' if value == 100 else f'{100-value:.2f}% of values are null' if value >= 99 else f'{100-value:.1f}% of values are null',
                 'validity': f'{value:.0f}% of values match expected formats',
                 'consistency': '✓ Patterns are uniform across data' if value >= 95 else 'Some pattern variations detected',
                 'uniqueness': 'ℹ Some expected duplication in categorical columns' if value < 80 else '✓ Good uniqueness ratio'
@@ -2839,8 +4179,17 @@ class ExecutiveHTMLReporter:
 
         tagged_count = sum(1 for col in profile.columns if col.semantic_info or col.pii_info and col.pii_info.get('detected'))
 
+        # Generate heatmap
+        heatmap_html = self._generate_column_heatmap(profile)
+
+        # Generate search controls
+        search_controls = self._generate_column_search_controls()
+
         return f'''
-                <div class="accordion" data-accordion="columns">
+                <!-- Column Quality Heatmap -->
+                {heatmap_html}
+
+                <div class="accordion column-explorer open" data-accordion="columns" id="section-columns">
                     <div class="accordion-header" onclick="toggleAccordion(this)">
                         <div class="accordion-title-group">
                             <div class="accordion-icon columns">📋</div>
@@ -2861,11 +4210,9 @@ class ExecutiveHTMLReporter:
                                 <br>• <strong>Semantic meaning</strong> - MONEY, TIMESTAMP, ACCOUNT_ID, etc.
                                 <br>• <strong>PII detection</strong> - Credit cards, SSN, emails, phones
                                 <br>• <strong>Temporal patterns</strong> - Date ranges, frequency, gaps
-                                <br>Click any column to see detailed statistics and insights.
+                                <br>Click any column to see details. Use the heatmap above for a quick overview.
                             </div>
-                            <div class="column-search">
-                                <input type="text" placeholder="Search columns by name, type, or tag..." oninput="filterColumns(this.value)">
-                            </div>
+                            {search_controls}
                             <div class="column-list" id="columnList">
                                 {column_rows}
                             </div>
@@ -2927,8 +4274,23 @@ class ExecutiveHTMLReporter:
         # Top values
         top_values = self._generate_top_values(col)
 
+        # Determine if column has issues for filtering
+        has_issues = bool(col.quality.issues) or score < 70 or col.quality.completeness < 80
+
+        # Build data attributes for JS sorting/filtering
+        data_attrs = f'data-name="{col.name}" data-type="{inferred_type}" data-quality="{score:.1f}" data-completeness="{col.quality.completeness:.1f}" data-issues="{str(has_issues).lower()}"'
+
+        # Format completeness with appropriate precision
+        completeness = col.quality.completeness
+        if completeness == 100:
+            completeness_str = "100% complete"
+        elif completeness >= 99:
+            completeness_str = f"{completeness:.2f}% complete"
+        else:
+            completeness_str = f"{completeness:.1f}% complete"
+
         return f'''
-                                <div class="column-row" onclick="toggleColumnRow(this)">
+                                <div class="column-row" onclick="toggleColumnRow(this)" {data_attrs}>
                                     <div class="column-row-header">
                                         <span class="column-expand-icon">▶</span>
                                         <div class="column-type-icon {type_class}">{icon}</div>
@@ -2937,7 +4299,7 @@ class ExecutiveHTMLReporter:
                                             <div class="column-type">{inferred_type} ({col.type_info.confidence*100:.0f}% confidence)</div>
                                         </div>
                                         <div class="column-quick-stats">
-                                            <span>{col.quality.completeness:.0f}% complete</span>
+                                            <span>{completeness_str}</span>
                                             <span>{col.statistics.unique_percentage:.2f}% unique</span>
                                         </div>
                                         <div class="column-tags">
@@ -3090,7 +4452,7 @@ class ExecutiveHTMLReporter:
                        .replace('>', '&gt;'))
 
         return f'''
-                <div class="accordion" data-accordion="config">
+                <div class="accordion" data-accordion="config" id="section-config">
                     <div class="accordion-header" onclick="toggleAccordion(this)">
                         <div class="accordion-title-group">
                             <div class="accordion-icon quality">⚙️</div>
@@ -3212,6 +4574,194 @@ class ExecutiveHTMLReporter:
 
         return f'''      - type: "{sugg.validation_type}"
         severity: "{sugg.severity}"{params_str if params_str else ""}'''
+
+    # =========================================================================
+    # NEW PRESENTATION IMPROVEMENTS
+    # =========================================================================
+
+    def _generate_executive_summary(self, profile: ProfileResult, pii_count: int, avg_completeness: float) -> str:
+        """
+        Generate the executive summary section with at-a-glance verdict.
+        This provides immediate context for busy stakeholders.
+        """
+        # Calculate verdict
+        score = profile.overall_quality_score
+        issues_count = sum(len(col.quality.issues) for col in profile.columns)
+        ml_issues = 0
+        if profile.ml_findings:
+            ml_issues = profile.ml_findings.get('summary', {}).get('total_issues', 0)
+
+        # Determine verdict
+        if score >= 90 and pii_count == 0 and issues_count < 3:
+            verdict = "✅ Data Quality: EXCELLENT"
+            verdict_class = "good"
+            verdict_detail = "This dataset meets high quality standards with minimal issues detected."
+        elif score >= 75 and pii_count <= 2:
+            verdict = "🟡 Data Quality: GOOD with minor concerns"
+            verdict_class = "warning"
+            verdict_detail = f"Overall quality is acceptable. {issues_count} column issue(s) to review."
+        elif score >= 60:
+            verdict = "🟠 Data Quality: NEEDS ATTENTION"
+            verdict_class = "warning"
+            verdict_detail = f"Multiple data quality issues detected ({issues_count} issues). Review recommended."
+        else:
+            verdict = "🔴 Data Quality: CRITICAL ISSUES"
+            verdict_class = "critical"
+            verdict_detail = "Significant data quality problems. Immediate review required."
+
+        # Priority actions based on issues
+        actions = []
+
+        # Check for PII
+        if pii_count > 0:
+            actions.append({
+                'icon': '🔒',
+                'text': f'Review {pii_count} column(s) with potential PII',
+                'link': '#section-pii'
+            })
+
+        # Check completeness
+        if avg_completeness < 90:
+            sparse_cols = [col.name for col in profile.columns if col.quality.completeness < 80]
+            actions.append({
+                'icon': '📊',
+                'text': f'{len(sparse_cols)} column(s) have significant missing data',
+                'link': '#section-alerts'
+            })
+
+        # Check ML findings
+        if ml_issues > 100:
+            actions.append({
+                'icon': '🧠',
+                'text': f'{ml_issues:,} records flagged by ML analysis',
+                'link': '#section-ml'
+            })
+
+        # Check for type issues
+        type_issues = [col.name for col in profile.columns if col.quality.validity < 90]
+        if type_issues:
+            actions.append({
+                'icon': '⚠️',
+                'text': f'{len(type_issues)} column(s) have data type issues',
+                'link': '#section-columns'
+            })
+
+        # Limit to top 3 actions
+        actions = actions[:3]
+
+        actions_html = ''
+        if actions:
+            for action in actions:
+                actions_html += f'''
+                <a href="{action['link']}" class="action-item">
+                    <span class="action-icon">{action['icon']}</span>
+                    <span class="action-text">{action['text']}</span>
+                    <span class="action-arrow">→</span>
+                </a>'''
+
+        # Add export button
+        export_btn = '''
+        <button onclick="exportAnomalies()" class="export-btn" title="Export flagged records to CSV">
+            📥 Export Issues
+        </button>'''
+
+        return f'''
+        <section class="executive-summary">
+            <div class="summary-verdict {verdict_class}">
+                <div class="verdict-text">{verdict}</div>
+                <div class="verdict-detail">{verdict_detail}</div>
+            </div>
+            <div class="summary-stats">
+                <div class="stat-item">
+                    <div class="stat-value">{profile.row_count:,}</div>
+                    <div class="stat-label">Records</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value">{profile.column_count}</div>
+                    <div class="stat-label">Columns</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value">{issues_count}</div>
+                    <div class="stat-label">Issues</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value">{ml_issues:,}</div>
+                    <div class="stat-label">ML Flags</div>
+                </div>
+            </div>
+            {f'<div class="priority-actions"><div class="actions-header">Priority Actions</div>{actions_html}</div>' if actions else ''}
+            <div class="summary-tools">
+                {export_btn}
+            </div>
+        </section>'''
+
+    def _generate_column_heatmap(self, profile: ProfileResult) -> str:
+        """
+        Generate a column quality heatmap visualization.
+        Shows all columns with color-coded quality scores at a glance.
+        """
+        cells = []
+        for col in profile.columns:
+            score = col.quality.overall_score
+            if score >= 90:
+                color_class = 'heatmap-good'
+            elif score >= 70:
+                color_class = 'heatmap-ok'
+            elif score >= 50:
+                color_class = 'heatmap-warning'
+            else:
+                color_class = 'heatmap-critical'
+
+            # Truncate long names
+            name = col.name[:12] + '...' if len(col.name) > 12 else col.name
+
+            cells.append(f'''
+            <div class="heatmap-cell {color_class}" title="{col.name}: {score:.0f}%">
+                <span class="heatmap-name">{name}</span>
+                <span class="heatmap-score">{score:.0f}</span>
+            </div>''')
+
+        return f'''
+        <div class="column-heatmap">
+            <div class="heatmap-header">
+                <span class="heatmap-title">Column Quality Overview</span>
+                <div class="heatmap-legend">
+                    <span class="legend-item"><span class="legend-dot heatmap-good"></span>90+</span>
+                    <span class="legend-item"><span class="legend-dot heatmap-ok"></span>70-89</span>
+                    <span class="legend-item"><span class="legend-dot heatmap-warning"></span>50-69</span>
+                    <span class="legend-item"><span class="legend-dot heatmap-critical"></span>&lt;50</span>
+                </div>
+            </div>
+            <div class="heatmap-grid">
+                {''.join(cells)}
+            </div>
+        </div>'''
+
+    def _generate_column_search_controls(self) -> str:
+        """Generate column search and filter controls."""
+        return '''
+        <div class="column-controls">
+            <div class="search-box">
+                <input type="text" id="columnSearch" placeholder="Search columns..."
+                       onkeyup="filterColumns()" class="search-input">
+                <span class="search-icon">🔍</span>
+            </div>
+            <div class="filter-buttons">
+                <button class="filter-btn active" onclick="filterByType('all')">All</button>
+                <button class="filter-btn" onclick="filterByType('issues')">⚠️ With Issues</button>
+                <button class="filter-btn" onclick="filterByType('numeric')">Numeric</button>
+                <button class="filter-btn" onclick="filterByType('string')">String</button>
+                <button class="filter-btn" onclick="filterByType('date')">Date</button>
+            </div>
+            <div class="sort-controls">
+                <select id="columnSort" onchange="sortColumns()" class="sort-select">
+                    <option value="name">Sort by Name</option>
+                    <option value="quality">Sort by Quality</option>
+                    <option value="completeness">Sort by Completeness</option>
+                    <option value="issues">Sort by Issues</option>
+                </select>
+            </div>
+        </div>'''
 
     # Helper methods
     def _build_sample_rows_html(self, sample_rows: List[Dict], max_rows: int = 5) -> str:
@@ -3356,3 +4906,200 @@ class ExecutiveHTMLReporter:
             pct = (typical / total_rows * 100) if total_rows else 0
             return {'typical_sample': typical, 'sample_pct': pct}
         return {'typical_sample': 0, 'sample_pct': 0}
+
+    def _generate_sampling_summary_enhanced(self, profile: ProfileResult, sampling_info: Dict, insights: Dict) -> str:
+        """
+        Generate enhanced sampling summary with insight engine's explanation.
+
+        Uses the 50k sampling policy explanation from the insight engine.
+        """
+        insight_sampling = insights.get('sampling_info', {})
+        sample_used = insight_sampling.get('sample_used', False)
+        sample_size = insight_sampling.get('sample_size', 0)
+        sample_fraction = insight_sampling.get('sample_fraction', 0)
+        total_rows = insight_sampling.get('total_rows', profile.row_count)
+
+        # Get metrics lists
+        full_metrics = insight_sampling.get('full_dataset_metrics', [])
+        sampled_metrics = insight_sampling.get('sampled_metrics', [])
+
+        # Format metrics lists for display
+        full_metrics_str = ', '.join(full_metrics) if full_metrics else 'Row counts, null counts, metadata'
+        sampled_metrics_str = ', '.join(sampled_metrics) if sampled_metrics else 'Statistics, patterns, ML analysis'
+
+        # Sampling explanation from insight engine
+        sampling_explanation = insights.get('sampling_explanation', '')
+        sampling_overview = insights.get('sampling_overview', '')
+
+        if sample_used:
+            sample_display = f"{sample_size:,} rows ({sample_fraction:.2%} of dataset)"
+            sample_note = "50k sample used for statistical analysis"
+        else:
+            sample_display = f"Full dataset ({total_rows:,} rows)"
+            sample_note = "Full dataset analyzed (under 50k rows)"
+
+        return f'''
+        <section class="sampling-bar" style="flex-direction: column; align-items: stretch;">
+            <div style="display: flex; flex-wrap: wrap; gap: 24px; align-items: center;">
+                <div class="sampling-bar-title">🔬 Analysis Methodology</div>
+                <div class="sampling-stat">
+                    <span class="sampling-stat-label">Dataset Size</span>
+                    <span class="sampling-stat-value highlight">{total_rows:,} rows</span>
+                </div>
+                <div class="sampling-stat">
+                    <span class="sampling-stat-label">Sample Used</span>
+                    <span class="sampling-stat-value">{sample_display}</span>
+                </div>
+                <div class="sampling-stat">
+                    <span class="sampling-stat-label">Method</span>
+                    <span class="sampling-stat-value">{sample_note}</span>
+                </div>
+            </div>
+            <details style="margin-top: 12px; margin-bottom: 0;">
+                <summary style="cursor: pointer; color: var(--text-secondary); font-size: 0.9em; padding: 8px 0;">ℹ️ About the 50k sampling methodology...</summary>
+                <div class="hint-box" style="margin-top: 8px; margin-bottom: 0; border-left-color: var(--info);">
+                    <p style="margin: 0 0 12px 0;"><strong>📊 Sampling Policy:</strong></p>
+                    <p style="margin: 0 0 12px 0; color: var(--text-secondary);">{sampling_explanation.replace(chr(10), '<br>')}</p>
+
+                    <p style="margin: 12px 0 8px 0;"><strong>Full Dataset Metrics:</strong> <span style="color: var(--good);">{full_metrics_str}</span></p>
+                    <p style="margin: 0;"><strong>{'Sampled' if sample_used else 'All'} Metrics:</strong> <span style="color: var(--accent);">{sampled_metrics_str}</span></p>
+                </div>
+            </details>
+        </section>'''
+
+    def _generate_key_insights_section(self, insights: Dict) -> str:
+        """
+        Generate key insights section from insight engine output.
+
+        Displays executive summary and top findings with severity badges.
+        """
+        exec_summary = insights.get('executive_summary', {})
+        detailed_sections = insights.get('detailed_sections', {})
+
+        if not exec_summary:
+            return ''
+
+        # Quality tier info
+        quality_tier = exec_summary.get('quality_tier', {})
+        tier_name = quality_tier.get('label', 'Unknown')
+        tier_description = quality_tier.get('description', '')
+
+        # Key findings
+        key_findings = exec_summary.get('key_findings', [])
+
+        # Build findings HTML
+        findings_html = ''
+        if key_findings:
+            for finding in key_findings:
+                severity = finding.get('severity', 'medium')
+                category = finding.get('category', 'general')
+                text = finding.get('text', '')
+
+                # Map severity to colors
+                severity_colors = {
+                    'critical': ('var(--critical)', 'var(--critical-soft)'),
+                    'high': ('var(--warning)', 'var(--warning-soft)'),
+                    'medium': ('var(--info)', 'var(--info-soft)'),
+                    'low': ('var(--text-secondary)', 'rgba(100,116,139,0.1)'),
+                    'info': ('var(--text-muted)', 'rgba(100,116,139,0.08)'),
+                }
+                color, bg_color = severity_colors.get(severity, severity_colors['medium'])
+
+                # Category icon mapping
+                category_icons = {
+                    'overall_quality': '📊',
+                    'pii': '🔒',
+                    'outliers': '📈',
+                    'authenticity': '🔍',
+                    'label_quality': '⚖️',
+                    'temporal': '📅',
+                    'cross_column': '🔗',
+                    'completeness': '📋',
+                    'validity': '✅',
+                    'ml_analysis': '🧠',
+                }
+                icon = category_icons.get(category, '•')
+
+                # Convert markdown bold to HTML
+                text_html = re.sub(r'\*\*([^*]+)\*\*', r'<strong>\1</strong>', text)
+
+                findings_html += f'''
+                <div style="display: flex; align-items: flex-start; gap: 12px; padding: 12px 16px; background: {bg_color}; border-radius: 8px; border-left: 3px solid {color}; margin-bottom: 8px;">
+                    <span style="font-size: 1.2em;">{icon}</span>
+                    <div style="flex: 1;">
+                        <span style="display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.75em; font-weight: 600; text-transform: uppercase; background: {color}; color: var(--bg-main); margin-bottom: 4px;">{severity}</span>
+                        <p style="margin: 4px 0 0 0; color: var(--text-primary); line-height: 1.5;">{text_html}</p>
+                    </div>
+                </div>'''
+
+        # Build detailed sections HTML (collapsible)
+        sections_html = ''
+        if detailed_sections:
+            for category, section_data in detailed_sections.items():
+                header = section_data.get('header', category.replace('_', ' ').title())
+                issues = section_data.get('issues', [])
+
+                if not issues:
+                    continue
+
+                # Category styling
+                category_styles = {
+                    'pii': ('🔒', 'var(--critical)', 'Privacy & PII'),
+                    'outliers': ('📈', 'var(--warning)', 'Outlier Analysis'),
+                    'authenticity': ('🔍', 'var(--info)', 'Data Authenticity'),
+                    'label_quality': ('⚖️', 'var(--warning)', 'Label Quality'),
+                    'temporal': ('📅', 'var(--accent)', 'Temporal Analysis'),
+                    'cross_column': ('🔗', 'var(--info)', 'Cross-Column'),
+                    'completeness': ('📋', 'var(--warning)', 'Completeness'),
+                    'validity': ('✅', 'var(--good)', 'Validity'),
+                    'ml_analysis': ('🧠', 'var(--primary)', 'ML Analysis'),
+                }
+                icon, color, display_name = category_styles.get(category, ('•', 'var(--text-secondary)', header))
+
+                issues_list = ''
+                for issue in issues[:5]:  # Limit to top 5 per category
+                    issue_text = issue.get('text', issue.get('id', 'Unknown issue'))
+                    issue_severity = issue.get('severity', 'medium')
+                    # Convert markdown
+                    issue_text_html = re.sub(r'\*\*([^*]+)\*\*', r'<strong>\1</strong>', issue_text)
+                    issues_list += f'''<li style="margin-bottom: 8px; color: var(--text-secondary);">{issue_text_html}</li>'''
+
+                sections_html += f'''
+                <details style="margin-bottom: 12px;">
+                    <summary style="cursor: pointer; padding: 12px 16px; background: var(--bg-card); border-radius: 8px; border-left: 3px solid {color}; display: flex; align-items: center; gap: 12px;">
+                        <span style="font-size: 1.2em;">{icon}</span>
+                        <span style="font-weight: 600; color: var(--text-primary);">{display_name}</span>
+                        <span style="margin-left: auto; font-size: 0.85em; color: var(--text-muted);">{len(issues)} finding(s)</span>
+                    </summary>
+                    <div style="padding: 12px 16px 12px 32px; background: var(--bg-elevated); border-radius: 0 0 8px 8px;">
+                        <ul style="margin: 0; padding-left: 20px; list-style-type: disc;">
+                            {issues_list}
+                        </ul>
+                    </div>
+                </details>'''
+
+        return f'''
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <!-- KEY INSIGHTS - Generated by Insight Engine                      -->
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <div class="section-divider" style="margin: 24px 0 16px 0; padding: 12px 20px; background: linear-gradient(135deg, #065f46 0%, #064e3b 100%); border-radius: 8px; border-left: 4px solid #10b981;">
+            <h2 style="margin: 0; font-size: 1.1em; color: #f1f5f9; font-weight: 600;">💡 KEY INSIGHTS</h2>
+            <p style="margin: 4px 0 0 0; font-size: 0.85em; color: #a7f3d0;">Automated analysis findings and recommendations</p>
+        </div>
+
+        <section style="padding: 20px; background: var(--bg-card); border-radius: 12px; margin-bottom: 24px;">
+            <!-- Quality Tier Badge -->
+            <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid var(--border-subtle);">
+                <div style="padding: 8px 16px; background: var(--accent-gradient); border-radius: 8px;">
+                    <span style="font-weight: 700; font-size: 1.1em; color: white;">{tier_name}</span>
+                </div>
+                <span style="color: var(--text-secondary); font-size: 0.95em;">{tier_description}</span>
+            </div>
+
+            <!-- Key Findings -->
+            <h3 style="margin: 0 0 16px 0; font-size: 1em; color: var(--text-primary); font-weight: 600;">Top Findings</h3>
+            {findings_html if findings_html else '<p style="color: var(--text-muted);">No significant issues detected.</p>'}
+
+            <!-- Detailed Sections (Collapsible) -->
+            {f'<h3 style="margin: 24px 0 16px 0; font-size: 1em; color: var(--text-primary); font-weight: 600;">Detailed Analysis</h3>' + sections_html if sections_html else ''}
+        </section>'''
