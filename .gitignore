@@ -155,3 +155,4 @@ playground/
 # The benchmark.sh script itself IS tracked; only data/outputs are ignored
 benchmark/data/
 benchmark/output/
+test-data/
