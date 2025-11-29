@@ -124,72 +124,55 @@ class ExecutiveHTMLReporter:
     <nav class="sticky-nav" id="stickyNav">
         <div class="sticky-nav-inner">
             <button class="nav-btn active" data-section="summary">Summary</button>
-            <button class="nav-btn" data-section="alerts">Alerts</button>
-            <button class="nav-btn" data-section="ml">ML Analysis</button>
+            <button class="nav-btn" data-section="risks">Risks</button>
+            <button class="nav-btn" data-section="quality">Quality</button>
             <button class="nav-btn" data-section="columns">Columns</button>
-            <button class="nav-btn" data-section="config">Config</button>
+            <button class="nav-btn" data-section="validations">Validations</button>
+            <span class="nav-spacer"></span>
+            <button class="expand-all-btn" id="expandAllBtn" onclick="toggleExpandAll()" title="Expand/Collapse all sections">
+                <span class="expand-icon">+</span> Expand All
+            </button>
         </div>
     </nav>
 
     <main class="page">
-        <!-- EXECUTIVE SUMMARY - At-a-Glance Verdict -->
-        {self._generate_executive_summary(profile, pii_count, avg_completeness)}
-
-        <!-- Page Header -->
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <!-- 1. HEADER & SAMPLING BANNER                                     -->
+        <!-- ═══════════════════════════════════════════════════════════════ -->
         <section class="page-header" id="section-summary">
             <div class="page-title-block">
-                <h1>Data Quality & Completeness</h1>
-                <p>Snapshot of overall health, completeness and key risks across this dataset.</p>
+                <h1>Data Profile Report</h1>
+                <p>Analysis of {profile.row_count:,} records across {profile.column_count} columns</p>
             </div>
         </section>
 
-        <!-- KPI Belt -->
-        <section class="kpi-belt">
-            <div class="kpi-card">
-                <div class="kpi-label">Overall Quality</div>
-                <div class="kpi-value">{profile.overall_quality_score:.1f}%</div>
-                <div class="kpi-trend {quality_status['class']}">{quality_status['text']}</div>
-            </div>
-            <div class="kpi-card">
-                <div class="kpi-label">Completeness</div>
-                <div class="kpi-value">{avg_completeness:.1f}%</div>
-                <div class="kpi-trend {'good' if avg_completeness >= 95 else 'warning'}">{'▲ Excellent - minimal nulls' if avg_completeness >= 95 else 'Some missing values detected'}</div>
-            </div>
-            <div class="kpi-card">
-                <div class="kpi-label">Privacy Risk</div>
-                <div class="kpi-value {'critical' if max_pii_risk > 50 else ''}">{max_pii_risk}</div>
-                <div class="kpi-trend {'critical' if max_pii_risk > 50 else 'good'}">{'⚠ ' + str(pii_count) + ' PII columns detected' if pii_count > 0 else '✓ No PII detected'}</div>
-            </div>
-            <div class="kpi-card">
-                <div class="kpi-label">Columns Analyzed</div>
-                <div class="kpi-value">{profile.column_count}</div>
-                <div class="kpi-trend good">All columns profiled</div>
-            </div>
-        </section>
-
-        <!-- Sampling Summary (Enhanced with Insight Engine) -->
-        {self._generate_sampling_summary_enhanced(profile, sampling_info, insights)}
-
-        <!-- Key Insights from Insight Engine -->
-        {self._generate_key_insights_section(insights)}
-
-        <!-- Data Quality Alerts (if any critical issues) -->
-        {self._generate_quality_alerts(profile)}
-
-        <!-- FIBO Semantic Analysis Section -->
-        {self._generate_fibo_section(profile)}
+        <!-- v2 Sampling Coverage Banner -->
+        {self._generate_sampling_banner_v2(profile, insights)}
 
         <!-- ═══════════════════════════════════════════════════════════════ -->
-        <!-- SECTION: DATA FOUNDATION - Understanding the baseline data      -->
+        <!-- 2. METRICS DASHBOARD (3 rows: Core, Quality, Types)             -->
         <!-- ═══════════════════════════════════════════════════════════════ -->
-        <div class="section-divider" style="margin: 24px 0 16px 0; padding: 12px 20px; background: linear-gradient(135deg, #1e3a5f 0%, #0d1f3c 100%); border-radius: 8px; border-left: 4px solid #3b82f6;">
-            <h2 style="margin: 0; font-size: 1.1em; color: #f1f5f9; font-weight: 600;">📊 DATA FOUNDATION</h2>
-            <p style="margin: 4px 0 0 0; font-size: 0.85em; color: #94a3b8;">Schema, quality metrics, and value distributions</p>
+        {self._generate_metrics_dashboard_v2(profile, avg_completeness, avg_validity, avg_consistency, avg_uniqueness, type_counts)}
+
+        <!-- FIBO Semantic Categories Summary -->
+        {self._generate_fibo_summary(profile.columns)}
+
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <!-- 3. DATA QUALITY OVERVIEW - High-level metrics first             -->
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <div class="section-divider" id="section-quality" style="margin: 24px 0 16px 0; padding: 12px 20px; background: linear-gradient(135deg, #1e3a5f 0%, #0d1f3c 100%); border-radius: 8px; border-left: 4px solid #3b82f6;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <h2 style="margin: 0; font-size: 1.1em; color: #f1f5f9; font-weight: 600;">Data Quality Overview</h2>
+                    <p style="margin: 4px 0 0 0; font-size: 0.85em; color: #94a3b8;">Type distribution, value patterns, and quality scores by column</p>
+                </div>
+                <div style="background: rgba(255,255,255,0.15); padding: 4px 12px; border-radius: 4px; font-size: 0.8em; font-weight: 600; color: white;">OVERVIEW</div>
+            </div>
         </div>
 
         <div class="layout-grid">
             <div class="main-column">
-                <!-- Overview Accordion -->
+                <!-- Data Types Accordion -->
                 {self._generate_overview_accordion(profile, type_counts, avg_completeness, avg_validity, avg_consistency, avg_uniqueness)}
 
                 <!-- Quality Metrics Accordion -->
@@ -197,53 +180,73 @@ class ExecutiveHTMLReporter:
 
                 <!-- Value Distribution Accordion -->
                 {self._generate_distribution_accordion(profile, categorical_columns)}
+
+                <!-- Temporal Analysis Accordion -->
+                {self._generate_temporal_accordion(temporal_columns) if temporal_columns else ''}
             </div>
         </div>
 
         <!-- ═══════════════════════════════════════════════════════════════ -->
-        <!-- SECTION: INTELLIGENT ANALYSIS - ML and pattern detection        -->
+        <!-- 4. DATA INSIGHTS - ML-powered patterns & anomalies              -->
         <!-- ═══════════════════════════════════════════════════════════════ -->
-        <div class="section-divider" id="section-ml" style="margin: 24px 0 16px 0; padding: 12px 20px; background: linear-gradient(135deg, #4c1d95 0%, #2e1065 100%); border-radius: 8px; border-left: 4px solid #8b5cf6;">
-            <h2 style="margin: 0; font-size: 1.1em; color: #f1f5f9; font-weight: 600;">🧠 INTELLIGENT ANALYSIS</h2>
-            <p style="margin: 4px 0 0 0; font-size: 0.85em; color: #c4b5fd;">Machine learning anomaly detection and pattern analysis</p>
-        </div>
 
-        <!-- ML Analysis Section (if ML analysis was run) -->
-        {self._generate_ml_section(profile.ml_findings) if profile.ml_findings else ''}
-
-        <!-- Advanced Visualizations Section -->
-        {self._generate_advanced_visualizations(profile.ml_findings) if profile.ml_findings and profile.ml_findings.get('visualizations') else ''}
-
-        <!-- Temporal Analysis Accordion -->
-        {self._generate_temporal_accordion(temporal_columns) if temporal_columns else ''}
-
-        <!-- PII Risk Section (if PII detected) -->
+        <!-- PII Risk Section (if detected) - still important to highlight -->
         {self._generate_pii_section(pii_columns) if pii_count > 0 else ''}
 
-        <!-- Validation Suggestions Accordion -->
+        <!-- v2 Insight Widgets (Plain English + Examples + Technical) -->
+        {self._generate_ml_section_v2(profile.ml_findings) if profile.ml_findings else ''}
+
+        <!-- Advanced Visualizations -->
+        {self._generate_advanced_visualizations(profile.ml_findings, profile.columns) if profile.ml_findings and profile.ml_findings.get('visualizations') else ''}
+
+        <!-- FIBO Semantic Analysis (if applicable) -->
+        {self._generate_fibo_section(profile)}
+
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <!-- 5. COLUMN-LEVEL QUALITY SUMMARY                                 -->
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <div class="section-divider" id="section-columns" style="margin: 24px 0 16px 0; padding: 12px 20px; background: linear-gradient(135deg, #374151 0%, #1f2937 100%); border-radius: 8px; border-left: 4px solid #6b7280;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <h2 style="margin: 0; font-size: 1.1em; color: #f1f5f9; font-weight: 600;">Column-Level Analysis</h2>
+                    <p style="margin: 4px 0 0 0; font-size: 0.85em; color: #9ca3af;">Detailed statistics, patterns, and quality metrics for each field</p>
+                </div>
+                <div style="background: rgba(255,255,255,0.15); padding: 4px 12px; border-radius: 4px; font-size: 0.8em; font-weight: 600; color: white;">{profile.column_count} COLUMNS</div>
+            </div>
+        </div>
+
         <div class="layout-grid">
             <div class="main-column">
-                {self._generate_suggestions_accordion(profile)}
+                <!-- Column Explorer -->
+                {self._generate_column_explorer(profile)}
             </div>
         </div>
 
         <!-- ═══════════════════════════════════════════════════════════════ -->
-        <!-- SECTION: REFERENCE - Detailed drill-down and config             -->
+        <!-- 6. RECOMMENDED VALIDATIONS                                      -->
         <!-- ═══════════════════════════════════════════════════════════════ -->
-        <div class="section-divider" style="margin: 24px 0 16px 0; padding: 12px 20px; background: linear-gradient(135deg, #374151 0%, #1f2937 100%); border-radius: 8px; border-left: 4px solid #6b7280;">
-            <h2 style="margin: 0; font-size: 1.1em; color: #f1f5f9; font-weight: 600;">📚 REFERENCE</h2>
-            <p style="margin: 4px 0 0 0; font-size: 0.85em; color: #9ca3af;">Detailed column information and configuration</p>
+        <div class="section-divider" id="section-validations" style="margin: 24px 0 16px 0; padding: 12px 20px; background: linear-gradient(135deg, #065f46 0%, #022c22 100%); border-radius: 8px; border-left: 4px solid #10b981;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <h2 style="margin: 0; font-size: 1.1em; color: #f1f5f9; font-weight: 600;">Recommended Validations</h2>
+                    <p style="margin: 4px 0 0 0; font-size: 0.85em; color: #6ee7b7;">Based on our analysis, implement these rules to protect data quality</p>
+                </div>
+                <div style="background: rgba(255,255,255,0.15); padding: 4px 12px; border-radius: 4px; font-size: 0.8em; font-weight: 600; color: white;">ACTION</div>
+            </div>
         </div>
 
         <div class="layout-grid">
             <div class="main-column">
-                <!-- Column Explorer Accordion -->
-                {self._generate_column_explorer(profile)}
+                <!-- Validation Suggestions -->
+                {self._generate_suggestions_accordion(profile)}
 
-                <!-- Full Validation Config Accordion (LAST - reference material) -->
+                <!-- Full Validation Config -->
                 {self._generate_full_config_accordion(profile)}
             </div>
         </div>
+
+        <!-- Sampling Summary -->
+        {self._generate_sampling_summary_enhanced(profile, sampling_info, insights)}
     </main>
 
     <script>
@@ -255,19 +258,22 @@ class ExecutiveHTMLReporter:
         return html
 
     def _get_css(self) -> str:
-        """Return the CSS styles."""
+        """Return the CSS styles - v2 widget-based dashboard design."""
         return '''        * { margin: 0; padding: 0; box-sizing: border-box; }
 
         :root {
-            --bg-main: #050713;
-            --bg-elevated: #0b1020;
-            --bg-card: #0d1424;
-            --bg-hover: #111a2e;
+            /* Core backgrounds - deep navy/slate palette */
+            --bg-main: #0a0f1a;
+            --bg-elevated: #0f172a;
+            --bg-card: linear-gradient(180deg, #0f172a 0%, #0a0f1a 100%);
+            --bg-hover: #1e293b;
             --bg-tertiary: #151d30;
-            --card-bg: #0d1424;
-            --border-subtle: rgba(148, 163, 184, 0.15);
-            --border-color: rgba(148, 163, 184, 0.2);
+            --card-bg: #0f172a;
+            --border-subtle: rgba(148, 163, 184, 0.08);
+            --border-color: rgba(148, 163, 184, 0.15);
             --border-focus: rgba(96, 165, 250, 0.4);
+
+            /* Accent colors */
             --accent: #60a5fa;
             --accent-soft: rgba(96, 165, 250, 0.08);
             --accent-gradient: linear-gradient(135deg, #3b82f6, #8b5cf6);
@@ -400,7 +406,7 @@ class ExecutiveHTMLReporter:
         }
 
         .page-title-block h1 {
-            font-size: 1.8em;
+            font-size: 1.4em;
             font-weight: 700;
             margin-bottom: 6px;
             background: linear-gradient(135deg, #f1f5f9 0%, #94a3b8 100%);
@@ -444,7 +450,7 @@ class ExecutiveHTMLReporter:
         }
 
         .kpi-value {
-            font-size: 2em;
+            font-size: 1.5em;
             font-weight: 700;
             color: var(--text-primary);
         }
@@ -572,7 +578,7 @@ class ExecutiveHTMLReporter:
         }
 
         .fibo-stat-value {
-            font-size: 1.5em;
+            font-size: 1.2em;
             font-weight: 600;
             color: #c4b5fd;
         }
@@ -1287,7 +1293,7 @@ class ExecutiveHTMLReporter:
         }
 
         .ml-summary-count {
-            font-size: 2.5em;
+            font-size: 1.6em;
             font-weight: 700;
             color: #8b5cf6;
             line-height: 1;
@@ -1584,6 +1590,42 @@ class ExecutiveHTMLReporter:
             background: var(--accent);
             border-color: var(--accent);
             color: white;
+        }
+
+        .nav-spacer {
+            flex: 1;
+        }
+
+        .expand-all-btn {
+            background: transparent;
+            border: 1px solid var(--border-subtle);
+            color: var(--text-muted);
+            padding: 6px 12px;
+            border-radius: var(--radius-md);
+            font-size: 0.75em;
+            font-weight: 400;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: all 0.2s ease;
+            opacity: 0.7;
+            margin-left: auto;
+        }
+
+        .expand-all-btn:hover {
+            opacity: 1;
+            border-color: var(--accent);
+            color: var(--text-secondary);
+        }
+
+        .expand-all-btn.expanded {
+            background: rgba(74, 144, 226, 0.1);
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        .expand-all-btn .expand-icon {
+            font-weight: 600;
+            margin-right: 4px;
         }
 
         /* ======================================================
@@ -2010,7 +2052,754 @@ class ExecutiveHTMLReporter:
             .summary-tools {
                 justify-content: flex-start;
             }
-        }'''
+        }
+
+        /* ======================================================
+           v2 SAMPLING COVERAGE BANNER
+           ====================================================== */
+        .sampling-banner {
+            background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+            border: 1px solid rgba(148, 163, 184, 0.15);
+            border-radius: 16px;
+            padding: 20px 24px;
+            margin-bottom: 24px;
+        }
+
+        .sampling-banner-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .sampling-banner-icon {
+            font-size: 1.5em;
+        }
+
+        .sampling-banner-title {
+            font-size: 1em;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .sampling-progress-container {
+            margin-bottom: 16px;
+        }
+
+        .sampling-progress-bar {
+            height: 10px;
+            background: rgba(30, 41, 59, 0.8);
+            border-radius: 5px;
+            overflow: hidden;
+            margin-bottom: 8px;
+        }
+
+        .sampling-progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #3b82f6 0%, #8b5cf6 100%);
+            border-radius: 5px;
+            transition: width 0.5s ease;
+        }
+
+        .sampling-progress-label {
+            font-size: 0.9em;
+            color: var(--text-secondary);
+            text-align: center;
+        }
+
+        .sampling-progress-label strong {
+            color: var(--accent);
+        }
+
+        .sampling-methods-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 12px;
+        }
+
+        .sampling-method {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 14px;
+            background: rgba(15, 23, 42, 0.6);
+            border-radius: 8px;
+            font-size: 0.85em;
+        }
+
+        .sampling-method-icon {
+            font-size: 1.1em;
+        }
+
+        .sampling-method.full .sampling-method-icon { color: #10b981; }
+        .sampling-method.sampled .sampling-method-icon { color: #f59e0b; }
+
+        .sampling-method-text {
+            color: var(--text-secondary);
+        }
+
+        .sampling-method-text strong {
+            color: var(--text-primary);
+            font-weight: 500;
+        }
+
+        /* Sample Size Explanation (Collapsible) */
+        .sample-size-explanation {
+            margin-top: 16px;
+            background: rgba(15, 23, 42, 0.4);
+            border-radius: 8px;
+            border: 1px solid rgba(148,163,184,0.05);
+        }
+
+        .sample-size-summary {
+            cursor: pointer;
+            padding: 12px 16px;
+            font-size: 0.85em;
+            color: var(--accent);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            list-style: none;
+        }
+
+        .sample-size-summary::-webkit-details-marker { display: none; }
+
+        .sample-size-summary::after {
+            content: '▸';
+            margin-left: auto;
+            transition: transform 0.2s;
+        }
+
+        .sample-size-explanation[open] .sample-size-summary::after {
+            transform: rotate(90deg);
+        }
+
+        .sample-size-content {
+            padding: 0 16px 16px;
+            color: var(--text-secondary);
+            font-size: 0.85em;
+            line-height: 1.6;
+        }
+
+        .sample-size-content p {
+            margin: 0 0 12px 0;
+        }
+
+        .sample-size-stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            margin: 16px 0;
+        }
+
+        .sample-stat {
+            text-align: center;
+            padding: 12px;
+            background: rgba(15, 23, 42, 0.6);
+            border-radius: 8px;
+        }
+
+        .sample-stat-value {
+            display: block;
+            font-size: 1.4em;
+            font-weight: 700;
+            color: var(--accent);
+        }
+
+        .sample-stat-label {
+            font-size: 0.75em;
+            color: var(--text-muted);
+            margin-top: 4px;
+            display: block;
+        }
+
+        .sample-size-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 12px 0;
+            font-size: 0.9em;
+        }
+
+        .sample-size-table th, .sample-size-table td {
+            padding: 8px 12px;
+            text-align: left;
+            border-bottom: 1px solid rgba(148,163,184,0.08);
+        }
+
+        .sample-size-table th {
+            color: var(--text-muted);
+            font-weight: 500;
+            font-size: 0.85em;
+        }
+
+        .sample-size-table .value-highlight {
+            color: #10b981;
+        }
+
+        .sample-size-note {
+            font-style: italic;
+            color: var(--text-muted);
+            border-left: 2px solid var(--accent);
+            padding-left: 12px;
+            margin: 16px 0 0 0;
+        }
+
+        @media (max-width: 640px) {
+            .sample-size-stats {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* FIBO Semantic Categories Summary */
+        .fibo-summary {
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.08) 0%, rgba(59, 130, 246, 0.05) 100%);
+            border: 1px solid rgba(139, 92, 246, 0.15);
+            border-radius: 12px;
+            padding: 16px 20px;
+            margin-bottom: 20px;
+        }
+
+        .fibo-summary-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 14px;
+        }
+
+        .fibo-summary-icon {
+            font-size: 1.3em;
+        }
+
+        .fibo-summary-title {
+            font-weight: 600;
+            color: var(--text-primary);
+            font-size: 0.95em;
+        }
+
+        .fibo-summary-count {
+            margin-left: auto;
+            font-size: 0.8em;
+            color: var(--text-muted);
+            background: rgba(139, 92, 246, 0.15);
+            padding: 4px 10px;
+            border-radius: 12px;
+        }
+
+        .fibo-categories-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .fibo-category-chip {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(15, 23, 42, 0.6);
+            padding: 8px 14px;
+            border-radius: 20px;
+            border: 1px solid rgba(148,163,184,0.08);
+            transition: all 0.2s;
+        }
+
+        .fibo-category-chip:hover {
+            background: rgba(15, 23, 42, 0.8);
+            border-color: rgba(139, 92, 246, 0.3);
+        }
+
+        .fibo-icon {
+            font-size: 1em;
+        }
+
+        .fibo-label {
+            font-weight: 600;
+            color: var(--text-primary);
+            font-size: 0.85em;
+        }
+
+        .fibo-count {
+            background: var(--accent);
+            color: white;
+            font-size: 0.7em;
+            font-weight: 700;
+            padding: 2px 7px;
+            border-radius: 10px;
+            min-width: 18px;
+            text-align: center;
+        }
+
+        .fibo-tags {
+            font-size: 0.75em;
+            color: var(--text-muted);
+            max-width: 150px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        @media (max-width: 640px) {
+            .fibo-categories-grid {
+                flex-direction: column;
+            }
+            .fibo-tags {
+                display: none;
+            }
+        }
+
+        /* FIBO Badge - Inline with column name (for mobile visibility) */
+        .column-name-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .fibo-badge-mobile {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            background: rgba(139, 92, 246, 0.12);
+            color: var(--text-secondary);
+            font-size: 0.7em;
+            padding: 2px 8px;
+            border-radius: 12px;
+            border: 1px solid rgba(139, 92, 246, 0.2);
+            white-space: nowrap;
+        }
+
+        @media (min-width: 1024px) {
+            /* Hide mobile badge on desktop - shown in expanded details instead */
+            .fibo-badge-mobile {
+                display: none;
+            }
+        }
+
+        @media (max-width: 640px) {
+            .fibo-badge-mobile {
+                font-size: 0.65em;
+                padding: 2px 6px;
+            }
+        }
+
+        /* ======================================================
+           v2 METRICS DASHBOARD GRID
+           ====================================================== */
+        .metrics-dashboard {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .metrics-row {
+            display: grid;
+            gap: 12px;
+        }
+
+        .metrics-row.core {
+            grid-template-columns: repeat(4, 1fr);
+        }
+
+        .metrics-row.quality {
+            grid-template-columns: repeat(4, 1fr);
+        }
+
+        .metrics-row.types {
+            grid-template-columns: repeat(4, 1fr);
+        }
+
+        @media (max-width: 768px) {
+            .metrics-row.core,
+            .metrics-row.quality,
+            .metrics-row.types {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        .metric-widget {
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: 12px;
+            padding: 16px;
+            text-align: center;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .metric-widget:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+        }
+
+        .metric-widget-label {
+            font-size: 0.7em;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-muted);
+            margin-bottom: 6px;
+        }
+
+        .metric-widget-value {
+            font-size: 1.6em;
+            font-weight: 700;
+            color: var(--text-primary);
+            line-height: 1.2;
+        }
+
+        .metric-widget-trend {
+            font-size: 0.75em;
+            margin-top: 6px;
+            color: var(--text-secondary);
+        }
+
+        .metric-widget-trend.good { color: var(--good); }
+        .metric-widget-trend.warning { color: var(--warning); }
+        .metric-widget-trend.critical { color: var(--critical); }
+
+        /* Quality gauge styling */
+        .metric-gauge {
+            position: relative;
+            width: 60px;
+            height: 60px;
+            margin: 0 auto 8px auto;
+        }
+
+        .metric-gauge svg {
+            transform: rotate(-90deg);
+        }
+
+        .metric-gauge-value {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 0.9em;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        /* ======================================================
+           v2 INSIGHT WIDGET (Masterpiece Design)
+           ====================================================== */
+        .insight-widget {
+            background: linear-gradient(180deg, #0f172a 0%, #0a0f1a 100%);
+            border: 1px solid rgba(148, 163, 184, 0.08);
+            border-radius: 16px;
+            padding: 0;
+            margin-bottom: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+            overflow: hidden;
+        }
+
+        .insight-widget-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 18px 24px;
+            border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+            background: rgba(15, 23, 42, 0.5);
+        }
+
+        .insight-widget-title-group {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .insight-widget-icon {
+            font-size: 1.3em;
+        }
+
+        .insight-widget-title {
+            font-size: 1.05em;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .insight-widget-badge {
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.75em;
+            font-weight: 600;
+            background: rgba(139, 92, 246, 0.15);
+            color: #a78bfa;
+        }
+
+        .insight-widget-badge.critical { background: rgba(239, 68, 68, 0.15); color: #f87171; }
+        .insight-widget-badge.warning { background: rgba(245, 158, 11, 0.15); color: #fbbf24; }
+        .insight-widget-badge.info { background: rgba(59, 130, 246, 0.15); color: #60a5fa; }
+        .insight-widget-badge.good { background: rgba(16, 185, 129, 0.15); color: #34d399; }
+
+        /* ML Model Badge */
+        .insight-ml-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 0.7em;
+            font-weight: 500;
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.2), rgba(59, 130, 246, 0.2));
+            color: #a78bfa;
+            border: 1px solid rgba(139, 92, 246, 0.3);
+            margin-left: 8px;
+        }
+
+        .insight-widget-body {
+            padding: 24px;
+        }
+
+        /* Plain English Summary Section */
+        .insight-summary {
+            margin-bottom: 24px;
+        }
+
+        .insight-summary-label {
+            font-size: 0.75em;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-muted);
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .insight-summary-label::before {
+            content: '💬';
+            font-size: 1.2em;
+        }
+
+        .insight-summary-text {
+            font-size: 1em;
+            line-height: 1.7;
+            color: var(--text-secondary);
+            padding: 16px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 10px;
+            border-left: 3px solid var(--accent);
+        }
+
+        /* Example Table Section */
+        .insight-examples {
+            margin-bottom: 20px;
+        }
+
+        .insight-examples-label {
+            font-size: 0.75em;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-muted);
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .insight-examples-label::before {
+            content: '📋';
+            font-size: 1.2em;
+        }
+
+        .insight-examples-table {
+            width: 100%;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+            overflow: hidden;
+            font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+            font-size: 0.85em;
+        }
+
+        .insight-examples-table thead {
+            background: rgba(15, 23, 42, 0.8);
+        }
+
+        .insight-examples-table th {
+            padding: 12px 16px;
+            text-align: left;
+            font-weight: 600;
+            color: var(--text-primary);
+            border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+        }
+
+        .insight-examples-table td {
+            padding: 10px 16px;
+            color: var(--text-secondary);
+            border-bottom: 1px solid rgba(148, 163, 184, 0.05);
+        }
+
+        .insight-examples-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .insight-examples-table tr:hover {
+            background: rgba(96, 165, 250, 0.05);
+        }
+
+        .insight-examples-table .value-highlight {
+            color: #f87171;
+            font-weight: 600;
+        }
+
+        .insight-examples-table .value-normal {
+            color: #94a3b8;
+        }
+
+        .insight-examples-table .row-id {
+            color: var(--text-muted);
+            font-size: 0.9em;
+        }
+
+        /* Technical Details Collapsible */
+        .insight-technical {
+            border-top: 1px solid rgba(148, 163, 184, 0.1);
+            margin-top: 4px;
+        }
+
+        .insight-technical-toggle {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            width: 100%;
+            padding: 14px 0;
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            color: var(--text-secondary);
+            font-size: 0.85em;
+            transition: color 0.2s ease;
+        }
+
+        .insight-technical-toggle:hover {
+            color: var(--accent);
+        }
+
+        .insight-technical-toggle::before {
+            content: '🔬';
+            font-size: 1.1em;
+        }
+
+        .insight-technical-toggle .toggle-arrow {
+            margin-left: auto;
+            transition: transform 0.2s ease;
+        }
+
+        .insight-technical.open .toggle-arrow {
+            transform: rotate(180deg);
+        }
+
+        .insight-technical-content {
+            display: none;
+            padding: 16px;
+            background: rgba(15, 23, 42, 0.6);
+            border-radius: 10px;
+            margin-bottom: 8px;
+        }
+
+        .insight-technical.open .insight-technical-content {
+            display: block;
+        }
+
+        .insight-technical-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+        }
+
+        .insight-technical-item {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .insight-technical-item-label {
+            font-size: 0.7em;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-muted);
+        }
+
+        .insight-technical-item-value {
+            font-size: 0.9em;
+            color: var(--text-secondary);
+            font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+        }
+
+        .insight-technical-context {
+            margin-top: 16px;
+            padding-top: 16px;
+            border-top: 1px solid rgba(148, 163, 184, 0.08);
+        }
+
+        .insight-technical-context-title {
+            font-size: 0.75em;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-muted);
+            margin-bottom: 10px;
+        }
+
+        .insight-technical-context-list {
+            list-style: none;
+            font-size: 0.85em;
+            color: var(--text-secondary);
+        }
+
+        .insight-technical-context-list li {
+            padding: 4px 0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .insight-technical-context-list li::before {
+            content: '•';
+            color: var(--accent);
+        }
+
+        /* ======================================================
+           v2 SECTION HEADERS (Observation framing)
+           ====================================================== */
+        .section-header-v2 {
+            background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+            border: 1px solid rgba(148, 163, 184, 0.1);
+            border-radius: 12px;
+            padding: 16px 20px;
+            margin: 28px 0 16px 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .section-header-v2-icon {
+            font-size: 1.3em;
+            margin-right: 12px;
+        }
+
+        .section-header-v2-title {
+            font-size: 1.1em;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .section-header-v2-subtitle {
+            font-size: 0.85em;
+            color: var(--text-secondary);
+            margin-top: 2px;
+        }
+
+        .section-header-v2-badge {
+            padding: 6px 14px;
+            border-radius: 8px;
+            font-size: 0.75em;
+            font-weight: 600;
+            text-transform: uppercase;
+            background: rgba(255, 255, 255, 0.1);
+            color: var(--text-secondary);
+        }
+
+        .section-header-v2-badge.observations { background: rgba(139, 92, 246, 0.15); color: #a78bfa; }
+        .section-header-v2-badge.patterns { background: rgba(59, 130, 246, 0.15); color: #60a5fa; }
+        .section-header-v2-badge.info { background: rgba(16, 185, 129, 0.15); color: #34d399; }'''
 
     def _get_javascript(self, profile: ProfileResult, type_counts: Dict[str, int], categorical_columns: List[Dict]) -> str:
         """Generate the JavaScript for charts and interactions."""
@@ -2029,11 +2818,34 @@ class ExecutiveHTMLReporter:
             for tv in cat_col.get('top_values', [])[:10]:
                 word_cloud_data.append([str(tv.get('value', '')), tv.get('count', 0)])
 
-        # Bubble chart data
+        # Bubble chart data - find the best metric for x-axis based on variation
+        completeness_values = [col.quality.completeness for col in profile.columns]
+        uniqueness_values = [col.quality.uniqueness for col in profile.columns]
+        consistency_values = [col.quality.consistency for col in profile.columns]
+
+        completeness_range = max(completeness_values) - min(completeness_values) if completeness_values else 0
+        uniqueness_range = max(uniqueness_values) - min(uniqueness_values) if uniqueness_values else 0
+        consistency_range = max(consistency_values) - min(consistency_values) if consistency_values else 0
+
+        # Choose the metric with most variation for x-axis
+        if completeness_range >= 5:
+            x_axis_metric = 'completeness'
+            x_axis_label = 'Completeness %'
+        elif uniqueness_range >= 5:
+            x_axis_metric = 'uniqueness'
+            x_axis_label = 'Uniqueness %'
+        elif consistency_range >= 5:
+            x_axis_metric = 'consistency'
+            x_axis_label = 'Consistency %'
+        else:
+            x_axis_metric = 'completeness'
+            x_axis_label = 'Completeness %'
+
         bubble_data = []
         for col in profile.columns:
+            x_val = getattr(col.quality, x_axis_metric)
             bubble_data.append({
-                'x': col.quality.completeness,
+                'x': x_val,
                 'y': col.quality.validity,
                 'r': min(max(5, col.statistics.unique_count / 1000), 15) if col.statistics.unique_count else 5,
                 'label': col.name[:15]
@@ -2052,15 +2864,63 @@ class ExecutiveHTMLReporter:
         }}
 
         // ======================================================
+        // EXPAND ALL TOGGLE
+        // ======================================================
+        let allExpanded = false;
+
+        function toggleExpandAll() {{
+            const btn = document.getElementById('expandAllBtn');
+            allExpanded = !allExpanded;
+
+            // Update button appearance
+            btn.classList.toggle('expanded', allExpanded);
+            btn.innerHTML = allExpanded
+                ? '<span class="expand-icon">-</span> Collapse All'
+                : '<span class="expand-icon">+</span> Expand All';
+
+            // Toggle all accordions
+            document.querySelectorAll('.accordion').forEach(acc => {{
+                if (allExpanded) {{
+                    acc.classList.add('open');
+                }} else {{
+                    acc.classList.remove('open');
+                }}
+            }});
+
+            // Toggle all column rows
+            document.querySelectorAll('.column-row').forEach(row => {{
+                if (allExpanded) {{
+                    row.classList.add('expanded');
+                }} else {{
+                    row.classList.remove('expanded');
+                }}
+            }});
+
+            // Toggle all <details> elements
+            document.querySelectorAll('details').forEach(details => {{
+                details.open = allExpanded;
+            }});
+
+            // Toggle all technical sections
+            document.querySelectorAll('.insight-technical').forEach(section => {{
+                if (allExpanded) {{
+                    section.classList.add('open');
+                }} else {{
+                    section.classList.remove('open');
+                }}
+            }});
+        }}
+
+        // ======================================================
         // STICKY NAVIGATION
         // ======================================================
         const navBtns = document.querySelectorAll('.nav-btn');
         const sections = {{
             'summary': document.getElementById('section-summary'),
-            'alerts': document.getElementById('section-alerts'),
-            'ml': document.getElementById('section-ml'),
+            'risks': document.getElementById('section-risks'),
+            'quality': document.getElementById('section-quality'),
             'columns': document.getElementById('section-columns'),
-            'config': document.getElementById('section-config')
+            'validations': document.getElementById('section-validations')
         }};
 
         navBtns.forEach(btn => {{
@@ -2308,8 +3168,15 @@ class ExecutiveHTMLReporter:
             }}
         }}
 
-        // Chart defaults
-        const chartDefaults = {{
+        // Initialize charts when library is ready
+        function initCharts() {{
+            if (typeof Chart === 'undefined') {{
+                setTimeout(initCharts, 100);
+                return;
+            }}
+
+            // Chart defaults
+            const chartDefaults = {{
             responsive: true,
             maintainAspectRatio: true,
             plugins: {{
@@ -2425,8 +3292,8 @@ class ExecutiveHTMLReporter:
                 }},
                 scales: {{
                     x: {{
-                        title: {{ display: true, text: 'Completeness %', color: '#64748b' }},
-                        min: Math.max(0, Math.min(...{json.dumps([col.quality.completeness for col in profile.columns])}) - 5),
+                        title: {{ display: true, text: '{x_axis_label}', color: '#64748b' }},
+                        min: Math.max(0, Math.min(...{json.dumps([b['x'] for b in bubble_data])}) - 5),
                         max: 101,
                         grid: {{ color: 'rgba(148, 163, 184, 0.1)' }},
                         ticks: {{ color: '#64748b' }}
@@ -2441,10 +3308,26 @@ class ExecutiveHTMLReporter:
                 }}
             }}
         }});
+        }} // end initCharts
 
-        // Word Cloud
-        const wordCloudContainer = document.getElementById('wordCloudContainer');
-        if (wordCloudContainer && typeof WordCloud !== 'undefined') {{
+        // Call initCharts when page is ready
+        if (document.readyState === 'complete') {{
+            initCharts();
+        }} else {{
+            window.addEventListener('load', initCharts);
+        }}
+
+        // Word Cloud - wait for library to load
+        function initWordCloud() {{
+            const wordCloudContainer = document.getElementById('wordCloudContainer');
+            if (!wordCloudContainer) return;
+
+            if (typeof WordCloud === 'undefined') {{
+                // Library not loaded yet, retry in 100ms
+                setTimeout(initWordCloud, 100);
+                return;
+            }}
+
             const wordCloudData = {json.dumps(word_cloud_data)};
             if (wordCloudData.length > 0) {{
                 // Normalize weights to a reasonable range for display
@@ -2472,6 +3355,12 @@ class ExecutiveHTMLReporter:
                     shrinkToFit: true
                 }});
             }}
+        }}
+        // Initialize word cloud after page load
+        if (document.readyState === 'complete') {{
+            initWordCloud();
+        }} else {{
+            window.addEventListener('load', initWordCloud);
         }}
 '''
 
@@ -2804,20 +3693,39 @@ class ExecutiveHTMLReporter:
         max_risk = max(col.get('risk_score', 0) for col in pii_columns)
         risk_level = 'Critical' if max_risk > 75 else 'High' if max_risk > 50 else 'Medium'
 
-        pii_items = ''
+        # Build table rows for clearer display
+        pii_rows = ''
         for col in pii_columns:
+            col_name = col.get('name', 'Unknown')
             pii_types = col.get('pii_types', [])
             type_name = pii_types[0].get('name', 'Unknown') if pii_types else 'Unknown'
+            # If type name matches column name, show "Detected" instead to avoid "Account Account"
+            if type_name.lower() == col_name.lower():
+                type_name = f"{type_name} (detected)"
             frameworks = col.get('frameworks', [])
+            framework_str = ', '.join(frameworks) if frameworks else 'N/A'
+            risk_score = col.get('risk_score', 0)
 
-            framework_tags = ''.join(f'<span class="pii-framework-tag">{fw}</span>' for fw in frameworks)
+            pii_rows += f'''
+                <tr>
+                    <td><strong>{col_name}</strong></td>
+                    <td><span class="pii-type-badge">{type_name}</span></td>
+                    <td>{framework_str}</td>
+                    <td style="color: {'var(--critical)' if risk_score > 75 else 'var(--warning)' if risk_score > 50 else 'var(--text-primary)'};">{risk_score}</td>
+                </tr>'''
 
-            pii_items += f'''
-                <div class="pii-column-item">
-                    <div class="pii-column-name">{col.get('name', 'Unknown')}</div>
-                    <span class="pii-type-badge">{type_name}</span>
-                    <div class="pii-frameworks">{framework_tags}</div>
-                </div>'''
+        pii_items = f'''
+            <table style="width: 100%; border-collapse: collapse; margin-top: 12px;">
+                <thead>
+                    <tr style="text-align: left; border-bottom: 1px solid var(--border-color);">
+                        <th style="padding: 8px; color: var(--text-secondary);">Column</th>
+                        <th style="padding: 8px; color: var(--text-secondary);">PII Type</th>
+                        <th style="padding: 8px; color: var(--text-secondary);">Frameworks</th>
+                        <th style="padding: 8px; color: var(--text-secondary);">Risk</th>
+                    </tr>
+                </thead>
+                <tbody>{pii_rows}</tbody>
+            </table>'''
 
         return f'''
         <div class="accordion open pii-alert" data-accordion="pii" style="border: 2px solid var(--critical); background: linear-gradient(135deg, rgba(239, 68, 68, 0.1) 0%, var(--bg-card) 100%);">
@@ -2848,408 +3756,445 @@ class ExecutiveHTMLReporter:
         </div>'''
 
     def _generate_ml_section(self, ml_findings: Dict) -> str:
-        """Generate the ML Analysis section (beta feature)."""
+        """Generate the Data Insights section - narrative-driven with severity levels."""
         if not ml_findings:
             return ''
 
         summary = ml_findings.get('summary', {})
         total_issues = summary.get('total_issues', 0)
         severity = summary.get('severity', 'none')
-        key_findings = summary.get('key_findings', [])
         sample_info = ml_findings.get('sample_info', {})
         analysis_time = ml_findings.get('analysis_time_seconds', 0)
+        analyzed_rows = sample_info.get('analyzed_rows', 0)
+        original_rows = sample_info.get('original_rows', analyzed_rows)
 
         # Determine severity badge style
         severity_map = {
-            'high': ('critical', 'HIGH RISK'),
-            'medium': ('warning', 'MEDIUM'),
-            'low': ('good', 'LOW'),
+            'high': ('critical', 'ACTION NEEDED'),
+            'medium': ('warning', 'REVIEW'),
+            'low': ('good', 'MINOR'),
             'none': ('good', 'CLEAN')
         }
         badge_class, badge_text = severity_map.get(severity, ('good', 'UNKNOWN'))
 
-        # Build findings list
-        findings_html = ''
-        for finding in key_findings[:5]:
-            findings_html += f'<div class="ml-finding-item">• {finding}</div>'
-
-        if not findings_html:
-            findings_html = '<div class="ml-finding-item">✓ No significant anomalies detected</div>'
-
-        # Build detailed sections organized by tier
-        details_html = ''
-
-        # ═══════════════════════════════════════════════════════════════
-        # TIER 1: DATA AUTHENTICITY
-        # ═══════════════════════════════════════════════════════════════
-        benford_analysis = ml_findings.get('benford_analysis', {})
-        if benford_analysis:
-            details_html += '''
-                <div class="ml-tier-header" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 12px 16px; margin: 20px 0 10px 0; border-radius: 8px; font-weight: 600;">
-                    📊 TIER 1: DATA AUTHENTICITY — Is this data real or fabricated?
-                </div>'''
-
-            benford_items = ''
-            for col, data in list(benford_analysis.items())[:3]:
-                chi_sq = data.get('chi_square', 0)
-                mad = data.get('mean_absolute_deviation', 0)
-                confidence = data.get('confidence', 'Unknown')
-                interpretation = data.get('interpretation', '')
-
-                # Build digit distribution mini-chart
-                digit_dist = data.get('digit_distribution', {})
-                digit_bars = ''
-                for digit in range(1, 10):
-                    d_data = digit_dist.get(digit, digit_dist.get(str(digit), {}))
-                    observed = d_data.get('observed', 0)
-                    expected = d_data.get('expected', 0)
-                    deviation = d_data.get('deviation', 0)
-                    bar_color = '#e74c3c' if abs(deviation) > 5 else '#f39c12' if abs(deviation) > 2 else '#2ecc71'
-                    digit_bars += f'<span style="display:inline-block;width:20px;text-align:center;margin:1px;padding:2px;background:{bar_color};color:white;font-size:10px;border-radius:2px;" title="Digit {digit}: {observed:.1f}% (expected {expected:.1f}%)">{digit}</span>'
-
-                benford_items += f'''
-                    <div class="ml-detail-item">
-                        <div class="ml-detail-col"><strong>{col}</strong> <span style='color:#6b7280;font-size:0.8em;'>(χ²={chi_sq:.1f}, MAD={mad:.1f}%)</span></div>
-                        <div class="ml-detail-count" style="color:#e74c3c;">⚠️ {confidence}</div>
-                        <div class="ml-detail-desc">
-                            {interpretation}<br>
-                            <span style="font-size:0.85em;">First digit distribution: {digit_bars}</span>
-                        </div>
-                    </div>'''
-
-            plain_english = benford_analysis.get(list(benford_analysis.keys())[0], {}).get('plain_english', '') if benford_analysis else ''
-            details_html += f'''
-                <div class="ml-detail-section">
-                    <div class="ml-detail-header">📊 Benford's Law Analysis</div>
-                    <details class="ml-hint-collapse"><summary>💡 What this means...</summary><div class="ml-hint-content">{plain_english}</div></details>
-                    {benford_items}
-                </div>'''
-
-        # ═══════════════════════════════════════════════════════════════
-        # TIER 2: RECORD ANOMALIES
-        # ═══════════════════════════════════════════════════════════════
+        # Extract all findings for categorization
+        format_anomalies = ml_findings.get('format_anomalies', {})
+        rare_categories = ml_findings.get('rare_categories', {})
+        cross_issues = ml_findings.get('cross_column_issues', [])
         numeric_outliers = ml_findings.get('numeric_outliers', {})
         autoencoder = ml_findings.get('autoencoder_anomalies', {})
-
-        if numeric_outliers or (autoencoder and autoencoder.get('anomaly_count', 0) > 0):
-            details_html += '''
-                <div class="ml-tier-header" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white; padding: 12px 16px; margin: 20px 0 10px 0; border-radius: 8px; font-weight: 600;">
-                    🎯 TIER 2: RECORD ANOMALIES — Which specific rows have problems?
-                </div>'''
-
-        # Numeric outliers (univariate)
-        if numeric_outliers:
-            outlier_items = ''
-            for col, data in list(numeric_outliers.items())[:5]:
-                count = data.get('anomaly_count', 0)
-                interpretation = data.get('interpretation', '')
-                contamination = data.get('contamination_used', 'auto')
-                top_values = data.get('top_anomalies', [])
-                top_display = ', '.join(f'{v:,.2f}' if isinstance(v, (int, float)) else str(v) for v in top_values[-3:])
-                rows_table = self._build_sample_rows_html(data.get('sample_rows', []))
-                contamination_info = f" <span style='color:#6b7280;font-size:0.8em;'>(sensitivity: {contamination})</span>" if contamination != 'auto' else ""
-
-                outlier_items += f'''
-                    <div class="ml-detail-item">
-                        <div class="ml-detail-col"><strong>{col}</strong>{contamination_info}</div>
-                        <div class="ml-detail-count">{count:,} outliers</div>
-                        <div class="ml-detail-desc">{interpretation or f"Top: {top_display}"}{rows_table}</div>
-                    </div>'''
-
-            skipped_semantic = ml_findings.get('skipped_numeric_semantic', [])
-            skipped_note = ""
-            if skipped_semantic:
-                skipped_cols = ', '.join(s['column'] for s in skipped_semantic[:3])
-                skipped_note = f'''<br><br><span style="color:#2ecc71;font-size:0.9em;">✓ <em>Smart filtering:</em> {len(skipped_semantic)} column(s) skipped ({skipped_cols}) - these are IDs, not measurements.</span>'''
-
-            details_html += f'''
-                <div class="ml-detail-section">
-                    <div class="ml-detail-header">🔢 Extreme Values (Isolation Forest)</div>
-                    <details class="ml-hint-collapse"><summary>💡 What this means...</summary><div class="ml-hint-content">Individual values that are unusually high or low. Like spotting a $10,000 transaction among mostly $50 ones. These could be data entry errors, exceptional cases, or legitimate but unusual activity.{skipped_note}</div></details>
-                    {outlier_items}
-                </div>'''
-
-        # Autoencoder anomalies
-        if autoencoder and autoencoder.get('anomaly_count', 0) > 0:
-            ae_count = autoencoder.get('anomaly_count', 0)
-            ae_pct = autoencoder.get('anomaly_percentage', 0)
-            confidence = autoencoder.get('confidence', 'Unknown')
-            architecture = autoencoder.get('architecture', 'Unknown')
-            interpretation = autoencoder.get('interpretation', '')
-            plain_english = autoencoder.get('plain_english', '')
-
-            contrib_features = autoencoder.get('contributing_features', [])
-            features_html = ''
-            if contrib_features:
-                features_list = ', '.join([f"{f['column']}" for f in contrib_features[:3]])
-                features_html = f'<br><span style="font-size:0.85em;color:#6b7280;">Key contributing columns: {features_list}</span>'
-
-            rows_table = self._build_sample_rows_html(autoencoder.get('sample_rows', []))
-
-            details_html += f'''
-                <div class="ml-detail-section">
-                    <div class="ml-detail-header">🧠 Deep Learning Analysis (Autoencoder)</div>
-                    <details class="ml-hint-collapse"><summary>💡 What this means...</summary><div class="ml-hint-content">{plain_english}</div></details>
-                    <div class="ml-detail-item">
-                        <div class="ml-detail-col"><strong>Neural Network</strong> <span style='color:#6b7280;font-size:0.8em;'>({architecture})</span></div>
-                        <div class="ml-detail-count">{ae_count:,} anomalies ({ae_pct:.2f}%)</div>
-                        <div class="ml-detail-desc">
-                            {interpretation}{features_html}{rows_table}
-                        </div>
-                    </div>
-                </div>'''
-
-        # ═══════════════════════════════════════════════════════════════
-        # TIER 3: DATA QUALITY ISSUES
-        # ═══════════════════════════════════════════════════════════════
-        rare_categories = ml_findings.get('rare_categories', {})
-        format_anomalies = ml_findings.get('format_anomalies', {})
-        cross_issues = ml_findings.get('cross_column_issues', [])
-
-        if rare_categories or format_anomalies or cross_issues:
-            details_html += '''
-                <div class="ml-tier-header" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); color: white; padding: 12px 16px; margin: 20px 0 10px 0; border-radius: 8px; font-weight: 600;">
-                    📝 TIER 3: DATA QUALITY ISSUES — What needs fixing?
-                </div>'''
-
-        # Rare categories
-        if rare_categories:
-            rare_items = ''
-            for col, data in list(rare_categories.items())[:5]:
-                rare_vals = data.get('rare_values', [])
-                total_rare = data.get('total_rare_count', 0)
-                threshold = data.get('threshold_percentage', 0)
-                interpretation = data.get('interpretation', '')
-                semantic_behavior = data.get('semantic_behavior', 'default')
-
-                vals_display = ', '.join([f'"{v["value"]}" ({v["count"]})' for v in rare_vals[:3]])
-                semantic_note = f" <span style='color:#2ecc71;font-size:0.8em;'>[{semantic_behavior}]</span>" if semantic_behavior != 'default' else ""
-
-                rare_items += f'''
-                    <div class="ml-detail-item">
-                        <div class="ml-detail-col"><strong>{col}</strong>{semantic_note}</div>
-                        <div class="ml-detail-count">{total_rare:,} rare values</div>
-                        <div class="ml-detail-desc">{interpretation}<br><span style="color:#e67e22;">Examples: {vals_display}</span></div>
-                    </div>'''
-
-            details_html += f'''
-                <div class="ml-detail-section">
-                    <div class="ml-detail-header">📋 Rare/Invalid Values</div>
-                    <details class="ml-hint-collapse"><summary>💡 What this means...</summary><div class="ml-hint-content">Categories that appear very rarely - could be typos, invalid codes, or legitimate but unusual values. Review to determine if they need correction.</div></details>
-                    {rare_items}
-                </div>'''
-
-        # Format anomalies
-        if format_anomalies:
-            format_items = ''
-            for col, data in list(format_anomalies.items())[:5]:
-                count = data.get('anomaly_count', 0)
-                pattern_desc = data.get('dominant_pattern_description', data.get('dominant_pattern', 'Unknown'))
-                sample_normal = data.get('sample_dominant_values', [])
-                unique_normal = list(dict.fromkeys(sample_normal))[:1]
-                normal_display = f'"{unique_normal[0]}"' if unique_normal else ''
-                sample_anomalies = data.get('sample_anomalies', [])
-                unique_anomalies = list(dict.fromkeys(sample_anomalies))[:3]
-                anomaly_display = ', '.join(f'"{s}"' for s in unique_anomalies) if unique_anomalies else 'N/A'
-                expected_part = f"Expected: {pattern_desc}"
-                if normal_display:
-                    expected_part += f" (e.g., {normal_display})"
-                rows_table = self._build_sample_rows_html(data.get('sample_rows', []))
-
-                format_items += f'''
-                    <div class="ml-detail-item">
-                        <div class="ml-detail-col"><strong>{col}</strong></div>
-                        <div class="ml-detail-count">{count:,} mismatches</div>
-                        <div class="ml-detail-desc">{expected_part}<br><span style="color:#e74c3c;">Anomalies: {anomaly_display}</span>{rows_table}</div>
-                    </div>'''
-
-            details_html += f'''
-                <div class="ml-detail-section">
-                    <div class="ml-detail-header">📝 Format Inconsistencies</div>
-                    <details class="ml-hint-collapse"><summary>💡 What this means...</summary><div class="ml-hint-content">Values that don't match the expected pattern for this column. Could indicate data entry errors, system migrations, or records from different sources.</div></details>
-                    {format_items}
-                </div>'''
-
-        # Cross-column issues
-        if cross_issues:
-            cross_items = ''
-            for issue in cross_issues[:3]:
-                cols = ' / '.join(issue.get('columns', []))
-                total = issue.get('total_issues', 0)
-                interpretation = issue.get('interpretation', '')
-                rows_table = self._build_sample_rows_html(issue.get('sample_rows', []))
-
-                cross_items += f'''
-                    <div class="ml-detail-item">
-                        <div class="ml-detail-col"><strong>{cols}</strong></div>
-                        <div class="ml-detail-count">{total:,} issues</div>
-                        <div class="ml-detail-desc">{interpretation}{rows_table}</div>
-                    </div>'''
-
-            details_html += f'''
-                <div class="ml-detail-section">
-                    <div class="ml-detail-header">🔗 Cross-Column Issues</div>
-                    <details class="ml-hint-collapse"><summary>💡 What this means...</summary><div class="ml-hint-content">Values in related columns don't match expected ratios. For example, "Amount Paid" should roughly equal "Amount Received" - large differences may indicate errors.</div></details>
-                    {cross_items}
-                </div>'''
-
-        # ═══════════════════════════════════════════════════════════════
-        # TIER 4: PATTERN ANALYSIS
-        # ═══════════════════════════════════════════════════════════════
+        corr_anomalies = ml_findings.get('correlation_anomalies', {})
+        corr_breaks = corr_anomalies.get('correlation_breaks', []) if corr_anomalies else []
         temporal_patterns = ml_findings.get('temporal_patterns', {})
         temporal_warnings = {k: v for k, v in temporal_patterns.items() if v.get('warning')}
-        corr_anomalies = ml_findings.get('correlation_anomalies', {})
-
-        if temporal_warnings or corr_anomalies:
-            details_html += '''
-                <div class="ml-tier-header" style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); color: white; padding: 12px 16px; margin: 20px 0 10px 0; border-radius: 8px; font-weight: 600;">
-                    ⏰ TIER 4: PATTERN ANALYSIS — Structural insights
-                </div>'''
-
-        # Temporal anomalies
-        if temporal_warnings:
-            temporal_items = ''
-            for col, data in list(temporal_warnings.items())[:3]:
-                interpretation = data.get('interpretation', 'Suspicious pattern detected')
-                rows_table = self._build_sample_rows_html(data.get('sample_rows', []))
-
-                temporal_items += f'''
-                    <div class="ml-detail-item">
-                        <div class="ml-detail-col"><strong>{col}</strong></div>
-                        <div class="ml-detail-desc">{interpretation}{rows_table}</div>
-                    </div>'''
-
-            details_html += f'''
-                <div class="ml-detail-section">
-                    <div class="ml-detail-header">⏰ Temporal Patterns</div>
-                    <details class="ml-hint-collapse"><summary>💡 What this means...</summary><div class="ml-hint-content">Unusual timing patterns - like too many records at midnight (batch processing artifacts), weekend gaps, or activity spikes outside business hours.</div></details>
-                    {temporal_items}
-                </div>'''
-
-        # Correlation anomalies
-        if corr_anomalies:
-            corr_breaks = corr_anomalies.get('correlation_breaks', [])
-
-            if corr_breaks:
-                corr_items = ''
-                for cb in corr_breaks[:3]:
-                    cols = ' / '.join(cb.get('columns', []))
-                    count = cb.get('anomaly_count', 0)
-                    expected_corr = cb.get('expected_correlation', 0)
-                    interpretation = cb.get('interpretation', '')
-                    sample_rows = cb.get('sample_rows', [])
-                    rows_html = self._build_sample_rows_html(sample_rows, max_rows=5) if sample_rows else ''
-
-                    corr_items += f'''
-                        <div class="ml-detail-item">
-                            <div class="ml-detail-col"><strong>{cols}</strong> <span style='color:#6b7280;font-size:0.8em;'>(r={expected_corr:.2f})</span></div>
-                            <div class="ml-detail-count">{count:,} breaks</div>
-                            <div class="ml-detail-desc">{interpretation}{rows_html}</div>
-                        </div>'''
-
-                details_html += f'''
-                    <div class="ml-detail-section">
-                        <div class="ml-detail-header">📈 Correlation Anomalies</div>
-                        <details class="ml-hint-collapse"><summary>💡 What this means...</summary><div class="ml-hint-content">Some columns naturally move together (e.g., "Amount Paid" and "Amount Received" should be similar). These are records where that expected relationship breaks - one value changed but the other did not follow as expected.</div></details>
-                        {corr_items}
-                    </div>'''
-
-        # ═══════════════════════════════════════════════════════════════
-        # INFORMATIONAL: CLUSTERING (not counted as issues)
-        # ═══════════════════════════════════════════════════════════════
+        benford_analysis = ml_findings.get('benford_analysis', {})
         clustering = ml_findings.get('clustering_analysis', {})
-        if clustering and clustering.get('n_clusters', 0) > 0:
-            n_clusters = clustering.get('n_clusters', 0)
-            noise_points = clustering.get('noise_points', 0)
-            interpretation = clustering.get('interpretation', '')
 
-            # Build cluster distribution visualization
-            cluster_counts = clustering.get('cluster_sizes', {})
-            total_in_clusters = sum(v for k, v in cluster_counts.items() if k != -1)
-            cluster_html = ''
-            cluster_bars = ''
-            colors = ['#8b5cf6', '#06b6d4', '#22c55e', '#f59e0b', '#ef4444']
-            for idx, (cluster_id, size) in enumerate(sorted(cluster_counts.items(), key=lambda x: -x[1])[:5]):
-                if cluster_id != -1:
-                    pct = (size / total_in_clusters * 100) if total_in_clusters > 0 else 0
-                    color = colors[idx % len(colors)]
-                    cluster_html += f'<span style="display:inline-block;margin:2px;padding:4px 10px;background:{color};color:white;border-radius:4px;font-size:0.85em;">Cluster {cluster_id}: {size:,} ({pct:.1f}%)</span>'
-                    cluster_bars += f'<div style="height:20px;background:{color};width:{pct}%;min-width:2px;border-radius:2px;" title="Cluster {cluster_id}: {size:,}"></div>'
-
-            # Sample noise rows (records that don't fit any cluster)
-            sample_noise = clustering.get('sample_noise_rows', [])
-            noise_rows_html = self._build_sample_rows_html(sample_noise, max_rows=5) if sample_noise else ''
-
-            details_html += f'''
-                <div class="ml-info-header" style="background: linear-gradient(135deg, #94a3b8 0%, #64748b 100%); color: white; padding: 12px 16px; margin: 20px 0 10px 0; border-radius: 8px; font-weight: 600;">
-                    ℹ️ INFORMATIONAL: CLUSTERING — Natural data groupings for context
-                </div>
-                <div class="ml-detail-section">
-                    <div class="ml-detail-header">🔬 DBSCAN Clustering Analysis</div>
-                    <details class="ml-hint-collapse"><summary>💡 What this means...</summary><div class="ml-hint-content">DBSCAN groups similar records based on numeric properties. This reveals natural structure in your data - records with similar characteristics cluster together. <strong>Noise points</strong> are records that do not fit any cluster - these are unique or unusual records that may warrant a closer look, though they are not necessarily errors.</div></details>
-
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 16px 0;">
-                        <div style="background: var(--card-bg); border-radius: 8px; padding: 16px; border: 1px solid var(--border-color);">
-                            <div style="font-size: 2em; font-weight: bold; color: var(--text-primary);">{n_clusters}</div>
-                            <div style="color: var(--text-secondary); font-size: 0.9em;">Natural Clusters</div>
-                        </div>
-                        <div style="background: var(--card-bg); border-radius: 8px; padding: 16px; border: 1px solid var(--border-color);">
-                            <div style="font-size: 2em; font-weight: bold; color: #f59e0b;">{noise_points:,}</div>
-                            <div style="color: var(--text-secondary); font-size: 0.9em;">Noise Points (unique records)</div>
-                        </div>
-                    </div>
-
-                    <div style="margin: 16px 0;">
-                        <div style="color: var(--text-secondary); font-size: 0.85em; margin-bottom: 8px;">Cluster Distribution:</div>
-                        <div style="display: flex; gap: 2px; height: 24px; background: var(--border-color); border-radius: 4px; overflow: hidden;">
-                            {cluster_bars}
-                        </div>
-                        <div style="margin-top: 8px;">{cluster_html}</div>
-                    </div>
-
-                    {f'<div style="margin-top: 16px;"><div style="color: var(--text-secondary); font-size: 0.85em; margin-bottom: 8px;">📋 Sample Noise Points (unique records worth reviewing):</div>{noise_rows_html}</div>' if noise_rows_html else ''}
-                </div>'''
-
-        # Prepare chart data (Multivariate IF removed, DBSCAN informational only)
+        # Calculate counts for summary
         outlier_count = sum(f.get('anomaly_count', 0) for f in numeric_outliers.values())
-        corr_break_count = sum(b.get('anomaly_count', 0) for b in corr_anomalies.get('correlation_breaks', [])) if corr_anomalies else 0
         format_count = sum(f.get('anomaly_count', 0) for f in format_anomalies.values())
         rare_count = sum(f.get('total_rare_count', 0) for f in rare_categories.values())
         cross_count = sum(i.get('total_issues', 0) for i in cross_issues)
-        temporal_count = len(temporal_warnings)
-        benford_count = len(benford_analysis) if benford_analysis else 0
-        autoencoder_count = autoencoder.get('anomaly_count', 0) if autoencoder else 0
+        ae_count = autoencoder.get('anomaly_count', 0) if autoencoder else 0
+        corr_break_count = sum(b.get('anomaly_count', 0) for b in corr_breaks)
 
-        # Build outlier bar chart data (top 5 columns by outlier count)
-        outlier_chart_data = []
-        for col, data in sorted(numeric_outliers.items(), key=lambda x: x[1].get('anomaly_count', 0), reverse=True)[:5]:
-            outlier_chart_data.append({
-                'column': col[:15] + '...' if len(col) > 15 else col,
-                'count': data.get('anomaly_count', 0)
-            })
+        details_html = ''
 
-        # Chart JS data - organized by tiers (removed: Multivariate IF, Clustering noise)
-        chart_labels = ['Outliers', 'Autoencoder', 'Format', 'Rare', 'Cross-Col', 'Correlation', 'Temporal', 'Benford']
-        chart_values = [outlier_count, autoencoder_count, format_count, rare_count, cross_count, corr_break_count, temporal_count, benford_count]
+        # ═══════════════════════════════════════════════════════════════
+        # EXECUTIVE SUMMARY - Key risks at a glance
+        # ═══════════════════════════════════════════════════════════════
+        risk_items = []
+        if outlier_count > 0:
+            pct = (outlier_count / analyzed_rows * 100) if analyzed_rows > 0 else 0
+            risk_items.append(f'<span style="color: #ef4444;">Extreme Outliers ({pct:.1f}%)</span>')
+        if ae_count > 0:
+            pct = autoencoder.get('anomaly_percentage', 0)
+            risk_items.append(f'<span style="color: #8b5cf6;">Multi-Column Anomalies ({pct:.1f}%)</span>')
+        if cross_count > 0:
+            risk_items.append(f'<span style="color: #06b6d4;">Cross-Field Issues ({cross_count:,})</span>')
+        if rare_count > 0:
+            risk_items.append(f'<span style="color: #f59e0b;">Rare Values ({rare_count:,})</span>')
+        if temporal_warnings:
+            risk_items.append(f'<span style="color: #22c55e;">Temporal Gaps</span>')
 
-        # Filter out zero values for cleaner chart
-        non_zero_data = [(l, v) for l, v in zip(chart_labels, chart_values) if v > 0]
-        if non_zero_data:
-            chart_labels, chart_values = zip(*non_zero_data)
-            chart_labels = list(chart_labels)
-            chart_values = list(chart_values)
-        else:
-            chart_labels = ['No Issues']
-            chart_values = [0]
+        if risk_items:
+            details_html += f'''
+                <div style="background: var(--card-bg); border-radius: 10px; padding: 16px 20px; margin-bottom: 20px; border: 1px solid var(--border-subtle);">
+                    <div style="font-weight: 600; margin-bottom: 10px; color: var(--text-primary);">Key Risks</div>
+                    <div style="display: flex; flex-wrap: wrap; gap: 12px; font-size: 0.9em;">
+                        {" • ".join(risk_items)}
+                    </div>
+                </div>'''
+
+        # ═══════════════════════════════════════════════════════════════
+        # SECTION 1: OUTLIER & ANOMALY ANALYSIS (Critical/High)
+        # ═══════════════════════════════════════════════════════════════
+        has_outliers = numeric_outliers or (autoencoder and ae_count > 0)
+
+        if has_outliers:
+            section_severity = 'CRITICAL' if outlier_count > analyzed_rows * 0.01 else 'HIGH'
+            details_html += f'''
+                <div style="background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%); color: white; padding: 16px 20px; margin: 16px 0 12px 0; border-radius: 10px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <div style="font-weight: 600; font-size: 1.05em;">Outlier & Anomaly Analysis</div>
+                            <div style="font-size: 0.85em; opacity: 0.9;">Values that deviate significantly from expected patterns</div>
+                        </div>
+                        <div style="background: rgba(255,255,255,0.2); padding: 4px 10px; border-radius: 4px; font-size: 0.8em; font-weight: 600;">{section_severity}</div>
+                    </div>
+                </div>'''
+
+            # Numeric outliers with business impact and actions
+            if numeric_outliers:
+                for col, data in list(numeric_outliers.items())[:4]:
+                    count = data.get('anomaly_count', 0)
+                    pct = data.get('anomaly_percentage', (count / analyzed_rows * 100) if analyzed_rows > 0 else 0)
+                    max_multiplier = data.get('max_deviation_from_median', 0)
+
+                    # Generate business impact based on severity
+                    if pct > 5:
+                        impact = 'Mean/average calculations severely distorted. ML models will overfit to outliers.'
+                        action = 'Export outlier records for review. Add RangeCheck validation to catch future issues.'
+                    elif max_multiplier > 1000:
+                        impact = f'Extreme values ({max_multiplier:,.0f}x median) will break visualizations and distort aggregates.'
+                        action = 'Investigate data source for entry errors or currency conversion issues.'
+                    else:
+                        impact = 'Statistical analysis may be skewed. Consider winsorizing for analytics.'
+                        action = 'Review outliers to determine if they are valid edge cases or errors.'
+
+                    details_html += f'''
+                        <div style="background: var(--card-bg); border-radius: 8px; padding: 14px; margin-bottom: 10px; border-left: 4px solid #ef4444;">
+                            <div style="display: flex; justify-content: space-between; align-items: start;">
+                                <div style="font-weight: 600; margin-bottom: 6px;">{col}</div>
+                                <div style="font-size: 0.8em; color: #ef4444; font-weight: 600;">{pct:.2f}% outliers</div>
+                            </div>
+                            <div style="font-size: 0.9em; color: var(--text-secondary); margin-bottom: 6px;">{count:,} extreme values detected</div>
+                            <div style="font-size: 0.85em; color: var(--text-muted); margin-bottom: 6px;">
+                                <strong style="color: var(--text-secondary);">Impact:</strong> {impact}
+                            </div>
+                            <div style="font-size: 0.85em; color: #22c55e;">
+                                <strong>Action:</strong> {action}
+                            </div>
+                        </div>'''
+
+            # Multi-column anomalies (autoencoder)
+            if autoencoder and ae_count > 0:
+                ae_pct = autoencoder.get('anomaly_percentage', 0)
+                interpretation = autoencoder.get('interpretation', 'Records with unusual feature combinations that don\'t fit normal patterns')
+
+                # Check for right-skewed reconstruction errors (dynamic explanation)
+                # Skew detection: median near zero while mean/max are much higher indicates right-skew
+                ae_error_stats = autoencoder.get('error_stats', {})
+                ae_median_err = ae_error_stats.get('median', 0)
+                ae_q75_err = ae_error_stats.get('q75', 0)
+                ae_mean_err = ae_error_stats.get('mean', 0)
+                ae_max_err = ae_error_stats.get('max', 0)
+                # Right-skewed if: median is zero, OR median << q75, OR median << mean (less than 0.1% of mean)
+                ae_is_skewed = (
+                    ae_median_err == 0 or
+                    (ae_q75_err > 0 and ae_median_err < ae_q75_err * 0.1) or
+                    (ae_mean_err > 0 and ae_median_err < ae_mean_err * 0.001)
+                )
+                ae_skew_note = ''
+                if ae_is_skewed and (ae_q75_err > 0 or ae_mean_err > 0):
+                    ae_skew_note = '<div style="font-size: 0.8em; color: var(--text-muted); margin-top: 6px; font-style: italic;">Note: Reconstruction errors are heavily right-skewed; anomaly threshold determined from upper tail distribution.</div>'
+
+                # Generate business impact based on severity
+                if ae_pct > 5:
+                    ae_impact = 'Significant portion of data has unusual multi-field patterns. May indicate systematic data issues or fraud.'
+                    ae_action = 'Export anomalous records for manual review. Consider implementing cross-field validation rules.'
+                elif ae_pct > 1:
+                    ae_impact = 'Notable subset of records don\'t fit normal patterns. Could be edge cases or data quality issues.'
+                    ae_action = 'Sample and review anomalous records to understand the root cause.'
+                else:
+                    ae_impact = 'Small number of unusual records detected. Likely genuine edge cases or rare scenarios.'
+                    ae_action = 'Spot-check a few examples to verify they are valid business scenarios.'
+
+                details_html += f'''
+                    <div style="background: var(--card-bg); border-radius: 8px; padding: 14px; margin-bottom: 10px; border-left: 4px solid #8b5cf6;">
+                        <div style="display: flex; justify-content: space-between; align-items: start;">
+                            <div style="font-weight: 600; margin-bottom: 6px;">Multi-Column Anomalies</div>
+                            <div style="font-size: 0.8em; color: #8b5cf6; font-weight: 600;">{ae_pct:.2f}%</div>
+                        </div>
+                        <div style="font-size: 0.9em; color: var(--text-secondary); margin-bottom: 6px;">{ae_count:,} records structurally unusual across multiple fields</div>
+                        <div style="font-size: 0.85em; color: var(--text-muted); margin-bottom: 6px;">
+                            <strong style="color: var(--text-secondary);">Impact:</strong> {ae_impact}
+                        </div>
+                        <div style="font-size: 0.85em; color: #22c55e;">
+                            <strong>Action:</strong> {ae_action}
+                        </div>
+                        {ae_skew_note}
+                    </div>'''
+
+        # ═══════════════════════════════════════════════════════════════
+        # SECTION 2: CROSS-FIELD CONSISTENCY (Medium/High)
+        # ═══════════════════════════════════════════════════════════════
+        has_cross = cross_issues or corr_breaks
+
+        if has_cross:
+            section_severity = 'HIGH' if cross_count > 100 else 'MEDIUM'
+            details_html += f'''
+                <div style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); color: white; padding: 16px 20px; margin: 20px 0 12px 0; border-radius: 10px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <div style="font-weight: 600; font-size: 1.05em;">Cross-Field Consistency</div>
+                            <div style="font-size: 0.85em; opacity: 0.9;">Relationships between columns that don't match expected patterns</div>
+                        </div>
+                        <div style="background: rgba(255,255,255,0.2); padding: 4px 10px; border-radius: 4px; font-size: 0.8em; font-weight: 600;">{section_severity}</div>
+                    </div>
+                </div>'''
+
+            # Cross-column issues
+            if cross_issues:
+                for issue in cross_issues[:3]:
+                    cols = issue.get('columns', [])
+                    total = issue.get('total_issues', 0)
+                    interpretation = issue.get('interpretation', 'Values between these fields show unexpected relationships')
+
+                    # Generate business impact based on count
+                    if total > 1000:
+                        cross_impact = 'Widespread data integrity issue. Business rules may not be enforced at entry point.'
+                        cross_action = 'Implement cross-field validation at data entry. Review ETL transformation logic.'
+                    elif total > 100:
+                        cross_impact = 'Moderate number of records violate expected field relationships.'
+                        cross_action = 'Add CrossFieldValidation rule to catch inconsistencies in future loads.'
+                    else:
+                        cross_impact = 'Small number of logical inconsistencies between related fields.'
+                        cross_action = 'Review sample records to determine if manual correction is needed.'
+
+                    details_html += f'''
+                        <div style="background: var(--card-bg); border-radius: 8px; padding: 14px; margin-bottom: 10px; border-left: 4px solid #06b6d4;">
+                            <div style="font-weight: 600; margin-bottom: 6px;">{cols[0]} ↔ {cols[1] if len(cols) > 1 else "related field"}</div>
+                            <div style="font-size: 0.9em; color: var(--text-secondary); margin-bottom: 6px;">{total:,} records with inconsistent values</div>
+                            <div style="font-size: 0.85em; color: var(--text-muted); margin-bottom: 6px;">
+                                <strong style="color: var(--text-secondary);">Impact:</strong> {cross_impact}
+                            </div>
+                            <div style="font-size: 0.85em; color: #22c55e;">
+                                <strong>Action:</strong> {cross_action}
+                            </div>
+                        </div>'''
+
+            # Correlation breaks
+            if corr_breaks:
+                for cb in corr_breaks[:2]:
+                    cols = cb.get('columns', [])
+                    count = cb.get('anomaly_count', 0)
+                    interpretation = cb.get('interpretation', 'Records that deviate from the expected correlation pattern')
+
+                    # Generate business impact
+                    if count > 500:
+                        corr_impact = 'Significant deviation from historical patterns. May indicate data drift or process change.'
+                        corr_action = 'Compare with historical data. Check if source system changed or new data flows were added.'
+                    else:
+                        corr_impact = 'Some records break expected statistical relationships between fields.'
+                        corr_action = 'Review flagged records for data entry errors or special business scenarios.'
+
+                    details_html += f'''
+                        <div style="background: var(--card-bg); border-radius: 8px; padding: 14px; margin-bottom: 10px; border-left: 4px solid #0891b2;">
+                            <div style="font-weight: 600; margin-bottom: 6px;">{cols[0] if cols else "Column"} ↔ {cols[1] if len(cols) > 1 else "related"}: Pattern Break</div>
+                            <div style="font-size: 0.9em; color: var(--text-secondary); margin-bottom: 6px;">{count:,} records deviate from expected relationship</div>
+                            <div style="font-size: 0.85em; color: var(--text-muted); margin-bottom: 6px;">
+                                <strong style="color: var(--text-secondary);">Impact:</strong> {corr_impact}
+                            </div>
+                            <div style="font-size: 0.85em; color: #22c55e;">
+                                <strong>Action:</strong> {corr_action}
+                            </div>
+                        </div>'''
+
+        # ═══════════════════════════════════════════════════════════════
+        # SECTION 3: CATEGORICAL & VALUE QUALITY (Medium)
+        # ═══════════════════════════════════════════════════════════════
+        has_categorical = rare_categories or format_anomalies
+
+        if has_categorical:
+            details_html += f'''
+                <div style="background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%); color: white; padding: 16px 20px; margin: 20px 0 12px 0; border-radius: 10px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <div style="font-weight: 600; font-size: 1.05em;">Categorical & Value Quality</div>
+                            <div style="font-size: 0.85em; opacity: 0.9;">Rare values, format inconsistencies, and domain violations</div>
+                        </div>
+                        <div style="background: rgba(255,255,255,0.2); padding: 4px 10px; border-radius: 4px; font-size: 0.8em; font-weight: 600;">MEDIUM</div>
+                    </div>
+                </div>'''
+
+            # Rare categories
+            if rare_categories:
+                for col, data in list(rare_categories.items())[:3]:
+                    rare_vals = data.get('rare_values', [])
+                    total_rare = data.get('total_rare_count', 0)
+                    vals_display = ', '.join([f'"{v["value"]}"' for v in rare_vals[:3]])
+
+                    # Generate business impact based on severity
+                    if total_rare > 100:
+                        rare_impact = 'Many infrequent values suggest inconsistent data entry or missing standardization.'
+                        rare_action = 'Create AllowedValuesCheck validation with approved values. Consider data cleansing.'
+                    else:
+                        rare_impact = 'A few uncommon values that may be typos, edge cases, or valid but rare categories.'
+                        rare_action = 'Review rare values to decide if they should be corrected or added to valid list.'
+
+                    details_html += f'''
+                        <div style="background: var(--card-bg); border-radius: 8px; padding: 14px; margin-bottom: 10px; border-left: 4px solid #f59e0b;">
+                            <div style="font-weight: 600; margin-bottom: 6px;">{col}: {total_rare:,} rare values</div>
+                            <div style="font-size: 0.9em; color: var(--text-secondary); margin-bottom: 6px;">Examples: {vals_display}</div>
+                            <div style="font-size: 0.85em; color: var(--text-muted); margin-bottom: 6px;">
+                                <strong style="color: var(--text-secondary);">Impact:</strong> {rare_impact}
+                            </div>
+                            <div style="font-size: 0.85em; color: #22c55e;">
+                                <strong>Action:</strong> {rare_action}
+                            </div>
+                        </div>'''
+
+            # Format anomalies
+            if format_anomalies:
+                for col, data in list(format_anomalies.items())[:3]:
+                    count = data.get('anomaly_count', 0)
+                    pattern_desc = data.get('dominant_pattern_description', data.get('dominant_pattern', 'standard format'))
+                    sample_anomalies = data.get('sample_anomalies', [])
+                    unique_anomalies = list(dict.fromkeys(sample_anomalies))[:3]
+                    anomaly_display = ', '.join(f'"{s}"' for s in unique_anomalies) if unique_anomalies else 'N/A'
+
+                    # Generate business impact
+                    if count > 1000:
+                        fmt_impact = 'Widespread format inconsistency will break parsing, integrations, and downstream systems.'
+                        fmt_action = 'Add FormatValidation rule. Fix data at source or implement ETL transformation.'
+                    elif count > 100:
+                        fmt_impact = 'Moderate format inconsistencies may cause integration failures or data loss.'
+                        fmt_action = 'Implement PatternCheck validation. Review input form validation rules.'
+                    else:
+                        fmt_impact = 'Minor format deviations that may cause issues in strict systems.'
+                        fmt_action = 'Review anomalies to determine if format validation should be enforced.'
+
+                    details_html += f'''
+                        <div style="background: var(--card-bg); border-radius: 8px; padding: 14px; margin-bottom: 10px; border-left: 4px solid #dc2626;">
+                            <div style="font-weight: 600; margin-bottom: 6px;">{col}: {count:,} format mismatches</div>
+                            <div style="font-size: 0.9em; color: var(--text-secondary);">Expected pattern: {pattern_desc}</div>
+                            <div style="font-size: 0.85em; color: #dc2626; margin-bottom: 6px;">Found: {anomaly_display}</div>
+                            <div style="font-size: 0.85em; color: var(--text-muted); margin-bottom: 6px;">
+                                <strong style="color: var(--text-secondary);">Impact:</strong> {fmt_impact}
+                            </div>
+                            <div style="font-size: 0.85em; color: #22c55e;">
+                                <strong>Action:</strong> {fmt_action}
+                            </div>
+                        </div>'''
+
+        # ═══════════════════════════════════════════════════════════════
+        # SECTION 4: TEMPORAL ANALYSIS (if warnings)
+        # ═══════════════════════════════════════════════════════════════
+        if temporal_warnings:
+            details_html += f'''
+                <div style="background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%); color: white; padding: 16px 20px; margin: 20px 0 12px 0; border-radius: 10px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <div style="font-weight: 600; font-size: 1.05em;">Temporal Analysis</div>
+                            <div style="font-size: 0.85em; opacity: 0.9;">Time-based patterns and gaps in your data</div>
+                        </div>
+                        <div style="background: rgba(255,255,255,0.2); padding: 4px 10px; border-radius: 4px; font-size: 0.8em; font-weight: 600;">INFO</div>
+                    </div>
+                </div>'''
+
+            for col, data in list(temporal_warnings.items())[:2]:
+                interpretation = data.get('interpretation', 'Unusual timing pattern detected')
+                gap_count = data.get('gap_count', 0)
+                largest_gap = data.get('largest_gap', '')
+
+                # Generate business impact
+                if gap_count > 5:
+                    temp_impact = 'Multiple time gaps detected. May indicate data ingestion failures or system downtime.'
+                    temp_action = 'Review ingestion logs for failures. Consider implementing data freshness monitoring.'
+                else:
+                    temp_impact = 'Time patterns show some irregularities worth understanding.'
+                    temp_action = 'Investigate if gaps correlate with known business events or maintenance windows.'
+
+                details_html += f'''
+                    <div style="background: var(--card-bg); border-radius: 8px; padding: 14px; margin-bottom: 10px; border-left: 4px solid #22c55e;">
+                        <div style="font-weight: 600; margin-bottom: 6px;">{col}: Temporal Irregularity</div>
+                        <div style="font-size: 0.9em; color: var(--text-secondary); margin-bottom: 6px;">{interpretation}</div>
+                        <div style="font-size: 0.85em; color: var(--text-muted); margin-bottom: 6px;">
+                            <strong style="color: var(--text-secondary);">Impact:</strong> {temp_impact}
+                        </div>
+                        <div style="font-size: 0.85em; color: #22c55e;">
+                            <strong>Action:</strong> {temp_action}
+                        </div>
+                    </div>'''
+
+        # ═══════════════════════════════════════════════════════════════
+        # SECTION 5: DATA CONTEXT (Informational)
+        # ═══════════════════════════════════════════════════════════════
+        has_context = benford_analysis or (clustering and clustering.get('n_clusters', 0) > 0)
+
+        if has_context:
+            details_html += '''
+                <div style="background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%); color: white; padding: 16px 20px; margin: 20px 0 12px 0; border-radius: 10px;">
+                    <div>
+                        <div style="font-weight: 600; font-size: 1.05em;">Data Characteristics</div>
+                        <div style="font-size: 0.85em; opacity: 0.9;">Understanding your data's natural structure</div>
+                    </div>
+                </div>'''
+
+            # Benford's Law
+            if benford_analysis:
+                for col, data in list(benford_analysis.items())[:2]:
+                    is_suspicious = data.get('is_suspicious', False)
+                    chi_square = data.get('chi_square', 0)
+                    p_value = data.get('p_value', 0)
+
+                    if is_suspicious:
+                        interpretation = 'Digit distribution deviates from natural patterns - may indicate synthetic or manipulated data'
+                        benford_impact = 'Unusual digit patterns may indicate data manipulation, synthetic generation, or non-organic sources.'
+                        benford_action = 'Review data provenance. Consider forensic analysis if fraud is suspected.'
+                    else:
+                        interpretation = 'Digit distribution follows natural patterns (Benford\'s Law) - consistent with organic financial data'
+                        benford_impact = 'Data shows natural patterns consistent with real-world financial data.'
+                        benford_action = 'No action needed. This is a positive indicator of data authenticity.'
+
+                    status_text = "Deviates (p < 0.05)" if is_suspicious else "Conforms (p ≥ 0.05)"
+                    details_html += f'''
+                        <div style="background: var(--card-bg); border-radius: 8px; padding: 14px; margin-bottom: 10px; border-left: 4px solid {"#f59e0b" if is_suspicious else "#22c55e"};">
+                            <div style="font-weight: 600; margin-bottom: 6px;">{col}: {"Unusual" if is_suspicious else "Natural"} Digit Distribution</div>
+                            <div style="font-size: 0.9em; color: var(--text-secondary); margin-bottom: 6px;">Benford's Law: {status_text} (χ²={chi_square:.1f})</div>
+                            <div style="font-size: 0.85em; color: var(--text-muted); margin-bottom: 6px;">
+                                <strong style="color: var(--text-secondary);">Impact:</strong> {benford_impact}
+                            </div>
+                            <div style="font-size: 0.85em; color: #22c55e;">
+                                <strong>Action:</strong> {benford_action}
+                            </div>
+                        </div>'''
+
+            # Clustering
+            if clustering and clustering.get('n_clusters', 0) > 0:
+                n_clusters = clustering.get('n_clusters', 0)
+                noise_points = clustering.get('noise_points', 0)
+                noise_pct = (noise_points / analyzed_rows * 100) if analyzed_rows > 0 else 0
+
+                # Generate impact based on noise
+                if noise_pct > 10:
+                    cluster_impact = f'{noise_pct:.1f}% of records are outliers that don\'t fit any natural group. These may need special handling.'
+                    cluster_action = 'Review noise points for data quality issues or create separate processing rules for edge cases.'
+                else:
+                    cluster_impact = f'Data has clear structure with {n_clusters} natural groupings. Low noise indicates consistent data patterns.'
+                    cluster_action = 'Consider using clusters for segmentation analysis or targeted validation rules.'
+
+                details_html += f'''
+                    <div style="background: var(--card-bg); border-radius: 8px; padding: 14px; margin-bottom: 10px; border-left: 4px solid #8b5cf6;">
+                        <div style="font-weight: 600; margin-bottom: 6px;">Natural Data Clustering</div>
+                        <div style="font-size: 0.9em; color: var(--text-secondary); margin-bottom: 6px;">Data naturally forms {n_clusters} distinct groups • {noise_points:,} noise points ({noise_pct:.1f}%)</div>
+                        <div style="font-size: 0.85em; color: var(--text-muted); margin-bottom: 6px;">
+                            <strong style="color: var(--text-secondary);">Impact:</strong> {cluster_impact}
+                        </div>
+                        <div style="font-size: 0.85em; color: #22c55e;">
+                            <strong>Action:</strong> {cluster_action}
+                        </div>
+                    </div>'''
 
         return f'''
-        <div class="accordion open" data-accordion="ml-analysis">
+        <div class="accordion open" data-accordion="data-insights">
             <div class="accordion-header" onclick="toggleAccordion(this)">
                 <div class="accordion-title-group">
-                    <div class="accordion-icon ml">🧠</div>
+                    <div class="accordion-icon ml">💡</div>
                     <div>
-                        <div class="accordion-title">ML-Based Anomaly Detection <span class="beta-badge">BETA</span></div>
-                        <div class="accordion-subtitle">Machine learning analysis of data patterns</div>
+                        <div class="accordion-title">Data Insights</div>
+                        <div class="accordion-subtitle">Analyzed {analyzed_rows:,} rows{f" (sample of {original_rows:,})" if original_rows > analyzed_rows else ""} in {analysis_time:.1f}s</div>
                     </div>
                 </div>
                 <div class="accordion-meta">
@@ -3259,134 +4204,814 @@ class ExecutiveHTMLReporter:
             </div>
             <div class="accordion-body">
                 <div class="accordion-content">
-                    <div class="hint-box">
-                        <strong>🧠 About ML Analysis:</strong> A tiered approach to finding data issues:<br>
-                        <strong>Tier 1</strong> checks if data is real (Benford's Law) • <strong>Tier 2</strong> finds problematic records (Outliers, Autoencoder) • <strong>Tier 3</strong> detects quality issues (Format, Rare values) • <strong>Tier 4</strong> reveals patterns (Temporal, Correlation).<br>
-                        Analyzed {sample_info.get('analyzed_rows', 0):,} rows ({sample_info.get('sample_percentage', 0):.1f}% of data) in {analysis_time:.1f}s.
-                    </div>
-
-                    <div class="ml-charts-row">
-                        <div class="ml-summary-card">
-                            <div class="ml-summary-header">
-                                <div class="ml-summary-count">{total_issues:,}</div>
-                                <div class="ml-summary-label">Potential Issues Found</div>
-                            </div>
-                            <div class="ml-findings-list">
-                                {findings_html}
-                            </div>
-                        </div>
-
-                        <div class="ml-chart-card">
-                            <div class="ml-chart-title">Issue Breakdown</div>
-                            <div class="ml-chart-container">
-                                <canvas id="mlBreakdownChart"></canvas>
-                            </div>
-                        </div>
-
-                        {f"""<div class="ml-chart-card">
-                            <div class="ml-chart-title">Top Outlier Columns</div>
-                            <div class="ml-chart-container">
-                                <canvas id="mlOutlierChart"></canvas>
-                            </div>
-                        </div>""" if outlier_chart_data else ""}
-                    </div>
-
                     {details_html}
                 </div>
             </div>
+        </div>'''
+
+    def _generate_ml_section_v2(self, ml_findings: Dict) -> str:
+        """
+        Generate v2 Data Insights section with masterpiece insight widgets.
+
+        New design features:
+        1. Plain English summary (always visible)
+        2. Example table with real data (always visible)
+        3. Collapsible technical details with data science explanation
+
+        Language: Observations, not issues. Awareness, not problems to fix.
+        """
+        if not ml_findings:
+            return ''
+
+        sample_info = ml_findings.get('sample_info', {})
+        analysis_time = ml_findings.get('analysis_time_seconds', 0)
+        analyzed_rows = sample_info.get('analyzed_rows', 0)
+        original_rows = sample_info.get('original_rows', analyzed_rows)
+
+        # Extract all findings
+        numeric_outliers = ml_findings.get('numeric_outliers', {})
+        # Try multivariate_outliers first (new key), fallback to autoencoder_anomalies
+        autoencoder = ml_findings.get('multivariate_outliers', ml_findings.get('autoencoder_anomalies', {}))
+        cross_issues = ml_findings.get('cross_column_issues', [])
+        corr_anomalies = ml_findings.get('correlation_anomalies', {})
+        corr_breaks = corr_anomalies.get('correlation_breaks', []) if corr_anomalies else []
+        rare_categories = ml_findings.get('rare_categories', {})
+        format_anomalies = ml_findings.get('format_anomalies', {})
+        temporal_patterns = ml_findings.get('temporal_patterns', {})
+        benford_analysis = ml_findings.get('benford_analysis', {})
+        clustering = ml_findings.get('clustering_analysis', {})
+
+        widgets_html = ''
+
+        # ═══════════════════════════════════════════════════════════════
+        # INSIGHT 1: OUTLIER PATTERNS (Isolation Forest ML)
+        # ═══════════════════════════════════════════════════════════════
+        if numeric_outliers:
+            total_outliers = sum(f.get('anomaly_count', 0) for f in numeric_outliers.values())
+            outlier_pct = (total_outliers / analyzed_rows * 100) if analyzed_rows > 0 else 0
+
+            # Plain English explanation
+            plain_english = f'''About {outlier_pct:.1f}% of values ({total_outliers:,} records) are dramatically different
+from typical values in their columns. These could be large transactions, data entry errors,
+currency conversion issues, or legitimate edge cases worth reviewing.'''
+
+            # Build example table rows from sample_rows (correct key)
+            example_rows = ''
+            for col_name, data in list(numeric_outliers.items())[:3]:
+                # Try sample_rows first, then fallback to other keys
+                samples = data.get('sample_rows', data.get('sample_anomalies', data.get('sample_outliers', [])))
+                top_anomalies = data.get('top_anomalies', [])
+                normal_range = data.get('normal_range', {})
+                median = normal_range.get('median', data.get('median', 0))
+
+                # Use sample_rows if available
+                for sample in samples[:2]:
+                    if isinstance(sample, dict):
+                        val = sample.get(col_name, 'N/A')
+                        # Try to format numeric values
+                        try:
+                            val_num = float(str(val).replace(',', ''))
+                            val_display = f'{val_num:,.2f}'
+                        except:
+                            val_display = str(val)
+                        median_display = f'{median:,.2f}' if median else 'N/A'
+                        example_rows += f'''
+                        <tr>
+                            <td>{col_name}</td>
+                            <td class="value-highlight">{val_display}</td>
+                            <td class="value-normal">{median_display}</td>
+                        </tr>'''
+
+                # If no sample_rows, use top_anomalies values
+                if not samples and top_anomalies:
+                    for val in top_anomalies[:2]:
+                        try:
+                            val_display = f'{float(val):,.2f}'
+                        except:
+                            val_display = str(val)
+                        median_display = f'{median:,.2f}' if median else 'N/A'
+                        example_rows += f'''
+                        <tr>
+                            <td>{col_name}</td>
+                            <td class="value-highlight">{val_display}</td>
+                            <td class="value-normal">{median_display}</td>
+                        </tr>'''
+
+            if not example_rows:
+                example_rows = '<tr><td colspan="3" style="text-align: center; color: var(--text-muted);">Sample data not available</td></tr>'
+
+            # Technical details
+            tech_items = []
+            for col_name, data in list(numeric_outliers.items())[:3]:
+                method = data.get('method', 'Isolation Forest')
+                count = data.get('anomaly_count', 0)
+                confidence = data.get('confidence', 'N/A')
+                tech_items.append(f'''
+                    <div class="insight-technical-item">
+                        <span class="insight-technical-item-label">{col_name}</span>
+                        <span class="insight-technical-item-value">{count:,} outliers • {method} • confidence: {confidence}</span>
+                    </div>''')
+
+            widgets_html += self._build_insight_widget(
+                icon="🧠",
+                title="Outlier Patterns",
+                badge_text=f"{outlier_pct:.1f}% of rows",
+                badge_class="warning" if outlier_pct > 1 else "info",
+                plain_english=plain_english,
+                table_headers=["Column", "Outlier Value", "Typical (Median)"],
+                table_rows=example_rows,
+                technical_items=''.join(tech_items),
+                technical_context=[
+                    f"ML Model: Isolation Forest (unsupervised anomaly detection)",
+                    f"Sample Size: {analyzed_rows:,} rows",
+                    f"Columns Analyzed: {len(numeric_outliers)}"
+                ],
+                ml_model="Isolation Forest"
+            )
+        else:
+            # Show that we checked but found nothing - with meaningful data context
+            widgets_html += self._build_insight_widget(
+                icon="✓",
+                title="Outlier Patterns",
+                badge_text="100% normal",
+                badge_class="good",
+                plain_english=f'''All {analyzed_rows:,} rows analyzed show values within expected statistical ranges.
+No extreme outliers were detected in any numeric column. This indicates consistent
+data without unexpected spikes or anomalous values that might warrant review.''',
+                table_headers=["Metric", "Finding"],
+                table_rows=f'''<tr><td>Rows Checked</td><td class="value-normal">{analyzed_rows:,}</td></tr>
+                <tr><td>Outliers Found</td><td class="value-normal">0 (0.00%)</td></tr>
+                <tr><td>Status</td><td class="value-normal">All values within normal range</td></tr>''',
+                technical_items='''
+                    <div class="insight-technical-item">
+                        <span class="insight-technical-item-label">Method</span>
+                        <span class="insight-technical-item-value">Isolation Forest (contamination=auto)</span>
+                    </div>
+                    <div class="insight-technical-item">
+                        <span class="insight-technical-item-label">Implication</span>
+                        <span class="insight-technical-item-value">Data values are consistent and well-distributed</span>
+                    </div>
+                ''',
+                technical_context=[
+                    "Isolation Forest ML algorithm scanned all numeric columns",
+                    "No values exceeded the anomaly score threshold (>3σ from mean)",
+                    "This is a positive finding indicating clean, consistent data"
+                ],
+                ml_model="Isolation Forest"
+            )
+
+        # ═══════════════════════════════════════════════════════════════
+        # INSIGHT 2: UNUSUAL COMBINATIONS (Isolation Forest Multivariate)
+        # ═══════════════════════════════════════════════════════════════
+        ae_count = autoencoder.get('anomaly_count', 0) if autoencoder else 0
+        if autoencoder and ae_count > 0:
+            ae_pct = autoencoder.get('anomaly_percentage', 0)
+            method = autoencoder.get('method', 'Isolation Forest')
+
+            # Check for right-skewed reconstruction errors (dynamic explanation)
+            # Skew detection: median near zero while mean/max are much higher indicates right-skew
+            ae_error_stats = autoencoder.get('error_stats', {})
+            ae_median_err = ae_error_stats.get('median', 0)
+            ae_q75_err = ae_error_stats.get('q75', 0)
+            ae_mean_err = ae_error_stats.get('mean', 0)
+            # Right-skewed if: median is zero, OR median << q75, OR median << mean
+            ae_is_skewed = (
+                ae_median_err == 0 or
+                (ae_q75_err > 0 and ae_median_err < ae_q75_err * 0.1) or
+                (ae_mean_err > 0 and ae_median_err < ae_mean_err * 0.001)
+            )
+            ae_skew_note = ''
+            if ae_is_skewed and (ae_q75_err > 0 or ae_mean_err > 0):
+                ae_skew_note = ' (Note: reconstruction errors are heavily right-skewed in this dataset; anomaly threshold determined from upper tail distribution.)'
+
+            plain_english = f'''About {ae_pct:.2f}% of records ({ae_count:,}) have unusual combinations
+of values across multiple fields. These records don't fit the normal patterns we see
+in your data - they could be rare but valid scenarios, or may warrant investigation.{ae_skew_note}'''
+
+            # Build example table from sample_rows (correct key)
+            example_rows = ''
+            sample_records = autoencoder.get('sample_rows', autoencoder.get('sample_anomalies', []))
+            contributing_cols = autoencoder.get('contributing_columns', [])
+
+            for i, record in enumerate(sample_records[:5]):
+                if isinstance(record, dict):
+                    # Format key values for display
+                    key_vals = []
+                    for k, v in list(record.items())[:4]:
+                        try:
+                            val_num = float(str(v).replace(',', ''))
+                            key_vals.append(f"{k}: {val_num:,.2f}")
+                        except:
+                            key_vals.append(f"{k}: {v}")
+                    fields_display = ' | '.join(key_vals)
+                    example_rows += f'''
+                    <tr>
+                        <td style="max-width: 400px; font-size: 0.85em;">{fields_display}</td>
+                    </tr>'''
+
+            # Add contributing column info if available
+            if contributing_cols and not example_rows:
+                for col_info in contributing_cols[:3]:
+                    col_name = col_info.get('column', 'Unknown')
+                    z_score = col_info.get('z_score_diff', 0)
+                    normal_mean = col_info.get('normal_mean', 0)
+                    anomaly_mean = col_info.get('anomaly_mean', 0)
+                    example_rows += f'''
+                    <tr>
+                        <td><strong>{col_name}</strong>: Anomaly avg {anomaly_mean:,.2f} vs normal {normal_mean:,.2f} (z-diff: {z_score:.1f})</td>
+                    </tr>'''
+
+            if not example_rows:
+                example_rows = '<tr><td style="text-align: center; color: var(--text-muted);">Sample records not available</td></tr>'
+
+            widgets_html += self._build_insight_widget(
+                icon="🧠",
+                title="Unusual Combinations",
+                badge_text=f"{ae_pct:.2f}%",
+                badge_class="warning" if ae_pct > 1 else "info",
+                plain_english=plain_english,
+                table_headers=["Sample Records with Unusual Patterns"],
+                table_rows=example_rows,
+                technical_items=f'''
+                    <div class="insight-technical-item">
+                        <span class="insight-technical-item-label">Method</span>
+                        <span class="insight-technical-item-value">{method}</span>
+                    </div>
+                    <div class="insight-technical-item">
+                        <span class="insight-technical-item-label">Columns Analyzed</span>
+                        <span class="insight-technical-item-value">{autoencoder.get('columns_analyzed', 'All numeric')}</span>
+                    </div>
+                    <div class="insight-technical-item">
+                        <span class="insight-technical-item-label">Contamination</span>
+                        <span class="insight-technical-item-value">{autoencoder.get('contamination_used', 'auto')}</span>
+                    </div>
+                ''',
+                technical_context=[
+                    f"ML Model: {method} (multivariate anomaly detection)",
+                    "Analyzes multiple columns together to find unusual combinations",
+                    "Useful for detecting fraud, data entry errors, or rare edge cases"
+                ],
+                ml_model=method
+            )
+        else:
+            # Show that multivariate analysis was performed but found nothing
+            widgets_html += self._build_insight_widget(
+                icon="✓",
+                title="Unusual Combinations",
+                badge_text="None detected",
+                badge_class="good",
+                plain_english='''Multivariate analysis found no unusual combinations across your columns.
+Records show consistent relationships between fields. This indicates well-structured
+data without suspicious multi-field patterns.''',
+                table_headers=["Analysis", "Result"],
+                table_rows=f'''<tr><td>Multivariate Isolation Forest</td><td class="value-normal">No anomalies detected</td></tr>
+                <tr><td>Rows Analyzed</td><td>{analyzed_rows:,}</td></tr>''',
+                technical_items='''
+                    <div class="insight-technical-item">
+                        <span class="insight-technical-item-label">Method</span>
+                        <span class="insight-technical-item-value">Isolation Forest (multivariate)</span>
+                    </div>
+                ''',
+                technical_context=[
+                    "Multivariate analysis examines relationships across all numeric columns",
+                    "No records showed unusual combinations of values",
+                    "This is a positive indicator of data consistency"
+                ],
+                ml_model="Isolation Forest"
+            )
+
+        # ═══════════════════════════════════════════════════════════════
+        # INSIGHT 3: CROSS-FIELD RELATIONSHIPS
+        # ═══════════════════════════════════════════════════════════════
+        if cross_issues or corr_breaks:
+            # Use only extreme ratio count - this is the primary cross-field metric
+            # Correlation breaks are a different statistical measure and shouldn't be added
+            extreme_ratio_count = sum(i.get('total_issues', 0) for i in cross_issues)
+            corr_break_total = sum(b.get('anomaly_count', 0) for b in corr_breaks)
+            # Get the outlier percentage from the data (dynamic, defaults to 1% if not available)
+            corr_outlier_percent = corr_breaks[0].get('outlier_percent', 1) if corr_breaks else 1
+
+            # Build description based on what we found
+            if extreme_ratio_count > 0 and corr_break_total > 0:
+                plain_english = f'''We found {extreme_ratio_count:,} records with extreme value ratios between
+related amount fields (e.g., Amount Paid vs Amount Received differ by >10x).
+Additionally, the top {corr_outlier_percent}% of records ({corr_break_total:,} rows) exhibit unusually
+large regression residuals, indicating atypical relationships between correlated fields.'''
+            elif extreme_ratio_count > 0:
+                plain_english = f'''We found {extreme_ratio_count:,} records where related amount fields have
+extreme ratios (>10x or <0.1x). These could indicate currency conversion,
+fees, or data entry issues that warrant review.'''
+            else:
+                plain_english = f'''The top {corr_outlier_percent}% of records ({corr_break_total:,} rows) exhibit unusually
+large regression residuals between correlated fields. These statistical outliers
+deviate from expected linear relationships and may indicate edge cases worth investigating.'''
+
+            # Collect all samples with their ratios for sorting
+            all_samples = []
+            for issue in cross_issues:
+                cols = issue.get('columns', [])
+                samples = issue.get('sample_rows', issue.get('sample_issues', []))
+                median_ratio = issue.get('median_ratio', 1.0)
+                for sample in samples:
+                    if isinstance(sample, dict):
+                        ratio = sample.get('ratio', None)
+                        if ratio is not None:
+                            # Calculate deviation from median (log scale)
+                            log_dev = abs(math.log10(max(ratio, 1e-10)) - math.log10(max(median_ratio, 1e-10)))
+                            all_samples.append({
+                                'cols': cols,
+                                'sample': sample,
+                                'ratio': ratio,
+                                'deviation': log_dev
+                            })
+
+            # Sort by deviation (most extreme first) and take top 5
+            all_samples.sort(key=lambda x: x['deviation'], reverse=True)
+
+            # Format ratio for display - handle near-zero baselines dynamically
+            def fmt_ratio(r, near_zero=False):
+                if near_zero:
+                    return '<span title="Ratio extremely large due to near-zero baseline (below 1st percentile threshold)">∞ (near-zero baseline)</span>'
+                if r >= 10000:
+                    return f'<span title="Ratio extremely large due to near-zero baseline">{r:,.0f}x</span>'
+                elif r >= 1000:
+                    return f'{r:,.0f}x'
+                elif r >= 10:
+                    return f'{r:.1f}x'
+                elif r >= 1:
+                    return f'{r:.2f}x'
+                else:
+                    return f'{r:.4f}x'
+
+            example_rows = ''
+            for item in all_samples[:5]:
+                cols = item['cols']
+                sample = item['sample']
+                ratio = item['ratio']
+                near_zero = sample.get('near_zero_baseline', False)
+                row_idx = sample.get('row_index', '?')
+                col1, col2 = cols[0] if len(cols) > 0 else '?', cols[1] if len(cols) > 1 else '?'
+                val1 = sample.get(col1, 'N/A')
+                val2 = sample.get(col2, 'N/A')
+                # Format large numbers
+                if isinstance(val1, (int, float)):
+                    val1 = f'{val1:,.2f}' if isinstance(val1, float) else f'{val1:,}'
+                if isinstance(val2, (int, float)):
+                    val2 = f'{val2:,.2f}' if isinstance(val2, float) else f'{val2:,}'
+                row_display = f'{row_idx:,}' if isinstance(row_idx, int) else str(row_idx)
+                example_rows += f'''
+                    <tr>
+                        <td class="row-id">{row_display}</td>
+                        <td>{col1} ↔ {col2}</td>
+                        <td>{val1} ↔ {val2}</td>
+                        <td class="value-highlight">{fmt_ratio(ratio, near_zero)}</td>
+                    </tr>'''
+
+            if not example_rows:
+                example_rows = '<tr><td colspan="4" style="text-align: center; color: var(--text-muted);">Sample data not available</td></tr>'
+
+            # Primary badge shows extreme ratio count (most actionable)
+            primary_count = extreme_ratio_count if extreme_ratio_count > 0 else corr_break_total
+
+            # Build technical items with clear separation of methods
+            tech_items = f'''
+                    <div class="insight-technical-item">
+                        <span class="insight-technical-item-label">Extreme Ratios</span>
+                        <span class="insight-technical-item-value">{extreme_ratio_count:,} records (ratio >10x or <0.1x)</span>
+                    </div>'''
+            if corr_break_total > 0:
+                tech_items += f'''
+                    <div class="insight-technical-item">
+                        <span class="insight-technical-item-label">Correlation Outliers</span>
+                        <span class="insight-technical-item-value">{corr_break_total:,} records (top {corr_outlier_percent}% regression residuals)</span>
+                    </div>'''
+            tech_items += f'''
+                    <div class="insight-technical-item">
+                        <span class="insight-technical-item-label">Column Pairs</span>
+                        <span class="insight-technical-item-value">{len(cross_issues)} analyzed</span>
+                    </div>'''
+
+            widgets_html += self._build_insight_widget(
+                icon="⚡",
+                title="Cross-Field Relationships",
+                badge_text=f"{primary_count:,} records",
+                badge_class="warning" if primary_count > 100 else "info",
+                plain_english=plain_english,
+                table_headers=["Row #", "Fields", "Values", "Ratio"],
+                table_rows=example_rows,
+                technical_items=tech_items,
+                technical_context=[
+                    "Extreme ratio: identifies records where related fields differ by >10x",
+                    f"Correlation outlier: top {corr_outlier_percent}% deviations from expected linear relationship",
+                    "Near-zero baseline: ratio shown as '∞' when denominator falls below 1st percentile threshold",
+                    "Examples sorted by ratio extremeness (most extreme first)"
+                ]
+            )
+
+        # ═══════════════════════════════════════════════════════════════
+        # INSIGHT 4: VALUE DISTRIBUTION (Rare Categories)
+        # ═══════════════════════════════════════════════════════════════
+        if rare_categories:
+            total_rare = sum(f.get('total_rare_count', 0) for f in rare_categories.values())
+
+            plain_english = f'''Some categorical fields contain rare values that appear infrequently
+({total_rare:,} total instances). These could be typos, edge cases, or legitimate
+but uncommon categories. Review to decide if standardization is needed.'''
+
+            example_rows = ''
+            for col_name, data in list(rare_categories.items())[:3]:
+                rare_vals = data.get('rare_values', [])
+                for rv in rare_vals[:3]:
+                    val = rv.get('value', 'N/A')
+                    count = rv.get('count', 0)
+                    pct = rv.get('percentage', 0)
+                    example_rows += f'''
+                    <tr>
+                        <td>{col_name}</td>
+                        <td class="value-highlight">"{val}"</td>
+                        <td>{count:,}</td>
+                        <td class="value-normal">{pct:.2f}%</td>
+                    </tr>'''
+
+            if not example_rows:
+                example_rows = '<tr><td colspan="4" style="text-align: center; color: var(--text-muted);">No rare values found</td></tr>'
+
+            widgets_html += self._build_insight_widget(
+                icon="📊",
+                title="Value Distribution",
+                badge_text=f"{total_rare:,} rare values",
+                badge_class="info",
+                plain_english=plain_english,
+                table_headers=["Column", "Rare Value", "Count", "Frequency"],
+                table_rows=example_rows,
+                technical_items=f'''
+                    <div class="insight-technical-item">
+                        <span class="insight-technical-item-label">Detection Method</span>
+                        <span class="insight-technical-item-value">Frequency analysis (threshold &lt; 1%)</span>
+                    </div>
+                    <div class="insight-technical-item">
+                        <span class="insight-technical-item-label">Columns Analyzed</span>
+                        <span class="insight-technical-item-value">{len(rare_categories)}</span>
+                    </div>
+                ''',
+                technical_context=[
+                    "Rare values are those appearing in less than 1% of records",
+                    "High cardinality columns may have many legitimate rare values",
+                    "Consider AllowedValuesCheck validation for controlled vocabularies"
+                ]
+            )
+
+        # ═══════════════════════════════════════════════════════════════
+        # INSIGHT 5: TEMPORAL PATTERNS
+        # ═══════════════════════════════════════════════════════════════
+        temporal_warnings = {k: v for k, v in temporal_patterns.items() if v.get('warning')}
+        if temporal_warnings:
+            # Calculate total large gaps dynamically
+            total_large_gaps = sum(d.get('large_gaps_count', 0) for d in temporal_warnings.values())
+
+            plain_english = f'''Your date/time fields show {total_large_gaps:,} significant temporal gaps - intervals
+exceeding 10× the median event frequency for this dataset. These gaps may indicate
+data collection issues, seasonal patterns, or system downtime.'''
+
+            example_rows = ''
+            for col_name, data in list(temporal_warnings.items())[:3]:
+                interpretation = data.get('interpretation', 'Temporal irregularity detected')
+                # large_gaps_count = significant gaps (>10x median frequency from ML)
+                significant_gaps = data.get('large_gaps_count', 0)
+                # Try both old and new key names for largest gap
+                largest_gap = data.get('largest_gap_days', data.get('largest_gap', 'N/A'))
+                if isinstance(largest_gap, (int, float)):
+                    largest_gap = f'{largest_gap} days'
+                example_rows += f'''
+                <tr>
+                    <td>{col_name}</td>
+                    <td>{interpretation[:60]}...</td>
+                    <td>{significant_gaps:,} large gaps</td>
+                    <td class="value-highlight">{largest_gap}</td>
+                </tr>'''
+
+            if not example_rows:
+                example_rows = '<tr><td colspan="4" style="text-align: center; color: var(--text-muted);">No temporal issues</td></tr>'
+
+            widgets_html += self._build_insight_widget(
+                icon="📅",
+                title="Temporal Patterns",
+                badge_text=f"{len(temporal_warnings)} fields",
+                badge_class="info",
+                plain_english=plain_english,
+                table_headers=["Column", "Pattern", "Gaps", "Largest"],
+                table_rows=example_rows,
+                technical_items=f'''
+                    <div class="insight-technical-item">
+                        <span class="insight-technical-item-label">Analysis Type</span>
+                        <span class="insight-technical-item-value">Time series gap detection</span>
+                    </div>
+                    <div class="insight-technical-item">
+                        <span class="insight-technical-item-label">Large Gap Threshold</span>
+                        <span class="insight-technical-item-value">10× median event interval (dynamic)</span>
+                    </div>
+                ''',
+                technical_context=[
+                    "Large gaps: intervals exceeding 10× the median frequency (dynamically computed)",
+                    "Seasonality analysis looks for recurring patterns",
+                    "Consider FreshnessCheck validation for time-sensitive data"
+                ]
+            )
+
+        # ═══════════════════════════════════════════════════════════════
+        # INSIGHT 6: DATA AUTHENTICITY (Benford's Law)
+        # Always show - even when not analyzed, it's useful to explain why
+        # ═══════════════════════════════════════════════════════════════
+        if benford_analysis:
+            # Use is_suspicious flag (reliable) instead of confidence string (semantics vary)
+            concerning = {k: v for k, v in benford_analysis.items() if v.get('is_suspicious', False)}
+            natural = {k: v for k, v in benford_analysis.items() if not v.get('is_suspicious', True)}
+
+            if concerning:
+                plain_english = f'''The digit distribution in {len(concerning)} numeric field(s) deviates from
+natural patterns (Benford's Law). This could indicate synthetic data generation,
+rounding, or data manipulation - though some data types naturally don't follow Benford's.'''
+                badge_class = "warning"
+            else:
+                plain_english = f'''The digit patterns in your numeric fields follow natural distributions
+(Benford's Law). This is a positive sign of organic, real-world data rather than
+synthetic or manipulated values.'''
+                badge_class = "good"
+
+            example_rows = ''
+            for col_name, data in list(benford_analysis.items())[:4]:
+                chi_square = data.get('chi_square', 0)
+                p_value = data.get('p_value', 0)
+                is_suspicious = data.get('is_suspicious', False)
+                # Show clear status based on is_suspicious flag
+                status = "Deviates" if is_suspicious else "Conforms"
+                example_rows += f'''
+                <tr>
+                    <td>{col_name}</td>
+                    <td class="{'value-highlight' if is_suspicious else 'value-normal'}">{status}</td>
+                    <td>{chi_square:.2f}</td>
+                    <td>{p_value:.4f}</td>
+                </tr>'''
+
+            widgets_html += self._build_insight_widget(
+                icon="🔍",
+                title="Data Authenticity",
+                badge_text="Benford's Law",
+                badge_class=badge_class,
+                plain_english=plain_english,
+                table_headers=["Column", "Status", "Chi-Square", "P-Value"],
+                table_rows=example_rows,
+                technical_items=f'''
+                    <div class="insight-technical-item">
+                        <span class="insight-technical-item-label">Test</span>
+                        <span class="insight-technical-item-value">Benford's Law Chi-Square Test</span>
+                    </div>
+                    <div class="insight-technical-item">
+                        <span class="insight-technical-item-label">Significance Level</span>
+                        <span class="insight-technical-item-value">α = 0.05</span>
+                    </div>
+                ''',
+                technical_context=[
+                    "Benford's Law describes expected first-digit distribution in natural datasets",
+                    "Financial data, population counts, and measurements typically follow this pattern",
+                    "Deviations may be legitimate (e.g., assigned IDs) or indicate data issues"
+                ]
+            )
+        else:
+            # Always show Benford section - explain when not analyzed
+            # Check if there are money-related columns that could be tested
+            money_cols = [col for col in profile.columns if col.semantic_info and
+                         col.semantic_info.get('primary_tag', '').startswith('money')] if hasattr(self, '_current_profile') else []
+
+            plain_english = '''Benford's Law analysis checks whether digit patterns in financial data
+follow natural distributions. This can help detect synthetic or manipulated data.
+Analysis was not performed on this dataset - this may be because no financial
+amount fields were detected, or the analysis was skipped during profiling.'''
+
+            widgets_html += self._build_insight_widget(
+                icon="🔍",
+                title="Data Authenticity",
+                badge_text="Not Analyzed",
+                badge_class="info",
+                plain_english=plain_english,
+                table_headers=["Status", "Reason"],
+                table_rows='''
+                <tr>
+                    <td>Skipped</td>
+                    <td>No applicable money/amount columns detected for Benford's Law analysis</td>
+                </tr>''',
+                technical_items='''
+                    <div class="insight-technical-item">
+                        <span class="insight-technical-item-label">Applicable Column Types</span>
+                        <span class="insight-technical-item-value">Financial amounts, counts, populations</span>
+                    </div>
+                    <div class="insight-technical-item">
+                        <span class="insight-technical-item-label">When to Use</span>
+                        <span class="insight-technical-item-value">Fraud detection, data validation, synthetic data detection</span>
+                    </div>
+                ''',
+                technical_context=[
+                    "Benford's Law applies to naturally occurring numeric data spanning multiple orders of magnitude",
+                    "IDs, codes, and assigned numbers do not follow Benford's Law",
+                    "To enable: ensure columns have FIBO semantic tags like 'money.amount'"
+                ]
+            )
+
+        # ═══════════════════════════════════════════════════════════════
+        # INSIGHT 7: NATURAL CLUSTERING
+        # ═══════════════════════════════════════════════════════════════
+        if clustering and clustering.get('n_clusters', 0) > 0:
+            n_clusters = clustering.get('n_clusters', 0)
+            noise_points = clustering.get('noise_points', 0)
+            rows_analyzed_cluster = clustering.get('rows_analyzed', analyzed_rows)
+            noise_pct = clustering.get('noise_percentage', (noise_points / rows_analyzed_cluster * 100) if rows_analyzed_cluster > 0 else 0)
+
+            plain_english = f'''Your data naturally groups into {n_clusters} distinct clusters. This reveals
+underlying structure - perhaps different customer segments, transaction types, or
+data sources. {noise_pct:.1f}% of records don't fit any cluster (these may be unusual cases).'''
+
+            # Build cluster details table showing top clusters
+            clusters_info = clustering.get('clusters', [])
+            example_rows = ''
+
+            # Show top 5 clusters by size
+            for cluster in clusters_info[:5]:
+                cluster_id = cluster.get('cluster_id', '?')
+                size = cluster.get('size', 0)
+                pct = cluster.get('percentage', 0)
+
+                # Build characteristics summary
+                chars = cluster.get('characteristics', {})
+                char_summary = []
+                for col_name, stats in list(chars.items())[:2]:  # Show first 2 columns
+                    mean = stats.get('mean', 0)
+                    if mean > 1000000:
+                        char_summary.append(f"{col_name}: {mean/1000000:.1f}M")
+                    elif mean > 1000:
+                        char_summary.append(f"{col_name}: {mean/1000:.1f}K")
+                    else:
+                        char_summary.append(f"{col_name}: {mean:.1f}")
+
+                char_display = ', '.join(char_summary) if char_summary else 'N/A'
+
+                example_rows += f'''
+                <tr>
+                    <td class="value-normal">Cluster {cluster_id}</td>
+                    <td>{size:,} ({pct:.1f}%)</td>
+                    <td style="font-size: 0.85em;">{char_display}</td>
+                </tr>'''
+
+            # Add noise points row
+            example_rows += f'''
+            <tr style="border-top: 1px solid rgba(148,163,184,0.1);">
+                <td class="value-highlight">Noise (outliers)</td>
+                <td>{noise_points:,} ({noise_pct:.1f}%)</td>
+                <td style="font-size: 0.85em; color: var(--text-muted);">Records not fitting any cluster</td>
+            </tr>'''
+
+            cluster_method = clustering.get('method', 'DBSCAN')
+            columns_analyzed = clustering.get('columns_analyzed', [])
+            cols_display = ', '.join(columns_analyzed[:4]) if isinstance(columns_analyzed, list) else str(columns_analyzed)
+            if isinstance(columns_analyzed, list) and len(columns_analyzed) > 4:
+                cols_display += f' +{len(columns_analyzed)-4} more'
+
+            widgets_html += self._build_insight_widget(
+                icon="🧠",
+                title="Natural Clustering",
+                badge_text=f"{n_clusters} clusters",
+                badge_class="info",
+                plain_english=plain_english,
+                table_headers=["Cluster", "Size", "Key Characteristics"],
+                table_rows=example_rows,
+                technical_items=f'''
+                    <div class="insight-technical-item">
+                        <span class="insight-technical-item-label">Algorithm</span>
+                        <span class="insight-technical-item-value">{cluster_method} (density-based)</span>
+                    </div>
+                    <div class="insight-technical-item">
+                        <span class="insight-technical-item-label">Features</span>
+                        <span class="insight-technical-item-value">{cols_display}</span>
+                    </div>
+                    <div class="insight-technical-item">
+                        <span class="insight-technical-item-label">Rows Analyzed</span>
+                        <span class="insight-technical-item-value">{rows_analyzed_cluster:,}</span>
+                    </div>
+                ''',
+                technical_context=[
+                    f"ML Model: {cluster_method} (unsupervised clustering)",
+                    "Finds clusters of arbitrary shape based on point density",
+                    "Noise points are records that don't belong to any dense region"
+                ],
+                ml_model=cluster_method
+            )
+
+        # Wrap all widgets in a section
+        if not widgets_html:
+            return ''
+
+        sample_note = f" (sample of {original_rows:,})" if original_rows > analyzed_rows else ""
+
+        return f'''
+        <section id="section-risks">
+            <div class="section-header-v2">
+                <div>
+                    <span class="section-header-v2-icon">💡</span>
+                    <span class="section-header-v2-title">Data Insights</span>
+                    <div class="section-header-v2-subtitle">Patterns observed from analyzing {analyzed_rows:,} rows{sample_note} in {analysis_time:.1f}s</div>
+                </div>
+                <span class="section-header-v2-badge observations">OBSERVATIONS</span>
+            </div>
+            {widgets_html}
+        </section>
+        '''
+
+    def _build_insight_widget(self, icon: str, title: str, badge_text: str, badge_class: str,
+                              plain_english: str, table_headers: list, table_rows: str,
+                              technical_items: str, technical_context: list,
+                              ml_model: str = None) -> str:
+        """
+        Build a single insight widget with the masterpiece design.
+
+        Args:
+            icon: Emoji icon for the widget
+            title: Widget title
+            badge_text: Text for the badge (e.g., "0.3% of rows")
+            badge_class: CSS class for badge (critical, warning, info, good)
+            plain_english: Plain language explanation of the insight
+            table_headers: List of column headers for example table
+            table_rows: Pre-built HTML rows for the example table
+            technical_items: Pre-built HTML for technical details grid
+            technical_context: List of context bullet points
+            ml_model: Optional ML model name to display (e.g., "Isolation Forest")
+        """
+        # Build table headers
+        headers_html = ''.join([f'<th>{h}</th>' for h in table_headers])
+
+        # Build technical context list
+        context_html = ''.join([f'<li>{item}</li>' for item in technical_context])
+
+        # Generate unique ID for toggle functionality
+        widget_id = f"tech_{hash(title) % 10000}"
+
+        # ML model badge if specified
+        ml_badge = ''
+        if ml_model:
+            ml_badge = f'<span class="insight-ml-badge">🧠 {ml_model}</span>'
+
+        return f'''
+        <div class="insight-widget">
+            <div class="insight-widget-header">
+                <div class="insight-widget-title-group">
+                    <span class="insight-widget-icon">{icon}</span>
+                    <span class="insight-widget-title">{title}</span>
+                    {ml_badge}
+                </div>
+                <span class="insight-widget-badge {badge_class}">{badge_text}</span>
+            </div>
+
+            <div class="insight-widget-body">
+                <!-- Plain English Summary -->
+                <div class="insight-summary">
+                    <div class="insight-summary-label">What This Means</div>
+                    <div class="insight-summary-text">{plain_english}</div>
+                </div>
+
+                <!-- Example Table -->
+                <div class="insight-examples">
+                    <div class="insight-examples-label">Examples From Your Data</div>
+                    <table class="insight-examples-table">
+                        <thead>
+                            <tr>{headers_html}</tr>
+                        </thead>
+                        <tbody>
+                            {table_rows}
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Technical Details (Collapsible) -->
+                <div class="insight-technical" id="{widget_id}">
+                    <button class="insight-technical-toggle" onclick="document.getElementById('{widget_id}').classList.toggle('open')">
+                        Show Technical Details
+                        <span class="toggle-arrow">▼</span>
+                    </button>
+                    <div class="insight-technical-content">
+                        <div class="insight-technical-grid">
+                            {technical_items}
+                        </div>
+                        <div class="insight-technical-context">
+                            <div class="insight-technical-context-title">Statistical Context</div>
+                            <ul class="insight-technical-context-list">
+                                {context_html}
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
+        '''
 
-        <script>
-        // ML Charts initialization
-        document.addEventListener('DOMContentLoaded', function() {{
-            // Issue Breakdown Doughnut Chart
-            const breakdownCtx = document.getElementById('mlBreakdownChart');
-            if (breakdownCtx) {{
-                new Chart(breakdownCtx, {{
-                    type: 'doughnut',
-                    data: {{
-                        labels: {chart_labels},
-                        datasets: [{{
-                            data: {chart_values},
-                            backgroundColor: [
-                                'rgba(139, 92, 246, 0.8)',
-                                'rgba(236, 72, 153, 0.8)',
-                                'rgba(6, 182, 212, 0.8)',
-                                'rgba(34, 197, 94, 0.8)',
-                                'rgba(245, 158, 11, 0.8)',
-                                'rgba(239, 68, 68, 0.8)',
-                                'rgba(59, 130, 246, 0.8)',
-                                'rgba(168, 85, 247, 0.8)'
-                            ],
-                            borderWidth: 0
-                        }}]
-                    }},
-                    options: {{
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: {{
-                            legend: {{
-                                position: 'bottom',
-                                labels: {{
-                                    color: getComputedStyle(document.documentElement).getPropertyValue('--text-secondary'),
-                                    font: {{ size: 11 }},
-                                    padding: 8
-                                }}
-                            }}
-                        }}
-                    }}
-                }});
-            }}
-
-            // Outlier Bar Chart
-            const outlierCtx = document.getElementById('mlOutlierChart');
-            if (outlierCtx) {{
-                const outlierData = {outlier_chart_data};
-                new Chart(outlierCtx, {{
-                    type: 'bar',
-                    data: {{
-                        labels: outlierData.map(d => d.column),
-                        datasets: [{{
-                            label: 'Outliers',
-                            data: outlierData.map(d => d.count),
-                            backgroundColor: 'rgba(139, 92, 246, 0.7)',
-                            borderColor: 'rgba(139, 92, 246, 1)',
-                            borderWidth: 1,
-                            borderRadius: 4
-                        }}]
-                    }},
-                    options: {{
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        indexAxis: 'y',
-                        plugins: {{
-                            legend: {{ display: false }}
-                        }},
-                        scales: {{
-                            x: {{
-                                beginAtZero: true,
-                                grid: {{
-                                    color: 'rgba(148, 163, 184, 0.1)'
-                                }},
-                                ticks: {{
-                                    color: getComputedStyle(document.documentElement).getPropertyValue('--text-secondary')
-                                }}
-                            }},
-                            y: {{
-                                grid: {{ display: false }},
-                                ticks: {{
-                                    color: getComputedStyle(document.documentElement).getPropertyValue('--text-secondary'),
-                                    font: {{ size: 11 }}
-                                }}
-                            }}
-                        }}
-                    }}
-                }});
-            }}
-        }});
-        </script>'''
-
-    def _generate_advanced_visualizations(self, ml_findings: Dict) -> str:
+    def _generate_advanced_visualizations(self, ml_findings: Dict, columns: List = None) -> str:
         """
         Generate advanced visualization section with interactive charts.
 
@@ -3404,6 +5029,16 @@ class ExecutiveHTMLReporter:
         if not viz_data:
             return ''
 
+        # Build column stats lookup for true min/max from Parquet metadata
+        column_stats = {}
+        if columns:
+            for col in columns:
+                if col.statistics:
+                    column_stats[col.name] = {
+                        'true_min': col.statistics.min_value,
+                        'true_max': col.statistics.max_value
+                    }
+
         sample_info = viz_data.get('sample_info', {})
         sample_note = ""
         if sample_info.get('is_sampled'):
@@ -3418,22 +5053,50 @@ class ExecutiveHTMLReporter:
         if amount_dists:
             charts_html = ''
             chart_scripts = []
+            is_sampled = sample_info.get('is_sampled', False)
             for idx, (col, dist_data) in enumerate(list(amount_dists.items())[:4]):
                 if not dist_data or not dist_data.get('histogram'):
                     continue
 
                 chart_id = f'amountLogHist_{idx}'
-                min_val = dist_data.get('min_value', 0)
-                max_val = dist_data.get('max_value', 0)
+                sample_min = dist_data.get('min_value', 0)
+                sample_max = dist_data.get('max_value', 0)
                 median_val = dist_data.get('median', 0)
                 mean_val = dist_data.get('mean', 0)
+
+                # Get true min/max from column stats (Parquet metadata for all rows)
+                col_true_stats = column_stats.get(col, {})
+                true_min = col_true_stats.get('true_min', sample_min)
+                true_max = col_true_stats.get('true_max', sample_max)
+
+                # Format large numbers more readably
+                def fmt_num(n):
+                    if n >= 1e12:
+                        return f'{n/1e12:.2f}T'
+                    elif n >= 1e9:
+                        return f'{n/1e9:.2f}B'
+                    elif n >= 1e6:
+                        return f'{n/1e6:.2f}M'
+                    elif n >= 1e3:
+                        return f'{n/1e3:.1f}K'
+                    else:
+                        return f'{n:,.2f}'
+
+                # Display true min/max prominently, with sample stats if different
+                if is_sampled and (abs(true_max - sample_max) > 1e6 or abs(true_min - sample_min) > 1e6):
+                    stats_line = f'Min: {fmt_num(true_min)} | Max: {fmt_num(true_max)} (all rows)'
+                    sample_line = f'<span style="font-size: 0.75em; color: var(--text-muted);">Sample Max: {fmt_num(sample_max)}</span>'
+                else:
+                    stats_line = f'Min: {fmt_num(true_min)} | Max: {fmt_num(true_max)} | Median: {fmt_num(median_val)}'
+                    sample_line = ''
 
                 charts_html += f'''
                     <div style="flex: 1; min-width: 300px; background: var(--bg-card); border-radius: 8px; padding: 16px; border: 1px solid var(--border-subtle);">
                         <h4 style="margin: 0 0 8px 0; font-size: 0.95em; color: var(--text-primary);">{col}</h4>
-                        <div style="font-size: 0.8em; color: var(--text-muted); margin-bottom: 12px;">
-                            Min: {min_val:,.2f} | Max: {max_val:,.2f} | Median: {median_val:,.2f}
+                        <div style="font-size: 0.8em; color: var(--text-muted); margin-bottom: 4px;">
+                            {stats_line}
                         </div>
+                        {f'<div style="margin-bottom: 8px;">{sample_line}</div>' if sample_line else ''}
                         <div style="height: 180px;">
                             <canvas id="{chart_id}"></canvas>
                         </div>
@@ -3471,6 +5134,7 @@ class ExecutiveHTMLReporter:
                                 <strong>Why log scale?</strong> Financial data often spans multiple orders of magnitude.
                                 Log scaling reveals patterns in both small and large values that would be hidden in linear plots.
                                 {sample_note}
+                                {' See Column Explorer for true min/max from all rows.' if is_sampled else ''}
                             </p>
                             <div style="display: flex; flex-wrap: wrap; gap: 16px;">
                                 {charts_html}
@@ -3797,7 +5461,8 @@ class ExecutiveHTMLReporter:
                         <div class="accordion-content">
                             <p style="color: var(--text-secondary); margin-bottom: 16px;">
                                 <strong>What this shows:</strong> The distribution of events/transactions over time.
-                                Gaps indicate periods with missing or low data coverage - potential ingestion issues or business seasonality.
+                                Daily gaps represent calendar days with zero recorded events after aggregation.
+                                Gaps may indicate ingestion issues, business seasonality, or expected quiet periods.
                                 {sample_note}
                             </p>
                             {timeline_charts}
@@ -3860,10 +5525,40 @@ class ExecutiveHTMLReporter:
         recon_errors = viz_data.get('reconstruction_errors')
         if recon_errors:
             mean_err = recon_errors.get('mean', 0)
+            median_err = recon_errors.get('median', 0)
+            q75_err = recon_errors.get('q75', 0)
             std_err = recon_errors.get('std', 0)
             threshold = recon_errors.get('threshold', 0)
+            # If threshold is 0 or missing, compute from mean + 2.5*std (approximation)
+            if threshold == 0 and std_err > 0:
+                threshold = mean_err + 2.5 * std_err
             anomaly_count = recon_errors.get('anomaly_count', 0)
             anomaly_pct = recon_errors.get('anomaly_percentage', 0)
+
+            # Smart formatting for very small values (use scientific notation)
+            def fmt_err(val):
+                if val == 0:
+                    return "0"
+                elif abs(val) < 0.0001:
+                    return f"{val:.2e}"
+                else:
+                    return f"{val:.4f}"
+
+            threshold_str = fmt_err(threshold)
+            median_str = fmt_err(median_err)
+            q75_str = fmt_err(q75_err)
+
+            # Dynamic explanation for right-skewed distributions where errors collapse to near-zero
+            # Skew detection: median near zero while mean/max are much higher indicates right-skew
+            # Right-skewed if: median is zero, OR median << q75, OR median << mean (less than 0.1% of mean)
+            skew_explanation = ""
+            is_right_skewed = (
+                median_err == 0 or
+                (q75_err > 0 and median_err < q75_err * 0.1) or
+                (mean_err > 0 and median_err < mean_err * 0.001)
+            )
+            if is_right_skewed and (q75_err > 0 or mean_err > 0):
+                skew_explanation = '<br><em style="font-size: 0.9em; color: var(--text-muted);">Note: Reconstruction errors are heavily right-skewed in this dataset; most errors are near zero, so the anomaly threshold is determined from the upper tail of the error distribution rather than from quartiles.</em>'
 
             sections_html.append(f'''
                 <div class="accordion" data-accordion="viz-autoencoder">
@@ -3884,25 +5579,25 @@ class ExecutiveHTMLReporter:
                         <p style="color: var(--text-secondary); margin-bottom: 16px;">
                             <strong>What this shows:</strong> The autoencoder learns normal patterns and measures how well it can
                             reconstruct each record. High reconstruction error indicates the record is unusual.
-                            Records above the threshold ({threshold:.4f}) are flagged as anomalies.
-                            {sample_note}
+                            Records above the threshold ({threshold_str}) are flagged as anomalies.
+                            {sample_note}{skew_explanation}
                         </p>
-                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 16px; margin-bottom: 20px;">
-                            <div style="background: var(--bg-card); padding: 16px; border-radius: 8px; text-align: center;">
-                                <div style="font-size: 1.5em; font-weight: bold; color: var(--text-primary);">{mean_err:.4f}</div>
-                                <div style="font-size: 0.85em; color: var(--text-muted);">Mean Error</div>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px; margin-bottom: 20px;">
+                            <div style="background: var(--bg-card); padding: 14px; border-radius: 8px; text-align: center;">
+                                <div style="font-size: 1.1em; font-weight: bold; color: var(--text-primary);">{median_str}</div>
+                                <div style="font-size: 0.8em; color: var(--text-muted);">Median Error</div>
                             </div>
-                            <div style="background: var(--bg-card); padding: 16px; border-radius: 8px; text-align: center;">
-                                <div style="font-size: 1.5em; font-weight: bold; color: var(--text-primary);">{std_err:.4f}</div>
-                                <div style="font-size: 0.85em; color: var(--text-muted);">Std Dev</div>
+                            <div style="background: var(--bg-card); padding: 14px; border-radius: 8px; text-align: center;">
+                                <div style="font-size: 1.1em; font-weight: bold; color: var(--text-primary);">{q75_str}</div>
+                                <div style="font-size: 0.8em; color: var(--text-muted);">Q75 Error</div>
                             </div>
-                            <div style="background: var(--bg-card); padding: 16px; border-radius: 8px; text-align: center;">
-                                <div style="font-size: 1.5em; font-weight: bold; color: var(--critical);">{threshold:.4f}</div>
-                                <div style="font-size: 0.85em; color: var(--text-muted);">Threshold</div>
+                            <div style="background: var(--bg-card); padding: 14px; border-radius: 8px; text-align: center;">
+                                <div style="font-size: 1.1em; font-weight: bold; color: var(--critical);">{threshold_str}</div>
+                                <div style="font-size: 0.8em; color: var(--text-muted);">Threshold</div>
                             </div>
-                            <div style="background: var(--bg-card); padding: 16px; border-radius: 8px; text-align: center;">
-                                <div style="font-size: 1.5em; font-weight: bold; color: var(--warning);">{anomaly_pct:.2f}%</div>
-                                <div style="font-size: 0.85em; color: var(--text-muted);">Anomaly Rate</div>
+                            <div style="background: var(--bg-card); padding: 14px; border-radius: 8px; text-align: center;">
+                                <div style="font-size: 1.1em; font-weight: bold; color: var(--warning);">{anomaly_pct:.2f}%</div>
+                                <div style="font-size: 0.8em; color: var(--text-muted);">Anomaly Rate</div>
                             </div>
                         </div>
                         <div style="background: var(--bg-card); border-radius: 8px; padding: 16px; height: 200px;">
@@ -3912,19 +5607,22 @@ class ExecutiveHTMLReporter:
                         document.addEventListener('DOMContentLoaded', function() {{
                             const reconCtx = document.getElementById('reconErrorChart');
                             if (reconCtx) {{
-                                // Generate simulated distribution based on stats
-                                const mean = {mean_err};
-                                const std = {std_err};
+                                // Use median for center (robust to outliers) and IQR-based scale
+                                const median = {median_err};
+                                const q75 = {q75_err};
                                 const threshold = {threshold};
+                                // Use IQR to estimate distribution width (more robust than std)
+                                const iqr = (q75 - median) * 2;  // Approximate IQR
+                                const displayStd = iqr > 0 ? iqr : 0.001;  // Fallback for very tight distributions
                                 const bins = 40;
                                 const labels = [];
                                 const data = [];
                                 const bgColors = [];
 
                                 for (let i = 0; i < bins; i++) {{
-                                    const x = mean - 3*std + (6*std/bins) * i;
-                                    const y = Math.exp(-0.5 * Math.pow((x - mean) / std, 2)) * 1000;
-                                    labels.push(x.toFixed(4));
+                                    const x = median - 3*displayStd + (6*displayStd/bins) * i;
+                                    const y = Math.exp(-0.5 * Math.pow((x - median) / displayStd, 2)) * 1000;
+                                    labels.push(x.toExponential(2));
                                     data.push(Math.max(0, y));
                                     bgColors.push(x > threshold ? 'rgba(239, 68, 68, 0.7)' : 'rgba(139, 92, 246, 0.6)');
                                 }}
@@ -4003,83 +5701,30 @@ class ExecutiveHTMLReporter:
     def _generate_overview_accordion(self, profile: ProfileResult, type_counts: Dict,
                                      avg_completeness: float, avg_validity: float,
                                      avg_consistency: float, avg_uniqueness: float) -> str:
-        """Generate the overview accordion."""
+        """Generate the data types accordion (simplified - quality metrics shown in dashboard above)."""
 
-        def get_bar_class(value):
-            if value >= 95: return 'good'
-            if value >= 80: return 'warning'
-            return 'critical'
-
-        def get_hint(metric, value):
-            hints = {
-                'completeness': '✓ No missing values - ready for analysis' if value == 100 else f'{100-value:.2f}% of values are null' if value >= 99 else f'{100-value:.1f}% of values are null',
-                'validity': f'{value:.0f}% of values match expected formats',
-                'consistency': '✓ Patterns are uniform across data' if value >= 95 else 'Some pattern variations detected',
-                'uniqueness': 'ℹ Some expected duplication in categorical columns' if value < 80 else '✓ Good uniqueness ratio'
-            }
-            return hints.get(metric, '')
+        # Build type breakdown text
+        type_breakdown = ', '.join([f"{count} {t}" for t, count in type_counts.items() if count > 0])
 
         return f'''
-                <div class="accordion open" data-accordion="overview">
+                <div class="accordion" data-accordion="overview">
                     <div class="accordion-header" onclick="toggleAccordion(this)">
                         <div class="accordion-title-group">
-                            <div class="accordion-icon overview">📊</div>
+                            <div class="accordion-icon overview">🔤</div>
                             <div>
-                                <div class="accordion-title">Overview & Distribution</div>
-                                <div class="accordion-subtitle">Data types, completeness breakdown</div>
+                                <div class="accordion-title">Data Types</div>
+                                <div class="accordion-subtitle">{type_breakdown}</div>
                             </div>
                         </div>
                         <div class="accordion-meta">
-                            <span class="accordion-badge {'good' if profile.overall_quality_score >= 80 else 'warning' if profile.overall_quality_score >= 60 else 'critical'}">{'Healthy' if profile.overall_quality_score >= 80 else 'Fair' if profile.overall_quality_score >= 60 else 'Needs Attention'}</span>
+                            <span class="accordion-badge info">{profile.column_count} columns</span>
                             <span class="accordion-chevron">▼</span>
                         </div>
                     </div>
                     <div class="accordion-body">
                         <div class="accordion-content">
                             <div class="hint-box">
-                                <strong>📊 How to read these metrics:</strong> Quality dimensions measure different aspects of your data. Higher percentages indicate better data quality.
-                            </div>
-                            <div class="overview-grid">
-                                <div class="overview-stat">
-                                    <div class="overview-stat-header">
-                                        <span class="overview-stat-label">Completeness</span>
-                                    </div>
-                                    <div class="overview-stat-value">{avg_completeness:.1f}%</div>
-                                    <div class="overview-stat-bar">
-                                        <div class="overview-stat-fill {get_bar_class(avg_completeness)}" style="width: {avg_completeness}%"></div>
-                                    </div>
-                                    <div class="overview-stat-hint">{get_hint('completeness', avg_completeness)}</div>
-                                </div>
-                                <div class="overview-stat">
-                                    <div class="overview-stat-header">
-                                        <span class="overview-stat-label">Validity</span>
-                                    </div>
-                                    <div class="overview-stat-value">{avg_validity:.1f}%</div>
-                                    <div class="overview-stat-bar">
-                                        <div class="overview-stat-fill {get_bar_class(avg_validity)}" style="width: {avg_validity}%"></div>
-                                    </div>
-                                    <div class="overview-stat-hint">{get_hint('validity', avg_validity)}</div>
-                                </div>
-                                <div class="overview-stat">
-                                    <div class="overview-stat-header">
-                                        <span class="overview-stat-label">Consistency</span>
-                                    </div>
-                                    <div class="overview-stat-value">{avg_consistency:.1f}%</div>
-                                    <div class="overview-stat-bar">
-                                        <div class="overview-stat-fill {get_bar_class(avg_consistency)}" style="width: {avg_consistency}%"></div>
-                                    </div>
-                                    <div class="overview-stat-hint">{get_hint('consistency', avg_consistency)}</div>
-                                </div>
-                                <div class="overview-stat">
-                                    <div class="overview-stat-header">
-                                        <span class="overview-stat-label">Uniqueness</span>
-                                    </div>
-                                    <div class="overview-stat-value">{avg_uniqueness:.1f}%</div>
-                                    <div class="overview-stat-bar">
-                                        <div class="overview-stat-fill {get_bar_class(avg_uniqueness)}" style="width: {min(avg_uniqueness, 100)}%"></div>
-                                    </div>
-                                    <div class="overview-stat-hint">{get_hint('uniqueness', avg_uniqueness)}</div>
-                                </div>
+                                <strong>🔤 Column Types:</strong> Shows the distribution of data types across your columns. Understanding types helps identify potential type mismatches or conversion needs.
                             </div>
                             <div class="chart-container">
                                 <div class="chart-title">Data Type Distribution</div>
@@ -4127,6 +5772,24 @@ class ExecutiveHTMLReporter:
         """Generate the value distribution accordion with charts."""
         cat_names = ', '.join(c.get('name', '') for c in categorical_columns[:3]) if categorical_columns else 'N/A'
 
+        # Determine which metric to show on x-axis based on variation
+        completeness_values = [col.quality.completeness for col in profile.columns]
+        uniqueness_values = [col.quality.uniqueness for col in profile.columns]
+        consistency_values = [col.quality.consistency for col in profile.columns]
+
+        completeness_range = max(completeness_values) - min(completeness_values) if completeness_values else 0
+        uniqueness_range = max(uniqueness_values) - min(uniqueness_values) if uniqueness_values else 0
+        consistency_range = max(consistency_values) - min(consistency_values) if consistency_values else 0
+
+        if completeness_range >= 5:
+            x_axis_metric_name = 'Completeness'
+        elif uniqueness_range >= 5:
+            x_axis_metric_name = 'Uniqueness'
+        elif consistency_range >= 5:
+            x_axis_metric_name = 'Consistency'
+        else:
+            x_axis_metric_name = 'Completeness'
+
         return f'''
                 <div class="accordion open" data-accordion="distribution">
                     <div class="accordion-header" onclick="toggleAccordion(this)">
@@ -4152,9 +5815,9 @@ class ExecutiveHTMLReporter:
                             </div>
                             <div style="display: grid; gap: 20px;">
                                 <div class="chart-container">
-                                    <div class="chart-title">Column Quality: Completeness vs Validity</div>
+                                    <div class="chart-title">Column Quality: {x_axis_metric_name} vs Validity</div>
                                     <div class="hint-box" style="margin-bottom: 12px; margin-top: 0;">
-                                        Bubble size represents unique value count. Position shows completeness (x) vs validity (y).
+                                        Bubble size represents unique value count. Position shows {x_axis_metric_name.lower()} (x) vs validity (y).
                                     </div>
                                     <canvas id="bubbleChart" height="200"></canvas>
                                 </div>
@@ -4211,6 +5874,24 @@ class ExecutiveHTMLReporter:
                                 <br>• <strong>PII detection</strong> - Credit cards, SSN, emails, phones
                                 <br>• <strong>Temporal patterns</strong> - Date ranges, frequency, gaps
                                 <br>Click any column to see details. Use the heatmap above for a quick overview.
+                                <details style="margin-top: 8px; color: var(--text-tertiary); font-size: 0.85em;">
+                                    <summary style="cursor: pointer; color: var(--text-secondary);">📊 <strong>Data Source Guide</strong> (click to expand)</summary>
+                                    <div style="margin-top: 8px; padding: 10px; background: rgba(var(--primary-color-rgb), 0.05); border-radius: 6px;">
+                                        <strong>From ALL rows (exact values):</strong>
+                                        <br>• Row Count, Null Count - computed during full file scan
+                                        <br>• Min/Max (numeric) - from Parquet metadata or full scan
+                                        <br><br>
+                                        <strong>From analysis sample (statistical metrics):</strong>
+                                        <br>• Mean, Std Dev, Median - computed from analysis sample rows
+                                        <br>• ML Analysis - patterns, outliers, clusters from sampled data
+                                        <br><br>
+                                        <strong>Per-column value tracking (adaptive):</strong>
+                                        <br>• Top Values - tracked differently per column based on cardinality
+                                        <br>• Low cardinality columns: all unique values captured (7-1000)
+                                        <br>• High cardinality columns: capped at 5K-10K for memory efficiency
+                                        <br>• <em>"Sampled: N" shows values tracked, not rows analyzed</em>
+                                    </div>
+                                </details>
                             </div>
                             {search_controls}
                             <div class="column-list" id="columnList">
@@ -4289,13 +5970,29 @@ class ExecutiveHTMLReporter:
         else:
             completeness_str = f"{completeness:.1f}% complete"
 
+        # Build FIBO badge for mobile (visible next to name)
+        fibo_badge_mobile = ''
+        if col.semantic_info and col.semantic_info.get('primary_tag'):
+            fibo_tag = col.semantic_info.get('primary_tag')
+            # Get high-level category for icon
+            category = fibo_tag.split('.')[0] if '.' in fibo_tag else fibo_tag
+            category_icons = {
+                'money': '💰', 'identifier': '🔑', 'party': '👤', 'datetime': '📅',
+                'location': '📍', 'account': '🏦', 'transaction': '💸', 'product': '📦'
+            }
+            fibo_icon = category_icons.get(category.lower(), '🏛️')
+            fibo_badge_mobile = f'<span class="fibo-badge-mobile" title="{fibo_tag}">{fibo_icon} {fibo_tag}</span>'
+
         return f'''
                                 <div class="column-row" onclick="toggleColumnRow(this)" {data_attrs}>
                                     <div class="column-row-header">
                                         <span class="column-expand-icon">▶</span>
                                         <div class="column-type-icon {type_class}">{icon}</div>
                                         <div class="column-info">
-                                            <div class="column-name">{col.name}</div>
+                                            <div class="column-name-row">
+                                                <span class="column-name">{col.name}</span>
+                                                {fibo_badge_mobile}
+                                            </div>
                                             <div class="column-type">{inferred_type} ({col.type_info.confidence*100:.0f}% confidence)</div>
                                         </div>
                                         <div class="column-quick-stats">
@@ -4305,7 +6002,7 @@ class ExecutiveHTMLReporter:
                                         <div class="column-tags">
                                             {tags}
                                         </div>
-                                        <span class="column-quality-score {score_class}">{score:.0f}%</span>
+                                        <span class="column-quality-score {score_class}" title="Overall Quality Score: Combines completeness, validity, consistency, and uniqueness metrics">Quality {score:.0f}%</span>
                                     </div>
                                     <div class="column-details">
                                         <div class="column-details-content">
@@ -4330,24 +6027,28 @@ class ExecutiveHTMLReporter:
             ('Unique Values', unique_display),
         ]
 
-        # Add type-specific stats
-        if stats.mean is not None:
+        # Determine if column is numeric (only show numeric stats for numeric columns)
+        is_numeric = col.type_info.inferred_type in ['integer', 'float', 'numeric', 'number']
+
+        # Add type-specific stats - only show mean/std for numeric columns
+        if is_numeric and stats.mean is not None:
             stat_items.append(('Mean', self._format_number(stats.mean)))
-        if stats.median is not None:
+        if is_numeric and stats.median is not None:
             stat_items.append(('Median', self._format_number(stats.median)))
-        if stats.std_dev is not None:
+        if is_numeric and stats.std_dev is not None:
             stat_items.append(('Std Dev', self._format_number(stats.std_dev)))
-        if stats.min_value is not None:
-            stat_items.append(('Min', str(stats.min_value)[:20]))
-        if stats.max_value is not None:
-            stat_items.append(('Max', str(stats.max_value)[:20]))
+        # Only show numeric Min/Max for numeric columns to avoid confusion
+        # (string min/max shows alphabetical first/last which is misleading for numeric-looking IDs)
+        if is_numeric:
+            if stats.min_value is not None:
+                stat_items.append(('Min', self._format_number(stats.min_value)))
+            if stats.max_value is not None:
+                stat_items.append(('Max', self._format_number(stats.max_value)))
         if stats.min_length is not None:
             stat_items.append(('Length', f'{stats.min_length}-{stats.max_length} chars'))
         if stats.pattern_samples:
             top_pattern = stats.pattern_samples[0] if stats.pattern_samples else {}
             stat_items.append(('Pattern', f"{top_pattern.get('pattern', 'N/A')[:15]}"))
-        if stats.sample_size:
-            stat_items.append(('Sample Size', f'{stats.sample_size:,}'))
 
         stats_html = ''
         for label, value in stat_items[:8]:  # Limit to 8 stats
@@ -4355,6 +6056,14 @@ class ExecutiveHTMLReporter:
                                             <div class="column-stat">
                                                 <div class="column-stat-label">{label}</div>
                                                 <div class="column-stat-value">{value}</div>
+                                            </div>'''
+
+        # Add sample size indicator if values were sampled for Top Values tracking
+        if stats.sample_size and stats.sample_size < stats.count:
+            stats_html += f'''
+                                            <div class="column-stat" style="background: rgba(var(--info-color-rgb), 0.1); border: 1px dashed var(--info-color);" title="Unique values tracked for Top Values (memory optimization for high-cardinality columns)">
+                                                <div class="column-stat-label" style="color: var(--info-color);">📊 Values Tracked</div>
+                                                <div class="column-stat-value" style="font-size: 0.75em;">{stats.sample_size:,}</div>
                                             </div>'''
 
         return f'<div class="column-stats-grid">{stats_html}</div>'
@@ -4489,6 +6198,12 @@ class ExecutiveHTMLReporter:
 
         # Build content for all temporal columns
         temporal_items = ''
+
+        # Get ML temporal patterns for consistent gap counts
+        ml_temporal = {}
+        if hasattr(self, 'profile') and hasattr(self.profile, 'ml_findings') and self.profile.ml_findings:
+            ml_temporal = self.profile.ml_findings.get('temporal_patterns', {})
+
         for col in temporal_columns:
             analysis = col.temporal_analysis or {}
             date_range = analysis.get('date_range', {})
@@ -4496,22 +6211,69 @@ class ExecutiveHTMLReporter:
             gaps = analysis.get('gaps', {})
             trend = analysis.get('trend', {})
 
-            # Determine if there are issues
-            has_gaps = gaps.get('gaps_detected', False)
-            gap_count = gaps.get('gap_count', 0)
+            # Two sources of gap data:
+            # - large_gaps_count (ML): significant gaps (typically >24h) from sampled data
+            # - gap_count (profiler): all detected gaps from sampled data
+            ml_col_data = ml_temporal.get(col.name, {})
+            significant_gaps = ml_col_data.get('large_gaps_count', 0)
+            total_gaps = gaps.get('gap_count', 0)
+            # Use significant gaps as primary metric (more meaningful for users)
+            has_gaps = significant_gaps > 0 or total_gaps > 0
+            display_gaps = significant_gaps if significant_gaps > 0 else total_gaps
+            gap_label = "large gaps" if significant_gaps > 0 else "gaps"
+
+            # Use column stats for true date range (from parquet metadata = all rows)
+            # Fall back to analysis date_range if not available
+            true_min = col.statistics.min_value if col.statistics else None
+            true_max = col.statistics.max_value if col.statistics else None
+
+            # Format dates - handle both string and datetime types
+            if true_min and true_max:
+                start_str = str(true_min)[:10] if true_min else 'N/A'
+                end_str = str(true_max)[:10] if true_max else 'N/A'
+            else:
+                start_str = date_range.get('start', 'N/A')[:10] if date_range.get('start') else 'N/A'
+                end_str = date_range.get('end', 'N/A')[:10] if date_range.get('end') else 'N/A'
+
+            # Calculate span from ML findings (sample-based) for gap analysis context
+            ml_span = ml_col_data.get('date_range', {}).get('span_days', date_range.get('span_days', 'N/A'))
+            is_sampled = bool(ml_col_data)
+            span_label = f"{ml_span} days (in sample)" if is_sampled and ml_span != 'N/A' else f"{ml_span} days"
+
+            # Build gap analysis detail with both metrics if they differ
+            # Also get largest gap from appropriate source
+            ml_largest_gap_days = ml_col_data.get('largest_gap_days', None)
+            profiler_largest_gap = gaps.get('largest_gap', None)
+
+            # Use ML largest gap (in days) if available and significant gaps are shown
+            # Otherwise use profiler largest gap (timedelta string)
+            if significant_gaps > 0 and ml_largest_gap_days is not None:
+                largest_gap_display = f"{ml_largest_gap_days} days" if isinstance(ml_largest_gap_days, (int, float)) else str(ml_largest_gap_days)
+            else:
+                largest_gap_display = str(profiler_largest_gap) if profiler_largest_gap else 'None'
+
+            if significant_gaps > 0 and total_gaps > 0 and significant_gaps != total_gaps:
+                gap_detail = f'{significant_gaps:,} large • {total_gaps:,} total'
+                gap_explanation = "Significant gaps exceed the dynamically computed threshold; raw gaps reflect all intervals above expected frequency."
+            elif significant_gaps > 0:
+                gap_detail = f'{significant_gaps:,} {gap_label}'
+                gap_explanation = "Significant gaps represent intervals exceeding the dynamically computed long-duration threshold."
+            else:
+                gap_detail = f'{display_gaps:,} {gap_label}'
+                gap_explanation = "Raw gaps represent all timestamp intervals exceeding the expected event frequency for this dataset."
 
             temporal_items += f'''
                 <div class="temporal-column-card" style="background: var(--card-bg); border-radius: 12px; padding: 20px; margin-bottom: 16px; border: 1px solid var(--border-color);">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
                         <h4 style="color: var(--text-primary); margin: 0; font-size: 1.1em;">📅 {col.name}</h4>
-                        <span class="accordion-badge {'warning' if has_gaps else 'good'}">{gap_count} gaps</span>
+                        <span class="accordion-badge {'warning' if has_gaps else 'good'}">{display_gaps:,} {gap_label}</span>
                     </div>
 
                     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
                         <div class="temporal-stat">
-                            <div style="color: var(--text-secondary); font-size: 0.85em; margin-bottom: 4px;">Date Range</div>
-                            <div style="color: var(--text-primary); font-weight: 500;">{date_range.get('start', 'N/A')[:10]} → {date_range.get('end', 'N/A')[:10]}</div>
-                            <div style="color: var(--text-tertiary); font-size: 0.8em;">{date_range.get('span_days', 'N/A')} days total</div>
+                            <div style="color: var(--text-secondary); font-size: 0.85em; margin-bottom: 4px;">Date Range (all rows)</div>
+                            <div style="color: var(--text-primary); font-weight: 500;">{start_str} → {end_str}</div>
+                            <div style="color: var(--text-tertiary); font-size: 0.8em;">{span_label}</div>
                         </div>
 
                         <div class="temporal-stat">
@@ -4527,12 +6289,30 @@ class ExecutiveHTMLReporter:
                         </div>
 
                         <div class="temporal-stat">
-                            <div style="color: var(--text-secondary); font-size: 0.85em; margin-bottom: 4px;">Gap Analysis</div>
-                            <div style="color: {'#f59e0b' if has_gaps else 'var(--text-primary)'}; font-weight: 500;">{gap_count} gaps found</div>
-                            <div style="color: var(--text-tertiary); font-size: 0.8em;">Largest: {gaps.get('largest_gap', 'None')}</div>
+                            <div style="color: var(--text-secondary); font-size: 0.85em; margin-bottom: 4px;">Gap Analysis (in sample)</div>
+                            <div style="color: {'#f59e0b' if has_gaps else 'var(--text-primary)'}; font-weight: 500;">{gap_detail}</div>
+                            <div style="color: var(--text-tertiary); font-size: 0.8em;">Largest: {largest_gap_display}</div>
+                            <div style="color: var(--text-muted); font-size: 0.7em; margin-top: 4px; font-style: italic;">{gap_explanation}</div>
+                            <details style="margin-top: 6px; font-size: 0.75em; color: var(--text-muted);">
+                                <summary style="cursor: pointer;">What do these metrics mean?</summary>
+                                <div style="margin-top: 4px; padding-left: 8px; border-left: 2px solid var(--border-color);">
+                                    <div><strong>Significant gaps:</strong> Intervals exceeding the dynamically computed long-duration threshold (10× median frequency)</div>
+                                    <div style="margin-top: 2px;"><strong>Raw gaps:</strong> All timestamp intervals exceeding the expected event frequency for this dataset</div>
+                                    <div style="margin-top: 2px;"><strong>Activity timeline:</strong> Calendar days with zero recorded events after aggregation</div>
+                                    <div style="margin-top: 2px;"><strong>Largest gap:</strong> Maximum interval detected, measured in days</div>
+                                </div>
+                            </details>
                         </div>
                     </div>
                 </div>'''
+
+        # Note about sampling for temporal analysis
+        sample_note = ""
+        if hasattr(self, 'profile') and hasattr(self.profile, 'ml_findings') and self.profile.ml_findings:
+            sample_info = self.profile.ml_findings.get('sample_info', {})
+            if sample_info.get('sampled', False):
+                analyzed = sample_info.get('analyzed_rows', 0)
+                sample_note = f'<div style="color: var(--text-tertiary); font-size: 0.8em; margin-top: 8px; font-style: italic;">ℹ️ Analysis based on {analyzed:,} sampled rows</div>'
 
         return f'''
         <div class="accordion open" data-accordion="temporal">
@@ -4555,6 +6335,7 @@ class ExecutiveHTMLReporter:
                         💡 <strong>What this shows:</strong> Temporal analysis examines date/time columns to understand your data's time coverage,
                         detect missing periods (gaps), identify trends (increasing/decreasing activity over time), and infer the expected data frequency
                         (daily, weekly, monthly). This helps ensure data completeness and spot collection issues.
+                        {sample_note}
                     </div>
                     {temporal_items}
                 </div>
@@ -4824,9 +6605,18 @@ class ExecutiveHTMLReporter:
 
     def _format_number(self, value: float) -> str:
         """Format large numbers for display."""
+        import math
         if value is None:
             return 'N/A'
+        # Handle infinity and NaN
+        if math.isinf(value):
+            return "∞" if value > 0 else "-∞"
+        if math.isnan(value):
+            return "N/A"
         abs_val = abs(value)
+        # Handle extreme values (data corruption / overflow)
+        if abs_val >= 1e100:
+            return "overflow"
         if abs_val >= 1e9:
             return f"{value/1e9:.2f}B"
         elif abs_val >= 1e6:
@@ -4933,10 +6723,10 @@ class ExecutiveHTMLReporter:
 
         if sample_used:
             sample_display = f"{sample_size:,} rows ({sample_fraction:.2%} of dataset)"
-            sample_note = "50k sample used for statistical analysis"
+            sample_note = f"{sample_size:,} sample used for statistical analysis"
         else:
             sample_display = f"Full dataset ({total_rows:,} rows)"
-            sample_note = "Full dataset analyzed (under 50k rows)"
+            sample_note = "Full dataset analyzed"
 
         return f'''
         <section class="sampling-bar" style="flex-direction: column; align-items: stretch;">
@@ -4956,7 +6746,7 @@ class ExecutiveHTMLReporter:
                 </div>
             </div>
             <details style="margin-top: 12px; margin-bottom: 0;">
-                <summary style="cursor: pointer; color: var(--text-secondary); font-size: 0.9em; padding: 8px 0;">ℹ️ About the 50k sampling methodology...</summary>
+                <summary style="cursor: pointer; color: var(--text-secondary); font-size: 0.9em; padding: 8px 0;">ℹ️ About the sampling methodology...</summary>
                 <div class="hint-box" style="margin-top: 8px; margin-bottom: 0; border-left-color: var(--info);">
                     <p style="margin: 0 0 12px 0;"><strong>📊 Sampling Policy:</strong></p>
                     <p style="margin: 0 0 12px 0; color: var(--text-secondary);">{sampling_explanation.replace(chr(10), '<br>')}</p>
@@ -4966,6 +6756,397 @@ class ExecutiveHTMLReporter:
                 </div>
             </details>
         </section>'''
+
+    def _generate_sampling_banner_v2(self, profile: ProfileResult, insights: Dict) -> str:
+        """
+        Generate v2 sampling coverage banner with visual progress and method breakdown.
+
+        New design per redesign plan - prominent, clear visibility of what's sampled vs full scan.
+        """
+        # Try to get sampling info from insights first, then from ml_findings
+        insight_sampling = insights.get('sampling_info', {})
+
+        # If no sampling_info in insights, check ml_findings.sample_info
+        if not insight_sampling and profile.ml_findings:
+            ml_sample_info = profile.ml_findings.get('sample_info', {})
+            sample_used = ml_sample_info.get('sampled', ml_sample_info.get('sample_percentage', 100) < 100)
+            sample_size = ml_sample_info.get('analyzed_rows', 0)
+            total_rows = ml_sample_info.get('original_rows', profile.row_count)
+        else:
+            sample_used = insight_sampling.get('sample_used', False)
+            sample_size = insight_sampling.get('sample_size', 0)
+            total_rows = insight_sampling.get('total_rows', profile.row_count)
+
+        # If we still don't have sample info, derive from profile
+        if total_rows == 0:
+            total_rows = profile.row_count
+
+        # Calculate coverage percentage with meaningful display
+        if sample_used and total_rows > 0:
+            coverage_pct = min((sample_size / total_rows) * 100, 100)
+            # For very small percentages, show more precision or use descriptive text
+            if coverage_pct < 0.1:
+                coverage_display = f"{sample_size:,} rows sampled from {total_rows:,} total"
+            elif coverage_pct < 1:
+                coverage_display = f"{coverage_pct:.2f}% sampled ({sample_size:,} of {total_rows:,} rows)"
+            else:
+                coverage_display = f"{coverage_pct:.1f}% sampled ({sample_size:,} of {total_rows:,} rows)"
+        else:
+            coverage_pct = 100
+            coverage_display = f"100% analyzed ({total_rows:,} rows)"
+
+        # Analysis methods and their coverage
+        full_scan_items = [
+            ("✓", "Schema & Types", "Full scan"),
+            ("✓", "Null Counts", "Full scan"),
+            ("✓", "Row Count", "Full scan"),
+        ]
+
+        if sample_used:
+            sampled_items = [
+                ("○", "Outlier Detection", "Sampled"),
+                ("○", "Pattern Analysis", "Sampled"),
+                ("○", "ML Analysis", "Sampled"),
+                ("○", "Correlation", "Sampled"),
+            ]
+        else:
+            sampled_items = [
+                ("✓", "Outlier Detection", "Full scan"),
+                ("✓", "Pattern Analysis", "Full scan"),
+                ("✓", "ML Analysis", "Full scan"),
+                ("✓", "Correlation", "Full scan"),
+            ]
+
+        # Build methods HTML
+        methods_html = ""
+        for icon, name, status in full_scan_items + sampled_items:
+            method_class = "full" if "Full" in status else "sampled"
+            methods_html += f'''
+                <div class="sampling-method {method_class}">
+                    <span class="sampling-method-icon">{icon}</span>
+                    <span class="sampling-method-text"><strong>{name}</strong>: {status}</span>
+                </div>'''
+
+        return f'''
+        <div class="sampling-banner">
+            <div class="sampling-banner-header">
+                <span class="sampling-banner-icon">📊</span>
+                <span class="sampling-banner-title">Analysis Coverage</span>
+            </div>
+
+            <div class="sampling-progress-container">
+                <div class="sampling-progress-bar">
+                    <div class="sampling-progress-fill" style="width: {coverage_pct}%;"></div>
+                </div>
+                <div class="sampling-progress-label">
+                    <strong>{coverage_display}</strong>
+                </div>
+            </div>
+
+            <div class="sampling-methods-grid">
+                {methods_html}
+            </div>
+
+            {self._generate_sample_size_explanation(sample_used, sample_size, total_rows)}
+        </div>'''
+
+    def _generate_sample_size_explanation(self, sample_used: bool, sample_size: int, total_rows: int) -> str:
+        """
+        Generate a collapsible technical explanation of sample size statistical sufficiency.
+        Only shown when sampling is used.
+        """
+        if not sample_used or sample_size >= total_rows:
+            return ''
+
+        # Calculate statistical properties
+        # For 95% confidence and 1% margin of error, required sample size is:
+        # n = (Z^2 * p * (1-p)) / E^2 where Z=1.96, p=0.5, E=0.01 gives ~9,604
+        # For 99% confidence and 1% margin of error: Z=2.576 gives ~16,587
+        # For detecting 1% events with 95% confidence: ~38,415
+
+        confidence_95_moe_1pct = "9,604"  # Required for 95% CI, 1% MoE
+        confidence_99_moe_1pct = "16,587"  # Required for 99% CI, 1% MoE
+        detect_1pct_events = "38,415"  # Required to detect 1% occurrence
+
+        margin_of_error = 100 * (1.96 * 0.5) / (sample_size ** 0.5)  # Simplified estimate
+
+        return f'''
+            <details class="sample-size-explanation">
+                <summary class="sample-size-summary">
+                    <span class="sample-size-icon">📐</span>
+                    Why is {sample_size:,} rows statistically sufficient?
+                </summary>
+                <div class="sample-size-content">
+                    <p><strong>Statistical sampling theory</strong> tells us that sample size, not population size,
+                    determines accuracy. Here's why {sample_size:,} rows provides reliable insights:</p>
+
+                    <div class="sample-size-stats">
+                        <div class="sample-stat">
+                            <span class="sample-stat-value">{margin_of_error:.2f}%</span>
+                            <span class="sample-stat-label">Margin of Error (95% CI)</span>
+                        </div>
+                        <div class="sample-stat">
+                            <span class="sample-stat-value">&lt; 0.1%</span>
+                            <span class="sample-stat-label">Events Detectable</span>
+                        </div>
+                        <div class="sample-stat">
+                            <span class="sample-stat-value">~{sample_size // 10000}x</span>
+                            <span class="sample-stat-label">Above Minimum Required</span>
+                        </div>
+                    </div>
+
+                    <div class="sample-size-detail">
+                        <h4>Sample Size Requirements</h4>
+                        <table class="sample-size-table">
+                            <tr>
+                                <th>Analysis Goal</th>
+                                <th>Required Sample</th>
+                                <th>Your Sample</th>
+                            </tr>
+                            <tr>
+                                <td>95% confidence, 1% margin of error</td>
+                                <td>{confidence_95_moe_1pct}</td>
+                                <td class="value-highlight">✓ {sample_size:,}</td>
+                            </tr>
+                            <tr>
+                                <td>99% confidence, 1% margin of error</td>
+                                <td>{confidence_99_moe_1pct}</td>
+                                <td class="value-highlight">✓ {sample_size:,}</td>
+                            </tr>
+                            <tr>
+                                <td>Detect events occurring in 1%</td>
+                                <td>{detect_1pct_events}</td>
+                                <td class="value-highlight">✓ {sample_size:,}</td>
+                            </tr>
+                        </table>
+                    </div>
+
+                    <p class="sample-size-note"><strong>Key insight:</strong> For a population of any size (even billions),
+                    a properly randomized sample of {sample_size:,} provides the same statistical power.
+                    The Central Limit Theorem ensures sample statistics converge to population parameters
+                    regardless of population size.</p>
+                </div>
+            </details>'''
+
+    def _generate_metrics_dashboard_v2(self, profile: ProfileResult,
+                                        avg_completeness: float, avg_validity: float,
+                                        avg_consistency: float, avg_uniqueness: float,
+                                        type_counts: Dict[str, int]) -> str:
+        """
+        Generate v2 metrics dashboard with 3-row widget grid.
+
+        Row 1: Core Numbers (rows, columns, quality, processing time)
+        Row 2: Quality Dimensions (completeness, validity, consistency, uniqueness)
+        Row 3: Field Types (numeric, text, dates, categorical)
+        """
+        # Format values
+        processing_time = self._format_duration(profile.processing_time_seconds)
+
+        # Quality score status
+        quality_score = profile.overall_quality_score
+        quality_class = "good" if quality_score >= 80 else "warning" if quality_score >= 60 else "critical"
+
+        # Type counts with defaults (keys are capitalized by _count_data_types)
+        numeric_count = type_counts.get('Integer', 0) + type_counts.get('Float', 0)
+        text_count = type_counts.get('String', 0)
+        date_count = type_counts.get('Date', 0) + type_counts.get('Datetime', 0)
+        categorical_count = sum(1 for col in profile.columns
+                                if col.statistics.cardinality < 0.1 and col.type_info.inferred_type in ['string', 'String'])
+
+        # Helper for quality gauge SVG
+        def gauge_svg(pct: float, color: str) -> str:
+            circumference = 2 * 3.14159 * 25
+            offset = circumference - (pct / 100) * circumference
+            return f'''
+                <svg width="60" height="60" viewBox="0 0 60 60">
+                    <circle cx="30" cy="30" r="25" fill="none" stroke="rgba(148,163,184,0.1)" stroke-width="5"/>
+                    <circle cx="30" cy="30" r="25" fill="none" stroke="{color}" stroke-width="5"
+                            stroke-dasharray="{circumference}" stroke-dashoffset="{offset}"
+                            stroke-linecap="round"/>
+                </svg>'''
+
+        # Status text helpers
+        def completeness_text(pct: float) -> tuple:
+            if pct >= 99.9: return ("No missing values", "good")
+            if pct >= 95: return ("Mostly complete", "good")
+            if pct >= 80: return ("Some gaps", "warning")
+            return ("Significant gaps", "critical")
+
+        def validity_text(pct: float) -> tuple:
+            if pct >= 95: return ("Formats valid", "good")
+            if pct >= 80: return ("Minor issues", "warning")
+            return ("Format problems", "critical")
+
+        def consistency_text(pct: float) -> tuple:
+            if pct >= 80: return ("Consistent", "good")
+            if pct >= 50: return ("Variable", "warning")
+            return ("Inconsistent", "critical")
+
+        def uniqueness_text(pct: float) -> tuple:
+            if pct >= 50: return ("High cardinality", "good")
+            if pct >= 10: return ("Moderate", "warning")
+            return ("Low cardinality", "info")
+
+        comp_text, comp_class = completeness_text(avg_completeness)
+        valid_text, valid_class = validity_text(avg_validity)
+        consist_text, consist_class = consistency_text(avg_consistency)
+        unique_text, unique_class = uniqueness_text(avg_uniqueness)
+
+        return f'''
+        <div class="metrics-dashboard">
+            <!-- Row 1: Core Numbers -->
+            <div class="metrics-row core">
+                <div class="metric-widget">
+                    <div class="metric-widget-label">Rows Analyzed</div>
+                    <div class="metric-widget-value">{profile.row_count:,}</div>
+                </div>
+                <div class="metric-widget">
+                    <div class="metric-widget-label">Columns</div>
+                    <div class="metric-widget-value">{profile.column_count}</div>
+                </div>
+                <div class="metric-widget">
+                    <div class="metric-widget-label">Quality Score</div>
+                    <div class="metric-widget-value" style="color: var(--{quality_class});">{quality_score:.0f}%</div>
+                </div>
+                <div class="metric-widget">
+                    <div class="metric-widget-label">Processing</div>
+                    <div class="metric-widget-value">{processing_time}</div>
+                </div>
+            </div>
+
+            <!-- Row 2: Quality Dimensions -->
+            <div class="metrics-row quality">
+                <div class="metric-widget">
+                    <div class="metric-gauge">
+                        {gauge_svg(avg_completeness, 'var(--good)' if avg_completeness >= 95 else 'var(--warning)' if avg_completeness >= 80 else 'var(--critical)')}
+                        <span class="metric-gauge-value">{avg_completeness:.0f}%</span>
+                    </div>
+                    <div class="metric-widget-label">Completeness</div>
+                    <div class="metric-widget-trend {comp_class}">{comp_text}</div>
+                </div>
+                <div class="metric-widget">
+                    <div class="metric-gauge">
+                        {gauge_svg(avg_validity, 'var(--good)' if avg_validity >= 95 else 'var(--warning)' if avg_validity >= 80 else 'var(--critical)')}
+                        <span class="metric-gauge-value">{avg_validity:.0f}%</span>
+                    </div>
+                    <div class="metric-widget-label">Validity</div>
+                    <div class="metric-widget-trend {valid_class}">{valid_text}</div>
+                </div>
+                <div class="metric-widget">
+                    <div class="metric-gauge">
+                        {gauge_svg(avg_consistency, 'var(--good)' if avg_consistency >= 80 else 'var(--warning)' if avg_consistency >= 50 else 'var(--critical)')}
+                        <span class="metric-gauge-value">{avg_consistency:.0f}%</span>
+                    </div>
+                    <div class="metric-widget-label">Consistency</div>
+                    <div class="metric-widget-trend {consist_class}">{consist_text}</div>
+                </div>
+                <div class="metric-widget">
+                    <div class="metric-gauge">
+                        {gauge_svg(avg_uniqueness, 'var(--info)')}
+                        <span class="metric-gauge-value">{avg_uniqueness:.0f}%</span>
+                    </div>
+                    <div class="metric-widget-label">Uniqueness</div>
+                    <div class="metric-widget-trend {unique_class}">{unique_text}</div>
+                </div>
+            </div>
+
+            <!-- Row 3: Field Types -->
+            <div class="metrics-row types">
+                <div class="metric-widget">
+                    <div class="metric-widget-value" style="color: #60a5fa;">{numeric_count}</div>
+                    <div class="metric-widget-label">Numeric</div>
+                </div>
+                <div class="metric-widget">
+                    <div class="metric-widget-value" style="color: #a78bfa;">{text_count}</div>
+                    <div class="metric-widget-label">Text</div>
+                </div>
+                <div class="metric-widget">
+                    <div class="metric-widget-value" style="color: #fbbf24;">{date_count}</div>
+                    <div class="metric-widget-label">Dates</div>
+                </div>
+                <div class="metric-widget">
+                    <div class="metric-widget-value" style="color: #34d399;">{categorical_count}</div>
+                    <div class="metric-widget-label">Categorical</div>
+                </div>
+            </div>
+        </div>'''
+
+    def _generate_fibo_summary(self, columns: List) -> str:
+        """
+        Generate FIBO semantic categories summary widget.
+
+        Shows all FIBO categories detected in the data with column counts.
+        """
+        # Collect FIBO categories from columns
+        fibo_categories = {}
+        for col in columns:
+            if col.semantic_info and col.semantic_info.get('primary_tag'):
+                tag = col.semantic_info.get('primary_tag', 'unknown')
+                fibo_source = col.semantic_info.get('fibo_source', '')
+                confidence = col.semantic_info.get('confidence', 0)
+
+                # Group by high-level category (first part of tag)
+                category = tag.split('.')[0] if '.' in tag else tag
+
+                if category not in fibo_categories:
+                    fibo_categories[category] = {
+                        'columns': [],
+                        'tags': set(),
+                        'fibo_sources': set()
+                    }
+
+                fibo_categories[category]['columns'].append(col.name)
+                fibo_categories[category]['tags'].add(tag)
+                if fibo_source:
+                    fibo_categories[category]['fibo_sources'].add(fibo_source)
+
+        if not fibo_categories:
+            return ''
+
+        # Build category chips HTML
+        chips_html = ''
+        category_icons = {
+            'money': '💰',
+            'identifier': '🔑',
+            'party': '👤',
+            'datetime': '📅',
+            'location': '📍',
+            'account': '🏦',
+            'transaction': '💸',
+            'product': '📦',
+            'unknown': '❓'
+        }
+
+        for category, data in sorted(fibo_categories.items(), key=lambda x: -len(x[1]['columns'])):
+            icon = category_icons.get(category.lower(), '📋')
+            col_count = len(data['columns'])
+            tags_display = ', '.join(sorted(data['tags']))
+            fibo_display = ', '.join(sorted(data['fibo_sources']))[:50]
+
+            chips_html += f'''
+                <div class="fibo-category-chip" title="{fibo_display}">
+                    <span class="fibo-icon">{icon}</span>
+                    <span class="fibo-label">{category.title()}</span>
+                    <span class="fibo-count">{col_count}</span>
+                    <span class="fibo-tags">{tags_display}</span>
+                </div>'''
+
+        # Count only columns that are NOT in the 'unknown' category
+        # 'unknown' means the classifier couldn't determine a semantic type, so it's not "mapped"
+        total_mapped = sum(len(d['columns']) for cat, d in fibo_categories.items() if cat.lower() != 'unknown')
+        unknown_count = len(fibo_categories.get('unknown', {}).get('columns', []))
+
+        return f'''
+        <div class="fibo-summary">
+            <div class="fibo-summary-header">
+                <span class="fibo-summary-icon">🏛️</span>
+                <span class="fibo-summary-title">Semantic Classification (FIBO)</span>
+                <span class="fibo-summary-count">{total_mapped} of {len(columns)} columns classified{f" ({unknown_count} unknown)" if unknown_count > 0 else ""}</span>
+            </div>
+            <div class="fibo-categories-grid">
+                {chips_html}
+            </div>
+        </div>'''
 
     def _generate_key_insights_section(self, insights: Dict) -> str:
         """

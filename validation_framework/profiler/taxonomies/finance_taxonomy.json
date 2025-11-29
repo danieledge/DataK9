@@ -444,6 +444,30 @@
             "DateFormatCheck",
             "MandatoryFieldCheck"
           ]
+        },
+        "temporal.timestamp": {
+          "fibo_class": "fibo-fnd-dt-fd:DateTime",
+          "definition": "A timestamp recording when an event or transaction occurred",
+          "patterns": [
+            "(?i)^timestamp$",
+            "(?i)^(created|updated|modified|event|record)_?(at|time|timestamp|ts)$",
+            "(?i).*_timestamp$",
+            "(?i).*_ts$",
+            "(?i)^ts$",
+            "(?i)^(created|updated|modified)_(at|on|date)$",
+            "(?i).*datetime.*"
+          ],
+          "data_properties": {
+            "type": [
+              "datetime",
+              "date",
+              "string"
+            ]
+          },
+          "validation_rules": [
+            "DateFormatCheck",
+            "MandatoryFieldCheck"
+          ]
         }
       }
     },

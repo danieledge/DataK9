@@ -150,3 +150,8 @@ Thumbs.db
 wip/
 CLAUDE.md
 playground/
+
+# Benchmark data and outputs (downloaded datasets and profiler results)
+# The benchmark.sh script itself IS tracked; only data/outputs are ignored
+benchmark/data/
+benchmark/output/

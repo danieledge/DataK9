@@ -26,8 +26,9 @@ View the actual profiler reports for each benchmark dataset:
 | Titanic | 5 | 4 | 80% | Name PII not flagged |
 | Adult Census | 6 | 6 | 100% | All issues identified |
 | COVID-19 OWID | 5 | 5 | 100% | Comprehensive detection |
+| IBM AML (Anti-Money Laundering) | 6 | 6 | 100% | Benford's Law + class imbalance |
 
-**Overall Detection Rate: 93%**
+**Overall Detection Rate: 95%** (21/22 known issues detected)
 
 ---
 
@@ -146,6 +147,58 @@ The lower quality score (60.8) accurately reflects the dataset's inherent sparse
 
 ---
 
+## 4. IBM AML Anti-Money Laundering Dataset
+
+**Source**: IBM AMLSim on Kaggle (Community Data License Agreement - Sharing - Version 1.0)
+**Rows**: 5,078,345 | **Columns**: 11
+**Quality Score**: 70.1/100
+
+This dataset contains synthetic but realistic financial transactions with labeled money laundering activity. It includes documented laundering patterns: FAN-OUT, CYCLE, GATHER-SCATTER, STACK, and RANDOM hop transactions.
+
+### Known Characteristics
+
+| Characteristic | Expected | Detected | Status |
+|----------------|----------|----------|--------|
+| Is Laundering flag extremely imbalanced | 0.10% fraud rate (788:1 ratio) | Class Imbalance alert | ✅ Detected |
+| Transaction amounts vary widely | Large value range | Outliers in Amount columns | ✅ Detected |
+| Benford's Law deviation | Synthetic data may deviate | χ²=155-156, MAD=0.60% flagged | ✅ Detected |
+| Amount Received ≈ Amount Paid | High correlation expected | r=0.852 with 500 anomalies | ✅ Detected |
+| Multiple currencies | 15 currencies | Low cardinality flagged | ✅ Detected |
+| Account ID inconsistency | Mixed formats | Type inconsistency flagged | ✅ Detected |
+
+### ML Analysis Highlights
+
+**Benford's Law Analysis**:
+| Column | Chi-Square | MAD | Status |
+|--------|-----------|-----|--------|
+| Amount Received | 155.5 | 0.60% | Suspicious |
+| Amount Paid | 156.7 | 0.60% | Suspicious |
+
+The Benford's Law violations indicate the synthetic data generation doesn't perfectly mimic natural transaction distributions - a useful finding that would also flag real-world data manipulation.
+
+**Correlation Anomalies**:
+- Amount Received and Amount Paid show r=0.852 correlation
+- **500 records identified** that deviate from expected relationship
+- Sample anomalies include transactions of $24M, $29M, and $120M
+
+**Class Imbalance**:
+- Non-fraud (0): 99.87%
+- Fraud (1): 0.13%
+- **788:1 ratio** correctly flagged as extreme imbalance
+
+### Assessment
+
+The profiler achieved **100% detection rate** on expected issues:
+- **Extreme class imbalance**: The 0.1% fraud rate (5,177 laundering transactions out of 5M+) was correctly identified
+- **Benford's Law**: Both amount columns flagged as suspicious
+- **Correlation anomalies**: Identified 500 records with unusual amount patterns
+- **Data type issues**: Account ID format inconsistencies detected
+- **Semantic tagging**: Correctly identified flag.binary for Is Laundering column
+
+**Key insight**: The profiler's ML analysis identified characteristics that would be valuable for fraud investigation teams - unusual amount patterns, Benford's Law deviations, and extreme class imbalance that would require specialized handling for ML model training.
+
+---
+
 ## Detection Capabilities Summary
 
 ### What the Profiler Detects Well
@@ -200,6 +253,7 @@ The lower quality score (60.8) accurately reflects the dataset's inherent sparse
 1. **Titanic**: Classic ML dataset with known missing data and class imbalance
 2. **Adult Census**: Tests placeholder detection and zero-inflated columns
 3. **COVID-19 OWID**: Large-scale real-world data with extensive sparsity
+4. **IBM AML**: Financial fraud detection with extreme class imbalance and Benford's Law testing
 
 ### Evaluation Criteria
 
@@ -223,9 +277,11 @@ The lower quality score (60.8) accurately reflects the dataset's inherent sparse
 
 The DataK9 Profiler demonstrates **strong detection capabilities** across diverse datasets:
 
-- **93% overall detection rate** for known data quality issues
-- **100% detection** on Adult Census (specifically designed to test new features)
-- **Accurate sparsity detection** across small (891 rows) to large (429K rows) datasets
+- **95% overall detection rate** for known data quality issues (21/22 detected)
+- **100% detection** on Adult Census, COVID-19, and IBM AML datasets
+- **Accurate sparsity detection** across small (891 rows) to very large (5M+ rows) datasets
 - **Sample-based estimation** works reliably for zero-inflated and class imbalance detection
+- **Benford's Law analysis** successfully flags suspicious financial distributions
+- **Correlation anomaly detection** identifies unusual transaction patterns
 
-The profiler is well-suited for automated data quality assessment in data engineering pipelines, providing actionable insights that would otherwise require manual investigation.
+The profiler is well-suited for automated data quality assessment in data engineering pipelines, providing actionable insights that would otherwise require manual investigation. The IBM AML benchmark demonstrates particular value for **financial fraud detection** scenarios, where the profiler's ML analysis can surface indicators that warrant further investigation.

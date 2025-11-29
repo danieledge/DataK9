@@ -16,15 +16,18 @@ from dataclasses import dataclass
 # SAMPLING EXPLANATIONS
 # =============================================================================
 
-SAMPLING_EXPLANATION = """A fixed 50,000-row sample is used for statistical and machine-learning-based checks.
-50k provides a strong, stable sample that keeps processing fast while maintaining high statistical accuracy
-(typically within ±0.5–1% for most proportions).
-If the dataset contains fewer than 50,000 rows, the full dataset is analysed with no sampling."""
+# These templates use {sample_size} placeholder which should be filled in with the actual sample size
+SAMPLING_EXPLANATION_TEMPLATE = """A configurable analysis sample (up to {sample_size:,} rows) is used for statistical and machine-learning-based checks.
+This sample size provides strong statistical accuracy (typically within ±0.5–1% for most proportions) while keeping processing fast.
+If the dataset contains fewer than {sample_size:,} rows, the full dataset is analysed with no sampling."""
+
+# Default for backwards compatibility (will be replaced by dynamic generation)
+SAMPLING_EXPLANATION = SAMPLING_EXPLANATION_TEMPLATE.format(sample_size=100000)
 
 SAMPLING_OVERVIEW_FULL = """This report analyses the **full dataset** ({total_rows:,} rows).
 All metrics, statistical analyses, and ML-based detections are computed from complete data."""
 
-SAMPLING_OVERVIEW_SAMPLED = """This report uses a fixed **50,000-row sample** (~{sample_fraction:.1%} of the dataset) for:
+SAMPLING_OVERVIEW_SAMPLED_TEMPLATE = """This report uses a **{sample_size:,}-row sample** (~{sample_fraction:.1%} of the dataset) for:
 - Validity checks and pattern detection
 - Distribution and statistical analysis
 - ML-based anomaly detection (Benford, autoencoder, outliers)
@@ -33,6 +36,22 @@ SAMPLING_OVERVIEW_SAMPLED = """This report uses a fixed **50,000-row sample** (~
 **Row counts, null counts, and basic metadata are computed from the full dataset.**
 
 This sample size provides typical error rates under ±1% for most proportions."""
+
+# Default for backwards compatibility
+SAMPLING_OVERVIEW_SAMPLED = SAMPLING_OVERVIEW_SAMPLED_TEMPLATE
+
+
+def get_sampling_explanation(sample_size: int) -> str:
+    """Generate sampling explanation with actual sample size."""
+    return SAMPLING_EXPLANATION_TEMPLATE.format(sample_size=sample_size)
+
+
+def get_sampling_overview_sampled(sample_size: int, sample_fraction: float) -> str:
+    """Generate sampled overview with actual sample size and fraction."""
+    return SAMPLING_OVERVIEW_SAMPLED_TEMPLATE.format(
+        sample_size=sample_size,
+        sample_fraction=sample_fraction
+    )
 
 
 # =============================================================================
@@ -565,7 +584,22 @@ def render_template(
 
     # Render template
     try:
-        rendered = template.format(**data)
+        # Handle cross-column templates that expect col1/col2 from columns list
+        render_data = data.copy()
+        if "columns" in render_data and isinstance(render_data["columns"], list):
+            cols = render_data["columns"]
+            if len(cols) >= 2:
+                render_data["col1"] = cols[0]
+                render_data["col2"] = cols[1]
+
+        # Calculate derived values for cross-column templates
+        if "total_issues" in render_data and "anomaly_rate" not in render_data:
+            # Estimate anomaly rate from total_issues
+            # Assume sample size of 50000 if not available
+            sample_size = len(render_data.get("sample_rows", [])) or 50000
+            render_data["anomaly_rate"] = render_data["total_issues"] / sample_size
+
+        rendered = template.format(**render_data)
     except KeyError as e:
         return f"[Template rendering error: missing key {e}]"
 
