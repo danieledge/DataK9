@@ -64,6 +64,23 @@ class ChunkedMLAccumulator:
         self.seen_count = 0
         self.max_reservoir_size = 1000000  # Allow up to 1M samples for autoencoder
 
+        # Target/Feature Analysis accumulators (memory-efficient streaming)
+        self.detected_targets: List[str] = []  # Detected target columns
+        self.target_value_counts: Dict[str, Counter] = {}  # target_col -> Counter of target values
+        # Streaming target-feature associations: {target_col: {feature_col: {target_val: Counter(feature_vals)}}}
+        self.target_feature_counts: Dict[str, Dict[str, Dict[str, Counter]]] = {}
+        # Missingness correlation with target: {target_col: {feature_col: {target_val: {'missing': n, 'present': n}}}}
+        self.missingness_by_target: Dict[str, Dict[str, Dict[str, Dict[str, int]]]] = {}
+        # Streaming numeric stats by target class: {target_col: {feature_col: {target_val: {sum, sum_sq, count}}}}
+        self.numeric_by_target: Dict[str, Dict[str, Dict[str, Dict[str, float]]]] = {}
+        # Mixed-type correlation accumulators (numeric-categorical, categorical-categorical)
+        # For correlation ratio (numeric vs categorical): {cat_col: {cat_val: {num_col: {sum, sum_sq, count}}}}
+        self.correlation_ratio_stats: Dict[str, Dict[str, Dict[str, Dict[str, float]]]] = {}
+
+        # Reservoir samples for numeric columns (used for visualizations)
+        self.numeric_samples: Dict[str, List[float]] = {}  # col -> sample values for scatter plots
+        self.max_numeric_samples = 10000  # Max samples per column for memory efficiency
+
     def _load_fibo_taxonomy(self) -> Dict[str, Any]:
         """Load FIBO taxonomy for intelligent analysis."""
         import json
@@ -79,6 +96,77 @@ class ChunkedMLAccumulator:
                 return flattened
         except Exception:
             return {}
+
+    def _detect_target_columns(self, df: pd.DataFrame) -> List[str]:
+        """
+        Detect likely target/label columns using heuristics.
+
+        Generic detection logic (no hardcoded dataset-specific keywords):
+        1. Keyword matching: 'target', 'label', 'class', 'outcome', 'y', etc.
+           Keywords must be standalone or delimited (not part of another word)
+        2. Pattern matching: 'is_*', 'has_*', '*_flag', '*_indicator'
+        3. Binary columns with low cardinality (2 unique values)
+        4. Low-cardinality categorical columns (≤5 unique) with target-like names
+
+        Returns:
+            List of detected target column names
+        """
+        target_keywords = [
+            'target', 'label', 'class', 'outcome', 'response', 'y',
+            'churn', 'fraud', 'default', 'laundering', 'spam', 'survived',
+            'conversion', 'click', 'purchase', 'attrition', 'failure', 'success'
+        ]
+        prefix_patterns = ['is_', 'has_', 'was_', 'did_', 'will_']
+        suffix_patterns = ['_flag', '_indicator', '_label', '_target', '_class', '_outcome']
+
+        def is_keyword_present(col_lower, keywords):
+            """Check if keyword is present as a whole word (not substring of another word)."""
+            for kw in keywords:
+                # Exact match
+                if col_lower == kw:
+                    return True
+                # Check with word boundaries (underscore, space, start/end)
+                # e.g., "class" matches "class", "_class", "class_", "_class_"
+                # but NOT "pclass" or "classification"
+                if f'_{kw}' in col_lower or f'{kw}_' in col_lower:
+                    return True
+                # Check if keyword is at start or end with underscore
+                if col_lower.startswith(f'{kw}_') or col_lower.endswith(f'_{kw}'):
+                    return True
+            return False
+
+        detected = []
+        for col in df.columns:
+            col_lower = col.lower().strip()
+
+            # Check keyword match (with word boundary awareness)
+            is_keyword_match = is_keyword_present(col_lower, target_keywords)
+
+            # Check prefix/suffix patterns
+            is_prefix_match = any(col_lower.startswith(p) for p in prefix_patterns)
+            is_suffix_match = any(col_lower.endswith(s) for s in suffix_patterns)
+
+            # Check cardinality (binary or very low)
+            try:
+                n_unique = df[col].nunique(dropna=True)
+                is_binary = n_unique == 2
+                is_low_cardinality = n_unique <= 5
+            except Exception:
+                is_binary = False
+                is_low_cardinality = False
+
+            # Detection logic:
+            # - Exact keyword match with low cardinality -> definitely target
+            # - Prefix/suffix pattern with binary -> likely target
+            # - Binary column with any target hint -> target
+            if is_keyword_match and is_low_cardinality:
+                detected.append(col)
+            elif (is_prefix_match or is_suffix_match) and is_binary:
+                detected.append(col)
+            elif is_binary and is_keyword_match:
+                detected.append(col)
+
+        return detected
 
     def process_chunk(self, chunk: pd.DataFrame, chunk_idx: int) -> None:
         """
@@ -104,12 +192,24 @@ class ChunkedMLAccumulator:
                     self.value_counts[col] = Counter()
                     self.format_pattern_counts[col] = Counter()
 
+            # Detect target columns on first chunk
+            self.detected_targets = self._detect_target_columns(chunk)
+            # Initialize target analysis accumulators
+            for target_col in self.detected_targets:
+                self.target_value_counts[target_col] = Counter()
+                self.target_feature_counts[target_col] = {}
+                self.missingness_by_target[target_col] = {}
+                self.numeric_by_target[target_col] = {}
+
         # Process each column
         for col in chunk.columns:
             if self.column_types.get(col) == 'numeric':
                 self._accumulate_numeric(col, chunk[col])
             else:
                 self._accumulate_string(col, chunk[col])
+
+        # Accumulate target-feature statistics (streaming)
+        self._accumulate_target_statistics(chunk)
 
         # Reservoir sampling for autoencoder training
         self._reservoir_sample(chunk)
@@ -127,6 +227,23 @@ class ChunkedMLAccumulator:
         stats['count'] += len(valid)
         stats['min'] = min(stats['min'], valid.min())
         stats['max'] = max(stats['max'], valid.max())
+
+        # Reservoir sampling for numeric values (used in visualizations)
+        if col not in self.numeric_samples:
+            self.numeric_samples[col] = []
+        current_samples = self.numeric_samples[col]
+        if len(current_samples) < self.max_numeric_samples:
+            # Still filling reservoir - take values directly
+            space_left = self.max_numeric_samples - len(current_samples)
+            sample_vals = valid.values[:space_left].tolist()
+            current_samples.extend(sample_vals)
+        else:
+            # Reservoir full - use reservoir sampling algorithm
+            import random
+            for i, val in enumerate(valid.values[:1000]):  # Limit to prevent excessive iteration
+                j = random.randint(0, stats['count'] - 1)
+                if j < self.max_numeric_samples:
+                    current_samples[j] = val
 
         # Update streaming histogram for percentile calculation
         hist_data = self.numeric_histograms[col]
@@ -226,6 +343,144 @@ class ChunkedMLAccumulator:
         pattern = re.sub(r'9+', '9+', pattern)
         return pattern[:50]  # Limit length
 
+    def _accumulate_target_statistics(self, chunk: pd.DataFrame) -> None:
+        """
+        Accumulate target-feature statistics for all detected targets.
+
+        This method accumulates:
+        1. Target value distributions
+        2. Target-feature co-occurrence (categorical features)
+        3. Missingness by target value
+        4. Numeric feature stats by target class
+        5. Correlation ratio stats (for mixed-type correlations)
+
+        Memory-efficient: Uses Counter objects and streaming statistics.
+        """
+        if not self.detected_targets:
+            return
+
+        # Limit feature columns to analyze (avoid memory explosion)
+        max_features = 20  # Analyze top N features by importance heuristic
+        all_features = [c for c in chunk.columns if c not in self.detected_targets]
+
+        # Prioritize low-cardinality categoricals and numeric features
+        priority_features = []
+        for col in all_features:
+            if self.column_types.get(col) == 'string':
+                # Low cardinality categorical features are more informative
+                if col in self.value_counts and len(self.value_counts[col]) <= 50:
+                    priority_features.append(col)
+            else:
+                # All numeric features
+                priority_features.append(col)
+        features_to_analyze = priority_features[:max_features]
+
+        for target_col in self.detected_targets:
+            if target_col not in chunk.columns:
+                continue
+
+            target_series = chunk[target_col].astype(str)  # Normalize to string for consistent counting
+
+            # 1. Accumulate target value counts
+            self.target_value_counts[target_col].update(target_series.dropna())
+
+            # Only process if we have features to analyze
+            if not features_to_analyze:
+                continue
+
+            for feature_col in features_to_analyze:
+                if feature_col not in chunk.columns or feature_col == target_col:
+                    continue
+
+                # Initialize nested structures if needed
+                if feature_col not in self.target_feature_counts[target_col]:
+                    self.target_feature_counts[target_col][feature_col] = {}
+                if feature_col not in self.missingness_by_target[target_col]:
+                    self.missingness_by_target[target_col][feature_col] = {}
+                if feature_col not in self.numeric_by_target[target_col]:
+                    self.numeric_by_target[target_col][feature_col] = {}
+
+                feature_series = chunk[feature_col]
+                is_numeric = self.column_types.get(feature_col) == 'numeric'
+
+                # Group by target value for analysis
+                for target_val in target_series.unique():
+                    if pd.isna(target_val):
+                        continue
+                    target_val_str = str(target_val)
+
+                    mask = target_series == target_val
+                    feature_subset = feature_series[mask]
+
+                    # 2. Missingness by target
+                    if target_val_str not in self.missingness_by_target[target_col][feature_col]:
+                        self.missingness_by_target[target_col][feature_col][target_val_str] = {'missing': 0, 'present': 0}
+                    n_missing = feature_subset.isna().sum()
+                    n_present = len(feature_subset) - n_missing
+                    self.missingness_by_target[target_col][feature_col][target_val_str]['missing'] += int(n_missing)
+                    self.missingness_by_target[target_col][feature_col][target_val_str]['present'] += int(n_present)
+
+                    if is_numeric:
+                        # 3. Numeric stats by target class (for target-class distribution analysis)
+                        valid_numeric = feature_subset.dropna()
+                        if len(valid_numeric) > 0:
+                            if target_val_str not in self.numeric_by_target[target_col][feature_col]:
+                                self.numeric_by_target[target_col][feature_col][target_val_str] = {
+                                    'sum': 0.0, 'sum_sq': 0.0, 'count': 0
+                                }
+                            stats = self.numeric_by_target[target_col][feature_col][target_val_str]
+                            stats['sum'] += float(valid_numeric.sum())
+                            stats['sum_sq'] += float((valid_numeric ** 2).sum())
+                            stats['count'] += len(valid_numeric)
+                    else:
+                        # 4. Categorical co-occurrence with target
+                        if target_val_str not in self.target_feature_counts[target_col][feature_col]:
+                            self.target_feature_counts[target_col][feature_col][target_val_str] = Counter()
+                        # Limit to top values to avoid memory explosion
+                        feature_vals = feature_subset.dropna().astype(str)
+                        if len(feature_vals) > 0:
+                            # Only track most common values
+                            val_counts = Counter(feature_vals)
+                            # Keep only top 20 per target value
+                            for val, cnt in val_counts.most_common(20):
+                                self.target_feature_counts[target_col][feature_col][target_val_str][val] += cnt
+
+        # 5. Correlation ratio stats (categorical vs numeric for mixed correlation matrix)
+        # Group numeric features by low-cardinality categorical features
+        categorical_cols = [c for c in features_to_analyze if self.column_types.get(c) == 'string'
+                          and c in self.value_counts and len(self.value_counts[c]) <= 20]
+        numeric_cols = [c for c in features_to_analyze if self.column_types.get(c) == 'numeric']
+
+        for cat_col in categorical_cols[:5]:  # Limit to 5 categorical columns
+            if cat_col not in self.correlation_ratio_stats:
+                self.correlation_ratio_stats[cat_col] = {}
+
+            cat_series = chunk[cat_col].astype(str)
+
+            for num_col in numeric_cols[:10]:  # Limit to 10 numeric columns
+                if num_col not in self.correlation_ratio_stats[cat_col]:
+                    self.correlation_ratio_stats[cat_col][num_col] = {}
+
+                num_series = chunk[num_col]
+
+                for cat_val in cat_series.unique():
+                    if pd.isna(cat_val):
+                        continue
+                    cat_val_str = str(cat_val)
+
+                    if cat_val_str not in self.correlation_ratio_stats[cat_col][num_col]:
+                        self.correlation_ratio_stats[cat_col][num_col][cat_val_str] = {
+                            'sum': 0.0, 'sum_sq': 0.0, 'count': 0
+                        }
+
+                    mask = cat_series == cat_val
+                    valid_numeric = num_series[mask].dropna()
+                    if len(valid_numeric) > 0:
+                        stats = self.correlation_ratio_stats[cat_col][num_col][cat_val_str]
+                        stats['sum'] += float(valid_numeric.sum())
+                        stats['sum_sq'] += float((valid_numeric ** 2).sum())
+                        stats['count'] += len(valid_numeric)
+
     def _reservoir_sample(self, chunk: pd.DataFrame) -> None:
         """Reservoir sampling for autoencoder training data.
 
@@ -300,6 +555,11 @@ class ChunkedMLAccumulator:
             "temporal_patterns": {},
             "correlation_anomalies": {},
             "clustering_analysis": {},
+            # New target/feature analysis sections
+            "target_feature_analysis": {},
+            "missingness_impact": {},
+            "target_class_distribution": {},
+            "mixed_correlation_matrix": {},
             "summary": {
                 "total_issues": 0,
                 "severity": "low",
@@ -348,6 +608,13 @@ class ChunkedMLAccumulator:
                         findings["autoencoder_anomalies"] = ae_result
             except Exception as e:
                 logger.debug(f"Autoencoder analysis failed: {e}")
+
+        # 6. Target/Feature Analysis (4 new sections)
+        if self.detected_targets:
+            findings["target_feature_analysis"] = self._finalize_target_feature_analysis()
+            findings["missingness_impact"] = self._finalize_missingness_impact()
+            findings["target_class_distribution"] = self._finalize_target_class_distribution()
+            findings["mixed_correlation_matrix"] = self._finalize_mixed_correlation_matrix()
 
         # Calculate summary
         total_issues = (
@@ -434,11 +701,10 @@ class ChunkedMLAccumulator:
                 logger.debug(f"Scatter plot data generation failed: {e}")
 
         # 3. Class imbalance data (for binary/low-cardinality columns)
-        target_keywords = ['target', 'label', 'class', 'survived', 'churn', 'fraud', 'default', 'laundering', 'is_', 'has_']
+        # Use detected_targets from proper target detection (not simple keyword matching)
         for col, counts in self.value_counts.items():
-            col_lower = col.lower()
-            is_target = any(kw in col_lower for kw in target_keywords)
-            # Include low-cardinality categorical columns
+            is_target = col in self.detected_targets
+            # Include low-cardinality categorical columns (binary or detected targets)
             if len(counts) <= 10 and (is_target or len(counts) == 2):
                 total = sum(counts.values())
                 viz_data["class_imbalance"][col] = {
@@ -477,6 +743,449 @@ class ChunkedMLAccumulator:
             }
 
         return viz_data
+
+    def _finalize_target_feature_analysis(self) -> Dict[str, Any]:
+        """
+        Finalize Target-Feature Association Analysis.
+
+        Computes association strength between detected targets and features using:
+        - Cramér's V for categorical-categorical associations
+        - Difference in means for numeric features across target classes
+
+        Returns:
+            Dictionary with association analysis per target column
+        """
+        results = {}
+
+        for target_col in self.detected_targets:
+            if target_col not in self.target_value_counts:
+                continue
+
+            target_counts = self.target_value_counts[target_col]
+            total_target = sum(target_counts.values())
+            if total_target < MIN_ROWS_FOR_ML:
+                continue
+
+            target_result = {
+                "target_column": target_col,
+                "target_distribution": {
+                    str(v): {"count": c, "percentage": round(c / total_target * 100, 2)}
+                    for v, c in target_counts.most_common(10)
+                },
+                "feature_associations": [],
+                "total_rows_analyzed": total_target,
+                "interpretation": ""
+            }
+
+            # Analyze categorical feature associations
+            if target_col in self.target_feature_counts:
+                for feature_col, target_val_dict in self.target_feature_counts[target_col].items():
+                    if not target_val_dict:
+                        continue
+
+                    # Calculate simple association measure: difference in top category proportion
+                    # More sophisticated: compute Cramér's V from contingency table
+                    association = self._compute_categorical_association(
+                        target_counts, target_val_dict, feature_col
+                    )
+                    if association:
+                        target_result["feature_associations"].append(association)
+
+            # Analyze numeric feature associations (difference in means)
+            if target_col in self.numeric_by_target:
+                for feature_col, target_val_dict in self.numeric_by_target[target_col].items():
+                    if not target_val_dict:
+                        continue
+
+                    association = self._compute_numeric_association(
+                        target_counts, target_val_dict, feature_col
+                    )
+                    if association:
+                        target_result["feature_associations"].append(association)
+
+            # Sort by association strength
+            target_result["feature_associations"].sort(
+                key=lambda x: x.get("association_strength", 0), reverse=True
+            )
+            # Keep top 10 associations
+            target_result["feature_associations"] = target_result["feature_associations"][:10]
+
+            # Generate interpretation
+            if target_result["feature_associations"]:
+                top_assoc = target_result["feature_associations"][0]
+                target_result["interpretation"] = (
+                    f"The feature '{top_assoc['feature']}' shows the strongest association "
+                    f"with '{target_col}' (strength: {top_assoc['association_strength']:.2f}). "
+                    f"This suggests {top_assoc['feature']} may be predictive of the target."
+                )
+            else:
+                target_result["interpretation"] = (
+                    f"No strong feature associations detected for '{target_col}'. "
+                    "This could indicate the target is relatively independent of other features."
+                )
+
+            results[target_col] = target_result
+
+        return results
+
+    def _compute_categorical_association(
+        self, target_counts: Counter, feature_dict: Dict, feature_col: str
+    ) -> Optional[Dict]:
+        """Compute association between categorical target and feature."""
+        # Build contingency table and compute Cramér's V approximation
+        # Using difference in proportions as a simpler measure
+        target_values = list(target_counts.keys())
+        if len(target_values) < 2:
+            return None
+
+        # Get all feature values across target classes
+        all_feature_vals = set()
+        for tv_dict in feature_dict.values():
+            if isinstance(tv_dict, Counter):
+                all_feature_vals.update(tv_dict.keys())
+
+        if len(all_feature_vals) == 0:
+            return None
+
+        # Calculate proportion difference for top feature value
+        max_diff = 0
+        distinguishing_value = None
+        for fv in list(all_feature_vals)[:10]:  # Check top values
+            proportions = []
+            for tv in target_values[:2]:  # Compare first two target values
+                tv_counter = feature_dict.get(str(tv), Counter())
+                tv_total = sum(tv_counter.values())
+                if tv_total > 0:
+                    proportions.append(tv_counter.get(fv, 0) / tv_total)
+                else:
+                    proportions.append(0)
+            if len(proportions) >= 2:
+                diff = abs(proportions[0] - proportions[1])
+                if diff > max_diff:
+                    max_diff = diff
+                    distinguishing_value = fv
+
+        if max_diff < 0.05:  # Minimum threshold for meaningful association
+            return None
+
+        return {
+            "feature": feature_col,
+            "feature_type": "categorical",
+            "association_strength": round(max_diff, 3),
+            "distinguishing_value": str(distinguishing_value) if distinguishing_value else None,
+            "interpretation": f"'{feature_col}' shows different distributions across target classes"
+        }
+
+    def _compute_numeric_association(
+        self, target_counts: Counter, feature_dict: Dict, feature_col: str
+    ) -> Optional[Dict]:
+        """Compute association between target and numeric feature using effect size."""
+        target_values = list(target_counts.keys())
+        if len(target_values) < 2:
+            return None
+
+        # Calculate mean and std for each target class
+        class_stats = {}
+        for tv in target_values[:2]:  # Compare first two target values
+            tv_str = str(tv)
+            if tv_str in feature_dict:
+                stats = feature_dict[tv_str]
+                if stats['count'] > 0:
+                    mean = stats['sum'] / stats['count']
+                    variance = (stats['sum_sq'] / stats['count']) - (mean ** 2)
+                    std = np.sqrt(max(0, variance))
+                    class_stats[tv_str] = {'mean': mean, 'std': std, 'count': stats['count']}
+
+        if len(class_stats) < 2:
+            return None
+
+        # Calculate Cohen's d effect size
+        stats_list = list(class_stats.values())
+        mean_diff = abs(stats_list[0]['mean'] - stats_list[1]['mean'])
+        pooled_std = np.sqrt(
+            (stats_list[0]['std']**2 + stats_list[1]['std']**2) / 2
+        )
+
+        if pooled_std == 0:
+            return None
+
+        cohens_d = mean_diff / pooled_std
+
+        if cohens_d < 0.2:  # Small effect threshold
+            return None
+
+        # Interpret effect size
+        if cohens_d >= 0.8:
+            effect_label = "large"
+        elif cohens_d >= 0.5:
+            effect_label = "medium"
+        else:
+            effect_label = "small"
+
+        return {
+            "feature": feature_col,
+            "feature_type": "numeric",
+            "association_strength": round(min(cohens_d, 3.0), 3),  # Cap at 3 for display
+            "effect_size": effect_label,
+            "class_means": {k: round(v['mean'], 2) for k, v in class_stats.items()},
+            "interpretation": f"'{feature_col}' shows {effect_label} difference between target classes"
+        }
+
+    def _finalize_missingness_impact(self) -> Dict[str, Any]:
+        """
+        Finalize Missingness Impact Analysis.
+
+        Analyzes how missing data correlates with target values.
+
+        Returns:
+            Dictionary with missingness analysis per target column
+        """
+        results = {}
+
+        for target_col in self.detected_targets:
+            if target_col not in self.missingness_by_target:
+                continue
+
+            target_result = {
+                "target_column": target_col,
+                "features_with_differential_missingness": [],
+                "total_features_analyzed": 0,
+                "interpretation": ""
+            }
+
+            feature_missingness = self.missingness_by_target[target_col]
+            target_result["total_features_analyzed"] = len(feature_missingness)
+
+            for feature_col, target_val_dict in feature_missingness.items():
+                if not target_val_dict:
+                    continue
+
+                # Calculate missingness rate per target class
+                missingness_rates = {}
+                for tv, counts in target_val_dict.items():
+                    total = counts.get('missing', 0) + counts.get('present', 0)
+                    if total > 0:
+                        miss_rate = counts.get('missing', 0) / total
+                        missingness_rates[tv] = {
+                            "rate": round(miss_rate * 100, 2),
+                            "total": total
+                        }
+
+                if len(missingness_rates) < 2:
+                    continue
+
+                # Check for differential missingness
+                rates = [v['rate'] for v in missingness_rates.values()]
+                max_diff = max(rates) - min(rates)
+
+                if max_diff >= 1.0:  # At least 1% difference in missingness rate (lowered from 5%)
+                    target_result["features_with_differential_missingness"].append({
+                        "feature": feature_col,
+                        "missingness_by_target": missingness_rates,
+                        "max_difference": round(max_diff, 2),
+                        "interpretation": (
+                            f"'{feature_col}' has {max_diff:.1f}% difference in missingness rate "
+                            "across target classes, which may indicate non-random missing data."
+                        )
+                    })
+
+            # Sort by impact
+            target_result["features_with_differential_missingness"].sort(
+                key=lambda x: x.get("max_difference", 0), reverse=True
+            )
+
+            # Generate interpretation
+            n_diff = len(target_result["features_with_differential_missingness"])
+            if n_diff > 0:
+                top_feature = target_result["features_with_differential_missingness"][0]["feature"]
+                target_result["interpretation"] = (
+                    f"Found {n_diff} feature(s) with differential missingness across '{target_col}' values. "
+                    f"'{top_feature}' shows the largest difference. This suggests missing data may not be "
+                    "random and could affect model training."
+                )
+            else:
+                target_result["interpretation"] = (
+                    f"No significant differential missingness detected for '{target_col}'. "
+                    "Missing data appears to be relatively uniform across target classes."
+                )
+
+            results[target_col] = target_result
+
+        return results
+
+    def _finalize_target_class_distribution(self) -> Dict[str, Any]:
+        """
+        Finalize Target-Class Distribution Analysis.
+
+        Analyzes how numeric features are distributed within each target class.
+
+        Returns:
+            Dictionary with distribution analysis per target column
+        """
+        results = {}
+
+        for target_col in self.detected_targets:
+            if target_col not in self.numeric_by_target:
+                continue
+
+            target_counts = self.target_value_counts.get(target_col, Counter())
+            total_target = sum(target_counts.values())
+
+            target_result = {
+                "target_column": target_col,
+                "target_class_counts": {
+                    str(v): c for v, c in target_counts.most_common(10)
+                },
+                "feature_distributions": {},
+                "interpretation": ""
+            }
+
+            numeric_features = self.numeric_by_target[target_col]
+            for feature_col, target_val_dict in numeric_features.items():
+                if not target_val_dict:
+                    continue
+
+                feature_dist = {
+                    "feature": feature_col,
+                    "by_target_class": {}
+                }
+
+                for tv, stats in target_val_dict.items():
+                    if stats['count'] > 0:
+                        mean = stats['sum'] / stats['count']
+                        variance = (stats['sum_sq'] / stats['count']) - (mean ** 2)
+                        std = np.sqrt(max(0, variance))
+                        feature_dist["by_target_class"][tv] = {
+                            "mean": round(mean, 4),
+                            "std": round(std, 4),
+                            "count": stats['count']
+                        }
+
+                if len(feature_dist["by_target_class"]) >= 2:
+                    target_result["feature_distributions"][feature_col] = feature_dist
+
+            # Generate interpretation
+            n_features = len(target_result["feature_distributions"])
+            if n_features > 0:
+                target_result["interpretation"] = (
+                    f"Analyzed distribution of {n_features} numeric feature(s) across '{target_col}' classes. "
+                    "Differences in means and standard deviations can help identify discriminative features."
+                )
+            else:
+                target_result["interpretation"] = (
+                    f"No numeric features available for distribution analysis across '{target_col}' classes."
+                )
+
+            results[target_col] = target_result
+
+        return results
+
+    def _finalize_mixed_correlation_matrix(self) -> Dict[str, Any]:
+        """
+        Finalize Mixed-Type Correlation Matrix.
+
+        Computes correlations including:
+        - Numeric-Categorical: Correlation Ratio (η)
+        - Categorical-Categorical: Would need Cramér's V (simplified here)
+
+        Returns:
+            Dictionary with mixed correlation data
+        """
+        results = {
+            "correlation_ratio": {},  # Categorical → Numeric associations
+            "interpretation": "",
+            "columns_analyzed": {
+                "categorical": [],
+                "numeric": []
+            }
+        }
+
+        if not self.correlation_ratio_stats:
+            results["interpretation"] = "No mixed correlations computed (insufficient categorical columns)."
+            return results
+
+        for cat_col, num_dict in self.correlation_ratio_stats.items():
+            results["columns_analyzed"]["categorical"].append(cat_col)
+
+            for num_col, cat_val_dict in num_dict.items():
+                if num_col not in results["columns_analyzed"]["numeric"]:
+                    results["columns_analyzed"]["numeric"].append(num_col)
+
+                # Compute correlation ratio (η)
+                # η² = SS_between / SS_total
+                total_sum = 0
+                total_sum_sq = 0
+                total_count = 0
+                group_means = []
+
+                for cat_val, stats in cat_val_dict.items():
+                    if stats['count'] > 0:
+                        group_mean = stats['sum'] / stats['count']
+                        group_means.append((group_mean, stats['count']))
+                        total_sum += stats['sum']
+                        total_sum_sq += stats['sum_sq']
+                        total_count += stats['count']
+
+                if total_count < MIN_ROWS_FOR_ML or len(group_means) < 2:
+                    continue
+
+                grand_mean = total_sum / total_count
+                ss_total = total_sum_sq - (total_sum ** 2) / total_count
+
+                if ss_total <= 0:
+                    continue
+
+                # SS_between = Σ n_i * (mean_i - grand_mean)²
+                ss_between = sum(
+                    n * (m - grand_mean) ** 2 for m, n in group_means
+                )
+
+                eta_squared = ss_between / ss_total if ss_total > 0 else 0
+                eta = np.sqrt(max(0, min(1, eta_squared)))
+
+                if eta >= 0.1:  # Minimum threshold for meaningful correlation
+                    key = f"{cat_col}_vs_{num_col}"
+                    results["correlation_ratio"][key] = {
+                        "categorical_column": cat_col,
+                        "numeric_column": num_col,
+                        "eta": round(eta, 3),
+                        "eta_squared": round(eta_squared, 3),
+                        "interpretation": self._interpret_correlation_ratio(eta)
+                    }
+
+        # Sort by eta
+        sorted_correlations = sorted(
+            results["correlation_ratio"].items(),
+            key=lambda x: x[1]["eta"],
+            reverse=True
+        )
+        results["correlation_ratio"] = dict(sorted_correlations[:20])  # Top 20
+
+        # Generate interpretation
+        n_corr = len(results["correlation_ratio"])
+        if n_corr > 0:
+            top_key = list(results["correlation_ratio"].keys())[0]
+            top_corr = results["correlation_ratio"][top_key]
+            results["interpretation"] = (
+                f"Found {n_corr} significant categorical-numeric associations. "
+                f"Strongest: '{top_corr['categorical_column']}' explains {top_corr['eta_squared']*100:.1f}% "
+                f"of variance in '{top_corr['numeric_column']}' (η={top_corr['eta']:.2f})."
+            )
+        else:
+            results["interpretation"] = "No significant categorical-numeric correlations detected."
+
+        return results
+
+    def _interpret_correlation_ratio(self, eta: float) -> str:
+        """Interpret correlation ratio value."""
+        if eta >= 0.5:
+            return "Strong association"
+        elif eta >= 0.3:
+            return "Moderate association"
+        elif eta >= 0.1:
+            return "Weak association"
+        else:
+            return "Negligible association"
 
     def _compute_log_histogram(self, col: str, samples: List, bins: int = 30) -> Dict[str, Any]:
         """Compute log-scaled histogram for amount field."""
@@ -742,6 +1451,77 @@ class MLAnalyzer:
             logger.warning("scikit-learn not available - some ML features disabled")
             return False
 
+    def _detect_target_columns(self, df: pd.DataFrame) -> List[str]:
+        """
+        Detect likely target/label columns using heuristics.
+
+        Generic detection logic (no hardcoded dataset-specific keywords):
+        1. Keyword matching: 'target', 'label', 'class', 'outcome', 'y', etc.
+           Keywords must be standalone or delimited (not part of another word)
+        2. Pattern matching: 'is_*', 'has_*', '*_flag', '*_indicator'
+        3. Binary columns with low cardinality (2 unique values)
+        4. Low-cardinality categorical columns (≤5 unique) with target-like names
+
+        Returns:
+            List of detected target column names
+        """
+        target_keywords = [
+            'target', 'label', 'class', 'outcome', 'response', 'y',
+            'churn', 'fraud', 'default', 'laundering', 'spam', 'survived',
+            'conversion', 'click', 'purchase', 'attrition', 'failure', 'success'
+        ]
+        prefix_patterns = ['is_', 'has_', 'was_', 'did_', 'will_']
+        suffix_patterns = ['_flag', '_indicator', '_label', '_target', '_class', '_outcome']
+
+        def is_keyword_present(col_lower, keywords):
+            """Check if keyword is present as a whole word (not substring of another word)."""
+            for kw in keywords:
+                # Exact match
+                if col_lower == kw:
+                    return True
+                # Check with word boundaries (underscore, space, start/end)
+                # e.g., "class" matches "class", "_class", "class_", "_class_"
+                # but NOT "pclass" or "classification"
+                if f'_{kw}' in col_lower or f'{kw}_' in col_lower:
+                    return True
+                # Check if keyword is at start or end with underscore
+                if col_lower.startswith(f'{kw}_') or col_lower.endswith(f'_{kw}'):
+                    return True
+            return False
+
+        detected = []
+        for col in df.columns:
+            col_lower = col.lower().strip()
+
+            # Check keyword match (with word boundary awareness)
+            is_keyword_match = is_keyword_present(col_lower, target_keywords)
+
+            # Check prefix/suffix patterns
+            is_prefix_match = any(col_lower.startswith(p) for p in prefix_patterns)
+            is_suffix_match = any(col_lower.endswith(s) for s in suffix_patterns)
+
+            # Check cardinality (binary or very low)
+            try:
+                n_unique = df[col].nunique(dropna=True)
+                is_binary = n_unique == 2
+                is_low_cardinality = n_unique <= 5
+            except Exception:
+                is_binary = False
+                is_low_cardinality = False
+
+            # Detection logic:
+            # - Exact keyword match with low cardinality -> definitely target
+            # - Prefix/suffix pattern with binary -> likely target
+            # - Binary column with any target hint -> target
+            if is_keyword_match and is_low_cardinality:
+                detected.append(col)
+            elif (is_prefix_match or is_suffix_match) and is_binary:
+                detected.append(col)
+            elif is_binary and is_keyword_match:
+                detected.append(col)
+
+        return detected
+
     def _calculate_confidence(self, method: str, anomaly_count: int,
                               anomaly_pct: float, sample_size: int) -> str:
         """
@@ -800,6 +1580,117 @@ class MLAnalyzer:
         else:
             return 'Low'
 
+    def _compute_missingness_impact_direct(self, df: pd.DataFrame) -> Dict[str, Any]:
+        """
+        Compute missingness impact analysis directly from DataFrame.
+
+        For each detected target column, analyze how missing data in feature columns
+        correlates with target values. This helps identify potential bias in missing data.
+
+        Args:
+            df: DataFrame to analyze
+
+        Returns:
+            Dictionary with missingness analysis per target column
+        """
+        results = {}
+
+        for target_col in self.detected_targets:
+            if target_col not in df.columns:
+                continue
+
+            target_result = {
+                "target_column": target_col,
+                "features_with_differential_missingness": [],
+                "total_features_analyzed": 0,
+                "interpretation": ""
+            }
+
+            # Get target values (drop rows where target is null)
+            target_series = df[target_col].dropna()
+            if len(target_series) == 0:
+                continue
+
+            target_values = target_series.unique()
+            if len(target_values) < 2 or len(target_values) > 10:
+                # Skip if target is not binary/low-cardinality
+                continue
+
+            features_analyzed = 0
+            for col in df.columns:
+                if col == target_col:
+                    continue
+
+                # Check if column has any missing values
+                missing_count = df[col].isna().sum()
+                if missing_count == 0:
+                    continue
+
+                features_analyzed += 1
+
+                # Calculate missingness rate per target class
+                missingness_rates = {}
+                for tv in target_values:
+                    mask = df[target_col] == tv
+                    subset = df.loc[mask, col]
+                    total = len(subset)
+                    if total > 0:
+                        missing = subset.isna().sum()
+                        miss_rate = (missing / total) * 100
+                        missingness_rates[str(tv)] = {
+                            "rate": round(miss_rate, 2),
+                            "total": total
+                        }
+
+                if len(missingness_rates) < 2:
+                    continue
+
+                # Check for differential missingness
+                rates = [v['rate'] for v in missingness_rates.values()]
+                max_diff = max(rates) - min(rates)
+
+                # Only report if difference is at least 1%
+                if max_diff >= 1.0:
+                    # Calculate overall missing rate
+                    overall_missing_rate = round((missing_count / len(df)) * 100, 2)
+
+                    target_result["features_with_differential_missingness"].append({
+                        "feature": col,
+                        "overall_missing_rate": overall_missing_rate,
+                        "missingness_by_target": missingness_rates,
+                        "max_difference": round(max_diff, 2),
+                        "interpretation": (
+                            f"'{col}' has {max_diff:.1f}% difference in missingness rate "
+                            "across target classes, which may indicate non-random missing data."
+                        )
+                    })
+
+            target_result["total_features_analyzed"] = features_analyzed
+
+            # Sort by impact
+            target_result["features_with_differential_missingness"].sort(
+                key=lambda x: x.get("max_difference", 0), reverse=True
+            )
+
+            # Generate interpretation
+            n_diff = len(target_result["features_with_differential_missingness"])
+            if n_diff > 0:
+                top_feature = target_result["features_with_differential_missingness"][0]["feature"]
+                target_result["interpretation"] = (
+                    f"Found {n_diff} feature(s) with differential missingness across '{target_col}' values. "
+                    f"'{top_feature}' shows the largest difference. This suggests missing data may not be "
+                    "random and could affect model training."
+                )
+            else:
+                target_result["interpretation"] = (
+                    f"No significant differential missingness detected for '{target_col}'. "
+                    "Missing data appears to be relatively uniform across target classes."
+                )
+
+            results[target_col] = target_result
+
+        return results
+
     def analyze(self, df: pd.DataFrame, column_semantic_info: Optional[Dict[str, Dict[str, Any]]] = None) -> Dict[str, Any]:
         """
         Run ML analysis on dataframe.
@@ -816,6 +1707,9 @@ class MLAnalyzer:
 
         # Store semantic info for use by detection methods
         self._column_semantic_info = column_semantic_info or {}
+
+        # Detect target columns (needed for is_target_like in visualizations)
+        self.detected_targets = self._detect_target_columns(df)
 
         # No internal sampling - engine handles all sampling decisions
         original_rows = len(df)
@@ -927,10 +1821,11 @@ class MLAnalyzer:
             if temporal_result:
                 findings["temporal_patterns"][col] = temporal_result
 
-        # 9. Benford's Law analysis (only on FIBO money-related columns)
+        # 9. Benford's Law analysis (based on numeric properties, not just FIBO tags)
         # Include ALL results (both suspicious and natural) so users see full analysis
         for col in numeric_cols:
-            if self._should_apply_benford(col):
+            values = df[col].dropna().values
+            if self._should_apply_benford(col, values):
                 benford_result = self._detect_benford_anomalies(df, col)
                 if benford_result:
                     findings["benford_analysis"][col] = benford_result
@@ -959,6 +1854,12 @@ class MLAnalyzer:
                 dist_result = self._fit_distribution(values)
                 if dist_result and dist_result.get("best_fit"):
                     findings["distribution_analysis"][col] = dist_result
+
+        # 14. Missingness Impact Analysis (target-based differential missingness)
+        if self.detected_targets:
+            missingness_result = self._compute_missingness_impact_direct(df)
+            if missingness_result:
+                findings["missingness_impact"] = missingness_result
 
         # Generate summary
         findings["summary"] = self._generate_summary(findings)
@@ -1033,10 +1934,9 @@ class MLAnalyzer:
                 logger.debug(f"Scatter plot generation failed: {e}")
 
         # 3. Class imbalance data (for binary/low-cardinality columns)
-        target_keywords = ['target', 'label', 'class', 'survived', 'churn', 'fraud', 'default', 'laundering', 'is_', 'has_', 'pclass', 'sex', 'embarked']
+        # Use detected_targets from proper target detection (not simple keyword matching)
         for col in df.columns:
-            col_lower = col.lower()
-            is_target = any(kw in col_lower for kw in target_keywords)
+            is_target = col in self.detected_targets
 
             try:
                 unique_count = df[col].nunique()
@@ -2450,12 +3350,22 @@ class MLAnalyzer:
 
         return "; ".join(interpretations) if interpretations else "Temporal patterns detected"
 
-    def _should_apply_benford(self, col_name: str) -> bool:
+    def _should_apply_benford(self, col_name: str, values: Optional[np.ndarray] = None) -> bool:
         """
         Check if Benford's Law should be applied to this column.
 
-        Only applies to FIBO money-related columns (amounts, prices, values)
-        NOT to identifiers, counts, or categorical data stored as numbers.
+        Benford's Law works well for data that:
+        1. Has positive values (negative values don't have meaningful first digits)
+        2. Spans multiple orders of magnitude (~2+ orders)
+        3. Has sufficient observations (at least 100)
+        4. Has enough unique values (not low-cardinality categorical data)
+
+        FIBO tags and amount keywords are used as positive indicators,
+        but numeric properties are the primary criteria.
+
+        Args:
+            col_name: Column name
+            values: Optional numpy array of column values (for numeric property checks)
 
         Returns:
             True if Benford's Law analysis is appropriate for this column
@@ -2473,25 +3383,55 @@ class MLAnalyzer:
             'money.fee',
         }
 
-        # Check if tagged as money-related
-        if primary_tag in benford_tags:
-            return True
-
-        # Fallback: check column name patterns for amount-like columns
         col_lower = col_name.lower()
-        amount_keywords = ['amount', 'price', 'value', 'total', 'sum', 'paid', 'received',
-                          'balance', 'fee', 'cost', 'revenue', 'sales', 'income']
 
-        # Exclude keywords that suggest identifiers
-        exclude_keywords = ['id', 'code', 'number', 'count', 'qty', 'quantity', 'bank', 'account']
+        # Exclude keywords that strongly suggest identifiers (should NOT use Benford)
+        exclude_keywords = ['id', 'code', 'number', 'count', 'qty', 'quantity', 'bank', 'account',
+                           'index', 'row', 'sequence', 'version', 'rank', 'position']
 
         if any(kw in col_lower for kw in exclude_keywords):
             return False
 
-        if any(kw in col_lower for kw in amount_keywords):
+        # Check if tagged as money-related (strong positive indicator)
+        if primary_tag in benford_tags:
             return True
 
-        return False
+        # Amount-like keywords (positive indicators)
+        amount_keywords = ['amount', 'price', 'value', 'total', 'sum', 'paid', 'received',
+                          'balance', 'fee', 'cost', 'revenue', 'sales', 'income', 'fare',
+                          'payment', 'salary', 'wage', 'tax', 'charge', 'bill', 'expense']
+
+        has_amount_keyword = any(kw in col_lower for kw in amount_keywords)
+
+        # If values provided, check numeric properties
+        if values is not None and len(values) > 0:
+            # Filter to positive non-zero values only (Benford requires positive numbers)
+            positive_values = values[values > 0]
+
+            # Criterion 1: Need sufficient observations (at least 100)
+            if len(positive_values) < 100:
+                return False
+
+            # Criterion 2: Need sufficient unique values (not low-cardinality)
+            unique_count = len(np.unique(positive_values))
+            if unique_count < 20:
+                return False
+
+            # Criterion 3: Data should span at least ~2 orders of magnitude
+            # This makes Benford's Law meaningful
+            min_val = np.min(positive_values)
+            max_val = np.max(positive_values)
+            if min_val > 0:
+                magnitude_span = np.log10(max_val / min_val)
+                if magnitude_span < 1.5:  # At least ~1.5 orders of magnitude
+                    return False
+
+            # If we pass numeric criteria, apply Benford analysis
+            # FIBO tags or amount keywords boost confidence, but numeric properties are primary
+            return True
+
+        # Fallback if no values provided: rely on keywords/tags
+        return has_amount_keyword
 
     def _get_benford_applicability(self, col_name: str) -> Dict[str, Any]:
         """

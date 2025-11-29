@@ -1596,6 +1596,16 @@ class DataProfiler:
                     "percentage": round(100 * count / type_sampled_count_for_conflicts, 2)
                 })
 
+        # Handle mixed types: if numeric is primary but there's significant string content,
+        # treat as string (e.g., Ticket column with "A/5 21171" and "21171" mixed)
+        if inferred in ['integer', 'float'] and not is_known:
+            string_count = type_counts.get('string', 0)
+            string_pct = (string_count / type_sampled_count_for_conflicts * 100) if type_sampled_count_for_conflicts > 0 else 0
+            # If at least 5% of values are strings, treat as string (mixed alphanumeric)
+            if string_pct >= 5:
+                inferred = 'string'
+                confidence = (string_count + primary_count) / type_sampled_count_for_conflicts if type_sampled_count_for_conflicts > 0 else 0.0
+
         # Log type inference summary with conflicts (DEBUG level)
         col_name = profile_data.get("column_name", "unknown")
         if conflicts and confidence < 0.95:
