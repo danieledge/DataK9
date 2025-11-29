@@ -442,8 +442,9 @@ def version():
               default='executive', help='HTML report style: classic (detailed) or executive (dashboard view)')
 @click.option('--beta-ml', is_flag=True, help='[BETA] Enable ML-based anomaly detection and data quality analysis')
 @click.option('--full-analysis', is_flag=True, help='Disable internal sampling - analyze full dataset (slower but more accurate for ML analysis)')
+@click.option('--analysis-sample-size', type=int, default=100000, help='Sample size for analysis when file exceeds this many rows (default: 100000). Files <= this size are analyzed fully.')
 def profile(file_path, format, database, table, query, html_output, json_output, config_output, chunk_size, sample, no_memory_check, log_level,
-            disable_temporal, disable_pii, disable_correlation, disable_all_enhancements, report_style, beta_ml, full_analysis):
+            disable_temporal, disable_pii, disable_correlation, disable_all_enhancements, report_style, beta_ml, full_analysis, analysis_sample_size):
     """
     Profile a data file or database table to understand its structure and quality.
 
@@ -531,7 +532,8 @@ def profile(file_path, format, database, table, query, html_output, json_output,
             enable_pii_detection=not disable_pii,
             enable_enhanced_correlation=not disable_correlation,
             disable_memory_safety=no_memory_check,  # Pass through the --no-memory-check flag
-            full_analysis=full_analysis  # Disable internal sampling for ML analysis
+            full_analysis=full_analysis,  # Disable internal sampling for ML analysis
+            analysis_sample_size=analysis_sample_size  # Configurable sample size
         )
 
         # DATABASE MODE
@@ -649,71 +651,91 @@ def profile(file_path, format, database, table, query, html_output, json_output,
         click.echo(f"\n✓ Profile complete: {profile_result.row_count:,} rows × {profile_result.column_count} cols | Quality: {profile_result.overall_quality_score:.0f}% | {profile_result.processing_time_seconds:.1f}s")
 
         # Run ML analysis if --beta-ml flag is set
+        # NOTE: The profiler engine already runs ML analysis during profiling (50K sample)
+        # Only run additional analysis here if ml_findings is not already populated
         if beta_ml:
-            click.echo("\n🧠 Running ML-based anomaly detection (beta)...")
-            try:
-                from validation_framework.profiler.ml_analyzer import run_ml_analysis
+            if profile_result.ml_findings:
+                # ML analysis already completed during profiling - display results
+                click.echo("\n🧠 ML-based anomaly detection (from profiler):")
+                ml_findings = profile_result.ml_findings
+                summary = ml_findings.get("summary", {})
+                total_issues = summary.get("total_issues", 0)
+                severity = summary.get("severity", "none")
+                key_findings = summary.get("key_findings", [])
 
-                # Load sample data for ML analysis
-                ml_sample_size = 250_000
-                loader = LoaderFactory.create_loader(file_path, format) if file_path else None
+                severity_icons = {"high": "🔴", "medium": "🟡", "low": "🟢", "none": "✓"}
+                icon = severity_icons.get(severity, "•")
 
-                if loader:
-                    # Load sample for ML analysis
-                    sample_df = None
-                    rows_loaded = 0
-                    chunks = []
-                    for chunk in loader.load():
-                        chunks.append(chunk)
-                        rows_loaded += len(chunk)
-                        if rows_loaded >= ml_sample_size:
-                            break
+                click.echo(f"  {icon} ML Analysis: {total_issues:,} potential issues ({severity} severity)")
+                for finding in key_findings[:3]:
+                    click.echo(f"    • {finding}")
+                click.echo(f"  → Analyzed {ml_findings.get('sample_info', {}).get('analyzed_rows', ml_findings.get('sample_info', {}).get('sample_size', 0)):,} rows")
+            else:
+                # No ML findings from profiler - run separate analysis
+                click.echo("\n🧠 Running ML-based anomaly detection (beta)...")
+                try:
+                    from validation_framework.profiler.ml_analyzer import run_ml_analysis
 
-                    if chunks:
-                        import pandas as pd
-                        sample_df = pd.concat(chunks, ignore_index=True)
-                        if len(sample_df) > ml_sample_size:
-                            sample_df = sample_df.head(ml_sample_size)
+                    # Load sample data for ML analysis
+                    ml_sample_size = 250_000
+                    loader = LoaderFactory.create_loader(file_path, format) if file_path else None
 
-                        # Extract semantic info from profile_result for intelligent ML analysis
-                        column_semantic_info = {}
-                        for col_profile in profile_result.columns:
-                            if col_profile.semantic_info:
-                                column_semantic_info[col_profile.name] = col_profile.semantic_info
+                    if loader:
+                        # Load sample for ML analysis
+                        sample_df = None
+                        rows_loaded = 0
+                        chunks = []
+                        for chunk in loader.load():
+                            chunks.append(chunk)
+                            rows_loaded += len(chunk)
+                            if rows_loaded >= ml_sample_size:
+                                break
 
-                        # Run ML analysis with semantic context
-                        ml_findings = run_ml_analysis(
-                            sample_df,
-                            sample_size=ml_sample_size,
-                            column_semantic_info=column_semantic_info
-                        )
-                        profile_result.ml_findings = ml_findings
+                        if chunks:
+                            import pandas as pd
+                            sample_df = pd.concat(chunks, ignore_index=True)
+                            if len(sample_df) > ml_sample_size:
+                                sample_df = sample_df.head(ml_sample_size)
 
-                        # Display summary
-                        summary = ml_findings.get("summary", {})
-                        total_issues = summary.get("total_issues", 0)
-                        severity = summary.get("severity", "none")
-                        key_findings = summary.get("key_findings", [])
+                            # Extract semantic info from profile_result for intelligent ML analysis
+                            column_semantic_info = {}
+                            for col_profile in profile_result.columns:
+                                if col_profile.semantic_info:
+                                    column_semantic_info[col_profile.name] = col_profile.semantic_info
 
-                        severity_icons = {"high": "🔴", "medium": "🟡", "low": "🟢", "none": "✓"}
-                        icon = severity_icons.get(severity, "•")
+                            # Run ML analysis with semantic context
+                            ml_findings = run_ml_analysis(
+                                sample_df,
+                                sample_size=ml_sample_size,
+                                column_semantic_info=column_semantic_info
+                            )
+                            profile_result.ml_findings = ml_findings
 
-                        click.echo(f"  {icon} ML Analysis: {total_issues:,} potential issues ({severity} severity)")
-                        for finding in key_findings[:3]:
-                            click.echo(f"    • {finding}")
+                            # Display summary
+                            summary = ml_findings.get("summary", {})
+                            total_issues = summary.get("total_issues", 0)
+                            severity = summary.get("severity", "none")
+                            key_findings = summary.get("key_findings", [])
 
-                        click.echo(f"  → Analyzed {ml_findings.get('sample_info', {}).get('analyzed_rows', 0):,} rows in {ml_findings.get('analysis_time_seconds', 0):.1f}s")
+                            severity_icons = {"high": "🔴", "medium": "🟡", "low": "🟢", "none": "✓"}
+                            icon = severity_icons.get(severity, "•")
 
-                        # Clean up
-                        del sample_df
-                        import gc
-                        gc.collect()
+                            click.echo(f"  {icon} ML Analysis: {total_issues:,} potential issues ({severity} severity)")
+                            for finding in key_findings[:3]:
+                                click.echo(f"    • {finding}")
 
-            except ImportError as e:
-                click.echo(f"  ⚠ ML analysis requires scikit-learn: {e}")
-            except Exception as e:
-                click.echo(f"  ⚠ ML analysis failed: {e}")
-                logger.debug(f"ML analysis error: {e}", exc_info=True)
+                            click.echo(f"  → Analyzed {ml_findings.get('sample_info', {}).get('analyzed_rows', 0):,} rows in {ml_findings.get('analysis_time_seconds', 0):.1f}s")
+
+                            # Clean up
+                            del sample_df
+                            import gc
+                            gc.collect()
+
+                except ImportError as e:
+                    click.echo(f"  ⚠ ML analysis requires scikit-learn: {e}")
+                except Exception as e:
+                    click.echo(f"  ⚠ ML analysis failed: {e}")
+                    logger.debug(f"ML analysis error: {e}", exc_info=True)
 
         # Generate HTML report (choose reporter based on style)
         if report_style and report_style.lower() == 'classic':

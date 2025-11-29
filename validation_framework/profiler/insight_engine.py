@@ -17,14 +17,14 @@ from validation_framework.profiler.insight_templates import (
     ISSUE_TEMPLATES,
     EXECUTIVE_SUMMARY_INTRO,
     SECTION_HEADERS,
-    SAMPLING_EXPLANATION,
     SAMPLING_OVERVIEW_FULL,
-    SAMPLING_OVERVIEW_SAMPLED,
     render_template,
     get_quality_tier,
     get_null_interpretation,
     get_outlier_severity_note,
     get_sampling_clause,
+    get_sampling_explanation,
+    get_sampling_overview_sampled,
 )
 
 logger = logging.getLogger(__name__)
@@ -34,9 +34,10 @@ logger = logging.getLogger(__name__)
 # CONSTANTS
 # =============================================================================
 
-# Fixed sampling threshold - datasets >= this size use 50k sample
-SAMPLE_THRESHOLD = 50_000
-SAMPLE_SIZE = 50_000
+# Default sampling threshold - datasets > this size use sampling
+# This matches the default in engine.py and cli.py (100K rows)
+SAMPLE_THRESHOLD = 100_000
+SAMPLE_SIZE = 100_000
 
 
 class Severity(Enum):
@@ -178,9 +179,9 @@ def determine_sampling_info(total_rows: int) -> SamplingInfo:
     """
     Determine sampling parameters based on dataset size.
 
-    Implements the 50k sampling policy:
-    - If rows < 50,000: use full dataset
-    - If rows >= 50,000: use 50,000 row sample
+    Implements the sampling policy (default 100K, configurable via --analysis-sample-size):
+    - If rows <= threshold: use full dataset
+    - If rows > threshold: use sample
 
     Args:
         total_rows: Total rows in the dataset
@@ -253,9 +254,33 @@ class RuleEngine:
         """
         issues: List[Issue] = []
 
-        # Determine sampling configuration
+        # Determine sampling configuration from actual profile data
         total_rows = profile_data.get("row_count", 0)
-        sampling_info = determine_sampling_info(total_rows)
+
+        # Check ml_findings for actual sample size (preferred source)
+        ml_findings = profile_data.get("ml_findings", {})
+        ml_sample_info = ml_findings.get("sample_info", {})
+        actual_sample_size = ml_sample_info.get("analyzed_rows", 0)
+        actual_original_rows = ml_sample_info.get("original_rows", total_rows)
+
+        if actual_sample_size > 0 and actual_original_rows > actual_sample_size:
+            # Use actual sampling info from ML analysis
+            sampling_info = SamplingInfo(
+                total_rows=actual_original_rows,
+                sample_used=True,
+                sample_size=actual_sample_size,
+                sample_fraction=actual_sample_size / actual_original_rows if actual_original_rows > 0 else 1.0,
+                full_dataset_metrics=["row_count", "null_count", "column_metadata"],
+                sampled_metrics=[
+                    "validity_checks", "pattern_analysis",
+                    "ml_anomaly_detection", "benford_analysis",
+                    "outlier_detection", "distribution_analysis",
+                    "cross_column_checks"
+                ]
+            )
+        else:
+            # Fallback to default logic
+            sampling_info = determine_sampling_info(total_rows)
 
         # Run all rule families
         issues.extend(self._analyze_overall_quality(profile_data, sampling_info))
@@ -1173,8 +1198,8 @@ class InsightEngine:
 
         # Build sampling overview
         if sampling_info.sample_used:
-            sampling_overview = SAMPLING_OVERVIEW_SAMPLED.format(
-                total_rows=sampling_info.total_rows,
+            sampling_overview = get_sampling_overview_sampled(
+                sample_size=sampling_info.sample_size,
                 sample_fraction=sampling_info.sample_fraction,
             )
         else:
@@ -1194,7 +1219,7 @@ class InsightEngine:
             },
             "executive_summary": executive_summary,
             "detailed_sections": detailed_sections,
-            "sampling_explanation": SAMPLING_EXPLANATION,
+            "sampling_explanation": get_sampling_explanation(sampling_info.sample_size),
             "sampling_overview": sampling_overview,
         }
 

@@ -97,7 +97,8 @@ class DataProfiler:
         enable_semantic_tagging: bool = True,
         enable_ml_analysis: bool = True,
         disable_memory_safety: bool = False,
-        full_analysis: bool = False
+        full_analysis: bool = False,
+        analysis_sample_size: int = 100000
     ):
         """
         Initialize data profiler.
@@ -112,8 +113,10 @@ class DataProfiler:
             enable_ml_analysis: Enable Phase 3 ML-based anomaly detection (default: True, Beta)
             disable_memory_safety: Disable memory safety termination (default: False, USE WITH CAUTION)
             full_analysis: Disable internal sampling for ML analysis (default: False, slower but more accurate)
+            analysis_sample_size: Sample size for analysis when file exceeds this many rows (default: 100000)
         """
         self.chunk_size = chunk_size  # None means auto-calculate
+        self.analysis_sample_size = analysis_sample_size  # Configurable sample size
         self.max_correlation_columns = max_correlation_columns
 
         # Phase 1 enhancement flags
@@ -417,6 +420,166 @@ class DataProfiler:
             dataset_privacy_risk=dataset_privacy_risk
         )
 
+    def _extract_parquet_column_stats(self, file_path: str) -> Optional[Dict[str, Any]]:
+        """
+        Extract column statistics from parquet metadata without reading data.
+
+        This is a CRITICAL optimization for large parquet files:
+        - Gets accurate null counts, min/max from metadata in <1 second
+        - vs 55+ minutes reading all data for a 180M row file
+
+        Returns dict with:
+            - total_rows: int
+            - num_row_groups: int
+            - columns: {col_name: {null_count, min, max, has_stats}}
+        """
+        try:
+            import pyarrow.parquet as pq
+
+            pf = pq.ParquetFile(file_path)
+            total_rows = pf.metadata.num_rows
+            num_row_groups = pf.metadata.num_row_groups
+            column_names = pf.schema_arrow.names
+
+            # Initialize stats aggregators
+            stats = {
+                'total_rows': total_rows,
+                'num_row_groups': num_row_groups,
+                'columns': {}
+            }
+
+            for col in column_names:
+                stats['columns'][col] = {
+                    'null_count': 0,
+                    'min': None,
+                    'max': None,
+                    'has_stats': False
+                }
+
+            # Aggregate statistics across all row groups
+            for rg_idx in range(num_row_groups):
+                rg_meta = pf.metadata.row_group(rg_idx)
+                for col_idx in range(rg_meta.num_columns):
+                    col_meta = rg_meta.column(col_idx)
+                    col_name = col_meta.path_in_schema
+
+                    if col_meta.statistics:
+                        stats['columns'][col_name]['has_stats'] = True
+                        stats['columns'][col_name]['null_count'] += col_meta.statistics.null_count or 0
+
+                        # Track global min/max
+                        if col_meta.statistics.min is not None:
+                            current_min = stats['columns'][col_name]['min']
+                            if current_min is None or col_meta.statistics.min < current_min:
+                                stats['columns'][col_name]['min'] = col_meta.statistics.min
+
+                        if col_meta.statistics.max is not None:
+                            current_max = stats['columns'][col_name]['max']
+                            if current_max is None or col_meta.statistics.max > current_max:
+                                stats['columns'][col_name]['max'] = col_meta.statistics.max
+
+            logger.debug(f"📊 Extracted parquet stats from {num_row_groups:,} row groups (no data read)")
+            return stats
+
+        except Exception as e:
+            logger.debug(f"Could not extract parquet stats: {e}")
+            return None
+
+    def _create_stratified_parquet_chunks(
+        self,
+        file_path: str,
+        sample_size: int = 50000,
+        chunk_size: int = 50000,
+        num_strata: int = 10
+    ):
+        """
+        Generator that yields chunks from stratified row groups (MEMORY-EFFICIENT).
+
+        Instead of loading all sample data at once, this yields chunks one at a time,
+        keeping memory usage bounded to chunk_size rows.
+
+        Strategy:
+        1. Divide row groups into strata across the file
+        2. Yield chunks from each stratum, sampling if row group is larger than chunk_size
+        3. Stop when sample_size total rows have been yielded
+
+        Args:
+            file_path: Path to parquet file
+            sample_size: Total rows to sample across all chunks
+            chunk_size: Maximum rows per chunk (memory bound)
+            num_strata: Number of strata to divide file into
+
+        Yields:
+            DataFrame chunks, each with at most chunk_size rows
+        """
+        import pyarrow.parquet as pq
+
+        pf = pq.ParquetFile(file_path)
+        total_rows = pf.metadata.num_rows
+        num_row_groups = pf.metadata.num_row_groups
+
+        # Calculate rows per row group
+        avg_rows_per_group = total_rows / num_row_groups
+
+        # Calculate how many row groups we need
+        groups_needed = int(np.ceil(sample_size / avg_rows_per_group))
+        actual_strata = max(num_strata, min(groups_needed, num_row_groups))
+
+        # Calculate rows to collect from each stratum
+        rows_per_stratum = sample_size // actual_strata
+        extra_rows = sample_size % actual_strata
+
+        # Select one row group from each stratum (spread across file)
+        stratum_size = num_row_groups / actual_strata
+        selected_groups = []
+        for stratum_idx in range(actual_strata):
+            stratum_start = int(stratum_idx * stratum_size)
+            stratum_end = int((stratum_idx + 1) * stratum_size)
+            middle_group = (stratum_start + stratum_end) // 2
+            selected_groups.append((stratum_idx, middle_group))
+
+        logger.debug(f"📊 Stratified chunking: {actual_strata} strata, ~{rows_per_stratum:,} rows each, chunk_size={chunk_size:,}")
+
+        rows_yielded = 0
+
+        for stratum_idx, rg_idx in selected_groups:
+            if rows_yielded >= sample_size:
+                break
+
+            # Calculate rows to take from this stratum
+            rows_to_take = rows_per_stratum + (1 if stratum_idx < extra_rows else 0)
+            rows_to_take = min(rows_to_take, sample_size - rows_yielded)
+
+            # Load single row group
+            rg_table = pf.read_row_group(rg_idx)
+            rg_df = rg_table.to_pandas()
+
+            # Sample if row group is larger than needed
+            if len(rg_df) > rows_to_take:
+                rg_df = rg_df.sample(n=rows_to_take, random_state=42 + stratum_idx)
+
+            # Yield in chunk_size pieces if needed
+            for start_idx in range(0, len(rg_df), chunk_size):
+                if rows_yielded >= sample_size:
+                    break
+
+                end_idx = min(start_idx + chunk_size, len(rg_df))
+                chunk = rg_df.iloc[start_idx:end_idx].copy()
+
+                rows_yielded += len(chunk)
+                logger.debug(f"📊 Yielding chunk from stratum {stratum_idx + 1}/{actual_strata}: {len(chunk):,} rows (total: {rows_yielded:,}/{sample_size:,})")
+
+                yield chunk
+
+                del chunk
+                gc.collect()
+
+            # Clean up row group
+            del rg_table, rg_df
+            gc.collect()
+
+        logger.debug(f"📊 Stratified sampling complete: {rows_yielded:,} rows from {len(selected_groups)} row groups")
+
     def profile_file(
         self,
         file_path: str,
@@ -448,8 +611,8 @@ class DataProfiler:
         # Datasets >= 50k rows use a 50k sample for statistical/ML analysis.
         # This provides strong statistical accuracy (±0.5-1%) while keeping processing fast.
         # Row counts, null counts, and metadata always use the full dataset.
-        ANALYSIS_SAMPLE_SIZE = 50_000  # Fixed sample size for ML and statistical analysis
-        MAX_CORRELATION_SAMPLES = 100_000  # Limit numeric samples for correlation analysis
+        ANALYSIS_SAMPLE_SIZE = self.analysis_sample_size  # Configurable sample size for ML and statistical analysis
+        MAX_CORRELATION_SAMPLES = max(100_000, ANALYSIS_SAMPLE_SIZE * 2)  # Scale with sample size
         MAX_TEMPORAL_SAMPLES = ANALYSIS_SAMPLE_SIZE  # Limit datetime samples for temporal analysis
         sampling_triggered = {}  # Track which columns hit sampling limit
 
@@ -533,9 +696,42 @@ class DataProfiler:
             logger.debug(f"Could not read file metadata: {e}")
             pass
 
+        # PARQUET OPTIMIZATION: For large parquet files, use stratified sampling
+        # and metadata for accurate stats. This reduces profiling from 55+ min to ~60s.
+        # CSV files use full scan (necessary for accurate placeholder null detection).
+        parquet_column_stats = None
+        actual_total_rows = None  # Track actual file rows vs sampled rows
+        use_stratified_chunks = False  # Flag to use stratified chunk iterator
+
+        if file_format == 'parquet' and file_metadata.get('total_rows', 0) > ANALYSIS_SAMPLE_SIZE:
+            actual_total_rows = file_metadata['total_rows']
+            logger.info(f"📊 Large parquet file ({actual_total_rows:,} rows) - using stratified chunked sampling")
+
+            # Extract accurate column statistics from parquet metadata
+            parquet_column_stats = self._extract_parquet_column_stats(file_path)
+            use_stratified_chunks = True
+
         # Process data in chunks
+        # For parquet: use stratified chunk iterator (memory-efficient)
+        # For CSV and other formats: iterate through all chunks (full scan)
         chunk_processing_start = time.time()
-        for chunk_idx, chunk in enumerate(loader.load()):
+
+        if use_stratified_chunks:
+            # PARQUET PATH: Use stratified chunk iterator (memory-efficient)
+            # Each chunk is bounded by chunk_size, data comes from across the file
+            chunk_iterator = self._create_stratified_parquet_chunks(
+                file_path,
+                sample_size=ANALYSIS_SAMPLE_SIZE,
+                chunk_size=self.chunk_size or 50000,  # Default chunk size
+                num_strata=10
+            )
+            total_chunks_str = "?"
+        else:
+            # CSV/OTHER PATH: Use regular loader iterator (full scan for accurate counts)
+            chunk_iterator = loader.load()
+
+        # Process chunks from either iterator (unified processing for both paths)
+        for chunk_idx, chunk in enumerate(chunk_iterator):
             # Handle sampling: if we've already reached sample_rows, don't process more
             if sample_rows and row_count >= sample_rows:
                 logger.debug(f"📊 Sample limit reached ({sample_rows:,} rows) - stopping chunk processing")
@@ -623,18 +819,19 @@ class DataProfiler:
                                     # Only collect if we haven't reached the limit
                                     current_count = len(datetime_data[col])
                                     if current_count < MAX_TEMPORAL_SAMPLES:
-                                        dt_list = dt_values.dropna().tolist()
+                                        # MEMORY EFFICIENT: Sample from Series before tolist()
+                                        dt_series = dt_values.dropna()
                                         samples_needed = MAX_TEMPORAL_SAMPLES - current_count
 
-                                        # Use sampling if chunk has more than needed
-                                        if len(dt_list) > samples_needed:
-                                            import random
-                                            datetime_data[col].extend(random.sample(dt_list, samples_needed))
+                                        # Sample from Series first to avoid memory spike
+                                        if len(dt_series) > samples_needed:
+                                            sampled = dt_series.sample(n=samples_needed, random_state=42 + chunk_idx)
+                                            datetime_data[col].extend(sampled.tolist())
                                             if col not in sampling_triggered:
                                                 sampling_triggered[col] = row_count
                                                 logger.debug(f"💾 Memory optimization: Column '{col}' temporal sampling limit reached at {row_count:,} rows (using {MAX_TEMPORAL_SAMPLES:,} samples)")
                                         else:
-                                            datetime_data[col].extend(dt_list)
+                                            datetime_data[col].extend(dt_series.tolist())
                         except Exception:
                             pass
 
@@ -651,14 +848,13 @@ class DataProfiler:
             if ml_accumulator is not None:
                 ml_accumulator.process_chunk(chunk, chunk_idx)
 
+            # Clean up chunk immediately after processing to free memory
+            del chunk
+            gc.collect()
+
         # Record chunk processing time
         phase_timings['chunk_processing'] = time.time() - chunk_processing_start
         logger.debug(f"⏱  Chunk processing completed in {phase_timings['chunk_processing']:.2f}s")
-
-        # Explicit garbage collection after each chunk to prevent memory buildup
-        # This is critical for large files with many chunks
-        del chunk  # Explicitly delete chunk DataFrame
-        gc.collect()  # Force garbage collection
 
         # Log memory optimization summary
         if sampling_triggered:
@@ -790,8 +986,10 @@ class DataProfiler:
                 logger.warning(f"Dataset privacy risk calculation failed: {e}")
 
         # Generate validation suggestions
+        # Use actual_total_rows for suggestions to get correct row count range (not sampled count)
         suggestions_start = time.time()
-        suggested_validations = self._generate_validation_suggestions(columns, row_count)
+        actual_rows_for_suggestions = actual_total_rows if actual_total_rows else row_count
+        suggested_validations = self._generate_validation_suggestions(columns, actual_rows_for_suggestions)
         phase_timings['generate_suggestions'] = time.time() - suggestions_start
 
         # Calculate overall quality score
@@ -800,9 +998,10 @@ class DataProfiler:
         phase_timings['quality_score'] = time.time() - quality_start
 
         # Generate validation configuration
+        # Use actual_total_rows for config to get correct row count reference (not sampled count)
         config_start = time.time()
         config_yaml, config_command = self._generate_validation_config(
-            file_name, file_path, file_format, file_size, row_count, columns, suggested_validations
+            file_name, file_path, file_format, file_size, actual_rows_for_suggestions, columns, suggested_validations
         )
         phase_timings['generate_config'] = time.time() - config_start
 
@@ -827,13 +1026,25 @@ class DataProfiler:
             logger.debug("🧠 Running ML-based anomaly detection (Beta)...")
             try:
                 # Check if we used chunked ML accumulation (full_analysis mode)
+                # Use actual_total_rows for correct original count display (not sampled row_count)
+                true_original_rows = actual_total_rows if actual_total_rows else row_count
                 if ml_accumulator is not None:
                     # Full analysis: finalize accumulated stats from all chunks
-                    logger.info(f"📊 Finalizing ML analysis from {row_count:,} rows (chunked processing)")
+                    logger.info(f"📊 Finalizing ML analysis from {true_original_rows:,} rows (chunked processing)")
                     ml_findings = ml_accumulator.finalize(self.ml_analyzer)
+                    # Update sample_info with actual original row count (accumulator only sees sampled rows)
+                    if 'sample_info' in ml_findings:
+                        ml_findings['sample_info']['original_rows'] = true_original_rows
+                        ml_findings['sample_info']['sampled'] = ml_findings['sample_info']['analyzed_rows'] < true_original_rows
+                        if true_original_rows > 0:
+                            ml_findings['sample_info']['sample_percentage'] = round(
+                                ml_findings['sample_info']['analyzed_rows'] / true_original_rows * 100, 2
+                            )
                 else:
-                    # Standard mode: sample data and run ML analysis (50k policy)
-                    ml_sample_size = min(ANALYSIS_SAMPLE_SIZE, row_count)  # Cap at 50K rows for ML
+                    # Standard mode: sample data and run ML analysis
+                    # Note: Individual ML algorithms (clustering, etc.) have their own internal limits
+                    # to prevent memory issues, so we can allow larger samples here
+                    ml_sample_size = min(ANALYSIS_SAMPLE_SIZE, row_count)
 
                     if file_format == 'parquet':
                         # Parquet: MEMORY-EFFICIENT sampling using row groups
@@ -888,6 +1099,16 @@ class DataProfiler:
                     # Run ML analysis with semantic context
                     ml_findings = self.ml_analyzer.analyze(ml_df, column_semantic_info=column_semantic_info)
 
+                    # Update sample_info with actual original row count (ML only sees sampled rows)
+                    if 'sample_info' in ml_findings:
+                        ml_findings['sample_info']['original_rows'] = true_original_rows
+                        ml_findings['sample_info']['sampled'] = ml_findings['sample_info'].get('analyzed_rows', len(ml_df)) < true_original_rows
+                        if true_original_rows > 0:
+                            analyzed = ml_findings['sample_info'].get('analyzed_rows', len(ml_df))
+                            ml_findings['sample_info']['sample_percentage'] = round(
+                                analyzed / true_original_rows * 100, 2
+                            )
+
                     # Clean up
                     del ml_df
                     gc.collect()
@@ -899,6 +1120,37 @@ class DataProfiler:
                 import traceback
                 logger.debug(traceback.format_exc())
 
+        # ═══════════════════════════════════════════════════════════════
+        # SMART VALIDATION RECOMMENDATIONS FROM ML FINDINGS
+        # Now that ML analysis is complete, generate ML-based suggestions
+        # and merge them into the validation recommendations
+        # ═══════════════════════════════════════════════════════════════
+        if ml_findings:
+            ml_suggestions_start = time.time()
+            try:
+                ml_based_suggestions = self._generate_ml_based_validations(ml_findings)
+                if ml_based_suggestions:
+                    logger.debug(f"💡 Generated {len(ml_based_suggestions)} ML-based validation suggestions")
+
+                    # Merge ML suggestions with existing suggestions
+                    suggested_validations.extend(ml_based_suggestions)
+
+                    # Re-apply deduplication after adding ML suggestions
+                    suggested_validations = self._deduplicate_validations_by_field(suggested_validations)
+
+                    # Re-sort by confidence
+                    suggested_validations = sorted(suggested_validations, key=lambda x: x.confidence, reverse=True)
+
+                    # Regenerate YAML config with ML-enhanced suggestions
+                    config_yaml, config_command = self._generate_validation_config(
+                        file_name, file_path, file_format, file_size, row_count, columns, suggested_validations
+                    )
+                    logger.debug(f"📝 Updated validation config with ML-based suggestions")
+
+                phase_timings['ml_suggestions'] = time.time() - ml_suggestions_start
+            except Exception as e:
+                logger.warning(f"ML-based suggestion generation failed: {e}")
+
         processing_time = time.time() - start_time
         logger.debug(f"⏱  Profile completed in {processing_time:.2f} seconds")
 
@@ -908,12 +1160,60 @@ class DataProfiler:
             percentage = (duration / processing_time * 100) if processing_time > 0 else 0
             logger.debug(f"   {phase}: {duration:.2f}s ({percentage:.1f}%)")
 
+        # Use actual total rows from parquet metadata if available (vs sampled row_count)
+        final_row_count = actual_total_rows if actual_total_rows else row_count
+
+        # Merge parquet metadata stats into column profiles for accurate counts
+        if parquet_column_stats:
+            for col in columns:
+                pq_stats = parquet_column_stats['columns'].get(col.name)
+                if pq_stats and pq_stats['has_stats']:
+                    # Update with accurate null count from metadata
+                    col.statistics.null_count = pq_stats['null_count']
+                    col.statistics.null_percentage = (pq_stats['null_count'] / final_row_count * 100) if final_row_count > 0 else 0.0
+                    col.statistics.count = final_row_count
+
+                    # Update min/max from parquet metadata - this is ALWAYS more accurate than sampled values
+                    # because parquet metadata is aggregated from ALL row groups, not just the sample
+                    # For large files with extreme values in sparse row groups, this is critical
+                    # Note: Only compare if types are compatible (both numeric or both string)
+                    pq_min = pq_stats['min']
+                    pq_max = pq_stats['max']
+
+                    if pq_min is not None:
+                        if col.statistics.min_value is None:
+                            col.statistics.min_value = pq_min
+                        elif isinstance(pq_min, (int, float)) and isinstance(col.statistics.min_value, (int, float)):
+                            # For numeric columns, use the smaller value (true min)
+                            if pq_min < col.statistics.min_value:
+                                col.statistics.min_value = pq_min
+                        elif isinstance(pq_min, str) and isinstance(col.statistics.min_value, str):
+                            # For string columns, use lexicographically smaller value
+                            if pq_min < col.statistics.min_value:
+                                col.statistics.min_value = pq_min
+
+                    if pq_max is not None:
+                        if col.statistics.max_value is None:
+                            col.statistics.max_value = pq_max
+                        elif isinstance(pq_max, (int, float)) and isinstance(col.statistics.max_value, (int, float)):
+                            # For numeric columns, use the larger value (true max)
+                            if pq_max > col.statistics.max_value:
+                                col.statistics.max_value = pq_max
+                        elif isinstance(pq_max, str) and isinstance(col.statistics.max_value, str):
+                            # For string columns, use lexicographically larger value
+                            if pq_max > col.statistics.max_value:
+                                col.statistics.max_value = pq_max
+
+            # Add sampling info to metadata
+            file_metadata['sampled_rows'] = row_count
+            file_metadata['sampling_note'] = f"Statistics from metadata ({final_row_count:,} rows), detailed analysis from {row_count:,} row sample"
+
         return ProfileResult(
             file_name=file_name,
             file_path=file_path,
             file_size_bytes=file_size,
             format=file_format,
-            row_count=row_count,
+            row_count=final_row_count,
             column_count=len(columns),
             profiled_at=datetime.now(),
             processing_time_seconds=processing_time,
@@ -1030,12 +1330,21 @@ class DataProfiler:
             profile["sample_values"].extend(samples)
 
         # Type detection (sample-based for performance)
-        # Only detect types on first chunk and sample of subsequent chunks
+        # CRITICAL: Sample for type detection even on first chunk to avoid O(n) iteration
+        # A 10K sample provides >99.9% confidence for type inference
+        TYPE_DETECTION_SAMPLE_SIZE = 10000
+
         if chunk_idx == 0:
-            # First chunk: detect all types
+            # First chunk: sample for type detection (not all values - that's O(n)!)
+            sample_size = min(TYPE_DETECTION_SAMPLE_SIZE, len(non_null_series))
+            if len(non_null_series) > sample_size:
+                type_sample = non_null_series.sample(n=sample_size, random_state=42)
+            else:
+                type_sample = non_null_series
+
             # Track unexpected types for debugging (limit to first 10 occurrences)
             unexpected_types_logged = 0
-            for value in non_null_series:
+            for value in type_sample:
                 detected_type = self._detect_type(value)
                 profile["type_counts"][detected_type] = profile["type_counts"].get(detected_type, 0) + 1
 
@@ -1049,7 +1358,7 @@ class DataProfiler:
                         logger.debug(f"🔍 Type mismatch in '{profile['column_name']}': value='{value}' → detected as '{detected_type}' (expected string)")
                         unexpected_types_logged += 1
 
-            profile["type_sampled_count"] += len(non_null_series)
+            profile["type_sampled_count"] += len(type_sample)
         elif chunk_idx % 10 == 0:
             # Every 10th chunk: sample 1000 values for type refinement
             sample_size = min(1000, len(non_null_series))
@@ -1398,19 +1707,34 @@ class DataProfiler:
             try:
                 # Convert to float array explicitly to avoid type issues
                 numeric_array = np.array(numeric_values, dtype=np.float64)
-                stats.min_value = float(np.min(numeric_array))
-                stats.max_value = float(np.max(numeric_array))
-                stats.mean = float(np.mean(numeric_array))
-                stats.median = float(np.median(numeric_array))
-                stats.std_dev = float(np.std(numeric_array))
 
-                # Quartiles
-                q1, q2, q3 = np.percentile(numeric_array, [25, 50, 75])
-                stats.quartiles = {
-                    "Q1": round(float(q1), 3),
-                    "Q2": round(float(q2), 3),
-                    "Q3": round(float(q3), 3)
-                }
+                # Filter out extreme values that indicate parsing errors (e.g., hex strings parsed as floats)
+                # Values beyond 1e100 are almost certainly data corruption or parsing artifacts
+                reasonable_mask = np.abs(numeric_array) < 1e100
+                if np.any(~np.isfinite(numeric_array)):
+                    reasonable_mask &= np.isfinite(numeric_array)
+
+                filtered_array = numeric_array[reasonable_mask]
+
+                # Only calculate stats if we have reasonable values left
+                # and if the majority of values are reasonable (not just a few)
+                if len(filtered_array) > 0 and len(filtered_array) >= len(numeric_array) * 0.5:
+                    stats.min_value = float(np.min(filtered_array))
+                    stats.max_value = float(np.max(filtered_array))
+                    stats.mean = float(np.mean(filtered_array))
+                    stats.median = float(np.median(filtered_array))
+                    stats.std_dev = float(np.std(filtered_array))
+
+                    # Quartiles
+                    q1, q2, q3 = np.percentile(filtered_array, [25, 50, 75])
+                    stats.quartiles = {
+                        "Q1": round(float(q1), 3),
+                        "Q2": round(float(q2), 3),
+                        "Q3": round(float(q3), 3)
+                    }
+                else:
+                    # Too many extreme values - likely string column with some numeric-like values
+                    logger.debug(f"Skipping numeric stats: {len(numeric_array) - len(filtered_array)} extreme values filtered")
             except (TypeError, ValueError) as e:
                 logger.warning(f"Could not calculate numeric statistics: {e}")
                 # Skip numeric stats if conversion fails
@@ -1647,12 +1971,22 @@ class DataProfiler:
                 if col.statistics.min_value > 1000000000:  # Unix timestamp range or large ID
                     return False
 
-        # 7. Column name hint for identifiers (weak signal) + data validation (strong signal)
-        name_suggests_id = any(kw in col_name_lower for kw in
-                              ['id', 'key', 'code', 'number', 'account', 'bank', 'reference', 'ref'])
+        # 7. Column name hint for identifiers
+        # Strong indicators - no cardinality check needed (these ARE IDs)
+        strong_id_indicators = ['_id', ' id', 'from bank', 'to bank', 'account', 'acct',
+                                'reference', 'ref_', 'ref ', 'transaction id', 'txn_id']
+        is_strong_id = any(kw in col_name_lower for kw in strong_id_indicators)
+
+        if is_strong_id:
+            logger.debug(f"Strong ID indicator detected for {col.name} - excluding from RangeCheck")
+            return False
+
+        # Weak indicators - require cardinality check to confirm
+        weak_id_indicators = ['id', 'key', 'code', 'number', 'bank']
+        name_suggests_id = any(kw in col_name_lower for kw in weak_id_indicators)
 
         # If name suggests ID AND cardinality is moderate-high, probably an identifier
-        if name_suggests_id and col.statistics.cardinality > 0.5:
+        if name_suggests_id and col.statistics.cardinality > 0.3:  # Lowered from 0.5 to 0.3
             return False
 
         # Default: suggest range check for numeric measurements with natural bounds
@@ -2104,6 +2438,201 @@ class DataProfiler:
                     },
                     reason=f"Length varies within small range ({min_len}-{max_len} characters)",
                     confidence=80.0
+                ))
+
+        return suggestions
+
+    def _generate_ml_based_validations(
+        self,
+        ml_findings: Dict[str, Any]
+    ) -> List[ValidationSuggestion]:
+        """
+        Generate validation suggestions based on ML analysis findings.
+
+        This function translates ML insights into actionable validation rules:
+        - Outlier detection → OutlierCheck with identified columns and thresholds
+        - Benford's Law violations → BenfordLawCheck for suspicious columns
+        - Cross-field anomalies → CrossFieldValidation suggestions
+        - Multivariate anomalies → Relationship-based validation hints
+
+        Args:
+            ml_findings: Results from MLAnalyzer.analyze()
+
+        Returns:
+            List of ValidationSuggestion objects based on ML findings
+        """
+        suggestions = []
+
+        if not ml_findings:
+            return suggestions
+
+        # ═══════════════════════════════════════════════════════════════
+        # 1. OUTLIER-BASED VALIDATIONS
+        # If Isolation Forest found outliers, suggest OutlierCheck or RangeCheck
+        # ═══════════════════════════════════════════════════════════════
+        outlier_summary = ml_findings.get('outlier_summary', {})
+        outlier_columns = outlier_summary.get('outlier_columns', {})
+
+        for col_name, outlier_data in outlier_columns.items():
+            outlier_count = outlier_data.get('count', 0)
+            outlier_pct = outlier_data.get('percentage', 0)
+
+            # Only suggest if meaningful outlier percentage found
+            if outlier_count > 0 and outlier_pct >= 0.1:
+                # Get threshold info if available
+                typical_range = outlier_data.get('typical_range', {})
+                min_typical = typical_range.get('min')
+                max_typical = typical_range.get('max')
+
+                if min_typical is not None and max_typical is not None:
+                    # Suggest StatisticalOutlierCheck with learned bounds
+                    suggestions.append(ValidationSuggestion(
+                        validation_type="StatisticalOutlierCheck",
+                        severity="WARNING",
+                        params={
+                            "field": col_name,
+                            "method": "iqr",
+                            "threshold": 3.0  # More lenient for real data
+                        },
+                        reason=f"ML detected {outlier_count:,} outliers ({outlier_pct:.2f}%) in {col_name}. Typical range: {min_typical:,.2f} to {max_typical:,.2f}",
+                        confidence=80.0
+                    ))
+
+        # ═══════════════════════════════════════════════════════════════
+        # 2. BENFORD'S LAW VALIDATIONS
+        # If Benford analysis found suspicious digit patterns, suggest check
+        # ═══════════════════════════════════════════════════════════════
+        benford_analysis = ml_findings.get('benford_analysis', {})
+
+        for col_name, benford_data in benford_analysis.items():
+            confidence = benford_data.get('confidence', 'Unknown')
+            is_suspicious = benford_data.get('is_suspicious', False)
+            chi_square = benford_data.get('chi_square', 0)
+            p_value = benford_data.get('p_value', 1)
+
+            # Suggest Benford check for suspicious columns OR high-value financial columns
+            if is_suspicious or confidence in ['Very Low', 'Low']:
+                suggestions.append(ValidationSuggestion(
+                    validation_type="BenfordLawCheck",
+                    severity="WARNING",
+                    params={
+                        "field": col_name,
+                        "significance_level": 0.05
+                    },
+                    reason=f"ML Benford analysis shows {confidence} confidence (χ²={chi_square:.2f}, p={p_value:.4f}). Digit distribution may indicate data quality issues.",
+                    confidence=75.0
+                ))
+            elif confidence in ['High', 'Very High']:
+                # Still suggest for financial/amount fields even if passing
+                suggestions.append(ValidationSuggestion(
+                    validation_type="BenfordLawCheck",
+                    severity="INFO",
+                    params={
+                        "field": col_name,
+                        "significance_level": 0.05
+                    },
+                    reason=f"Financial amount field follows Benford's Law ({confidence} confidence). Monitor for authenticity.",
+                    confidence=60.0
+                ))
+
+        # ═══════════════════════════════════════════════════════════════
+        # 3. CROSS-FIELD RELATIONSHIP VALIDATIONS
+        # If correlation breaks or cross-field issues found, suggest checks
+        # ═══════════════════════════════════════════════════════════════
+        cross_issues = ml_findings.get('cross_column_issues', [])
+        correlation_breaks = ml_findings.get('correlation_breaks', [])
+
+        # Track which column pairs we've suggested for
+        suggested_pairs = set()
+
+        for issue in cross_issues:
+            columns = issue.get('columns', [])
+            issue_count = issue.get('total_issues', 0)
+
+            if len(columns) >= 2 and issue_count > 10:
+                pair_key = tuple(sorted(columns[:2]))
+                if pair_key not in suggested_pairs:
+                    suggested_pairs.add(pair_key)
+                    suggestions.append(ValidationSuggestion(
+                        validation_type="CrossFieldValidation",
+                        severity="WARNING",
+                        params={
+                            "fields": columns[:2],
+                            "rule": "relationship_check"
+                        },
+                        reason=f"ML found {issue_count:,} records where {columns[0]} and {columns[1]} show unusual relationships",
+                        confidence=70.0
+                    ))
+
+        for cb in correlation_breaks:
+            columns = cb.get('columns', [])
+            anomaly_count = cb.get('anomaly_count', 0)
+
+            if len(columns) >= 2 and anomaly_count > 10:
+                pair_key = tuple(sorted(columns[:2]))
+                if pair_key not in suggested_pairs:
+                    suggested_pairs.add(pair_key)
+                    correlation = cb.get('expected_correlation', 'unknown')
+                    suggestions.append(ValidationSuggestion(
+                        validation_type="CorrelationCheck",
+                        severity="WARNING",
+                        params={
+                            "field1": columns[0],
+                            "field2": columns[1],
+                            "min_correlation": max(0.3, correlation - 0.2) if isinstance(correlation, (int, float)) else 0.3
+                        },
+                        reason=f"ML found {anomaly_count:,} correlation breaks between {columns[0]} and {columns[1]} (expected r={correlation})",
+                        confidence=72.0
+                    ))
+
+        # ═══════════════════════════════════════════════════════════════
+        # 4. MULTIVARIATE ANOMALY SUGGESTIONS
+        # If autoencoder found unusual combinations, highlight
+        # ═══════════════════════════════════════════════════════════════
+        multivariate = ml_findings.get('multivariate_anomalies', {})
+        autoencoder = multivariate.get('autoencoder_anomalies', {})
+
+        if autoencoder:
+            anomaly_count = autoencoder.get('total_anomalies', 0)
+            columns_analyzed = autoencoder.get('columns_analyzed', [])
+
+            if anomaly_count > 0 and isinstance(columns_analyzed, list) and len(columns_analyzed) >= 2:
+                # Suggest a multi-field consistency check
+                suggestions.append(ValidationSuggestion(
+                    validation_type="RecordLevelValidation",
+                    severity="INFO",
+                    params={
+                        "fields": columns_analyzed[:5],  # Limit to first 5
+                        "rule": "multivariate_consistency"
+                    },
+                    reason=f"ML found {anomaly_count:,} records with unusual multi-field combinations across {len(columns_analyzed)} numeric fields. Consider custom validation.",
+                    confidence=65.0
+                ))
+
+        # ═══════════════════════════════════════════════════════════════
+        # 5. RARE VALUE SUGGESTIONS
+        # If rare categories found, suggest ValidValuesCheck
+        # ═══════════════════════════════════════════════════════════════
+        rare_categories = ml_findings.get('rare_categories', {})
+
+        for col_name, rare_data in rare_categories.items():
+            rare_values = rare_data.get('rare_values', [])
+            total_rare_count = rare_data.get('total_rare_count', 0)
+
+            if total_rare_count > 0 and rare_values:
+                # Get the rare values (potential typos/errors)
+                rare_value_list = [rv.get('value') for rv in rare_values[:5]]
+
+                suggestions.append(ValidationSuggestion(
+                    validation_type="ValidValuesCheck",
+                    severity="INFO",
+                    params={
+                        "field": col_name,
+                        "exclude_values": rare_value_list,
+                        "note": "These rare values may be valid edge cases or data entry errors"
+                    },
+                    reason=f"ML found {len(rare_values)} rare values in {col_name} ({total_rare_count:,} total instances). Review if these should be excluded.",
+                    confidence=55.0
                 ))
 
         return suggestions

@@ -24,11 +24,11 @@ import time
 
 logger = logging.getLogger(__name__)
 
-# Max sample size for ML analysis (balance between accuracy and speed)
-ML_SAMPLE_SIZE = 250_000
+# Default sample size threshold - if file has more rows than this, sampling is applied
+# No hard cap - user controls via --analysis-sample-size parameter
+DEFAULT_SAMPLE_THRESHOLD = 100_000
 
 # Minimum rows required for reliable ML analysis
-# Increased from 100 to 500 per data science best practices
 MIN_ROWS_FOR_ML = 500
 
 
@@ -50,14 +50,19 @@ class ChunkedMLAccumulator:
         self.benford_digit_counts: Dict[str, Counter] = {}  # col -> Counter of first digits
         self.value_counts: Dict[str, Counter] = {}  # col -> Counter of values (for rare categories)
         self.format_pattern_counts: Dict[str, Counter] = {}  # col -> Counter of patterns
-        self.numeric_stats: Dict[str, Dict] = {}  # col -> {sum, sum_sq, count, min, max, samples}
-        self.numeric_samples: Dict[str, List] = {}  # col -> sampled values for outlier detection
+        self.numeric_stats: Dict[str, Dict] = {}  # col -> {sum, sum_sq, count, min, max}
+        self.numeric_histograms: Dict[str, Dict] = {}  # col -> streaming histogram for percentiles
         self.column_types: Dict[str, str] = {}  # col -> 'numeric' or 'string'
 
+        # Histogram settings for streaming percentiles
+        self.histogram_bins = 1000  # Number of bins for percentile estimation
+
         # Sample reservoir for autoencoder (reservoir sampling)
-        self.reservoir_size = 50000
+        # Size scales with expected data - no arbitrary cap
+        self.reservoir_size = 100000  # Initial size, can grow
         self.reservoir_samples: List[Dict] = []
         self.seen_count = 0
+        self.max_reservoir_size = 1000000  # Allow up to 1M samples for autoencoder
 
     def _load_fibo_taxonomy(self) -> Dict[str, Any]:
         """Load FIBO taxonomy for intelligent analysis."""
@@ -92,7 +97,8 @@ class ChunkedMLAccumulator:
                     self.column_types[col] = 'numeric'
                     self.benford_digit_counts[col] = Counter()
                     self.numeric_stats[col] = {'sum': 0, 'sum_sq': 0, 'count': 0, 'min': float('inf'), 'max': float('-inf')}
-                    self.numeric_samples[col] = []
+                    # Streaming histogram for percentiles - initialized after first pass to know range
+                    self.numeric_histograms[col] = {'bins': None, 'counts': None, 'initialized': False}
                 else:
                     self.column_types[col] = 'string'
                     self.value_counts[col] = Counter()
@@ -122,20 +128,66 @@ class ChunkedMLAccumulator:
         stats['min'] = min(stats['min'], valid.min())
         stats['max'] = max(stats['max'], valid.max())
 
-        # Sample values for IQR/Isolation Forest (keep ~10K samples per column)
-        if len(self.numeric_samples[col]) < 10000:
-            sample_size = min(1000, len(valid))
-            if sample_size > 0:
-                samples = valid.sample(n=sample_size, random_state=42).tolist()
-                self.numeric_samples[col].extend(samples)
+        # Update streaming histogram for percentile calculation
+        hist_data = self.numeric_histograms[col]
+        if not hist_data['initialized']:
+            # Initialize histogram bins based on data range from this chunk
+            # Will be refined as we see more data
+            col_min, col_max = valid.min(), valid.max()
+            if col_min != col_max:
+                hist_data['range_min'] = col_min
+                hist_data['range_max'] = col_max
+                hist_data['counts'] = np.zeros(self.histogram_bins, dtype=np.int64)
+                hist_data['initialized'] = True
 
-        # Benford's law - count first digits
+        if hist_data['initialized']:
+            # Expand range if needed
+            col_min, col_max = valid.min(), valid.max()
+            if col_min < hist_data['range_min'] or col_max > hist_data['range_max']:
+                # Need to rebuild histogram with expanded range
+                old_counts = hist_data['counts']
+                old_min, old_max = hist_data['range_min'], hist_data['range_max']
+                new_min = min(col_min, old_min)
+                new_max = max(col_max, old_max)
+
+                # Create new histogram with expanded range
+                new_counts = np.zeros(self.histogram_bins, dtype=np.int64)
+
+                # Redistribute old counts to new bins
+                if old_max > old_min:
+                    old_bin_width = (old_max - old_min) / self.histogram_bins
+                    new_bin_width = (new_max - new_min) / self.histogram_bins
+                    for i, count in enumerate(old_counts):
+                        if count > 0:
+                            # Map old bin center to new bin
+                            old_center = old_min + (i + 0.5) * old_bin_width
+                            new_bin = int((old_center - new_min) / new_bin_width)
+                            new_bin = max(0, min(self.histogram_bins - 1, new_bin))
+                            new_counts[new_bin] += count
+
+                hist_data['counts'] = new_counts
+                hist_data['range_min'] = new_min
+                hist_data['range_max'] = new_max
+
+            # Add current chunk values to histogram
+            bin_width = (hist_data['range_max'] - hist_data['range_min']) / self.histogram_bins
+            if bin_width > 0:
+                bin_indices = ((valid - hist_data['range_min']) / bin_width).astype(int)
+                bin_indices = np.clip(bin_indices, 0, self.histogram_bins - 1)
+                # Efficient counting using numpy bincount
+                chunk_counts = np.bincount(bin_indices, minlength=self.histogram_bins)
+                hist_data['counts'] += chunk_counts[:self.histogram_bins]
+
+        # Benford's law - count first digits (no sampling - just counting)
         positive_vals = valid[valid > 0]
         if len(positive_vals) > 0:
-            # Extract first digit
+            # Extract first digit using vectorized operation
             first_digits = positive_vals.apply(lambda x: int(str(abs(x)).lstrip('0').replace('.', '')[0]) if x != 0 else 0)
             first_digits = first_digits[first_digits > 0]  # Benford only applies to 1-9
-            self.benford_digit_counts[col].update(first_digits.tolist())
+            # Use value_counts() for memory efficiency (no list creation)
+            digit_counts = first_digits.value_counts()
+            for digit, count in digit_counts.items():
+                self.benford_digit_counts[col][digit] += count
 
     def _accumulate_string(self, col: str, series: pd.Series) -> None:
         """Accumulate statistics for a string column."""
@@ -143,27 +195,20 @@ class ChunkedMLAccumulator:
         if len(valid) == 0:
             return
 
-        # Value counts for rare category detection (cap at 10K unique values)
-        # MEMORY FIX: Use pandas value_counts() then update Counter instead of .tolist()
-        # This avoids creating a massive list in memory
-        if len(self.value_counts[col]) < 10000:
-            # Sample if series is large to prevent memory issues
-            if len(valid) > 10000:
-                valid_sample = valid.sample(n=10000, random_state=42)
-            else:
-                valid_sample = valid
-            # Use pandas value_counts() - much more memory efficient
-            val_counts = valid_sample.value_counts()
+        # Value counts for rare category detection
+        # Track up to 100K unique values - Counter is memory efficient
+        max_unique_values = 100000
+        if len(self.value_counts[col]) < max_unique_values:
+            # Use pandas value_counts() - memory efficient
+            val_counts = valid.value_counts()
             for val, count in val_counts.items():
-                if len(self.value_counts[col]) >= 10000:
+                if len(self.value_counts[col]) >= max_unique_values:
                     break
                 self.value_counts[col][val] += count
 
-        # Format pattern counts - sample to limit memory
-        # MEMORY FIX: Only sample first 5K values for pattern detection
-        pattern_sample = valid.head(5000) if len(valid) > 5000 else valid
-        patterns = pattern_sample.apply(self._extract_pattern)
-        # Use pandas value_counts() instead of .tolist()
+        # Format pattern counts - process all values (counting is memory efficient)
+        patterns = valid.apply(self._extract_pattern)
+        # Use pandas value_counts() for memory efficiency
         pattern_counts = patterns.value_counts()
         for pattern, count in pattern_counts.items():
             self.format_pattern_counts[col][pattern] += count
@@ -191,9 +236,12 @@ class ChunkedMLAccumulator:
 
         chunk_size = len(chunk)
 
-        # If reservoir not full, add samples directly (batch operation)
-        if len(self.reservoir_samples) < self.reservoir_size:
-            spaces_available = self.reservoir_size - len(self.reservoir_samples)
+        # Dynamic reservoir size - grow up to max_reservoir_size
+        target_size = min(self.max_reservoir_size, self.seen_count + chunk_size)
+
+        # If reservoir can still grow, add samples directly
+        if len(self.reservoir_samples) < target_size:
+            spaces_available = target_size - len(self.reservoir_samples)
             samples_to_take = min(spaces_available, chunk_size)
 
             if samples_to_take > 0:
@@ -201,17 +249,17 @@ class ChunkedMLAccumulator:
                 sample_chunk = chunk.head(samples_to_take)
                 # Convert to list of dicts in one vectorized operation
                 self.reservoir_samples.extend(sample_chunk.to_dict('records'))
-        else:
-            # Reservoir is full - use probabilistic replacement
+                # Update reservoir_size to match actual size
+                self.reservoir_size = len(self.reservoir_samples)
+        elif len(self.reservoir_samples) >= self.max_reservoir_size:
+            # Reservoir is at max capacity - use probabilistic replacement
             # Calculate how many replacements to make based on reservoir sampling theory
-            # For each element in chunk, probability of selection = reservoir_size / (seen_count + position)
-            # Approximate with batch sampling for efficiency
             replacement_prob = self.reservoir_size / (self.seen_count + chunk_size)
             expected_replacements = int(chunk_size * replacement_prob)
 
             if expected_replacements > 0:
-                # Sample rows to potentially add
-                sample_size = min(expected_replacements, chunk_size, 100)  # Cap at 100 per chunk
+                # Scale replacements with chunk size (proportional, not hard cap)
+                sample_size = min(expected_replacements, chunk_size, max(100, chunk_size // 10))
                 if sample_size > 0:
                     sample_indices = random.sample(range(chunk_size), sample_size)
                     replacement_positions = random.sample(range(self.reservoir_size), sample_size)
@@ -260,16 +308,18 @@ class ChunkedMLAccumulator:
         }
 
         # 1. Benford's law analysis from accumulated digit counts
+        # Include ALL results (both suspicious and natural) so users see full analysis
         for col, digit_counts in self.benford_digit_counts.items():
             if sum(digit_counts.values()) >= MIN_ROWS_FOR_ML:
                 benford_result = self._analyze_benford_from_counts(col, digit_counts)
-                if benford_result and benford_result.get("is_suspicious"):
+                if benford_result:
                     findings["benford_analysis"][col] = benford_result
 
-        # 2. Numeric outliers from accumulated statistics
+        # 2. Numeric outliers from accumulated statistics using streaming histograms
         for col, stats in self.numeric_stats.items():
-            if stats['count'] >= MIN_ROWS_FOR_ML and len(self.numeric_samples.get(col, [])) > 100:
-                outlier_result = self._analyze_outliers_from_stats(col, stats, self.numeric_samples[col])
+            hist_data = self.numeric_histograms.get(col, {})
+            if stats['count'] >= MIN_ROWS_FOR_ML and hist_data.get('initialized'):
+                outlier_result = self._analyze_outliers_from_stats(col, stats, hist_data)
                 if outlier_result and outlier_result.get("anomaly_count", 0) > 0:
                     findings["numeric_outliers"][col] = outlier_result
 
@@ -416,6 +466,8 @@ class ChunkedMLAccumulator:
             error_stats = ae_data["error_stats"]
             viz_data["reconstruction_errors"] = {
                 "mean": error_stats.get("mean", 0),
+                "median": error_stats.get("median", 0),
+                "q75": error_stats.get("q75", 0),
                 "std": error_stats.get("std", 0),
                 "max": error_stats.get("max", 0),
                 "threshold": ae_data.get("threshold", 0),
@@ -460,32 +512,97 @@ class ChunkedMLAccumulator:
 
     def _analyze_benford_from_counts(self, col: str, digit_counts: Counter) -> Optional[Dict]:
         """Analyze Benford's law from accumulated digit counts."""
+        from scipy import stats as scipy_stats
+
         total = sum(digit_counts.values())
         if total < MIN_ROWS_FOR_ML:
             return None
 
-        # Expected Benford distribution
+        # Expected Benford distribution (proportions)
         benford_expected = {d: np.log10(1 + 1/d) for d in range(1, 10)}
 
-        # Calculate observed distribution
+        # Calculate observed distribution (proportions)
         observed = {d: digit_counts.get(d, 0) / total for d in range(1, 10)}
 
-        # Chi-square test
-        chi_sq = sum((observed.get(d, 0) - benford_expected[d])**2 / benford_expected[d] for d in range(1, 10))
+        # Observed counts for chi-square test
+        observed_counts = np.array([digit_counts.get(d, 0) for d in range(1, 10)])
+        expected_counts = np.array([benford_expected[d] * total for d in range(1, 10)])
 
-        # Threshold for suspicion (chi-square critical value for df=8, p=0.05 is ~15.5)
-        is_suspicious = chi_sq > 15.5
+        # Chi-square test with actual p-value
+        chi_sq, p_value = scipy_stats.chisquare(observed_counts, expected_counts)
+
+        # Interpretation: low p-value = deviation from Benford (suspicious)
+        # High p-value = conforms to Benford (natural data)
+        is_suspicious = p_value < 0.05
+
+        # Confidence in the DEVIATION finding (consistent with _detect_benford_anomalies)
+        # Low p-value = high confidence that data deviates from Benford
+        if p_value < 0.001:
+            confidence = "Very High"  # Strong evidence of deviation
+        elif p_value < 0.01:
+            confidence = "High"
+        elif p_value < 0.05:
+            confidence = "Medium"
+        else:
+            confidence = "Low"  # Not suspicious / conforms to Benford
 
         return {
             "chi_square": round(chi_sq, 2),
-            "is_suspicious": is_suspicious,
+            "p_value": round(p_value, 6),
+            "alpha": 0.05,  # Significance level used for test
+            "conforms": not is_suspicious,  # True if data follows Benford's Law
+            "is_suspicious": is_suspicious,  # True if data deviates from Benford's Law
+            "confidence": confidence,  # Confidence in the deviation finding
             "total_values": total,
             "observed_distribution": {str(d): round(observed.get(d, 0) * 100, 1) for d in range(1, 10)},
             "expected_distribution": {str(d): round(benford_expected[d] * 100, 1) for d in range(1, 10)}
         }
 
-    def _analyze_outliers_from_stats(self, col: str, stats: Dict, samples: List) -> Optional[Dict]:
-        """Analyze numeric outliers from accumulated statistics."""
+    def _percentile_from_histogram(self, hist_data: Dict, percentile: float) -> float:
+        """Compute approximate percentile from streaming histogram."""
+        if not hist_data['initialized'] or hist_data['counts'] is None:
+            return 0.0
+
+        counts = hist_data['counts']
+        total = counts.sum()
+        if total == 0:
+            return 0.0
+
+        target = total * (percentile / 100.0)
+        cumsum = 0
+        bin_width = (hist_data['range_max'] - hist_data['range_min']) / len(counts)
+
+        for i, count in enumerate(counts):
+            cumsum += count
+            if cumsum >= target:
+                # Linear interpolation within the bin
+                bin_start = hist_data['range_min'] + i * bin_width
+                if count > 0:
+                    fraction = (target - (cumsum - count)) / count
+                    return bin_start + fraction * bin_width
+                return bin_start
+
+        return hist_data['range_max']
+
+    def _count_outliers_from_histogram(self, hist_data: Dict, lower_bound: float, upper_bound: float) -> int:
+        """Count values outside bounds using histogram."""
+        if not hist_data['initialized'] or hist_data['counts'] is None:
+            return 0
+
+        counts = hist_data['counts']
+        bin_width = (hist_data['range_max'] - hist_data['range_min']) / len(counts)
+        outlier_count = 0
+
+        for i, count in enumerate(counts):
+            if count > 0:
+                bin_center = hist_data['range_min'] + (i + 0.5) * bin_width
+                if bin_center < lower_bound or bin_center > upper_bound:
+                    outlier_count += count
+
+        return outlier_count
+
+    def _analyze_outliers_from_stats(self, col: str, stats: Dict, hist_data: Dict) -> Optional[Dict]:
+        """Analyze numeric outliers using streaming histogram percentiles."""
         if stats['count'] < MIN_ROWS_FOR_ML:
             return None
 
@@ -497,24 +614,27 @@ class ChunkedMLAccumulator:
         if std == 0:
             return None
 
-        # Use IQR method on samples
-        samples_arr = np.array(samples)
-        q1, q3 = np.percentile(samples_arr, [25, 75])
+        # Use IQR method with streaming histogram percentiles
+        q1 = self._percentile_from_histogram(hist_data, 25)
+        q3 = self._percentile_from_histogram(hist_data, 75)
         iqr = q3 - q1
+
+        if iqr == 0:
+            return None
+
         lower_bound = q1 - 1.5 * iqr
         upper_bound = q3 + 1.5 * iqr
 
-        # Count outliers in samples and extrapolate
-        sample_outliers = np.sum((samples_arr < lower_bound) | (samples_arr > upper_bound))
-        outlier_rate = sample_outliers / len(samples_arr)
-        estimated_outliers = int(outlier_rate * stats['count'])
+        # Count outliers directly from histogram
+        outlier_count = self._count_outliers_from_histogram(hist_data, lower_bound, upper_bound)
+        outlier_rate = outlier_count / stats['count']
 
-        if estimated_outliers == 0:
+        if outlier_count == 0:
             return None
 
         return {
-            "method": "IQR (chunked)",
-            "anomaly_count": estimated_outliers,
+            "method": "IQR (streaming histogram)",
+            "anomaly_count": outlier_count,
             "anomaly_percentage": round(outlier_rate * 100, 2),
             "bounds": {"lower": round(lower_bound, 2), "upper": round(upper_bound, 2)},
             "statistics": {"mean": round(mean, 2), "std": round(std, 2), "min": round(stats['min'], 2), "max": round(stats['max'], 2)}
@@ -579,14 +699,13 @@ class MLAnalyzer:
     Supports FIBO-based semantic intelligence for smart rare category detection.
     """
 
-    def __init__(self, sample_size: int = ML_SAMPLE_SIZE):
+    def __init__(self):
         """
         Initialize ML analyzer.
 
-        Args:
-            sample_size: Maximum rows to sample for ML analysis
+        Note: No internal sample size limit - the caller (engine) handles sampling.
+        This analyzer processes whatever data is passed to it.
         """
-        self.sample_size = sample_size
         self.results: Dict[str, Any] = {}
         self._sklearn_available = self._check_sklearn()
         self._fibo_taxonomy = self._load_fibo_taxonomy()
@@ -698,22 +817,14 @@ class MLAnalyzer:
         # Store semantic info for use by detection methods
         self._column_semantic_info = column_semantic_info or {}
 
-        # Sample if needed
+        # No internal sampling - engine handles all sampling decisions
         original_rows = len(df)
-        if len(df) > self.sample_size:
-            df = df.sample(n=self.sample_size, random_state=42)
-            sampled = True
-        else:
-            sampled = False
-
-        logger.info(f"ML Analysis: Analyzing {len(df):,} rows (sampled: {sampled})")
+        logger.info(f"ML Analysis: Analyzing {len(df):,} rows")
 
         findings = {
             "sample_info": {
                 "original_rows": original_rows,
-                "analyzed_rows": len(df),
-                "sampled": sampled,
-                "sample_percentage": round(len(df) / original_rows * 100, 2) if original_rows > 0 else 100
+                "analyzed_rows": len(df)
             },
             # Tier 1: Data Authenticity
             "benford_analysis": {},
@@ -817,10 +928,11 @@ class MLAnalyzer:
                 findings["temporal_patterns"][col] = temporal_result
 
         # 9. Benford's Law analysis (only on FIBO money-related columns)
+        # Include ALL results (both suspicious and natural) so users see full analysis
         for col in numeric_cols:
             if self._should_apply_benford(col):
                 benford_result = self._detect_benford_anomalies(df, col)
-                if benford_result and benford_result.get("is_suspicious"):
+                if benford_result:
                     findings["benford_analysis"][col] = benford_result
 
         # 10. Autoencoder anomaly detection (on true numeric columns)
@@ -948,6 +1060,8 @@ class MLAnalyzer:
             error_stats = ae_data["error_stats"]
             viz_data["reconstruction_errors"] = {
                 "mean": error_stats.get("mean", 0),
+                "median": error_stats.get("median", 0),
+                "q75": error_stats.get("q75", 0),
                 "std": error_stats.get("std", 0),
                 "max": error_stats.get("max", 0),
                 "threshold": ae_data.get("threshold", 0),
@@ -1416,6 +1530,7 @@ class MLAnalyzer:
     def _analyze_clusters(self, df: pd.DataFrame, numeric_cols: List[str]) -> Optional[Dict[str, Any]]:
         """
         Analyze data clusters using DBSCAN to identify natural groupings and noise points.
+        Uses proportional sampling for memory efficiency on large datasets.
         """
         try:
             from sklearn.cluster import DBSCAN
@@ -1430,7 +1545,7 @@ class MLAnalyzer:
         if len(valid_cols) < 2:
             return None
 
-        # Limit columns
+        # Limit columns to top 5 by variance
         if len(valid_cols) > 5:
             variances = df[valid_cols].var()
             valid_cols = variances.nlargest(5).index.tolist()
@@ -1440,35 +1555,59 @@ class MLAnalyzer:
             if len(subset_df) < MIN_ROWS_FOR_ML:
                 return None
 
+            # No sampling - process full dataset with memory-efficient batching
+            logger.debug(f"Clustering: analyzing {len(subset_df):,} rows with batched kneighbors")
+
             # Standardize
             scaler = StandardScaler()
             scaled_data = scaler.fit_transform(subset_df)
 
             # Estimate eps using k-nearest neighbors with elbow method
             k = min(max(5, len(subset_df) // 50), 20)  # Adaptive k
-            nn = NearestNeighbors(n_neighbors=k)
+
+            # Use ball_tree algorithm - more memory efficient for moderate dimensions
+            nn = NearestNeighbors(n_neighbors=k, algorithm='ball_tree', leaf_size=40)
             nn.fit(scaled_data)
-            distances, _ = nn.kneighbors(scaled_data)
 
-            # Use k-th neighbor distance, sorted, and find elbow
-            k_distances = np.sort(distances[:, k-1])
+            # Batch kneighbors to manage memory - process in chunks
+            n_rows = len(scaled_data)
+            batch_size = min(50000, n_rows)  # Process 50K rows at a time
+            k_distances_list = []
 
-            # Use a more adaptive eps - aim for ~5-15% as noise maximum
-            # Start with 95th percentile of k-distances
-            eps = np.percentile(k_distances, 95)
+            for start_idx in range(0, n_rows, batch_size):
+                end_idx = min(start_idx + batch_size, n_rows)
+                batch_data = scaled_data[start_idx:end_idx]
+                batch_distances, _ = nn.kneighbors(batch_data)
+                k_distances_list.append(batch_distances[:, k-1])
+                del batch_distances
+                gc.collect()
+
+            # Combine and sort k-distances
+            k_distances = np.concatenate(k_distances_list)
+            del k_distances_list
+            k_distances = np.sort(k_distances)
+
+            # Clean up NearestNeighbors immediately
+            del nn
+            gc.collect()
+
+            # Use adaptive eps - aim for ~5-15% as noise maximum
+            eps_95 = np.percentile(k_distances, 95)
+            eps_99 = np.percentile(k_distances, 99)
+            del k_distances  # Clean up
+            gc.collect()
 
             # Adaptive min_samples based on dataset size
             min_samples = max(5, min(len(subset_df) // 200, 50))
 
             # Run DBSCAN
-            dbscan = DBSCAN(eps=eps, min_samples=min_samples)
+            dbscan = DBSCAN(eps=eps_95, min_samples=min_samples)
             labels = dbscan.fit_predict(scaled_data)
 
             # If too much noise (>50%), try with larger eps
             noise_ratio = (labels == -1).sum() / len(labels)
             if noise_ratio > 0.5:
-                eps = np.percentile(k_distances, 99)
-                dbscan = DBSCAN(eps=eps, min_samples=min_samples)
+                dbscan = DBSCAN(eps=eps_99, min_samples=min_samples)
                 labels = dbscan.fit_predict(scaled_data)
 
             n_clusters = len(set(labels)) - (1 if -1 in labels else 0)
@@ -1988,7 +2127,18 @@ class MLAnalyzer:
             if valid_mask.sum() < MIN_ROWS_FOR_ML:
                 return None
 
+            # Compute dynamic near-zero threshold from data distribution
+            # Use 1st percentile of positive values as baseline for "near-zero"
+            col1_positive = df.loc[valid_mask, col1]
+            near_zero_threshold = col1_positive.quantile(0.01)
+            # Fallback: if 1st percentile is 0, use a small fraction of median
+            if near_zero_threshold <= 0:
+                near_zero_threshold = col1_positive.median() * 0.001
+
             ratios = df.loc[valid_mask, col2] / df.loc[valid_mask, col1]
+
+            # Flag near-zero denominators (will produce extremely large ratios)
+            near_zero_mask = col1_positive < near_zero_threshold
 
             # Adaptive thresholds based on ratio distribution
             median_ratio = ratios.median()
@@ -2010,15 +2160,39 @@ class MLAnalyzer:
             if extreme_high + extreme_low < 10:
                 return None
 
-            # Get sample rows
+            # Get sample rows - sorted by ratio extremeness (furthest from median first)
             extreme_mask = extreme_high_mask | extreme_low_mask
             valid_df = df[valid_mask].reset_index(drop=True)
-            extreme_indices = extreme_mask[extreme_mask].index[:5]
+
+            # Get indices and their ratio values for sorting
+            extreme_indices = extreme_mask[extreme_mask].index.tolist()
+            if not extreme_indices:
+                return None
+
+            # Calculate deviation from median for sorting (log scale for ratios)
+            extreme_ratios = ratios.iloc[extreme_indices]
+            log_median = np.log10(median_ratio) if median_ratio > 0 else 0
+            log_ratios = np.log10(extreme_ratios.replace(0, 1e-10))
+            deviations = np.abs(log_ratios - log_median)
+
+            # Sort by deviation (most extreme first) and take top 5
+            sorted_indices = np.argsort(deviations.values)[::-1][:5]
+            top_extreme_indices = [extreme_indices[i] for i in sorted_indices]
+
             sample_rows = []
-            for idx in extreme_indices:
+            for idx in top_extreme_indices:
                 if idx < len(valid_df):
                     row = valid_df.iloc[idx]
-                    row_dict = {str(k)[:25]: str(v)[:50] for k, v in row.items()}
+                    ratio_val = float(ratios.iloc[idx])
+                    denom_val = float(col1_positive.iloc[idx]) if idx < len(col1_positive) else 0
+                    is_near_zero = denom_val < near_zero_threshold
+                    row_dict = {
+                        'row_index': int(idx),
+                        'ratio': ratio_val,
+                        'near_zero_baseline': is_near_zero,
+                        col1: row[col1] if col1 in row else 'N/A',
+                        col2: row[col2] if col2 in row else 'N/A'
+                    }
                     sample_rows.append(row_dict)
 
             return {
@@ -2028,6 +2202,7 @@ class MLAnalyzer:
                 "extreme_low_count": int(extreme_low),
                 "total_issues": int(extreme_high + extreme_low),
                 "median_ratio": float(median_ratio),
+                "near_zero_threshold": float(near_zero_threshold),
                 "expected_range": {
                     "low": float(low_threshold),
                     "high": float(high_threshold)
@@ -2086,10 +2261,12 @@ class MLAnalyzer:
                 predicted = slope * x + intercept
                 residuals = np.abs(y - predicted)
 
-                # Flag extreme residuals
-                residual_threshold = np.percentile(residuals, 99)
+                # Flag extreme residuals (configurable percentile)
+                residual_percentile = 99  # Top 1% outliers
+                residual_threshold = np.percentile(residuals, residual_percentile)
                 anomaly_mask = residuals > residual_threshold
                 anomaly_count = anomaly_mask.sum()
+                outlier_percent = 100 - residual_percentile  # What percent are flagged
 
                 if anomaly_count > 0:
                     # Get sample rows for anomalies
@@ -2106,6 +2283,7 @@ class MLAnalyzer:
                         "columns": [col1, col2],
                         "expected_correlation": round(corr, 3),
                         "anomaly_count": int(anomaly_count),
+                        "outlier_percent": outlier_percent,  # Dynamic: what % are flagged as outliers
                         "sample_rows": sample_rows,
                         "interpretation": f"{anomaly_count} records deviate from expected {col1}/{col2} relationship"
                     })
@@ -2463,9 +2641,24 @@ class MLAnalyzer:
                 chi_square += (observed_count - expected_count) ** 2 / expected_count
 
         # Degrees of freedom = 8 (9 digits - 1)
-        # Critical values: 15.51 (p=0.05), 20.09 (p=0.01)
-        is_suspicious = chi_square > 15.51
-        confidence = "Very High" if chi_square > 26.12 else "High" if chi_square > 20.09 else "Medium" if chi_square > 15.51 else "Low"
+        # Calculate actual p-value using chi-squared distribution
+        from scipy import stats as scipy_stats
+        df_chi = 8  # degrees of freedom
+        p_value = 1 - scipy_stats.chi2.cdf(chi_square, df_chi)
+
+        # Interpretation based on p-value (standard statistical significance)
+        # Low p-value = deviation from Benford (suspicious)
+        is_suspicious = p_value < 0.05
+
+        # Confidence in suspicious finding (based on p-value)
+        if p_value < 0.001:
+            confidence = "Very High"  # Strong evidence of deviation
+        elif p_value < 0.01:
+            confidence = "High"
+        elif p_value < 0.05:
+            confidence = "Medium"
+        else:
+            confidence = "Low"  # Not suspicious
 
         # Find worst deviations
         worst_deviations = sorted(deviations.items(), key=lambda x: abs(x[1]["deviation"]), reverse=True)[:3]
@@ -2498,6 +2691,9 @@ class MLAnalyzer:
             "method": "benford_law",
             "sample_size": total,
             "chi_square": round(chi_square, 2),
+            "p_value": round(p_value, 6),
+            "alpha": 0.05,  # Significance level used for test
+            "conforms": not is_suspicious,  # True if data follows Benford's Law
             "mean_absolute_deviation": round(mad, 2),
             "is_suspicious": is_suspicious,
             "confidence": confidence,
@@ -2642,6 +2838,19 @@ class MLAnalyzer:
             else:
                 confidence = "Low"
 
+            # Helper for consistent precision (use scientific notation for very small values)
+            def smart_round(val, decimals=4):
+                if val == 0:
+                    return 0.0
+                elif abs(val) < 0.0001:
+                    return float(f"{val:.2e}")  # Scientific notation for tiny values
+                else:
+                    return round(val, decimals)
+
+            # Calculate percentiles for better interpretability (mean is skewed by outliers)
+            median_error = np.median(reconstruction_errors)
+            q75_error = np.percentile(reconstruction_errors, 75)
+
             return {
                 "method": "autoencoder",
                 "architecture": f"Input({n_features}) -> {hidden_layers} -> Output({n_features})",
@@ -2650,12 +2859,14 @@ class MLAnalyzer:
                 "anomaly_count": int(anomaly_count),
                 "anomaly_percentage": round(anomaly_pct, 4),
                 "confidence": confidence,
-                "threshold": round(threshold, 4),
+                "threshold": smart_round(threshold, 8),
                 "error_stats": {
-                    "mean": round(np.mean(reconstruction_errors), 4),
-                    "std": round(np.std(reconstruction_errors), 4),
-                    "max": round(np.max(reconstruction_errors), 4),
-                    "anomaly_min_error": round(reconstruction_errors[anomaly_mask].min(), 4)
+                    "mean": smart_round(np.mean(reconstruction_errors)),
+                    "median": smart_round(median_error),
+                    "q75": smart_round(q75_error),
+                    "std": smart_round(np.std(reconstruction_errors)),
+                    "max": round(np.max(reconstruction_errors), 4),  # Max is always large
+                    "anomaly_min_error": smart_round(reconstruction_errors[anomaly_mask].min())
                 },
                 "contributing_features": contributing_features[:5],
                 "sample_rows": sample_rows,
@@ -3375,15 +3586,13 @@ class MLAnalyzer:
 
 def run_ml_analysis(
     df: pd.DataFrame,
-    sample_size: int = ML_SAMPLE_SIZE,
     column_semantic_info: Optional[Dict[str, Dict[str, Any]]] = None
 ) -> Dict[str, Any]:
     """
     Convenience function to run ML analysis on a DataFrame.
 
     Args:
-        df: DataFrame to analyze
-        sample_size: Maximum rows to sample
+        df: DataFrame to analyze (sampling should be done by caller if needed)
         column_semantic_info: Optional dict mapping column names to their semantic info.
                               Each entry should have 'semantic_tags', 'primary_tag', etc.
                               Used for intelligent rare category detection based on FIBO.
@@ -3391,5 +3600,5 @@ def run_ml_analysis(
     Returns:
         Dictionary containing ML findings
     """
-    analyzer = MLAnalyzer(sample_size=sample_size)
+    analyzer = MLAnalyzer()
     return analyzer.analyze(df, column_semantic_info=column_semantic_info)

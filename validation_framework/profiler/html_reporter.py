@@ -1583,6 +1583,7 @@ class ProfileHTMLReporter:
 
     def _format_number(self, value: any) -> str:
         """Format numeric values, handling scientific notation and extreme values."""
+        import math
         try:
             # Handle string representations
             if isinstance(value, str):
@@ -1594,8 +1595,16 @@ class ProfileHTMLReporter:
             else:
                 num_val = float(value)
 
+            # Handle infinity and NaN
+            if math.isinf(num_val):
+                return "∞" if num_val > 0 else "-∞"
+            if math.isnan(num_val):
+                return "N/A"
+
             # Check for extreme values (likely data corruption or overflow)
-            if abs(num_val) > 1e15:
+            if abs(num_val) > 1e100:
+                return "overflow"  # Beyond reasonable numeric range
+            elif abs(num_val) > 1e15:
                 return f"{num_val:.2e}"  # Use scientific notation
             elif abs(num_val) < 0.001 and num_val != 0:
                 return f"{num_val:.2e}"  # Small numbers in scientific notation
