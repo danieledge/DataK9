@@ -969,4 +969,78 @@ The Insight Engine implements a consistent sampling policy:
 
 ---
 
-**Updated**: 2025-11-27 (v1.54 - Added Insight Engine documentation, corrected memory thresholds)
+## Report UX Design
+
+### Dual-Layer Explanation System
+
+All profiler report sections use a **dual-layer explanation system** to serve both technical and non-technical audiences:
+
+#### Plain-English Summary (📘)
+- **Always visible** (expanded by default)
+- Uses simple, jargon-free language
+- Explains findings in business terms
+- No statistical terminology or algorithm names
+- Accessible to product managers, analysts, and domain experts
+
+**Examples of plain-English language:**
+- ✅ "Most values fall in a normal-looking range"
+- ✅ "Some rows look unusual compared to the rest"
+- ✅ "A few groups have more missing values than others"
+- ❌ ~~"Distribution shows positive skew"~~
+- ❌ ~~"MCAR/MAR missingness pattern detected"~~
+
+#### Technical Details (🧠)
+- **Collapsed by default** (click to expand)
+- Contains all statistical details
+- Algorithm names, thresholds, p-values
+- Correlation coefficients, error metrics
+- For data scientists and technical reviewers
+
+### Section Structure
+
+Every analytical section follows this pattern:
+
+```html
+<div class="insight-widget">
+  <!-- Plain-English Summary (always visible) -->
+  <div class="insight-summary">
+    <div class="insight-summary-label">📘 Plain-English Summary</div>
+    <p>Simple explanation here...</p>
+  </div>
+
+  <!-- Example Data Table -->
+  <table class="insight-examples-table">
+    <!-- Real data examples -->
+  </table>
+
+  <!-- Technical Details (collapsed) -->
+  <details class="dual-layer-technical">
+    <summary>🧠 Technical Details (click to expand)</summary>
+    <div class="technical-body">
+      <!-- All technical content -->
+    </div>
+  </details>
+</div>
+```
+
+### Target Detection Visual Cues
+
+When the profiler detects a likely ML target column:
+
+1. **Class Distribution section** separates target from non-target fields
+2. **Target columns** get:
+   - Orange highlighted border (2px solid #f59e0b)
+   - "🎯 ML TARGET" badge at top
+   - Grouped under "Detected ML Target" header
+3. **Non-target columns** appear under "Other Categorical Fields"
+
+### Anomaly Example Deduplication
+
+All anomaly example tables (Outliers, Unusual Combinations, Cross-Field) are **deduplicated** to show unique examples only:
+- Sorted by anomaly score (most extreme first)
+- Filtered by distinct record signature
+- Shows "No examples available" only when count = 0
+
+---
+
+**Updated**: 2025-11-29 (v1.55 - Added dual-layer UX documentation, target detection, anomaly deduplication)

@@ -8,6 +8,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Dual-Layer Report UX** - All profiler report sections now use a dual-layer explanation system
+  - 📘 Plain-English Summary: Always visible, jargon-free explanations for business users
+  - 🧠 Technical Details: Collapsed by default, contains statistical details for data scientists
+  - Consistent structure across all analytical sections
+- **ML Target Visual Separation** - Class Distribution section now visually distinguishes targets
+  - Target columns highlighted with orange border and "🎯 ML TARGET" badge
+  - Non-target fields appear under separate "Other Categorical Fields" section
+- **Improved Categorical Summary** - Natural language descriptions for categorical columns
+  - Context-aware wording based on number of columns and cardinality
+- **Anomaly Example Deduplication** - Outlier and Unusual Combination tables show unique rows only
+  - Sorted by anomaly score (most extreme first)
+  - No duplicate examples in any anomaly section
+
+### Changed
+- **Autoencoder Section** - Now follows dual-layer pattern with proper plain-English summary
+
+### Fixed
+- Removed awkward "Others (Sex, Embarked) have few unique values" phrasing
+
+---
+
+### Added (Prior)
 - **Date/Time Pattern Support** - Output filenames now support automatic date/time pattern substitution
   - Patterns: `{date}`, `{time}`, `{timestamp}`, `{datetime}`, `{job_name}`, `{file_name}`, `{table_name}`
   - Works in CLI arguments (`-o`, `-j`, `-c`, `--log-file`) and YAML config (`output.html_report`, `output.json_summary`)
