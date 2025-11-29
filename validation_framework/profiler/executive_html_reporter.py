@@ -2570,13 +2570,13 @@ class ExecutiveHTMLReporter:
         }
 
         .insight-summary-text {
-            font-size: 1em;
-            line-height: 1.7;
+            font-size: 0.95em;
+            line-height: 1.6;
             color: var(--text-secondary);
-            padding: 16px;
-            background: rgba(0, 0, 0, 0.2);
-            border-radius: 10px;
-            border-left: 3px solid var(--accent);
+            padding: 14px 16px;
+            background: rgba(var(--info-color-rgb), 0.08);
+            border-radius: 0 8px 8px 0;
+            border-left: 3px solid var(--info-color);
         }
 
         /* Example Table Section */
@@ -2781,7 +2781,7 @@ class ExecutiveHTMLReporter:
         }
 
         .dual-layer-summary-text {
-            font-size: 0.9em;
+            font-size: 0.95em;
             color: var(--text-secondary);
             line-height: 1.6;
         }
@@ -5603,13 +5603,26 @@ the largest difference between classes, which could be useful for predictive mod
                             </div>
                         </div>
                         <div class="accordion-content">
-                            <p style="color: var(--text-secondary); margin-bottom: 16px;">
-                                <strong>Why log scale?</strong> Numeric data often spans multiple orders of magnitude.
-                                Log scaling reveals patterns in both small and large values that would be hidden in linear plots.
-                                {sample_note}
-                                {' See Column Explorer for true min/max from all rows.' if is_sampled else ''}
-                            </p>
-                            <div style="display: flex; flex-wrap: wrap; gap: 16px;">
+                            <div class="dual-layer-explanation">
+                                <div class="dual-layer-summary">
+                                    <div class="dual-layer-summary-label">📘 Plain-English Summary</div>
+                                    <div class="dual-layer-summary-text">
+                                        These charts show how values are spread across each numeric field. We use a special scale that lets you see both small and large values clearly - otherwise big numbers would hide everything else.
+                                        {sample_note}
+                                    </div>
+                                </div>
+                                <details class="dual-layer-technical">
+                                    <summary>🧠 Technical Details (click to expand)</summary>
+                                    <div class="dual-layer-technical-content" style="padding: 12px;">
+                                        <ul style="margin: 0; padding-left: 20px; color: var(--text-secondary); font-size: 0.85em;">
+                                            <li>Log-scaled histogram bins for wide-range numeric data</li>
+                                            <li>Reveals patterns across multiple orders of magnitude</li>
+                                            <li>Min/max shown from full dataset (Parquet metadata)</li>
+                                        </ul>
+                                    </div>
+                                </details>
+                            </div>
+                            <div style="display: flex; flex-wrap: wrap; gap: 16px; margin-top: 16px;">
                                 {charts_html}
                             </div>
                             <script>
@@ -5681,11 +5694,25 @@ the largest difference between classes, which could be useful for predictive mod
                         </div>
                     </div>
                     <div class="accordion-content">
-                        <p style="color: var(--text-secondary); margin-bottom: 16px;">
-                            <strong>Interpretation:</strong> Points should cluster near the diagonal line (y=x) if received and paid amounts match.
-                            Deviations indicate potential unit inconsistencies, adjustments, or data issues. {sample_note}
-                        </p>
-                        <div style="height: 400px; background: var(--bg-card); border-radius: 8px; padding: 16px;">
+                        <div class="dual-layer-explanation">
+                            <div class="dual-layer-summary">
+                                <div class="dual-layer-summary-label">📘 Plain-English Summary</div>
+                                <div class="dual-layer-summary-text">
+                                    This chart compares two amount fields. If both amounts are usually the same, points should line up along the diagonal. Points far from the line might indicate data issues or special cases. {sample_note}
+                                </div>
+                            </div>
+                            <details class="dual-layer-technical">
+                                <summary>🧠 Technical Details (click to expand)</summary>
+                                <div class="dual-layer-technical-content" style="padding: 12px;">
+                                    <ul style="margin: 0; padding-left: 20px; color: var(--text-secondary); font-size: 0.85em;">
+                                        <li>Diagonal line represents y = x (perfect 1:1 match)</li>
+                                        <li>Off-diagonal points may indicate adjustments, fees, or errors</li>
+                                        <li>Log scale used when data spans multiple orders of magnitude</li>
+                                    </ul>
+                                </div>
+                            </details>
+                        </div>
+                        <div style="height: 400px; background: var(--bg-card); border-radius: 8px; padding: 16px; margin-top: 16px;">
                             <canvas id="amountScatterChart"></canvas>
                         </div>
                         <script>
@@ -5855,11 +5882,25 @@ the largest difference between classes, which could be useful for predictive mod
                             </div>
                         </div>
                         <div class="accordion-content">
-                            <p style="color: var(--text-secondary); margin-bottom: 16px;">
-                                <strong>Why this matters:</strong> Severely imbalanced classes (&lt;10% minority) can cause ML models
-                                to ignore the minority class entirely. Consider resampling, class weights, or alternative metrics.
-                                {sample_note}
-                            </p>
+                            <div class="dual-layer-explanation">
+                                <div class="dual-layer-summary">
+                                    <div class="dual-layer-summary-label">📘 Plain-English Summary</div>
+                                    <div class="dual-layer-summary-text">
+                                        These charts show how values are split across categories. When one group is much smaller than others (less than 10%), it can cause problems for analysis because the small group gets overlooked.
+                                        {sample_note}
+                                    </div>
+                                </div>
+                                <details class="dual-layer-technical">
+                                    <summary>🧠 Technical Details (click to expand)</summary>
+                                    <div class="dual-layer-technical-content" style="padding: 12px;">
+                                        <ul style="margin: 0; padding-left: 20px; color: var(--text-secondary); font-size: 0.85em;">
+                                            <li>Minority class &lt;10% = critical imbalance for ML models</li>
+                                            <li>Solutions: SMOTE oversampling, class weights, stratified sampling</li>
+                                            <li>Alternative metrics: F1-score, precision-recall AUC, Cohen's kappa</li>
+                                        </ul>
+                                    </div>
+                                </details>
+                            </div>
                             {imbalance_charts}
                             <script>
                             document.addEventListener('DOMContentLoaded', function() {{
@@ -5977,12 +6018,25 @@ the largest difference between classes, which could be useful for predictive mod
                             </div>
                         </div>
                         <div class="accordion-content">
-                            <p style="color: var(--text-secondary); margin-bottom: 16px;">
-                                <strong>What this shows:</strong> The distribution of records over time.
-                                Daily gaps represent calendar days with zero recorded events after aggregation.
-                                Gaps may indicate ingestion issues, business seasonality, or expected quiet periods.
-                                {sample_note}
-                            </p>
+                            <div class="dual-layer-explanation">
+                                <div class="dual-layer-summary">
+                                    <div class="dual-layer-summary-label">📘 Plain-English Summary</div>
+                                    <div class="dual-layer-summary-text">
+                                        This shows how records are spread out over time. Red bars highlight days with no activity - these gaps might be normal (weekends, holidays) or could indicate missing data.
+                                        {sample_note}
+                                    </div>
+                                </div>
+                                <details class="dual-layer-technical">
+                                    <summary>🧠 Technical Details (click to expand)</summary>
+                                    <div class="dual-layer-technical-content" style="padding: 12px;">
+                                        <ul style="margin: 0; padding-left: 20px; color: var(--text-secondary); font-size: 0.85em;">
+                                            <li>Daily aggregation of event counts</li>
+                                            <li>Gap detection compares consecutive dates</li>
+                                            <li>Red bars = calendar days with zero events</li>
+                                        </ul>
+                                    </div>
+                                </details>
+                            </div>
                             {timeline_charts}
                             <script>
                             document.addEventListener('DOMContentLoaded', function() {{
@@ -7697,9 +7751,23 @@ the largest difference between classes, which could be useful for predictive mod
                     </div>
                     <div class="accordion-body">
                         <div class="accordion-content">
-                            <div class="hint-box">
-                                <strong>💡 Smart Suggestions:</strong> Based on the data profile, these validations are recommended.
-                                Copy individual snippets or use the full config below.
+                            <div class="dual-layer-explanation">
+                                <div class="dual-layer-summary">
+                                    <div class="dual-layer-summary-label">📘 Plain-English Summary</div>
+                                    <div class="dual-layer-summary-text">
+                                        Based on what we learned about your data, here are recommended validations to help catch issues early. Each suggestion includes copy-ready configuration you can add to your validation file.
+                                    </div>
+                                </div>
+                                <details class="dual-layer-technical">
+                                    <summary>🧠 Technical Details (click to expand)</summary>
+                                    <div class="dual-layer-technical-content" style="padding: 12px;">
+                                        <ul style="margin: 0; padding-left: 20px; color: var(--text-secondary); font-size: 0.85em;">
+                                            <li>Suggestions are derived from column statistics, patterns, and anomalies</li>
+                                            <li>Higher confidence scores indicate stronger signals from the data</li>
+                                            <li>Each YAML snippet can be copied directly into your validation config</li>
+                                        </ul>
+                                    </div>
+                                </details>
                             </div>
                             {suggestion_cards}
                         </div>
@@ -7734,9 +7802,23 @@ the largest difference between classes, which could be useful for predictive mod
                     </div>
                     <div class="accordion-body">
                         <div class="accordion-content">
-                            <div class="hint-box">
-                                <strong>📋 Complete Configuration:</strong> Copy this YAML and save it as a <code>.yaml</code> file
-                                to run validations with DataK9 CLI: <code>python3 -m validation_framework.cli validate config.yaml</code>
+                            <div class="dual-layer-explanation">
+                                <div class="dual-layer-summary">
+                                    <div class="dual-layer-summary-label">📘 Plain-English Summary</div>
+                                    <div class="dual-layer-summary-text">
+                                        This is your complete validation configuration file, ready to use. Copy it, save as a .yaml file, and run validations with the DataK9 CLI command shown below.
+                                    </div>
+                                </div>
+                                <details class="dual-layer-technical">
+                                    <summary>🧠 Technical Details (click to expand)</summary>
+                                    <div class="dual-layer-technical-content" style="padding: 12px;">
+                                        <ul style="margin: 0; padding-left: 20px; color: var(--text-secondary); font-size: 0.85em;">
+                                            <li>Run command: <code>python3 -m validation_framework.cli validate config.yaml</code></li>
+                                            <li>Configuration includes all suggested validations from the profile</li>
+                                            <li>Adjust thresholds and parameters based on your specific requirements</li>
+                                        </ul>
+                                    </div>
+                                </details>
                             </div>
                             <div class="full-config-container">
                                 <div class="config-actions">
