@@ -23,6 +23,283 @@ import math
 
 logger = logging.getLogger(__name__)
 
+# SVG icons based on Feather Icons (MIT License - https://feathericons.com)
+# These are defined as reusable symbols, referenced via <use> for efficiency
+# Icon paths only - wrapped with <symbol> in get_svg_defs() for HTML embedding
+FEATHER_ICONS = {
+    # Charts & Data
+    'bar-chart': '<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>',
+    'pie-chart': '<path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/>',
+    'activity': '<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>',
+    'trending-up': '<polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/>',
+    'trending-down': '<polyline points="23 18 13.5 8.5 8.5 13.5 1 6"/><polyline points="17 18 23 18 23 12"/>',
+
+    # Status & Alerts
+    'alert-triangle': '<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>',
+    'alert-circle': '<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>',
+    'check-circle': '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>',
+    'x-circle': '<circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>',
+    'check': '<polyline points="20 6 9 17 4 12"/>',
+    'x': '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>',
+    'info': '<circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>',
+    'help-circle': '<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>',
+
+    # Navigation & Arrows
+    'chevron-down': '<polyline points="6 9 12 15 18 9"/>',
+    'chevron-up': '<polyline points="18 15 12 9 6 15"/>',
+    'chevron-right': '<polyline points="9 18 15 12 9 6"/>',
+    'arrow-up': '<line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/>',
+    'arrow-down': '<line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/>',
+    'arrow-right': '<line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/>',
+    'maximize': '<polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/>',
+    'minimize': '<polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="14" y1="10" x2="21" y2="3"/><line x1="3" y1="21" x2="10" y2="14"/>',
+
+    # Data & Files
+    'database': '<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>',
+    'file-text': '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>',
+    'folder': '<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>',
+    'package': '<line x1="16.5" y1="9.4" x2="7.5" y2="4.21"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/>',
+    'box': '<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/>',
+    'layers': '<polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/>',
+    'grid': '<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>',
+    'copy': '<rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',
+    'download': '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>',
+
+    # UI Elements
+    'search': '<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>',
+    'eye': '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>',
+    'settings': '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
+    'sliders': '<line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/>',
+    'filter': '<polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>',
+    'target': '<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>',
+    'edit': '<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>',
+    'plus': '<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>',
+    'minus': '<line x1="5" y1="12" x2="19" y2="12"/>',
+
+    # Time & Calendar
+    'clock': '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
+    'calendar': '<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>',
+
+    # People & Identity
+    'user': '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
+    'shield': '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>',
+    'lock': '<rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
+    'key': '<path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/>',
+
+    # Communication
+    'mail': '<path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/>',
+    'link': '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>',
+
+    # Location & World
+    'globe': '<circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>',
+    'map-pin': '<path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>',
+
+    # Finance & Commerce
+    'dollar-sign': '<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',
+    'credit-card': '<rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/>',
+    'briefcase': '<rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>',
+    'percent': '<line x1="19" y1="5" x2="5" y2="19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/>',
+
+    # Objects & Misc
+    'tag': '<path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/>',
+    'hash': '<line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/><line x1="10" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="14" y2="21"/>',
+    'star': '<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>',
+    'zap': '<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>',
+    'book-open': '<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>',
+    'thumbs-up': '<path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/>',
+    'thumbs-down': '<path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17"/>',
+    'cpu': '<rect x="4" y="4" width="16" height="16" rx="2" ry="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="14" x2="23" y2="14"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="14" x2="4" y2="14"/>',
+
+    # AI/ML Icons (from Lucide - MIT License)
+    'brain': '<path d="M12 18V5"/><path d="M15 13a4.17 4.17 0 0 1-3-4 4.17 4.17 0 0 1-3 4"/><path d="M17.598 6.5A3 3 0 1 0 12 5a3 3 0 1 0-5.598 1.5"/><path d="M17.997 5.125a4 4 0 0 1 2.526 5.77"/><path d="M18 18a4 4 0 0 0 2-7.464"/><path d="M19.967 17.483A4 4 0 1 1 12 18a4 4 0 1 1-7.967-.517"/><path d="M6 18a4 4 0 0 1-2-7.464"/><path d="M6.003 5.125a4 4 0 0 0-2.526 5.77"/>',
+    'brain-circuit': '<path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/><path d="M9 13a4.5 4.5 0 0 0 3-4"/><path d="M6.003 5.125A3 3 0 0 0 6.401 6.5"/><path d="M3.477 10.896a4 4 0 0 1 .585-.396"/><path d="M6 18a4 4 0 0 1-1.967-.516"/><path d="M12 13h4"/><path d="M12 18h6a2 2 0 0 1 2 2v1"/><path d="M12 8h8"/><path d="M16 8V5a2 2 0 0 1 2-2"/><circle cx="16" cy="13" r=".5"/><circle cx="18" cy="3" r=".5"/><circle cx="20" cy="21" r=".5"/><circle cx="20" cy="8" r=".5"/>',
+    'network': '<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>',
+    'aperture': '<circle cx="12" cy="12" r="10"/><line x1="14.31" y1="8" x2="20.05" y2="17.94"/><line x1="9.69" y1="8" x2="21.17" y2="8"/><line x1="7.38" y1="12" x2="13.12" y2="2.06"/><line x1="9.69" y1="16" x2="3.95" y2="6.06"/><line x1="14.31" y1="16" x2="2.83" y2="16"/><line x1="16.62" y1="12" x2="10.88" y2="21.94"/>',
+    'git-branch': '<line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/>',
+}
+
+
+def get_svg_defs() -> str:
+    """Generate SVG <defs> block with all icon symbols for HTML embedding.
+
+    Returns:
+        HTML string with hidden SVG containing all icon symbols
+    """
+    symbols = []
+    for icon_id, paths in FEATHER_ICONS.items():
+        symbols.append(f'<symbol id="icon-{icon_id}" viewBox="0 0 24 24">{paths}</symbol>')
+
+    return f'''<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+    <defs>
+        {''.join(symbols)}
+    </defs>
+</svg>'''
+
+
+def icon(name: str, size: int = 16, color: str = None, class_name: str = '', style: str = '') -> str:
+    """Generate an SVG icon reference using <use>.
+
+    Args:
+        name: Icon name (must exist in FEATHER_ICONS)
+        size: Icon size in pixels (default 16)
+        color: Optional color override
+        class_name: Optional CSS class
+        style: Additional inline styles
+
+    Returns:
+        SVG element string using <use> to reference the icon symbol
+    """
+    color_style = f'color: {color};' if color else ''
+    full_style = f'width: {size}px; height: {size}px; vertical-align: -2px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; {color_style} {style}'.strip()
+    class_attr = f' class="{class_name}"' if class_name else ''
+
+    return f'<svg{class_attr} style="{full_style}"><use href="#icon-{name}"/></svg>'
+
+
+# Legacy SVG_ICONS dict for backward compatibility (inline SVGs)
+# Used by emoji_to_svg() when <defs> aren't available
+SVG_ICONS = {
+    'chart': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>',
+    'brain': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 18V5"/><path d="M15 13a4.17 4.17 0 0 1-3-4 4.17 4.17 0 0 1-3 4"/><path d="M17.598 6.5A3 3 0 1 0 12 5a3 3 0 1 0-5.598 1.5"/><path d="M17.997 5.125a4 4 0 0 1 2.526 5.77"/><path d="M18 18a4 4 0 0 0 2-7.464"/><path d="M19.967 17.483A4 4 0 1 1 12 18a4 4 0 1 1-7.967-.517"/><path d="M6 18a4 4 0 0 1-2-7.464"/><path d="M6.003 5.125a4 4 0 0 0-2.526 5.77"/></svg>',
+    'warning': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>',
+    'trending': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>',
+    'search': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>',
+    'box': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>',
+    'layers': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>',
+    'target': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>',
+    'grid': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>',
+    'link': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>',
+    'check': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>',
+    'calendar': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>',
+    'lightbulb': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>',
+    'bolt': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>',
+    'info': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>',
+    'hash': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/><line x1="10" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="14" y2="21"/></svg>',
+    'user': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>',
+    'mappin': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>',
+    'dollar': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>',
+    'key': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>',
+    'building': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>',
+    'lock': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>',
+    'mail': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>',
+    'phone': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>',
+    'globe': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>',
+    'shield': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>',
+    'flask': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>',
+    'file': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>',
+    'folder': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>',
+    'tag': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>',
+    'pencil': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>',
+    'checkcircle': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>',
+    'xcircle': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>',
+    'alertcircle': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>',
+    'arrowright': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>',
+    'arrowup': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>',
+    'arrowdown': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>',
+    'chevrondown': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>',
+    'activity': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>',
+    'eye': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>',
+    'database': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>',
+    'piechart': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg>',
+    'creditcard': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>',
+    'briefcase': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>',
+    'clock': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>',
+    'clipboard': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>',
+    'settings': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>',
+    'wrench': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>',
+    'book': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>',
+}
+
+# Emoji to SVG icon mapping for replacing emojis with inline SVGs
+# Format: emoji -> (icon_key, optional_color)
+EMOJI_TO_ICON = {
+    '📊': ('chart', None),
+    '🧠': ('brain', None),
+    '📅': ('calendar', None),
+    '📋': ('clipboard', None),
+    '💡': ('lightbulb', '#f59e0b'),
+    '📘': ('book', None),
+    '🏦': ('building', None),
+    '⚠️': ('warning', '#f59e0b'),
+    '⚠': ('warning', '#f59e0b'),
+    '🔢': ('hash', None),
+    '🔗': ('link', None),
+    '🔍': ('search', None),
+    '📦': ('box', None),
+    '👤': ('user', None),
+    'ℹ': ('info', None),
+    'ℹ️': ('info', None),
+    '🏷': ('tag', None),
+    '🏷️': ('tag', None),
+    '📝': ('pencil', None),
+    '📍': ('mappin', None),
+    '💰': ('dollar', '#10b981'),
+    '⚡': ('bolt', '#f59e0b'),
+    '→': ('arrowright', None),
+    '🔬': ('flask', None),
+    '🔒': ('lock', None),
+    '🔑': ('key', None),
+    '📈': ('trending', '#10b981'),
+    '📧': ('mail', None),
+    '🎯': ('target', '#ef4444'),
+    '✅': ('checkcircle', '#10b981'),
+    '❌': ('xcircle', '#ef4444'),
+    '✓': ('check', '#10b981'),
+    '🚨': ('alertcircle', '#ef4444'),
+    '🔧': ('wrench', None),
+    '📞': ('phone', None),
+    '🏢': ('building', None),
+    '🌐': ('globe', None),
+    '❓': ('info', None),
+    '⚙️': ('settings', None),
+    '📄': ('file', None),
+    '⏳': ('clock', None),
+    '↑': ('arrowup', '#10b981'),
+    '↓': ('arrowdown', '#ef4444'),
+    '📐': ('layers', None),
+    '💸': ('dollar', None),
+    '🛡️': ('shield', None),
+    '🛡': ('shield', None),
+    '📉': ('trending', '#ef4444'),
+    '💳': ('creditcard', None),
+    '💼': ('briefcase', None),
+    '📂': ('folder', None),
+    '🔴': ('alertcircle', '#ef4444'),
+    '🟡': ('alertcircle', '#f59e0b'),
+    '🟠': ('alertcircle', '#f97316'),
+    '🔄': ('activity', '#3b82f6'),
+    '❓': ('info', '#6b7280'),
+    '⚖️': ('activity', None),
+    '🕳️': ('info', '#6b7280'),
+}
+
+
+def emoji_to_svg(emoji: str, size: int = 14, style: str = '') -> str:
+    """Convert an emoji to an inline SVG icon.
+
+    Args:
+        emoji: The emoji character to convert
+        size: Icon size in pixels (default 14)
+        style: Additional inline CSS styles
+
+    Returns:
+        SVG HTML string or original emoji if no mapping exists
+    """
+    if emoji not in EMOJI_TO_ICON:
+        return emoji
+
+    icon_key, color = EMOJI_TO_ICON[emoji]
+    if icon_key not in SVG_ICONS:
+        return emoji
+
+    svg = SVG_ICONS[icon_key]
+    # Add size and optional color styling
+    color_style = f'color: {color};' if color else ''
+    full_style = f'width: {size}px; height: {size}px; vertical-align: -2px; {color_style} {style}'.strip()
+
+    # Insert style into SVG
+    return svg.replace('<svg ', f'<svg style="{full_style}" ')
+
 
 class ExecutiveHTMLReporter:
     """Generate executive-style HTML reports for profile results."""
@@ -118,11 +395,24 @@ class ExecutiveHTMLReporter:
 
         # Pre-join charts for each section
         distribution_charts = ''.join(viz_charts.get('distributions', []))
+        predictive_ml_charts = ''.join(viz_charts.get('predictive_ml', []))
         anomaly_charts = ''.join(viz_charts.get('anomalies', []))
         temporal_charts = ''.join(viz_charts.get('temporal', []))
         correlation_charts = ''.join(viz_charts.get('correlations', []))
         missingness_charts = ''.join(viz_charts.get('missingness', []))
         overview_charts = ''.join(viz_charts.get('overview', []))
+
+        # Compute badge counts for section headers
+        ml_field_count = len(categorical_columns)  # Low-cardinality fields for ML
+        anomaly_count = profile.ml_findings.get('summary', {}).get('total_issues', 0) if profile.ml_findings else 0
+        # profile.correlations can be a list or dict depending on version
+        if isinstance(profile.correlations, list):
+            correlation_count = len(profile.correlations)
+        elif isinstance(profile.correlations, dict):
+            correlation_count = len(profile.correlations.get('pairs', []))
+        else:
+            correlation_count = 0
+        temporal_count = len(temporal_columns)
 
         html = f'''<!DOCTYPE html>
 <html lang="en">
@@ -138,6 +428,9 @@ class ExecutiveHTMLReporter:
     </style>
 </head>
 <body>
+    <!-- Feather Icons SVG Definitions (MIT License - https://feathericons.com) -->
+    {get_svg_defs()}
+
     <!-- Top Navigation -->
     <header class="top-nav">
         <div class="top-inner">
@@ -169,19 +462,18 @@ class ExecutiveHTMLReporter:
                 <div class="dq-sidebar-section">
                     <div class="dq-sidebar-label">Navigation</div>
                     <ul class="dq-nav-list">
-                        <li class="dq-nav-item"><button class="dq-nav-link active" data-section="overview"><span class="nav-num">1</span>Overview</button></li>
-                        <li class="dq-nav-item"><button class="dq-nav-link" data-section="engine"><span class="nav-num">2</span>Profiling Engine</button></li>
-                        <li class="dq-nav-item"><button class="dq-nav-link" data-section="structure"><span class="nav-num">3</span>Dataset Structure</button></li>
-                        <li class="dq-nav-item"><button class="dq-nav-link" data-section="columns"><span class="nav-num">4</span>Field Profiles</button></li>
-                        <li class="dq-nav-item"><button class="dq-nav-link" data-section="distributions"><span class="nav-num">5</span>Distributions</button></li>
-                        <li class="dq-nav-item"><button class="dq-nav-link" data-section="missingness"><span class="nav-num">6</span>Missingness & Bias</button></li>
-                        <li class="dq-nav-item"><button class="dq-nav-link" data-section="anomalies"><span class="nav-num">7</span>Anomalies</button></li>
-                        <li class="dq-nav-item"><button class="dq-nav-link" data-section="temporal"><span class="nav-num">8</span>Temporal Analysis</button></li>
-                        <li class="dq-nav-item"><button class="dq-nav-link" data-section="correlations"><span class="nav-num">9</span>Correlations</button></li>
-                        <li class="dq-nav-item"><button class="dq-nav-link" data-section="validations"><span class="nav-num">10</span>Validation Suggestions</button></li>
-                        <li class="dq-nav-item"><button class="dq-nav-link" data-section="yaml"><span class="nav-num">11</span>YAML / Export</button></li>
-                        <li class="dq-nav-item"><button class="dq-nav-link" data-section="nextsteps"><span class="nav-num">12</span>Next Steps</button></li>
-                        <li class="dq-nav-item"><button class="dq-nav-link" data-section="glossary"><span class="nav-num">13</span>Glossary</button></li>
+                        <li class="dq-nav-item"><button class="dq-nav-link active" data-section="overview"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Overview</button></li>
+                        <li class="dq-nav-item"><button class="dq-nav-link" data-section="structure"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3h18v18H3z"/><path d="M3 9h18M9 3v18"/></svg>Dataset Structure</button></li>
+                        <li class="dq-nav-item"><button class="dq-nav-link" data-section="missingness"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 3v18" stroke-dasharray="3 3"/></svg>Data Quality</button></li>
+                        <li class="dq-nav-item"><button class="dq-nav-link" data-section="distributions"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 20h18M5 20V10M9 20V4M13 20v-8M17 20V8M21 20v-6"/></svg>Distributions</button></li>
+                        <li class="dq-nav-item"><button class="dq-nav-link" data-section="predictive-ml"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>Predictive ML</button></li>
+                        <li class="dq-nav-item"><button class="dq-nav-link" data-section="anomalies"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>Anomalies</button></li>
+                        <li class="dq-nav-item"><button class="dq-nav-link" data-section="correlations"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="6" r="3"/><circle cx="18" cy="18" r="3"/><path d="M8.5 8.5l7 7"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/></svg>Correlations</button></li>
+                        <li class="dq-nav-item"><button class="dq-nav-link" data-section="columns"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v4H4zM4 10h16v4H4zM4 16h16v4H4z"/></svg>Field Profiles</button></li>
+                        <li class="dq-nav-item"><button class="dq-nav-link" data-section="validations"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3 8-8"/><path d="M20 12v6a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h9"/></svg>Validations</button></li>
+                        <li class="dq-nav-item"><button class="dq-nav-link" data-section="yaml"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h8"/></svg>YAML Config</button></li>
+                        <li class="dq-nav-item"><button class="dq-nav-link" data-section="lineage"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>Data Lineage</button></li>
+                        <li class="dq-nav-item"><button class="dq-nav-link" data-section="glossary"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/><path d="M8 7h8M8 11h6"/></svg>Glossary</button></li>
                     </ul>
                 </div>
             </div>
@@ -190,7 +482,7 @@ class ExecutiveHTMLReporter:
                     <span class="expand-icon">+</span> Expand All
                 </button>
                 <button class="export-pdf-btn" id="exportPdfBtn" onclick="exportToPDF()" title="Export report to PDF">
-                    <span class="pdf-icon">📄</span> Export PDF
+                    <span class="pdf-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;vertical-align:-2px"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg></span> Export PDF
                 </button>
             </div>
         </aside>
@@ -229,30 +521,73 @@ class ExecutiveHTMLReporter:
         <!-- ═══════════════════════════════════════════════════════════════ -->
         <!-- 3. DATA QUALITY OVERVIEW - High-level metrics first             -->
         <!-- ═══════════════════════════════════════════════════════════════ -->
-        <div class="section-divider" id="section-structure" style="margin: 24px 0 16px 0; padding: 12px 20px; background: linear-gradient(135deg, #1e3a5f 0%, #0d1f3c 100%); border-radius: 8px; border-left: 4px solid #3b82f6;">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-                <div>
-                    <h2 style="margin: 0; font-size: 1.1em; color: #f1f5f9; font-weight: 600;">Dataset Structure & Semantics</h2>
-                    <p style="margin: 4px 0 0 0; font-size: 0.85em; color: #94a3b8;">Type distribution, value patterns, and quality scores by column</p>
+        <div class="section-accordion expanded" id="section-structure" style="--section-accent: #3b82f6; --section-accent-dark: #1d4ed8;">
+            <div class="section-accordion-header" onclick="toggleSectionAccordion(this)">
+                <div class="section-accordion-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3h18v18H3z"/><path d="M3 9h18M9 3v18"/></svg>
                 </div>
-                <div style="background: rgba(255,255,255,0.15); padding: 4px 12px; border-radius: 4px; font-size: 0.8em; font-weight: 600; color: white;">STRUCTURE</div>
+                <div class="section-accordion-content-wrap">
+                    <h2 class="section-accordion-title">Dataset Structure & Semantics</h2>
+                    <p class="section-accordion-subtitle">Type distribution, value patterns, and quality scores by column</p>
+                </div>
+                <div class="section-accordion-meta">
+                    <div class="section-accordion-badge">Structure</div>
+                    <span class="section-accordion-chevron"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><polyline points="6 9 12 15 18 9"/></svg></span>
+                </div>
             </div>
-        </div>
-
-        <div class="layout-grid">
-            <div class="main-column">
+            <div class="section-accordion-content">
                 <!-- Data Types Accordion -->
                 {self._generate_overview_accordion(profile, type_counts, avg_completeness, avg_validity, avg_consistency, avg_uniqueness)}
 
                 <!-- Semantic Classification Accordion (unified FIBO + Schema.org) -->
                 {self._generate_semantic_classification_accordion(profile)}
+            </div>
+        </div>
 
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <!-- 3B. DATA QUALITY - Quality metrics and missingness              -->
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <div class="section-accordion expanded" id="section-missingness" style="--section-accent: #f59e0b; --section-accent-dark: #d97706;">
+            <div class="section-accordion-header" onclick="toggleSectionAccordion(this)">
+                <div class="section-accordion-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                </div>
+                <div class="section-accordion-content-wrap">
+                    <h2 class="section-accordion-title">Data Quality</h2>
+                    <p class="section-accordion-subtitle">Completeness, validity, consistency, and uniqueness metrics</p>
+                </div>
+                <div class="section-accordion-meta">
+                    <div class="section-accordion-badge">Quality</div>
+                    <span class="section-accordion-chevron"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><polyline points="6 9 12 15 18 9"/></svg></span>
+                </div>
+            </div>
+            <div class="section-accordion-content">
                 <!-- Quality Metrics Accordion -->
                 {self._generate_quality_accordion(profile)}
 
                 <!-- Overview Visualizations - Quality Radar (relocated from Advanced Visualizations) -->
                 {overview_charts}
+            </div>
+        </div>
 
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <!-- 3C. DISTRIBUTIONS - Value distributions and patterns            -->
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <div class="section-accordion expanded" id="section-distributions" style="--section-accent: #06b6d4; --section-accent-dark: #0891b2;">
+            <div class="section-accordion-header" onclick="toggleSectionAccordion(this)">
+                <div class="section-accordion-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
+                </div>
+                <div class="section-accordion-content-wrap">
+                    <h2 class="section-accordion-title">Distributions</h2>
+                    <p class="section-accordion-subtitle">Value distributions, categorical breakdowns, and temporal patterns</p>
+                </div>
+                <div class="section-accordion-meta">
+                    <div class="section-accordion-badge">{ml_field_count} Categorical</div>
+                    <span class="section-accordion-chevron"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><polyline points="6 9 12 15 18 9"/></svg></span>
+                </div>
+            </div>
+            <div class="section-accordion-content">
                 <!-- Value Distribution Accordion -->
                 {self._generate_distribution_accordion(profile, categorical_columns)}
 
@@ -268,42 +603,104 @@ class ExecutiveHTMLReporter:
         </div>
 
         <!-- ═══════════════════════════════════════════════════════════════ -->
+        <!-- 3D. PREDICTIVE ML - Target variable analysis                    -->
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <div class="section-accordion expanded" id="section-predictive-ml" style="--section-accent: #ec4899; --section-accent-dark: #db2777;">
+            <div class="section-accordion-header" onclick="toggleSectionAccordion(this)">
+                <div class="section-accordion-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+                </div>
+                <div class="section-accordion-content-wrap">
+                    <h2 class="section-accordion-title">Predictive ML</h2>
+                    <p class="section-accordion-subtitle">Target variable analysis, class balance, and feature associations</p>
+                </div>
+                <div class="section-accordion-meta">
+                    <div class="section-accordion-badge">{ml_field_count} Fields</div>
+                    <span class="section-accordion-chevron"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><polyline points="6 9 12 15 18 9"/></svg></span>
+                </div>
+            </div>
+            <div class="section-accordion-content">
+                <!-- Predictive ML Section -->
+                {predictive_ml_charts if predictive_ml_charts else '<p style="color: var(--text-muted);">No categorical target variables detected for ML analysis.</p>'}
+            </div>
+        </div>
+
+        <!-- ═══════════════════════════════════════════════════════════════ -->
         <!-- 4. DATA INSIGHTS - ML-powered patterns & anomalies              -->
         <!-- ═══════════════════════════════════════════════════════════════ -->
+        <div class="section-accordion expanded" id="section-anomalies" style="--section-accent: #ef4444; --section-accent-dark: #dc2626;">
+            <div class="section-accordion-header" onclick="toggleSectionAccordion(this)">
+                <div class="section-accordion-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                </div>
+                <div class="section-accordion-content-wrap">
+                    <h2 class="section-accordion-title">Data Insights & Anomalies</h2>
+                    <p class="section-accordion-subtitle">ML-powered pattern detection, outliers, and data quality issues</p>
+                </div>
+                <div class="section-accordion-meta">
+                    <div class="section-accordion-badge">{anomaly_count} Issues</div>
+                    <span class="section-accordion-chevron"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><polyline points="6 9 12 15 18 9"/></svg></span>
+                </div>
+            </div>
+            <div class="section-accordion-content">
+                <!-- PII Risk Section (if detected) - still important to highlight -->
+                {self._generate_pii_section(pii_columns) if pii_count > 0 else ''}
 
-        <!-- PII Risk Section (if detected) - still important to highlight -->
-        {self._generate_pii_section(pii_columns) if pii_count > 0 else ''}
+                <!-- v2 Insight Widgets (Plain English + Examples + Technical) -->
+                {self._generate_ml_section_v2(profile.ml_findings, profile.columns) if profile.ml_findings else ''}
 
-        <!-- v2 Insight Widgets (Plain English + Examples + Technical) -->
-        {self._generate_ml_section_v2(profile.ml_findings, profile.columns) if profile.ml_findings else ''}
+                <!-- Anomaly Visualizations (relocated from Advanced Visualizations) -->
+                {anomaly_charts}
 
-        <!-- Anomaly Visualizations (relocated from Advanced Visualizations) -->
-        {anomaly_charts}
+                <!-- Missingness Visualizations (relocated from Advanced Visualizations) -->
+                {missingness_charts}
+            </div>
+        </div>
 
-        <!-- Missingness Visualizations (relocated from Advanced Visualizations) -->
-        {missingness_charts}
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <!-- 4B. CORRELATIONS - Column relationships                         -->
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <div class="section-accordion expanded" id="section-correlations" style="--section-accent: #8b5cf6; --section-accent-dark: #7c3aed;">
+            <div class="section-accordion-header" onclick="toggleSectionAccordion(this)">
+                <div class="section-accordion-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+                </div>
+                <div class="section-accordion-content-wrap">
+                    <h2 class="section-accordion-title">Correlations & Relationships</h2>
+                    <p class="section-accordion-subtitle">Statistical relationships between columns</p>
+                </div>
+                <div class="section-accordion-meta">
+                    <div class="section-accordion-badge">{correlation_count} Pairs</div>
+                    <span class="section-accordion-chevron"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><polyline points="6 9 12 15 18 9"/></svg></span>
+                </div>
+            </div>
+            <div class="section-accordion-content">
+                <!-- Column Relationships / Correlations -->
+                {self._generate_correlations_section(profile.correlations) if profile.correlations else '<p style="color: var(--text-muted);">No significant correlations detected.</p>'}
 
-        <!-- Column Relationships / Correlations -->
-        {self._generate_correlations_section(profile.correlations) if profile.correlations else ''}
-
-        <!-- Correlation Visualizations (relocated from Advanced Visualizations) -->
-        {correlation_charts}
+                <!-- Correlation Visualizations (relocated from Advanced Visualizations) -->
+                {correlation_charts}
+            </div>
+        </div>
 
         <!-- ═══════════════════════════════════════════════════════════════ -->
         <!-- 5. COLUMN-LEVEL QUALITY SUMMARY                                 -->
         <!-- ═══════════════════════════════════════════════════════════════ -->
-        <div class="section-divider" id="section-columns" style="margin: 24px 0 16px 0; padding: 12px 20px; background: linear-gradient(135deg, #374151 0%, #1f2937 100%); border-radius: 8px; border-left: 4px solid #6b7280;">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-                <div>
-                    <h2 style="margin: 0; font-size: 1.1em; color: #f1f5f9; font-weight: 600;">Column-Level Analysis</h2>
-                    <p style="margin: 4px 0 0 0; font-size: 0.85em; color: #9ca3af;">Detailed statistics, patterns, and quality metrics for each field</p>
+        <div class="section-accordion expanded" id="section-columns" style="--section-accent: #6366f1; --section-accent-dark: #4f46e5;">
+            <div class="section-accordion-header" onclick="toggleSectionAccordion(this)">
+                <div class="section-accordion-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v4H4zM4 10h16v4H4zM4 16h16v4H4z"/></svg>
                 </div>
-                <div style="background: rgba(255,255,255,0.15); padding: 4px 12px; border-radius: 4px; font-size: 0.8em; font-weight: 600; color: white;">{profile.column_count} COLUMNS</div>
+                <div class="section-accordion-content-wrap">
+                    <h2 class="section-accordion-title">Field Profiles</h2>
+                    <p class="section-accordion-subtitle">Detailed statistics, patterns, and quality metrics for each field</p>
+                </div>
+                <div class="section-accordion-meta">
+                    <div class="section-accordion-badge">{profile.column_count} Fields</div>
+                    <span class="section-accordion-chevron"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><polyline points="6 9 12 15 18 9"/></svg></span>
+                </div>
             </div>
-        </div>
-
-        <div class="layout-grid">
-            <div class="main-column">
+            <div class="section-accordion-content">
                 <!-- Column Explorer -->
                 {self._generate_column_explorer(profile)}
             </div>
@@ -312,18 +709,21 @@ class ExecutiveHTMLReporter:
         <!-- ═══════════════════════════════════════════════════════════════ -->
         <!-- 6. RECOMMENDED VALIDATIONS                                      -->
         <!-- ═══════════════════════════════════════════════════════════════ -->
-        <div class="section-divider" id="section-validations" style="margin: 24px 0 16px 0; padding: 12px 20px; background: linear-gradient(135deg, #065f46 0%, #022c22 100%); border-radius: 8px; border-left: 4px solid #10b981;">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-                <div>
-                    <h2 style="margin: 0; font-size: 1.1em; color: #f1f5f9; font-weight: 600;">Recommended Validations</h2>
-                    <p style="margin: 4px 0 0 0; font-size: 0.85em; color: #6ee7b7;">Based on our analysis, implement these rules to protect data quality</p>
+        <div class="section-accordion expanded" id="section-validations" style="--section-accent: #10b981; --section-accent-dark: #059669;">
+            <div class="section-accordion-header" onclick="toggleSectionAccordion(this)">
+                <div class="section-accordion-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3 8-8"/><path d="M20 12v6a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h9"/></svg>
                 </div>
-                <div style="background: rgba(255,255,255,0.15); padding: 4px 12px; border-radius: 4px; font-size: 0.8em; font-weight: 600; color: white;">ACTION</div>
+                <div class="section-accordion-content-wrap">
+                    <h2 class="section-accordion-title">Recommended Validations</h2>
+                    <p class="section-accordion-subtitle">Data quality rules based on pattern analysis</p>
+                </div>
+                <div class="section-accordion-meta">
+                    <div class="section-accordion-badge">Action</div>
+                    <span class="section-accordion-chevron"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><polyline points="6 9 12 15 18 9"/></svg></span>
+                </div>
             </div>
-        </div>
-
-        <div class="layout-grid">
-            <div class="main-column">
+            <div class="section-accordion-content">
                 <!-- Validation Suggestions -->
                 {self._generate_suggestions_accordion(profile)}
 
@@ -340,106 +740,92 @@ class ExecutiveHTMLReporter:
         <!-- ═══════════════════════════════════════════════════════════════ -->
         <!-- 13. GLOSSARY SECTION                                            -->
         <!-- ═══════════════════════════════════════════════════════════════ -->
-        <div class="section-divider" id="section-glossary" style="margin: 24px 0 16px 0; padding: 12px 20px; background: linear-gradient(135deg, #374151 0%, #1f2937 100%); border-radius: 8px; border-left: 4px solid #9ca3af;">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-                <div>
-                    <h2 style="margin: 0; font-size: 1.1em; color: #f1f5f9; font-weight: 600;">📖 Glossary</h2>
-                    <p style="margin: 4px 0 0 0; font-size: 0.85em; color: #94a3b8;">Key terms and concepts used in this report</p>
+        <div class="section-accordion expanded" id="section-glossary" style="--section-accent: #64748b; --section-accent-dark: #475569;">
+            <div class="section-accordion-header" onclick="toggleSectionAccordion(this)">
+                <div class="section-accordion-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/><path d="M8 7h8M8 11h6"/></svg>
                 </div>
-                <div style="background: rgba(255,255,255,0.1); padding: 4px 12px; border-radius: 4px; font-size: 0.8em; font-weight: 600; color: #94a3b8;">REFERENCE</div>
+                <div class="section-accordion-content-wrap">
+                    <h2 class="section-accordion-title">Glossary</h2>
+                    <p class="section-accordion-subtitle">Key terms and concepts used in this report</p>
+                </div>
+                <div class="section-accordion-meta">
+                    <div class="section-accordion-badge">Reference</div>
+                    <span class="section-accordion-chevron"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><polyline points="6 9 12 15 18 9"/></svg></span>
+                </div>
             </div>
-        </div>
+            <div class="section-accordion-content">
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px;">
+                    <!-- Data Quality Metrics -->
+                    <div style="background: var(--bg-card); border-radius: 8px; padding: 16px; border-left: 3px solid #3b82f6;">
+                        <h4 style="margin: 0 0 12px 0; font-size: 0.9em; color: #3b82f6; text-transform: uppercase; letter-spacing: 0.5px;">Quality Metrics</h4>
+                        <dl style="margin: 0; font-size: 0.85em;">
+                            <dt style="font-weight: 600; color: var(--text-primary); margin-top: 8px;">Completeness</dt>
+                            <dd style="margin: 4px 0 0 0; color: var(--text-secondary);">Percentage of non-null values in a field. Higher is better for required fields.</dd>
 
-        <div class="layout-grid">
-            <div class="main-column">
-                <div class="accordion" data-accordion="glossary-terms">
-                    <div class="accordion-header" onclick="toggleAccordion(this)">
-                        <div class="accordion-title-group">
-                            <div class="accordion-icon" style="background: linear-gradient(135deg, #6b7280, #4b5563);">📚</div>
-                            <div>
-                                <div class="accordion-title">Data Quality & Analysis Terms</div>
-                                <div class="accordion-subtitle">Understanding the metrics and methods in this report</div>
-                            </div>
-                        </div>
-                        <div class="accordion-meta">
-                            <span class="accordion-badge info">Reference</span>
-                            <span class="accordion-chevron">▼</span>
-                        </div>
+                            <dt style="font-weight: 600; color: var(--text-primary); margin-top: 12px;">Validity</dt>
+                            <dd style="margin: 4px 0 0 0; color: var(--text-secondary);">Percentage of values that match expected format/type. Based on pattern consistency.</dd>
+
+                            <dt style="font-weight: 600; color: var(--text-primary); margin-top: 12px;">Uniqueness</dt>
+                            <dd style="margin: 4px 0 0 0; color: var(--text-secondary);">Ratio of distinct values to total values. Important for ID fields (should be 100%).</dd>
+
+                            <dt style="font-weight: 600; color: var(--text-primary); margin-top: 12px;">Consistency</dt>
+                            <dd style="margin: 4px 0 0 0; color: var(--text-secondary);">How well values follow a single pattern/format. Measures data standardization.</dd>
+                        </dl>
                     </div>
-                    <div class="accordion-content">
-                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px;">
-                            <!-- Data Quality Metrics -->
-                            <div style="background: var(--bg-card); border-radius: 8px; padding: 16px; border-left: 3px solid #3b82f6;">
-                                <h4 style="margin: 0 0 12px 0; font-size: 0.9em; color: #3b82f6; text-transform: uppercase; letter-spacing: 0.5px;">Quality Metrics</h4>
-                                <dl style="margin: 0; font-size: 0.85em;">
-                                    <dt style="font-weight: 600; color: var(--text-primary); margin-top: 8px;">Completeness</dt>
-                                    <dd style="margin: 4px 0 0 0; color: var(--text-secondary);">Percentage of non-null values in a field. Higher is better for required fields.</dd>
 
-                                    <dt style="font-weight: 600; color: var(--text-primary); margin-top: 12px;">Validity</dt>
-                                    <dd style="margin: 4px 0 0 0; color: var(--text-secondary);">Percentage of values that match expected format/type. Based on pattern consistency.</dd>
+                    <!-- Statistical Terms -->
+                    <div style="background: var(--bg-card); border-radius: 8px; padding: 16px; border-left: 3px solid #8b5cf6;">
+                        <h4 style="margin: 0 0 12px 0; font-size: 0.9em; color: #8b5cf6; text-transform: uppercase; letter-spacing: 0.5px;">Statistical Terms</h4>
+                        <dl style="margin: 0; font-size: 0.85em;">
+                            <dt style="font-weight: 600; color: var(--text-primary); margin-top: 8px;">IQR (Interquartile Range)</dt>
+                            <dd style="margin: 4px 0 0 0; color: var(--text-secondary);">Range between 25th and 75th percentiles. Values beyond 1.5×IQR are outliers.</dd>
 
-                                    <dt style="font-weight: 600; color: var(--text-primary); margin-top: 12px;">Uniqueness</dt>
-                                    <dd style="margin: 4px 0 0 0; color: var(--text-secondary);">Ratio of distinct values to total values. Important for ID fields (should be 100%).</dd>
+                            <dt style="font-weight: 600; color: var(--text-primary); margin-top: 12px;">Cardinality</dt>
+                            <dd style="margin: 4px 0 0 0; color: var(--text-secondary);">Number of unique values. Low cardinality (≤10) suggests categorical data.</dd>
 
-                                    <dt style="font-weight: 600; color: var(--text-primary); margin-top: 12px;">Consistency</dt>
-                                    <dd style="margin: 4px 0 0 0; color: var(--text-secondary);">How well values follow a single pattern/format. Measures data standardization.</dd>
-                                </dl>
-                            </div>
+                            <dt style="font-weight: 600; color: var(--text-primary); margin-top: 12px;">Skewness</dt>
+                            <dd style="margin: 4px 0 0 0; color: var(--text-secondary);">Measure of distribution asymmetry. Positive = right tail, negative = left tail.</dd>
 
-                            <!-- Statistical Terms -->
-                            <div style="background: var(--bg-card); border-radius: 8px; padding: 16px; border-left: 3px solid #8b5cf6;">
-                                <h4 style="margin: 0 0 12px 0; font-size: 0.9em; color: #8b5cf6; text-transform: uppercase; letter-spacing: 0.5px;">Statistical Terms</h4>
-                                <dl style="margin: 0; font-size: 0.85em;">
-                                    <dt style="font-weight: 600; color: var(--text-primary); margin-top: 8px;">IQR (Interquartile Range)</dt>
-                                    <dd style="margin: 4px 0 0 0; color: var(--text-secondary);">Range between 25th and 75th percentiles. Values beyond 1.5×IQR are outliers.</dd>
+                            <dt style="font-weight: 600; color: var(--text-primary); margin-top: 12px;">Kurtosis</dt>
+                            <dd style="margin: 4px 0 0 0; color: var(--text-secondary);">Measure of distribution "tailedness". High = more outliers than normal distribution.</dd>
+                        </dl>
+                    </div>
 
-                                    <dt style="font-weight: 600; color: var(--text-primary); margin-top: 12px;">Cardinality</dt>
-                                    <dd style="margin: 4px 0 0 0; color: var(--text-secondary);">Number of unique values. Low cardinality (≤10) suggests categorical data.</dd>
+                    <!-- ML/Anomaly Terms -->
+                    <div style="background: var(--bg-card); border-radius: 8px; padding: 16px; border-left: 3px solid #ef4444;">
+                        <h4 style="margin: 0 0 12px 0; font-size: 0.9em; color: #ef4444; text-transform: uppercase; letter-spacing: 0.5px;">Anomaly Detection</h4>
+                        <dl style="margin: 0; font-size: 0.85em;">
+                            <dt style="font-weight: 600; color: var(--text-primary); margin-top: 8px;">Isolation Forest</dt>
+                            <dd style="margin: 4px 0 0 0; color: var(--text-secondary);">ML algorithm that isolates anomalies by random partitioning. Unusual points are easier to isolate.</dd>
 
-                                    <dt style="font-weight: 600; color: var(--text-primary); margin-top: 12px;">Skewness</dt>
-                                    <dd style="margin: 4px 0 0 0; color: var(--text-secondary);">Measure of distribution asymmetry. Positive = right tail, negative = left tail.</dd>
+                            <dt style="font-weight: 600; color: var(--text-primary); margin-top: 12px;">Reconstruction Error</dt>
+                            <dd style="margin: 4px 0 0 0; color: var(--text-secondary);">How poorly a model recreates a data point. High error = unusual pattern combination.</dd>
 
-                                    <dt style="font-weight: 600; color: var(--text-primary); margin-top: 12px;">Kurtosis</dt>
-                                    <dd style="margin: 4px 0 0 0; color: var(--text-secondary);">Measure of distribution "tailedness". High = more outliers than normal distribution.</dd>
-                                </dl>
-                            </div>
+                            <dt style="font-weight: 600; color: var(--text-primary); margin-top: 12px;">Benford's Law</dt>
+                            <dd style="margin: 4px 0 0 0; color: var(--text-secondary);">Natural distribution of leading digits. Real-world data follows this; deviations may indicate fraud.</dd>
 
-                            <!-- ML/Anomaly Terms -->
-                            <div style="background: var(--bg-card); border-radius: 8px; padding: 16px; border-left: 3px solid #ef4444;">
-                                <h4 style="margin: 0 0 12px 0; font-size: 0.9em; color: #ef4444; text-transform: uppercase; letter-spacing: 0.5px;">Anomaly Detection</h4>
-                                <dl style="margin: 0; font-size: 0.85em;">
-                                    <dt style="font-weight: 600; color: var(--text-primary); margin-top: 8px;">Isolation Forest</dt>
-                                    <dd style="margin: 4px 0 0 0; color: var(--text-secondary);">ML algorithm that isolates anomalies by random partitioning. Unusual points are easier to isolate.</dd>
+                            <dt style="font-weight: 600; color: var(--text-primary); margin-top: 12px;">DBSCAN Clustering</dt>
+                            <dd style="margin: 4px 0 0 0; color: var(--text-secondary);">Groups similar records together. Points not fitting any cluster are labeled "noise" (potential anomalies).</dd>
+                        </dl>
+                    </div>
 
-                                    <dt style="font-weight: 600; color: var(--text-primary); margin-top: 12px;">Reconstruction Error</dt>
-                                    <dd style="margin: 4px 0 0 0; color: var(--text-secondary);">How poorly a model recreates a data point. High error = unusual pattern combination.</dd>
+                    <!-- Semantic Terms -->
+                    <div style="background: var(--bg-card); border-radius: 8px; padding: 16px; border-left: 3px solid #10b981;">
+                        <h4 style="margin: 0 0 12px 0; font-size: 0.9em; color: #10b981; text-transform: uppercase; letter-spacing: 0.5px;">Semantic Analysis</h4>
+                        <dl style="margin: 0; font-size: 0.85em;">
+                            <dt style="font-weight: 600; color: var(--text-primary); margin-top: 8px;">Semantic Type</dt>
+                            <dd style="margin: 4px 0 0 0; color: var(--text-secondary);">The meaning/purpose of data (e.g., Email, Currency, Date) beyond its technical type.</dd>
 
-                                    <dt style="font-weight: 600; color: var(--text-primary); margin-top: 12px;">Benford's Law</dt>
-                                    <dd style="margin: 4px 0 0 0; color: var(--text-secondary);">Natural distribution of leading digits. Real-world data follows this; deviations may indicate fraud.</dd>
+                            <dt style="font-weight: 600; color: var(--text-primary); margin-top: 12px;">PII (Personally Identifiable Information)</dt>
+                            <dd style="margin: 4px 0 0 0; color: var(--text-secondary);">Data that can identify an individual: names, emails, SSN, phone numbers, addresses.</dd>
 
-                                    <dt style="font-weight: 600; color: var(--text-primary); margin-top: 12px;">DBSCAN Clustering</dt>
-                                    <dd style="margin: 4px 0 0 0; color: var(--text-secondary);">Groups similar records together. Points not fitting any cluster are labeled "noise" (potential anomalies).</dd>
-                                </dl>
-                            </div>
+                            <dt style="font-weight: 600; color: var(--text-primary); margin-top: 12px;">Schema.org</dt>
+                            <dd style="margin: 4px 0 0 0; color: var(--text-secondary);">Web vocabulary for structured data. Used for standardized semantic type mapping.</dd>
 
-                            <!-- Semantic Terms -->
-                            <div style="background: var(--bg-card); border-radius: 8px; padding: 16px; border-left: 3px solid #10b981;">
-                                <h4 style="margin: 0 0 12px 0; font-size: 0.9em; color: #10b981; text-transform: uppercase; letter-spacing: 0.5px;">Semantic Analysis</h4>
-                                <dl style="margin: 0; font-size: 0.85em;">
-                                    <dt style="font-weight: 600; color: var(--text-primary); margin-top: 8px;">Semantic Type</dt>
-                                    <dd style="margin: 4px 0 0 0; color: var(--text-secondary);">The meaning/purpose of data (e.g., Email, Currency, Date) beyond its technical type.</dd>
-
-                                    <dt style="font-weight: 600; color: var(--text-primary); margin-top: 12px;">PII (Personally Identifiable Information)</dt>
-                                    <dd style="margin: 4px 0 0 0; color: var(--text-secondary);">Data that can identify an individual: names, emails, SSN, phone numbers, addresses.</dd>
-
-                                    <dt style="font-weight: 600; color: var(--text-primary); margin-top: 12px;">Schema.org</dt>
-                                    <dd style="margin: 4px 0 0 0; color: var(--text-secondary);">Web vocabulary for structured data. Used for standardized semantic type mapping.</dd>
-
-                                    <dt style="font-weight: 600; color: var(--text-primary); margin-top: 12px;">FIBO (Financial Industry Business Ontology)</dt>
-                                    <dd style="margin: 4px 0 0 0; color: var(--text-secondary);">Standard vocabulary for financial concepts. Used for finance-specific semantic types.</dd>
-                                </dl>
-                            </div>
-                        </div>
+                            <dt style="font-weight: 600; color: var(--text-primary); margin-top: 12px;">FIBO (Financial Industry Business Ontology)</dt>
+                            <dd style="margin: 4px 0 0 0; color: var(--text-secondary);">Standard vocabulary for financial concepts. Used for finance-specific semantic types.</dd>
+                        </dl>
                     </div>
                 </div>
             </div>
@@ -681,6 +1067,127 @@ class ExecutiveHTMLReporter:
         .page-title-block p {
             color: var(--text-secondary);
             font-size: 0.95em;
+        }
+
+        /* Elegant Expandable Section Accordions */
+        .section-accordion {
+            margin: 24px 0;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid var(--border-subtle);
+            background: var(--bg-card);
+        }
+        .section-accordion-header {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 16px 20px;
+            background: linear-gradient(135deg, var(--bg-card) 0%, rgba(30,41,59,0.95) 100%);
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+            transition: background 0.2s ease;
+        }
+        .section-accordion-header:hover {
+            background: linear-gradient(135deg, rgba(51,65,85,0.5) 0%, rgba(30,41,59,1) 100%);
+        }
+        .section-accordion-header::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 4px;
+            height: 100%;
+            background: var(--section-accent, #3b82f6);
+        }
+        .section-accordion-header::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 200px;
+            height: 100%;
+            background: linear-gradient(90deg, transparent 0%, var(--section-accent, #3b82f6) 100%);
+            opacity: 0.06;
+            pointer-events: none;
+        }
+        .section-accordion-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, var(--section-accent, #3b82f6) 0%, var(--section-accent-dark, #1d4ed8) 100%);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            flex-shrink: 0;
+        }
+        .section-accordion-icon svg {
+            width: 20px;
+            height: 20px;
+            color: white;
+        }
+        .section-accordion-content-wrap {
+            flex: 1;
+            min-width: 0;
+        }
+        .section-accordion-title {
+            margin: 0;
+            font-size: 1.05em;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+        .section-accordion-subtitle {
+            margin: 3px 0 0 0;
+            font-size: 0.8em;
+            color: var(--text-muted);
+        }
+        .section-accordion-meta {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .section-accordion-badge {
+            background: rgba(255,255,255,0.06);
+            padding: 5px 12px;
+            border-radius: 6px;
+            font-size: 0.7em;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--section-accent, #3b82f6);
+            border: 1px solid rgba(255,255,255,0.08);
+        }
+        .section-accordion-chevron {
+            color: var(--text-muted);
+            font-size: 0.9em;
+            transition: transform 0.3s ease;
+        }
+        .section-accordion.expanded .section-accordion-chevron {
+            transform: rotate(180deg);
+        }
+        .section-accordion-content {
+            /* Safari-compatible hide/show using height + overflow */
+            max-height: 0;
+            overflow: hidden;
+            padding: 0 20px;
+            padding-left: 24px;
+            background: rgba(15,23,42,0.3);
+            border-top: 1px solid var(--border-subtle);
+            border-left: 4px solid var(--section-accent, #3b82f6);
+            margin-left: 0;
+            opacity: 0;
+            visibility: hidden;
+            transition: max-height 0.3s ease-out, opacity 0.2s ease-out, padding 0.2s ease-out, visibility 0s linear 0.3s;
+        }
+        .section-accordion.expanded .section-accordion-content {
+            max-height: none;
+            overflow: visible;
+            padding: 20px;
+            padding-left: 24px;
+            opacity: 1;
+            visibility: visible;
+            transition: max-height 0.3s ease-out, opacity 0.2s ease-out, padding 0.2s ease-out, visibility 0s linear 0s;
         }
 
         .kpi-belt {
@@ -966,12 +1473,19 @@ class ExecutiveHTMLReporter:
             align-items: center;
             justify-content: center;
             font-size: 1.1em;
+            color: white;
+        }
+        .accordion-icon svg {
+            width: 20px;
+            height: 20px;
         }
 
         .accordion-icon.overview { background: var(--info-soft); }
         .accordion-icon.quality { background: var(--good-soft); }
         .accordion-icon.columns { background: var(--accent-soft); }
         .accordion-icon.issues { background: var(--critical-soft); }
+        .accordion-icon.ml { background: linear-gradient(135deg, #f59e0b, #d97706); }
+        .accordion-icon.semantics { background: linear-gradient(135deg, #8b5cf6, #3b82f6); }
 
         .accordion-title {
             font-weight: 600;
@@ -1933,11 +2447,15 @@ class ExecutiveHTMLReporter:
         }
 
         .dq-nav-link .nav-icon {
-            font-size: 1em;
+            width: 18px;
+            height: 18px;
             opacity: 0.7;
-            width: 20px;
-            text-align: center;
             flex-shrink: 0;
+            margin-right: 10px;
+        }
+        .dq-nav-link:hover .nav-icon,
+        .dq-nav-link.active .nav-icon {
+            opacity: 1;
         }
 
         .dq-nav-link .nav-num {
@@ -3151,19 +3669,17 @@ class ExecutiveHTMLReporter:
         }
 
         .insight-summary-label {
-            font-size: 0.75em;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            color: var(--text-muted);
-            margin-bottom: 8px;
+            font-size: 0.85em;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 10px;
             display: flex;
             align-items: center;
             gap: 6px;
         }
 
-        .insight-summary-label::before {
-            content: '📘';
-            font-size: 1.2em;
+        .insight-summary-label svg {
+            color: var(--info-color);
         }
 
         .insight-summary-text {
@@ -3182,19 +3698,17 @@ class ExecutiveHTMLReporter:
         }
 
         .insight-examples-label {
-            font-size: 0.75em;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            color: var(--text-muted);
+            font-size: 0.85em;
+            font-weight: 600;
+            color: var(--text-primary);
             margin-bottom: 12px;
             display: flex;
             align-items: center;
             gap: 6px;
         }
 
-        .insight-examples-label::before {
-            content: '📋';
-            font-size: 1.2em;
+        .insight-examples-label svg {
+            color: var(--text-muted);
         }
 
         .insight-examples-table {
@@ -3369,12 +3883,17 @@ class ExecutiveHTMLReporter:
         }
 
         .dual-layer-summary-label {
-            font-size: 0.75em;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            color: var(--info-color);
+            font-size: 0.85em;
             font-weight: 600;
-            margin-bottom: 6px;
+            color: var(--text-primary);
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .dual-layer-summary-label svg {
+            color: var(--info-color);
         }
 
         .dual-layer-summary-text {
@@ -3563,6 +4082,22 @@ class ExecutiveHTMLReporter:
             accordion.classList.toggle('collapsed');
         }}
 
+        // Section accordion toggle - uses 'expanded' class (content hidden by default)
+        function toggleSectionAccordion(header) {{
+            const section = header.closest('.section-accordion');
+            section.classList.toggle('expanded');
+        }}
+
+        // Safari-compatible: Sections start expanded to ensure content renders, then collapse after load
+        document.addEventListener('DOMContentLoaded', function() {{
+            // Small delay to ensure all content (charts, etc.) has rendered
+            setTimeout(function() {{
+                document.querySelectorAll('.section-accordion.expanded').forEach(function(section) {{
+                    section.classList.remove('expanded');
+                }});
+            }}, 150);  // 150ms delay for Safari to paint content before hiding
+        }});
+
         // Column row toggle
         function toggleColumnRow(row) {{
             row.classList.toggle('expanded');
@@ -3571,7 +4106,7 @@ class ExecutiveHTMLReporter:
         // ======================================================
         // EXPAND ALL TOGGLE
         // ======================================================
-        let allExpanded = false;  // Starts collapsed by default
+        let allExpanded = false;  // Will be collapsed after initial render (Safari workaround)
 
         function toggleExpandAll() {{
             const btn = document.getElementById('expandAllBtn');
@@ -3612,6 +4147,15 @@ class ExecutiveHTMLReporter:
                     section.classList.add('open');
                 }} else {{
                     section.classList.remove('open');
+                }}
+            }});
+
+            // Toggle all section accordions
+            document.querySelectorAll('.section-accordion').forEach(section => {{
+                if (allExpanded) {{
+                    section.classList.add('expanded');
+                }} else {{
+                    section.classList.remove('expanded');
                 }}
             }});
         }}
@@ -3941,7 +4485,7 @@ class ExecutiveHTMLReporter:
             const btn = event?.target;
             if (btn) {{
                 const originalText = btn.textContent;
-                btn.textContent = '✓ Exported!';
+                btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px;vertical-align:-1px"><polyline points="20 6 9 17 4 12"/></svg> Exported!';
                 btn.style.background = '#10b981';
                 setTimeout(() => {{
                     btn.textContent = originalText;
@@ -3971,7 +4515,7 @@ class ExecutiveHTMLReporter:
             navigator.clipboard.writeText(yamlContent).then(() => {{
                 const btn = event.target;
                 const originalText = btn.textContent;
-                btn.textContent = '✓ Copied!';
+                btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px;vertical-align:-1px"><polyline points="20 6 9 17 4 12"/></svg> Copied!';
                 btn.style.background = '#10b981';
                 setTimeout(() => {{
                     btn.textContent = originalText;
@@ -3987,7 +4531,7 @@ class ExecutiveHTMLReporter:
                 navigator.clipboard.writeText(yamlEl.textContent).then(() => {{
                     const btn = event.target;
                     const originalText = btn.textContent;
-                    btn.textContent = '✓ Copied!';
+                    btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px;vertical-align:-1px"><polyline points="20 6 9 17 4 12"/></svg> Copied!';
                     setTimeout(() => {{
                         btn.textContent = originalText;
                     }}, 1500);
@@ -4231,10 +4775,10 @@ class ExecutiveHTMLReporter:
                 </div>
             </div>
             <details style="margin-top: 12px; margin-bottom: 0;">
-                <summary style="cursor: pointer; color: var(--text-secondary); font-size: 0.9em; padding: 8px 0;">ℹ️ About sampling methodology...</summary>
+                <summary style="cursor: pointer; color: var(--text-secondary); font-size: 0.9em; padding: 8px 0;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;vertical-align:-1px;margin-right:2px"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg> About sampling methodology...</summary>
                 <div class="hint-box" style="margin-top: 8px; margin-bottom: 0; border-left-color: var(--info);">
-                    <strong>📊 Sampling methodology:</strong> For {profile.row_count:,} rows, statistical sampling provides high confidence results while keeping processing time manageable.
-                    <br><strong style="color: var(--warning);">⚠️ Limitations:</strong> Rare values (&lt;0.01% occurrence) and extreme outliers may not be captured in sampled statistics.
+                    <strong><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;vertical-align:-2px;margin-right:2px"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg> Sampling methodology:</strong> For {profile.row_count:,} rows, statistical sampling provides high confidence results while keeping processing time manageable.
+                    <br><strong style="color: var(--warning);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;vertical-align:-1px;color:#f59e0b"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> Limitations:</strong> Rare values (&lt;0.01% occurrence) and extreme outliers may not be captured in sampled statistics.
                     <br><strong>*</strong> Unique count marked with * means every sampled row was unique - actual cardinality is likely much higher.
                 </div>
             </details>
@@ -4389,9 +4933,10 @@ class ExecutiveHTMLReporter:
         displayed_count = min(12, len(alerts))
         for alert in alerts[:displayed_count]:
             severity_class = alert['severity']
+            icon_svg = emoji_to_svg(alert['icon'], size=14)
             alert_items += f'''
                 <div class="quality-alert-item {severity_class}">
-                    <span class="alert-icon">{alert['icon']}</span>
+                    <span class="alert-icon">{icon_svg}</span>
                     <span class="alert-column">{alert['column']}</span>
                     <span class="alert-issue">{alert['issue']}</span>
                     <span class="alert-detail">{alert['detail']}</span>
@@ -4411,10 +4956,13 @@ class ExecutiveHTMLReporter:
 
         header_style = 'background: linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, var(--bg-card) 100%); border: 1px solid rgba(239, 68, 68, 0.3);' if critical_count > 0 else 'background: linear-gradient(135deg, rgba(245, 158, 11, 0.1) 0%, var(--bg-card) 100%); border: 1px solid rgba(245, 158, 11, 0.2);'
 
+        critical_icon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:24px;height:24px;color:#ef4444"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>'
+        warning_icon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:24px;height:24px;color:#f59e0b"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>'
+
         return f'''
         <section class="quality-alerts-section" id="section-alerts" style="{header_style} border-radius: var(--radius-lg); padding: 16px 20px; margin-bottom: 16px;">
             <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
-                <span style="font-size: 1.3em;">{'🚨' if critical_count > 0 else '⚠️'}</span>
+                <span>{critical_icon if critical_count > 0 else warning_icon}</span>
                 <div>
                     <div style="font-weight: 600; color: {'var(--critical)' if critical_count > 0 else 'var(--warning)'};">Data Quality Alerts</div>
                     <div style="font-size: 0.85em; color: var(--text-secondary);">{len(alerts)} issue(s) detected{f' • {critical_count} critical' if critical_count else ''}{f' • {warning_count} warnings' if warning_count else ''}</div>
@@ -4518,11 +5066,11 @@ class ExecutiveHTMLReporter:
                         <div class="dual-view-tabs" style="display: flex; border-bottom: 1px solid var(--border-subtle);">
                             <button class="tab-btn active" onclick="this.parentElement.nextElementSibling.querySelector('.plain-view').style.display='block'; this.parentElement.nextElementSibling.querySelector('.tech-view').style.display='none'; this.classList.add('active'); this.nextElementSibling.classList.remove('active');"
                                 style="flex: 1; padding: 10px; border: none; background: var(--bg-card); cursor: pointer; font-size: 0.85em; font-weight: 600; color: #818cf8; border-bottom: 2px solid #818cf8;">
-                                📝 Plain English
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;vertical-align:-2px;margin-right:4px"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg> Plain English
                             </button>
                             <button class="tab-btn" onclick="this.parentElement.nextElementSibling.querySelector('.plain-view').style.display='none'; this.parentElement.nextElementSibling.querySelector('.tech-view').style.display='block'; this.classList.add('active'); this.previousElementSibling.classList.remove('active');"
                                 style="flex: 1; padding: 10px; border: none; background: var(--bg-primary); cursor: pointer; font-size: 0.85em; font-weight: 500; color: var(--text-secondary); border-bottom: 2px solid transparent;">
-                                🔧 Technical Details
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;vertical-align:-2px;margin-right:4px"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg> Technical Details
                             </button>
                         </div>
                         <div class="tab-content" style="padding: 16px 20px; background: var(--bg-card);">
@@ -4530,7 +5078,7 @@ class ExecutiveHTMLReporter:
                             <div class="plain-view">
                                 <p style="margin: 0 0 10px 0; color: var(--text-primary); line-height: 1.6;">{plain_english}</p>
                                 <div style="background: rgba(245, 158, 11, 0.15); padding: 12px; border-radius: 8px; border-left: 3px solid #f59e0b;">
-                                    <div style="font-size: 0.8em; color: #fbbf24; font-weight: 600; margin-bottom: 4px;">💡 What This Means</div>
+                                    <div style="font-size: 0.8em; color: #fbbf24; font-weight: 600; margin-bottom: 4px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;vertical-align:-1px;margin-right:3px"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> What This Means</div>
                                     <p style="margin: 0; font-size: 0.9em; color: var(--text-secondary);">{business_insight}</p>
                                 </div>
                             </div>
@@ -4563,23 +5111,10 @@ class ExecutiveHTMLReporter:
                 </div>
             ''')
 
+        # Return content directly without accordion wrapper (parent section-accordion provides structure)
         return f'''
-        <div class="accordion" id="section-correlations" data-accordion="correlations" style="margin-top: 24px;">
-            <div class="accordion-header" onclick="toggleAccordion(this)" style="background: linear-gradient(135deg, #4338ca 0%, #6366f1 100%); color: white; padding: 16px 20px; display: flex; align-items: center; gap: 12px; border-radius: var(--radius-lg) var(--radius-lg) 0 0;">
-                <span style="font-size: 1.5em;">🔗</span>
-                <div style="flex: 1;">
-                    <h3 style="margin: 0; font-size: 1.1em; font-weight: 600;">Correlations & Relationships</h3>
-                    <p style="margin: 4px 0 0 0; font-size: 0.85em; opacity: 0.9;">{len(unique_correlations)} significant correlation(s) detected</p>
-                </div>
-                <div style="display: flex; gap: 8px; font-size: 0.75em; align-items: center;">
-                    <span style="background: rgba(255,255,255,0.2); padding: 4px 10px; border-radius: 12px;">↑ Positive</span>
-                    <span style="background: rgba(255,255,255,0.2); padding: 4px 10px; border-radius: 12px;">↓ Negative</span>
-                    <span class="accordion-chevron" style="color: white;">▼</span>
-                </div>
-            </div>
-            <div class="accordion-content" style="background: var(--bg-card); border: 1px solid var(--border-subtle); border-top: none; border-radius: 0 0 var(--radius-lg) var(--radius-lg);">
                 <div style="background: rgba(67, 56, 202, 0.1); border: 1px solid rgba(99, 102, 241, 0.3); border-radius: 8px; padding: 12px 16px; margin-bottom: 16px; display: flex; align-items: center; gap: 10px;">
-                    <span style="font-size: 1.2em;">📊</span>
+                    <svg style="width: 20px; height: 20px; flex-shrink: 0;" viewBox="0 0 24 24" fill="none" stroke="#818cf8" stroke-width="2"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
                     <p style="margin: 0; font-size: 0.9em; color: var(--text-secondary);">
                         <strong style="color: var(--text-primary);">Ranked by correlation strength</strong> - Strongest relationships appear first.
                         Values closer to +1 or -1 indicate stronger associations between columns.
@@ -4588,8 +5123,6 @@ class ExecutiveHTMLReporter:
                 <div style="display: flex; flex-direction: column; gap: 0;">
                     {''.join(items_html)}
                 </div>
-            </div>
-        </div>
         '''
 
     def _generate_fibo_section(self, profile: ProfileResult) -> str:
@@ -4636,7 +5169,7 @@ class ExecutiveHTMLReporter:
                     </div>
                 </div>
                 <div class="hint-box" style="margin-top: 12px; border-left-color: #6b7280;">
-                    ℹ️ <strong>No FIBO patterns matched:</strong> Column names in this dataset don't match common financial data patterns.
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;vertical-align:-2px;margin-right:2px"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg> <strong>No FIBO patterns matched:</strong> Column names in this dataset don't match common financial data patterns.
                     FIBO semantic tagging works best with columns named like "amount", "account_id", "currency", "transaction_date", etc.
                     <br><a href="https://spec.edmcouncil.org/fibo/" target="_blank" style="color: #8b5cf6;">Learn more about FIBO →</a>
                 </div>
@@ -4696,12 +5229,12 @@ class ExecutiveHTMLReporter:
                     {categories_html}
                 </div>
                 <details style="margin-top: 12px;">
-                    <summary style="cursor: pointer; color: var(--text-secondary); font-size: 0.9em; padding: 8px 0;">ℹ️ What is FIBO and how does it help?</summary>
+                    <summary style="cursor: pointer; color: var(--text-secondary); font-size: 0.9em; padding: 8px 0;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;vertical-align:-1px;margin-right:2px"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg> What is FIBO and how does it help?</summary>
                     <div class="hint-box" style="margin-top: 8px; border-left-color: #8b5cf6;">
-                        <strong>🏦 FIBO</strong> (Financial Industry Business Ontology) is an industry-standard semantic framework maintained by the EDM Council.
+                        <strong><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;vertical-align:-2px;margin-right:2px"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg> FIBO</strong> (Financial Industry Business Ontology) is an industry-standard semantic framework maintained by the EDM Council.
                         DataK9 uses it to automatically understand the meaning and purpose of your data columns.
                         <br><br>
-                        <strong>💡 Benefits:</strong> Columns identified as financial data types (e.g., "money.amount", "identifier.account")
+                        <strong><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;vertical-align:-2px;margin-right:2px;color:#f59e0b"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> Benefits:</strong> Columns identified as financial data types (e.g., "money.amount", "identifier.account")
                         automatically receive context-appropriate validation suggestions and intelligent ML analysis filtering.
                         <br><a href="https://spec.edmcouncil.org/fibo/" target="_blank" style="color: #8b5cf6;">Learn more about FIBO →</a>
                     </div>
@@ -4755,15 +5288,15 @@ class ExecutiveHTMLReporter:
         <div class="accordion pii-alert" data-accordion="pii" style="border: 2px solid var(--critical); background: linear-gradient(135deg, rgba(239, 68, 68, 0.1) 0%, var(--bg-card) 100%);">
             <div class="accordion-header" onclick="toggleAccordion(this)" style="background: linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, transparent 100%);">
                 <div class="accordion-title-group">
-                    <div class="accordion-icon issues" style="background: var(--critical-soft);">🔒</div>
+                    <div class="accordion-icon issues" style="background: var(--critical-soft);"><svg style="width:16px;height:16px;color:white;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div>
                     <div>
-                        <div class="accordion-title" style="color: var(--critical);">⚠️ Privacy & PII Risk Detected</div>
+                        <div class="accordion-title" style="color: var(--critical);"><svg style="width:14px;height:14px;vertical-align:-2px;color:var(--critical);margin-right:4px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>Privacy & PII Risk Detected</div>
                         <div class="accordion-subtitle">{len(pii_columns)} column(s) contain sensitive data</div>
                     </div>
                 </div>
                 <div class="accordion-meta">
                     <span class="accordion-badge critical">{risk_level.upper()}</span>
-                    <span class="accordion-chevron">▼</span>
+                    <span class="accordion-chevron"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><polyline points="6 9 12 15 18 9"/></svg></span>
                 </div>
             </div>
             <div class="accordion-body">
@@ -4777,7 +5310,7 @@ class ExecutiveHTMLReporter:
                     {pii_items}
 
                     <details class="dual-layer-technical" style="margin-top: 16px;">
-                        <summary>🧠 PII Detection Logic (click to expand)</summary>
+                        <summary><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;vertical-align:-2px;margin-right:4px"><path d="M12 18V5"/><path d="M15 13a4.17 4.17 0 0 1-3-4 4.17 4.17 0 0 1-3 4"/><path d="M17.598 6.5A3 3 0 1 0 12 5a3 3 0 1 0-5.598 1.5"/><path d="M17.997 5.125a4 4 0 0 1 2.526 5.77"/><path d="M18 18a4 4 0 0 0 2-7.464"/><path d="M19.967 17.483A4 4 0 1 1 12 18a4 4 0 1 1-7.967-.517"/><path d="M6 18a4 4 0 0 1-2-7.464"/><path d="M6.003 5.125a4 4 0 0 0-2.526 5.77"/></svg> PII Detection Logic (click to expand)</summary>
                         <div class="dual-layer-technical-content">
                             <div class="dual-layer-technical-context">
                                 <p style="margin-bottom: 12px; color: var(--text-secondary);">The following semantic types are flagged as PII:</p>
@@ -4834,7 +5367,7 @@ class ExecutiveHTMLReporter:
             <div class="lineage-banner-header" onclick="this.parentElement.classList.toggle('expanded')" style="padding: 10px 16px; cursor: pointer; display: flex; justify-content: space-between; align-items: center;">
                 <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap;">
                     <div style="display: flex; align-items: center; gap: 8px;">
-                        <span style="font-size: 1em;">🔗</span>
+                        <span style="font-size: 1em;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;vertical-align:-2px"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></span>
                         <span style="font-weight: 600; color: #a78bfa; font-size: 0.85em;">Data Lineage</span>
                     </div>
                     <div style="display: flex; align-items: center; gap: 12px; font-size: 0.75em; color: var(--text-secondary);">
@@ -4847,7 +5380,7 @@ class ExecutiveHTMLReporter:
                 </div>
                 <div style="display: flex; align-items: center; gap: 8px;">
                     <span style="background: rgba(167,139,250,0.2); color: #a78bfa; padding: 2px 8px; border-radius: 4px; font-size: 0.7em; font-weight: 600;">{analysis_count} ANALYSES</span>
-                    <span class="lineage-chevron" style="color: #a78bfa; font-size: 0.8em; transition: transform 0.2s;">▼</span>
+                    <span class="lineage-chevron" style="color: #a78bfa; transition: transform 0.2s;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px"><polyline points="6 9 12 15 18 9"/></svg></span>
                 </div>
             </div>
             <div class="lineage-banner-content" style="display: none; padding: 0 16px 12px 16px; border-top: 1px solid rgba(167, 139, 250, 0.2);">
@@ -4928,7 +5461,7 @@ class ExecutiveHTMLReporter:
             s = lineage.sampling_info
             sampling_html = f'''
                 <div style="margin-top: 16px; padding: 12px; background: rgba(245, 158, 11, 0.08); border-radius: 6px; border-left: 3px solid #f59e0b;">
-                    <div style="font-weight: 600; color: #f59e0b; font-size: 0.85em; margin-bottom: 8px;">⚡ Sampling Applied</div>
+                    <div style="font-weight: 600; color: #f59e0b; font-size: 0.85em; margin-bottom: 8px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;vertical-align:-2px;margin-right:2px"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> Sampling Applied</div>
                     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; font-size: 0.8em;">
                         <div><span style="color: var(--text-muted);">Total Rows:</span> <span style="color: var(--text-primary); font-weight: 500;">{s.get("total_rows", 0):,}</span></div>
                         <div><span style="color: var(--text-muted);">Sampled:</span> <span style="color: var(--text-primary); font-weight: 500;">{s.get("sampled_rows", 0):,}</span></div>
@@ -4939,107 +5472,108 @@ class ExecutiveHTMLReporter:
             '''
 
         return f'''
-        <div class="section-divider" id="section-lineage" style="margin: 24px 0 16px 0; padding: 12px 20px; background: linear-gradient(135deg, #4c1d95 0%, #2e1065 100%); border-radius: 8px; border-left: 4px solid #a78bfa;">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-                <div>
-                    <h2 style="margin: 0; font-size: 1.1em; color: #f1f5f9; font-weight: 600;">Data Lineage & Provenance</h2>
-                    <p style="margin: 4px 0 0 0; font-size: 0.85em; color: #c4b5fd;">Audit trail for compliance, governance, and traceability</p>
+        <div class="section-accordion expanded" id="section-lineage" style="--section-accent: #8b5cf6; --section-accent-dark: #7c3aed;">
+            <div class="section-accordion-header" onclick="toggleSectionAccordion(this)">
+                <div class="section-accordion-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
                 </div>
-                <div style="background: rgba(255,255,255,0.15); padding: 4px 12px; border-radius: 4px; font-size: 0.8em; font-weight: 600; color: white;">AUDIT</div>
+                <div class="section-accordion-content-wrap">
+                    <h2 class="section-accordion-title">Data Lineage & Provenance</h2>
+                    <p class="section-accordion-subtitle">Audit trail for compliance, governance, and traceability</p>
+                </div>
+                <div class="section-accordion-meta">
+                    <div class="section-accordion-badge">{source_type}</div>
+                    <span class="section-accordion-chevron"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><polyline points="6 9 12 15 18 9"/></svg></span>
+                </div>
             </div>
-        </div>
-
-        <div class="layout-grid">
-            <div class="main-column">
-                <div class="accordion" data-accordion="lineage" style="border-left: 3px solid #a78bfa;">
-                    <div class="accordion-header" onclick="toggleAccordion(this)" style="background: var(--bg-card);">
-                        <div class="accordion-title-group">
-                            <div class="accordion-icon" style="background: linear-gradient(135deg, #7c3aed, #5b21b6);">🔗</div>
-                            <div>
-                                <div class="accordion-title">Source Provenance & Integrity</div>
-                                <div class="accordion-subtitle">Where this data came from and verification hash</div>
-                            </div>
+            <div class="section-accordion-content">
+                <!-- Source Information -->
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-bottom: 16px;">
+                    <div style="background: var(--bg-card); border-radius: 8px; padding: 16px; border: 1px solid var(--border-color);">
+                        <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 12px; font-size: 0.9em;">
+                            <svg style="width: 14px; height: 14px; vertical-align: -2px; margin-right: 6px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
+                            Source Details
                         </div>
-                        <div class="accordion-meta">
-                            <span class="accordion-badge" style="background: rgba(167, 139, 250, 0.15); color: #a78bfa;">{source_type}</span>
-                            <span class="accordion-chevron">▼</span>
+                        <div style="font-size: 0.8em; line-height: 1.8;">
+                            <div style="display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid var(--border-color);">
+                                <span style="color: var(--text-muted);">Path</span>
+                                <span style="color: var(--text-primary); font-family: monospace; font-size: 0.85em; max-width: 200px; overflow: hidden; text-overflow: ellipsis;" title="{source_path}">{source_path.split("/")[-1] if "/" in source_path else source_path}</span>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid var(--border-color);">
+                                <span style="color: var(--text-muted);">Size</span>
+                                <span style="color: var(--text-primary); font-weight: 500;">{size_display}</span>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid var(--border-color);">
+                                <span style="color: var(--text-muted);">Modified</span>
+                                <span style="color: var(--text-primary);">{source_modified}</span>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; padding: 4px 0;">
+                                <span style="color: var(--text-muted);">Type</span>
+                                <span style="color: var(--text-primary);">{source_type}</span>
+                            </div>
                         </div>
                     </div>
-                    <div class="accordion-content" style="display: block;">
-                        <!-- Source Information -->
-                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-bottom: 16px;">
-                            <div style="background: var(--bg-card); border-radius: 8px; padding: 16px; border: 1px solid var(--border-color);">
-                                <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 12px; font-size: 0.9em;">📁 Source Details</div>
-                                <div style="font-size: 0.8em; line-height: 1.8;">
-                                    <div style="display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid var(--border-color);">
-                                        <span style="color: var(--text-muted);">Path</span>
-                                        <span style="color: var(--text-primary); font-family: monospace; font-size: 0.85em; max-width: 200px; overflow: hidden; text-overflow: ellipsis;" title="{source_path}">{source_path.split("/")[-1] if "/" in source_path else source_path}</span>
-                                    </div>
-                                    <div style="display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid var(--border-color);">
-                                        <span style="color: var(--text-muted);">Size</span>
-                                        <span style="color: var(--text-primary); font-weight: 500;">{size_display}</span>
-                                    </div>
-                                    <div style="display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid var(--border-color);">
-                                        <span style="color: var(--text-muted);">Modified</span>
-                                        <span style="color: var(--text-primary);">{source_modified}</span>
-                                    </div>
-                                    <div style="display: flex; justify-content: space-between; padding: 4px 0;">
-                                        <span style="color: var(--text-muted);">Type</span>
-                                        <span style="color: var(--text-primary);">{source_type}</span>
-                                    </div>
-                                </div>
-                            </div>
 
-                            <div style="background: var(--bg-card); border-radius: 8px; padding: 16px; border: 1px solid var(--border-color);">
-                                <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 12px; font-size: 0.9em;">🔐 Integrity Verification</div>
-                                <div style="font-size: 0.8em;">
-                                    <div style="color: var(--text-muted); margin-bottom: 4px;">SHA-256 Hash</div>
-                                    <div style="background: rgba(0,0,0,0.3); padding: 8px 12px; border-radius: 4px; font-family: monospace; font-size: 0.85em; color: #a78bfa; word-break: break-all;" title="{source_hash_full}">{source_hash_full}</div>
-                                    <div style="margin-top: 8px; color: var(--text-muted); font-size: 0.75em;">Use this hash to verify data integrity and detect tampering</div>
-                                </div>
+                    <div style="background: var(--bg-card); border-radius: 8px; padding: 16px; border: 1px solid var(--border-color);">
+                        <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 12px; font-size: 0.9em;">
+                            <svg style="width: 14px; height: 14px; vertical-align: -2px; margin-right: 6px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+                            Integrity Verification
+                        </div>
+                        <div style="font-size: 0.8em;">
+                            <div style="color: var(--text-muted); margin-bottom: 4px;">SHA-256 Hash</div>
+                            <div style="background: rgba(0,0,0,0.3); padding: 8px 12px; border-radius: 4px; font-family: monospace; font-size: 0.85em; color: #a78bfa; word-break: break-all;" title="{source_hash_full}">{source_hash_full}</div>
+                            <div style="margin-top: 8px; color: var(--text-muted); font-size: 0.75em;">Use this hash to verify data integrity and detect tampering</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Processing Info -->
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px;">
+                    <div style="background: var(--bg-card); border-radius: 8px; padding: 16px; border: 1px solid var(--border-color);">
+                        <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 12px; font-size: 0.9em;">
+                            <svg style="width: 14px; height: 14px; vertical-align: -2px; margin-right: 6px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+                            Processing Record
+                        </div>
+                        <div style="font-size: 0.8em; line-height: 1.8;">
+                            <div style="display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid var(--border-color);">
+                                <span style="color: var(--text-muted);">Profiled At</span>
+                                <span style="color: var(--text-primary);">{profiled_at}</span>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid var(--border-color);">
+                                <span style="color: var(--text-muted);">Profiler Version</span>
+                                <span style="color: var(--text-primary);">DataK9 v{profiler_version}</span>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; padding: 4px 0;">
+                                <span style="color: var(--text-muted);">Host</span>
+                                <span style="color: var(--text-primary);">{hostname}</span>
                             </div>
                         </div>
+                    </div>
 
-                        <!-- Processing Info -->
-                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px;">
-                            <div style="background: var(--bg-card); border-radius: 8px; padding: 16px; border: 1px solid var(--border-color);">
-                                <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 12px; font-size: 0.9em;">⏱️ Processing Record</div>
-                                <div style="font-size: 0.8em; line-height: 1.8;">
-                                    <div style="display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid var(--border-color);">
-                                        <span style="color: var(--text-muted);">Profiled At</span>
-                                        <span style="color: var(--text-primary);">{profiled_at}</span>
-                                    </div>
-                                    <div style="display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid var(--border-color);">
-                                        <span style="color: var(--text-muted);">Profiler Version</span>
-                                        <span style="color: var(--text-primary);">DataK9 v{profiler_version}</span>
-                                    </div>
-                                    <div style="display: flex; justify-content: space-between; padding: 4px 0;">
-                                        <span style="color: var(--text-muted);">Host</span>
-                                        <span style="color: var(--text-primary);">{hostname}</span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div style="background: var(--bg-card); border-radius: 8px; padding: 16px; border: 1px solid var(--border-color);">
-                                <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 12px; font-size: 0.9em;">🔬 Analysis Applied</div>
-                                <div style="font-size: 0.8em;">
-                                    {analysis_badges if analysis_badges else '<span style="color: var(--text-muted);">No advanced analysis applied</span>'}
-                                </div>
-                            </div>
+                    <div style="background: var(--bg-card); border-radius: 8px; padding: 16px; border: 1px solid var(--border-color);">
+                        <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 12px; font-size: 0.9em;">
+                            <svg style="width: 14px; height: 14px; vertical-align: -2px; margin-right: 6px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+                            Analysis Applied
                         </div>
-
-                        {sampling_html}
-
-                        <!-- Export for Audit -->
-                        <div style="margin-top: 16px; padding: 12px; background: rgba(167, 139, 250, 0.08); border-radius: 6px; border: 1px dashed rgba(167, 139, 250, 0.3);">
-                            <div style="display: flex; justify-content: space-between; align-items: center;">
-                                <div>
-                                    <div style="font-size: 0.85em; font-weight: 500; color: var(--text-primary);">💾 Audit Export</div>
-                                    <div style="font-size: 0.75em; color: var(--text-muted);">Full lineage data is included in JSON output for audit trails and compliance reporting</div>
-                                </div>
-                                <span style="background: rgba(167, 139, 250, 0.2); color: #a78bfa; padding: 4px 10px; border-radius: 4px; font-size: 0.7em; font-weight: 600;">JSON EXPORT</span>
-                            </div>
+                        <div style="font-size: 0.8em;">
+                            {analysis_badges if analysis_badges else '<span style="color: var(--text-muted);">No advanced analysis applied</span>'}
                         </div>
+                    </div>
+                </div>
+
+                {sampling_html}
+
+                <!-- Export for Audit -->
+                <div style="margin-top: 16px; padding: 12px; background: rgba(167, 139, 250, 0.08); border-radius: 6px; border: 1px dashed rgba(167, 139, 250, 0.3);">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <div style="font-size: 0.85em; font-weight: 500; color: var(--text-primary);">
+                                <svg style="width: 14px; height: 14px; vertical-align: -2px; margin-right: 6px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg>
+                                Audit Export
+                            </div>
+                            <div style="font-size: 0.75em; color: var(--text-muted);">Full lineage data is included in JSON output for audit trails and compliance reporting</div>
+                        </div>
+                        <span style="background: rgba(167, 139, 250, 0.2); color: #a78bfa; padding: 4px 10px; border-radius: 4px; font-size: 0.7em; font-weight: 600;">JSON EXPORT</span>
                     </div>
                 </div>
             </div>
@@ -5481,7 +6015,7 @@ class ExecutiveHTMLReporter:
         <div class="accordion" data-accordion="data-insights">
             <div class="accordion-header" onclick="toggleAccordion(this)">
                 <div class="accordion-title-group">
-                    <div class="accordion-icon ml">💡</div>
+                    <div class="accordion-icon ml"><svg style="width:16px;height:16px;color:white;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></div>
                     <div>
                         <div class="accordion-title">Data Insights</div>
                         <div class="accordion-subtitle">Analyzed {analyzed_rows:,} rows{f" (sample of {original_rows:,})" if original_rows > analyzed_rows else ""} in {analysis_time:.1f}s</div>
@@ -5489,7 +6023,7 @@ class ExecutiveHTMLReporter:
                 </div>
                 <div class="accordion-meta">
                     <span class="accordion-badge {badge_class}">{badge_text}</span>
-                    <span class="accordion-chevron">▼</span>
+                    <span class="accordion-chevron"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><polyline points="6 9 12 15 18 9"/></svg></span>
                 </div>
             </div>
             <div class="accordion-body">
@@ -6253,69 +6787,10 @@ data sources. {noise_pct:.2f}% of records don't fit any cluster (these may be un
 
         # ═══════════════════════════════════════════════════════════════
         # INSIGHT 8: TARGET-FEATURE ASSOCIATIONS
+        # NOTE: Consolidated into Predictive ML section to avoid duplication.
+        # The Predictive ML section shows class imbalance charts, feature
+        # importance bars, and ML readiness assessments for detected targets.
         # ═══════════════════════════════════════════════════════════════
-        target_feature = ml_findings.get('target_feature_analysis', {})
-        if target_feature:
-            for target_col, analysis in list(target_feature.items())[:2]:  # Show max 2 targets
-                target_dist = analysis.get('target_distribution', {})
-                feature_assoc = analysis.get('feature_associations', [])
-
-                if not feature_assoc:
-                    continue
-
-                # Calculate class balance
-                total_target = sum(d.get('count', 0) for d in target_dist.values())
-                minority_pct = min((d.get('percentage', 0) for d in target_dist.values()), default=0)
-
-                # Plain English explanation - no jargon
-                top_feature = feature_assoc[0] if feature_assoc else {}
-                plain_english = f'''The '{target_col}' column appears to be an outcome with {len(target_dist)} categories.
-The column most strongly linked to this outcome is '{top_feature.get("feature", "N/A")}'. This suggests
-patterns worth exploring, though it doesn't prove cause and effect.'''
-
-                # Build example table
-                example_rows = ''
-                for assoc in feature_assoc[:5]:
-                    feature_name = assoc.get('feature', '')
-                    strength = assoc.get('association_strength', 0)
-                    interp = assoc.get('interpretation', '')[:50] + ('...' if len(assoc.get('interpretation', '')) > 50 else '')
-                    strength_class = 'value-highlight' if strength > 0.3 else 'value-normal'
-                    example_rows += f'''
-                    <tr>
-                        <td>{feature_name}</td>
-                        <td class="{strength_class}">{strength:.3f}</td>
-                        <td style="font-size: 0.85em;">{interp}</td>
-                    </tr>'''
-
-                widgets_html += self._build_insight_widget(
-                    icon="🎯",
-                    title=f"Target Analysis: {target_col}",
-                    badge_text=f"{len(feature_assoc)} features",
-                    badge_class="info",
-                    plain_english=plain_english,
-                    table_headers=["Feature", "Association", "Interpretation"],
-                    table_rows=example_rows,
-                    technical_items=f'''
-                        <div class="insight-technical-item">
-                            <span class="insight-technical-item-label">Target Column</span>
-                            <span class="insight-technical-item-value">{target_col}</span>
-                        </div>
-                        <div class="insight-technical-item">
-                            <span class="insight-technical-item-label">Classes</span>
-                            <span class="insight-technical-item-value">{len(target_dist)}</span>
-                        </div>
-                        <div class="insight-technical-item">
-                            <span class="insight-technical-item-label">Features Analyzed</span>
-                            <span class="insight-technical-item-value">{len(feature_assoc)}</span>
-                        </div>
-                    ''',
-                    technical_context=[
-                        "Detected using keyword matching and cardinality analysis",
-                        "Association strength uses Cohen's d (numeric) or proportion difference (categorical)",
-                        "Higher values indicate stronger predictive relationship"
-                    ],
-                    ml_model="Target Detection"
-                )
 
         # ═══════════════════════════════════════════════════════════════
         # INSIGHT 9: MISSINGNESS IMPACT
@@ -6500,24 +6975,20 @@ the largest difference between classes, which could be useful for predictive mod
                     ml_model="Class Distribution"
                 )
 
-        # Wrap all widgets in a section
+        # Return widgets directly without section wrapper (parent section-accordion provides structure)
         if not widgets_html:
             return ''
 
         sample_note = f" (sample of {original_rows:,})" if original_rows > analyzed_rows else ""
 
         return f'''
-        <section id="section-anomalies">
-            <div class="section-header-v2">
-                <div>
-                    <span class="section-header-v2-icon">💡</span>
-                    <span class="section-header-v2-title">Anomalies & Patterns</span>
-                    <div class="section-header-v2-subtitle">Patterns observed from analyzing {analyzed_rows:,} rows{sample_note} in {analysis_time:.1f}s</div>
-                </div>
-                <span class="section-header-v2-badge observations">OBSERVATIONS</span>
+            <div class="insights-summary" style="background: rgba(99, 102, 241, 0.08); border: 1px solid rgba(99, 102, 241, 0.2); border-radius: 8px; padding: 12px 16px; margin-bottom: 20px;">
+                <p style="margin: 0; font-size: 0.9em; color: var(--text-secondary);">
+                    <svg style="width: 16px; height: 16px; vertical-align: -3px; margin-right: 8px;" viewBox="0 0 24 24" fill="none" stroke="#818cf8" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+                    Patterns observed from analyzing <strong>{analyzed_rows:,} rows</strong>{sample_note} in {analysis_time:.1f}s
+                </p>
             </div>
             {widgets_html}
-        </section>
         '''
 
     def _build_insight_widget(self, icon: str, title: str, badge_text: str, badge_class: str,
@@ -6540,6 +7011,9 @@ the largest difference between classes, which could be useful for predictive mod
             ml_model: Optional ML model name to display (e.g., "Isolation Forest")
             semantic_confidence: Optional HTML for semantic confidence badge
         """
+        # Convert emoji icon to SVG if possible
+        icon_html = emoji_to_svg(icon, size=18) if icon else ''
+
         # Build table headers
         headers_html = ''.join([f'<th>{h}</th>' for h in table_headers])
 
@@ -6552,7 +7026,8 @@ the largest difference between classes, which could be useful for predictive mod
         # ML model badge if specified
         ml_badge = ''
         if ml_model:
-            ml_badge = f'<span class="insight-ml-badge">🧠 {ml_model}</span>'
+            brain_svg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;vertical-align:-1px;margin-right:3px"><path d="M12 18V5"/><path d="M15 13a4.17 4.17 0 0 1-3-4 4.17 4.17 0 0 1-3 4"/><path d="M17.598 6.5A3 3 0 1 0 12 5a3 3 0 1 0-5.598 1.5"/><path d="M17.997 5.125a4 4 0 0 1 2.526 5.77"/><path d="M18 18a4 4 0 0 0 2-7.464"/><path d="M19.967 17.483A4 4 0 1 1 12 18a4 4 0 1 1-7.967-.517"/><path d="M6 18a4 4 0 0 1-2-7.464"/><path d="M6.003 5.125a4 4 0 0 0-2.526 5.77"/></svg>'
+            ml_badge = f'<span class="insight-ml-badge">{brain_svg} {ml_model}</span>'
 
         # Semantic confidence badge (optional)
         semantic_badge_html = semantic_confidence if semantic_confidence else ''
@@ -6561,26 +7036,26 @@ the largest difference between classes, which could be useful for predictive mod
         <div class="insight-widget">
             <div class="insight-widget-header" onclick="this.closest('.insight-widget').classList.toggle('collapsed')">
                 <div class="insight-widget-title-group">
-                    <span class="insight-widget-icon">{icon}</span>
+                    <span class="insight-widget-icon">{icon_html}</span>
                     <span class="insight-widget-title">{title}</span>
                     {ml_badge}
                 </div>
                 <div style="display: flex; align-items: center;">
                     <span class="insight-widget-badge {badge_class}">{badge_text}</span>
-                    <span class="insight-widget-chevron">▼</span>
+                    <span class="insight-widget-chevron"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px"><polyline points="6 9 12 15 18 9"/></svg></span>
                 </div>
             </div>
 
             <div class="insight-widget-body">
                 <!-- Plain English Summary (always visible) -->
                 <div class="insight-summary">
-                    <div class="insight-summary-label">Plain-English Summary</div>
+                    <div class="insight-summary-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7V17a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-2.3A7 7 0 0 0 12 2z"/></svg> What this means</div>
                     <div class="insight-summary-text">{plain_english}</div>
                 </div>
 
                 <!-- Example Table -->
                 <div class="insight-examples">
-                    <div class="insight-examples-label">Examples From Your Data</div>
+                    <div class="insight-examples-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M7 16h8"/><path d="M7 11h12"/><path d="M7 6h3"/></svg> Sample data</div>
                     <table class="insight-examples-table">
                         <thead>
                             <tr>{headers_html}</tr>
@@ -6596,7 +7071,7 @@ the largest difference between classes, which could be useful for predictive mod
 
                 <!-- Technical Details (Collapsed by default) -->
                 <details class="dual-layer-technical">
-                    <summary>🧠 Technical Details (click to expand)</summary>
+                    <summary><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;vertical-align:-2px;margin-right:4px"><path d="M12 18V5"/><path d="M15 13a4.17 4.17 0 0 1-3-4 4.17 4.17 0 0 1-3 4"/><path d="M17.598 6.5A3 3 0 1 0 12 5a3 3 0 1 0-5.598 1.5"/><path d="M17.997 5.125a4 4 0 0 1 2.526 5.77"/><path d="M18 18a4 4 0 0 0 2-7.464"/><path d="M19.967 17.483A4 4 0 1 1 12 18a4 4 0 1 1-7.967-.517"/><path d="M6 18a4 4 0 0 1-2-7.464"/><path d="M6.003 5.125a4 4 0 0 0-2.526 5.77"/></svg> Technical Details (click to expand)</summary>
                     <div class="dual-layer-technical-content">
                         <div class="dual-layer-technical-grid">
                             {technical_items}
@@ -6647,7 +7122,7 @@ the largest difference between classes, which could be useful for predictive mod
         if stats_html or context_html:
             technical_section = f'''
                 <details class="dual-layer-technical">
-                    <summary>🧠 Technical Details (click to expand)</summary>
+                    <summary><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;vertical-align:-2px;margin-right:4px"><path d="M12 18V5"/><path d="M15 13a4.17 4.17 0 0 1-3-4 4.17 4.17 0 0 1-3 4"/><path d="M17.598 6.5A3 3 0 1 0 12 5a3 3 0 1 0-5.598 1.5"/><path d="M17.997 5.125a4 4 0 0 1 2.526 5.77"/><path d="M18 18a4 4 0 0 0 2-7.464"/><path d="M19.967 17.483A4 4 0 1 1 12 18a4 4 0 1 1-7.967-.517"/><path d="M6 18a4 4 0 0 1-2-7.464"/><path d="M6.003 5.125a4 4 0 0 0-2.526 5.77"/></svg> Technical Details (click to expand)</summary>
                     <div class="dual-layer-technical-content">
                         <div class="dual-layer-technical-grid">{stats_html}</div>
                         {context_html}
@@ -6657,7 +7132,7 @@ the largest difference between classes, which could be useful for predictive mod
         return f'''
             <div class="dual-layer-explanation">
                 <div class="dual-layer-summary">
-                    <div class="dual-layer-summary-label">📘 Plain-English Summary</div>
+                    <div class="dual-layer-summary-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7V17a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-2.3A7 7 0 0 0 12 2z"/></svg> What this means</div>
                     <div class="dual-layer-summary-text">{plain_english}</div>
                 </div>
                 {technical_section}
@@ -6680,6 +7155,7 @@ the largest difference between classes, which could be useful for predictive mod
         # Initialize categorized chart containers
         charts_by_section = {
             'distributions': [],
+            'predictive_ml': [],
             'anomalies': [],
             'temporal': [],
             'correlations': [],
@@ -6696,12 +7172,22 @@ the largest difference between classes, which could be useful for predictive mod
 
         # Build column stats lookup for true min/max from Parquet metadata
         column_stats = {}
+        column_semantic = {}  # Semantic type lookup for ML feature tagging
         if columns:
             for col in columns:
                 if col.statistics:
                     column_stats[col.name] = {
                         'true_min': col.statistics.min_value,
                         'true_max': col.statistics.max_value
+                    }
+                # Build semantic lookup for feature importance tagging
+                if hasattr(col, 'semantic_info') and col.semantic_info:
+                    sem = col.semantic_info
+                    schema_type = sem.get('schema_org', {}).get('type', '') if sem.get('schema_org') else ''
+                    display_label = sem.get('resolved', {}).get('display_label', '') if sem.get('resolved') else ''
+                    column_semantic[col.name] = {
+                        'schema_type': schema_type,
+                        'display_label': display_label
                     }
 
         sample_info = viz_data.get('sample_info', {})
@@ -6784,7 +7270,7 @@ the largest difference between classes, which could be useful for predictive mod
                     <div class="accordion" data-accordion="viz-amounts">
                         <div class="accordion-header" onclick="toggleAccordion(this)">
                             <div class="accordion-title-group">
-                                <div class="accordion-icon" style="background: linear-gradient(135deg, #10b981, #059669);">📊</div>
+                                <div class="accordion-icon"><svg style="width:16px;height:16px;color:#64748b;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M7 16h8"/><path d="M7 11h12"/><path d="M7 6h3"/></svg></div>
                                 <div>
                                     <div class="accordion-title">Amount Distributions (Log Scale)</div>
                                     <div class="accordion-subtitle">Visualize skewed numeric data distributions</div>
@@ -6792,25 +7278,25 @@ the largest difference between classes, which could be useful for predictive mod
                             </div>
                             <div class="accordion-meta">
                                 <span class="accordion-badge info">{len(amount_dists)} Fields</span>
-                                <span class="accordion-chevron">▼</span>
+                                <span class="accordion-chevron"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><polyline points="6 9 12 15 18 9"/></svg></span>
                             </div>
                         </div>
                         <div class="accordion-content">
                             <div class="dual-layer-explanation">
                                 <div class="dual-layer-summary">
-                                    <div class="dual-layer-summary-label">📘 Plain-English Summary</div>
+                                    <div class="dual-layer-summary-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7V17a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-2.3A7 7 0 0 0 12 2z"/></svg> What this means</div>
                                     <div class="dual-layer-summary-text">
-                                        These charts show how values are spread across each numeric field. We use a special scale that lets you see both small and large values clearly - otherwise big numbers would hide everything else.
+                                        Distribution of values in numeric fields using log-scale histograms. This reveals patterns in skewed data where values span multiple orders of magnitude - common in financial, count, and measurement data.
                                         {sample_note}
                                     </div>
                                 </div>
                                 <details class="dual-layer-technical">
-                                    <summary>🧠 Technical Details (click to expand)</summary>
+                                    <summary><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;vertical-align:-2px;margin-right:4px"><path d="M12 18V5"/><path d="M15 13a4.17 4.17 0 0 1-3-4 4.17 4.17 0 0 1-3 4"/><path d="M17.598 6.5A3 3 0 1 0 12 5a3 3 0 1 0-5.598 1.5"/><path d="M17.997 5.125a4 4 0 0 1 2.526 5.77"/><path d="M18 18a4 4 0 0 0 2-7.464"/><path d="M19.967 17.483A4 4 0 1 1 12 18a4 4 0 1 1-7.967-.517"/><path d="M6 18a4 4 0 0 1-2-7.464"/><path d="M6.003 5.125a4 4 0 0 0-2.526 5.77"/></svg> Technical Details (click to expand)</summary>
                                     <div class="dual-layer-technical-content" style="padding: 12px;">
                                         <ul style="margin: 0; padding-left: 20px; color: var(--text-secondary); font-size: 0.85em;">
-                                            <li>Log-scaled histogram bins for wide-range numeric data</li>
-                                            <li>Reveals patterns across multiple orders of magnitude</li>
-                                            <li>Min/max shown from full dataset (Parquet metadata)</li>
+                                            <li>Log-transformed bins handle heavy-tailed distributions</li>
+                                            <li>Useful for detecting multimodality, gaps, and concentration points</li>
+                                            <li>Consider log-transform or Box-Cox for modeling if highly skewed</li>
                                         </ul>
                                     </div>
                                 </details>
@@ -6875,7 +7361,7 @@ the largest difference between classes, which could be useful for predictive mod
                 <div class="accordion" data-accordion="viz-scatter">
                     <div class="accordion-header" onclick="toggleAccordion(this)">
                         <div class="accordion-title-group">
-                            <div class="accordion-icon" style="background: linear-gradient(135deg, #3b82f6, #1d4ed8);">⚡</div>
+                            <div class="accordion-icon"><svg style="width:16px;height:16px;color:#64748b;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/></svg></div>
                             <div>
                                 <div class="accordion-title">{x_col} vs {y_col}</div>
                                 <div class="accordion-subtitle">Identify mismatches between related amount fields</div>
@@ -6883,24 +7369,24 @@ the largest difference between classes, which could be useful for predictive mod
                         </div>
                         <div class="accordion-meta">
                             <span class="accordion-badge info">{total_points:,} Points</span>
-                            <span class="accordion-chevron">▼</span>
+                            <span class="accordion-chevron"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><polyline points="6 9 12 15 18 9"/></svg></span>
                         </div>
                     </div>
                     <div class="accordion-content">
                         <div class="dual-layer-explanation">
                             <div class="dual-layer-summary">
-                                <div class="dual-layer-summary-label">📘 Plain-English Summary</div>
+                                <div class="dual-layer-summary-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7V17a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-2.3A7 7 0 0 0 12 2z"/></svg> What this means</div>
                                 <div class="dual-layer-summary-text">
-                                    This chart compares two amount fields. If both amounts are usually the same, points should line up along the diagonal. Points far from the line might indicate data issues or special cases. {sample_note}
+                                    Scatter plot comparing two numeric fields that may have a relationship. Points clustering along the diagonal indicate values tend to match; deviations reveal discrepancies, transformations, or data quality issues. {sample_note}
                                 </div>
                             </div>
                             <details class="dual-layer-technical">
-                                <summary>🧠 Technical Details (click to expand)</summary>
+                                <summary><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;vertical-align:-2px;margin-right:4px"><path d="M12 18V5"/><path d="M15 13a4.17 4.17 0 0 1-3-4 4.17 4.17 0 0 1-3 4"/><path d="M17.598 6.5A3 3 0 1 0 12 5a3 3 0 1 0-5.598 1.5"/><path d="M17.997 5.125a4 4 0 0 1 2.526 5.77"/><path d="M18 18a4 4 0 0 0 2-7.464"/><path d="M19.967 17.483A4 4 0 1 1 12 18a4 4 0 1 1-7.967-.517"/><path d="M6 18a4 4 0 0 1-2-7.464"/><path d="M6.003 5.125a4 4 0 0 0-2.526 5.77"/></svg> Technical Details (click to expand)</summary>
                                 <div class="dual-layer-technical-content" style="padding: 12px;">
                                     <ul style="margin: 0; padding-left: 20px; color: var(--text-secondary); font-size: 0.85em;">
-                                        <li>Diagonal line represents y = x (perfect 1:1 match)</li>
-                                        <li>Off-diagonal points may indicate adjustments, fees, or errors</li>
-                                        <li>Log scale used when data spans multiple orders of magnitude</li>
+                                        <li>Reference line: y = x (perfect correlation)</li>
+                                        <li>Clusters away from diagonal indicate systematic differences</li>
+                                        <li>Useful for validating calculated fields, detecting currency conversions, or fee structures</li>
                                     </ul>
                                 </div>
                             </details>
@@ -7000,26 +7486,56 @@ the largest difference between classes, which could be useful for predictive mod
 
                     # Build feature importance bars
                     feature_bars = ''
+                    # Semantic types that indicate unlikely useful predictors
+                    unlikely_useful_types = {'schema:name', 'schema:identifier', 'schema:email',
+                                             'schema:telephone', 'schema:URL', 'schema:Text'}
                     if feature_associations:
                         for fa in feature_associations:
-                            feat_name = fa.get('feature', '')[:15]  # Truncate long names
+                            feat_full_name = fa.get('feature', '')
+                            feat_name = feat_full_name[:15]  # Truncate long names
                             strength = fa.get('association_strength', 0)
                             bar_width = min(100, strength * 100)
-                            bar_color = '#10b981' if strength >= 0.3 else '#f59e0b' if strength >= 0.15 else '#6b7280'
+
+                            # Check semantic type for this feature
+                            feat_semantic = column_semantic.get(feat_full_name, {})
+                            schema_type = feat_semantic.get('schema_type', '')
+                            is_unlikely_useful = schema_type in unlikely_useful_types
+
+                            # Dim the bar and add tag for unlikely useful features
+                            if is_unlikely_useful:
+                                bar_color = '#6b728080'  # Dimmed gray
+                                semantic_tag = f'<span style="font-size: 0.6em; color: #f59e0b; margin-left: 4px;" title="High correlation due to uniqueness, not predictive value"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;vertical-align:-1px"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span>'
+                            else:
+                                bar_color = '#10b981' if strength >= 0.3 else '#f59e0b' if strength >= 0.15 else '#6b7280'
+                                semantic_tag = ''
+
                             feature_bars += f'''
                                 <div style="display: flex; align-items: center; margin-bottom: 6px;">
-                                    <span style="font-size: 0.75em; color: var(--text-secondary); width: 80px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{fa.get('feature', '')}">{feat_name}</span>
+                                    <span style="font-size: 0.75em; color: var(--text-secondary); width: 80px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{feat_full_name}">{feat_name}{semantic_tag}</span>
                                     <div style="flex: 1; height: 8px; background: rgba(255,255,255,0.1); border-radius: 4px; margin: 0 8px; overflow: hidden;">
-                                        <div style="height: 100%; width: {bar_width}%; background: {bar_color}; border-radius: 4px;"></div>
+                                        <div style="height: 100%; width: {bar_width}%; background: {bar_color}; border-radius: 4px;{' opacity: 0.5;' if is_unlikely_useful else ''}"></div>
                                     </div>
                                     <span style="font-size: 0.7em; color: var(--text-muted); width: 35px; text-align: right;">{strength:.2f}</span>
                                 </div>'''
 
                     feature_importance_card = ''
+                    # Check if any features have warning tags
+                    has_warned_features = any(
+                        column_semantic.get(fa.get('feature', ''), {}).get('schema_type', '') in unlikely_useful_types
+                        for fa in feature_associations[:5]
+                    )
+                    warning_legend = ''
+                    if has_warned_features:
+                        warning_legend = '''
+                            <div style="font-size: 0.7em; color: #f59e0b; margin-top: 8px; padding: 6px 8px; background: rgba(245, 158, 11, 0.1); border-radius: 4px; border-left: 2px solid #f59e0b;">
+                                <svg style="width: 12px; height: 12px; vertical-align: -1px; margin-right: 4px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+                                <strong>Dimmed features:</strong> High-cardinality fields (names, IDs, tickets) show high correlation due to uniqueness, not predictive value. Exclude these from ML models.
+                            </div>'''
+
                     if feature_bars:
                         feature_importance_card = f'''
                         <div style="flex: 1; min-width: 280px; background: var(--bg-card); border-radius: 8px; padding: 16px; border: 2px solid #f59e0b; position: relative;">
-                            <div style="position: absolute; top: -10px; left: 12px; background: linear-gradient(135deg, #10b981, #059669); color: white; font-size: 0.7em; font-weight: 600; padding: 2px 8px; border-radius: 4px;">📊 FEATURE IMPORTANCE</div>
+                            <div style="position: absolute; top: -10px; left: 12px; background: linear-gradient(135deg, #10b981, #059669); color: white; font-size: 0.7em; font-weight: 600; padding: 2px 8px; border-radius: 4px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:10px;height:10px;vertical-align:-1px;margin-right:2px"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg> FEATURE IMPORTANCE</div>
                             <div style="margin-top: 8px;">
                                 <div style="font-size: 0.85em; color: var(--text-primary); margin-bottom: 12px; font-weight: 500;">Top Predictors for {col}</div>
                                 {feature_bars}
@@ -7027,6 +7543,7 @@ the largest difference between classes, which could be useful for predictive mod
                             <div style="font-size: 0.7em; color: var(--text-muted); margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--border-color);">
                                 Higher values = stronger association with target
                             </div>
+                            {warning_legend}
                         </div>'''
 
                     # ML Readiness assessment
@@ -7093,7 +7610,7 @@ the largest difference between classes, which could be useful for predictive mod
 
                     chart_html = f'''
                     <div style="flex: 1; min-width: 280px; background: var(--bg-card); border-radius: 8px; padding: 16px; border: 2px solid #f59e0b; position: relative;">
-                        <div style="position: absolute; top: -10px; left: 12px; background: linear-gradient(135deg, #f59e0b, #d97706); color: white; font-size: 0.7em; font-weight: 600; padding: 2px 8px; border-radius: 4px;">🎯 ML TARGET</div>
+                        <div style="position: absolute; top: -10px; left: 12px; background: linear-gradient(135deg, #f59e0b, #d97706); color: white; font-size: 0.7em; font-weight: 600; padding: 2px 8px; border-radius: 4px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:10px;height:10px;vertical-align:-1px;margin-right:2px"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg> ML TARGET</div>
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; margin-top: 4px;">
                             <h4 style="margin: 0; font-size: 0.95em; color: var(--text-primary);">{col}</h4>
                             <span class="accordion-badge {imbalance_status}">{imbalance_note}</span>
@@ -7156,103 +7673,88 @@ the largest difference between classes, which could be useful for predictive mod
                 else:
                     subtitle_text = "Low-cardinality categorical field distributions"
 
-                charts_by_section['distributions'].append(f'''
-                    <div class="accordion" data-accordion="viz-imbalance">
-                        <div class="accordion-header" onclick="toggleAccordion(this)">
-                            <div class="accordion-title-group">
-                                <div class="accordion-icon" style="background: linear-gradient(135deg, #f59e0b, #d97706);">⚖️</div>
-                                <div>
-                                    <div class="accordion-title">Class Distribution & Imbalance</div>
-                                    <div class="accordion-subtitle">{subtitle_text}</div>
-                                </div>
-                            </div>
-                            <div class="accordion-meta">
-                                <span class="accordion-badge info">{len(class_data)} Fields</span>
-                                <span class="accordion-chevron">▼</span>
+                # Content directly without accordion wrapper (parent section-accordion provides structure)
+                charts_by_section['predictive_ml'].append(f'''
+                    <div class="dual-layer-explanation" style="margin-bottom: 20px;">
+                        <div class="dual-layer-summary">
+                            <div class="dual-layer-summary-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7V17a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-2.3A7 7 0 0 0 12 2z"/></svg> What this means</div>
+                            <div class="dual-layer-summary-text">
+                                We've identified columns that look like ML prediction targets (what you'd try to predict). The charts show how the classes are distributed - if one class is much rarer than others, your model may struggle to predict it accurately without special handling.
+                                {sample_note}
                             </div>
                         </div>
-                        <div class="accordion-content">
-                            <div class="dual-layer-explanation">
-                                <div class="dual-layer-summary">
-                                    <div class="dual-layer-summary-label">📘 Plain-English Summary</div>
-                                    <div class="dual-layer-summary-text">
-                                        These charts show how values are split across categories. When one group is much smaller than others (less than 10%), it can cause problems for analysis because the small group gets overlooked.
-                                        {sample_note}
-                                    </div>
-                                </div>
-                                <details class="dual-layer-technical">
-                                    <summary>🧠 Technical Details (click to expand)</summary>
-                                    <div class="dual-layer-technical-content" style="padding: 12px;">
-                                        <ul style="margin: 0; padding-left: 20px; color: var(--text-secondary); font-size: 0.85em;">
-                                            <li>Minority class &lt;10% = critical imbalance for ML models</li>
-                                            <li>Solutions: SMOTE oversampling, class weights, stratified sampling</li>
-                                            <li>Alternative metrics: F1-score, precision-recall AUC, Cohen's kappa</li>
-                                        </ul>
-                                        <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border-subtle);">
-                                            <p style="font-weight: 600; margin-bottom: 8px; color: var(--text-secondary);">🎯 Target Detection Logic:</p>
-                                            <ul style="margin: 0; padding-left: 20px; color: var(--text-secondary); font-size: 0.85em;">
-                                                <li><strong>Keyword match:</strong> target, label, class, outcome, churn, fraud, survived, etc.</li>
-                                                <li><strong>Pattern match:</strong> is_*, has_*, *_flag, *_indicator prefixes/suffixes</li>
-                                                <li><strong>Binary columns:</strong> Fields with exactly 2 unique values + target-like name</li>
-                                                <li><strong>Low cardinality:</strong> ≤5 unique values + keyword match</li>
-                                            </ul>
-                                        </div>
-                                    </div>
-                                </details>
+                        <details class="dual-layer-technical">
+                            <summary>
+                                <svg style="width: 14px; height: 14px; vertical-align: -2px; margin-right: 6px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a4 4 0 014 4c0 1.5-1 2.5-2 3l-2 1v2"/><circle cx="12" cy="17" r="1"/></svg>
+                                Technical Details (click to expand)
+                            </summary>
+                            <div class="dual-layer-technical-content" style="padding: 12px;">
+                                <p style="font-weight: 600; margin-bottom: 8px; color: var(--text-secondary);">Target Detection</p>
+                                <ul style="margin: 0 0 12px 0; padding-left: 20px; color: var(--text-secondary); font-size: 0.85em;">
+                                    <li><strong>Keywords:</strong> target, label, class, outcome, churn, fraud, survived</li>
+                                    <li><strong>Patterns:</strong> is_*, has_*, *_flag, *_indicator</li>
+                                    <li><strong>Binary/low cardinality:</strong> 2-5 unique values with target-like name</li>
+                                </ul>
+                                <p style="font-weight: 600; margin-bottom: 8px; color: var(--text-secondary);">Class Imbalance</p>
+                                <ul style="margin: 0; padding-left: 20px; color: var(--text-secondary); font-size: 0.85em;">
+                                    <li>Minority class &lt;10% = critical imbalance requiring intervention</li>
+                                    <li><strong>Solutions:</strong> SMOTE oversampling, class weights, stratified sampling</li>
+                                    <li><strong>Metrics:</strong> Use F1-score, precision-recall AUC instead of accuracy</li>
+                                </ul>
                             </div>
-                            {imbalance_charts}
-                            <script>
-                            document.addEventListener('DOMContentLoaded', function() {{
-                                const imbalanceCharts = {json.dumps(imbalance_scripts)};
-                                const colors = ['rgba(139, 92, 246, 0.8)', 'rgba(59, 130, 246, 0.8)', 'rgba(16, 185, 129, 0.8)',
-                                               'rgba(245, 158, 11, 0.8)', 'rgba(239, 68, 68, 0.8)', 'rgba(236, 72, 153, 0.8)'];
-                                imbalanceCharts.forEach(chart => {{
-                                    const ctx = document.getElementById(chart.id);
-                                    if (ctx) {{
-                                        new Chart(ctx, {{
-                                            type: 'bar',
-                                            data: {{
-                                                labels: chart.labels,
-                                                datasets: [{{
-                                                    label: 'Count',
-                                                    data: chart.data,
-                                                    backgroundColor: colors.slice(0, chart.labels.length),
-                                                    borderWidth: 0,
-                                                    borderRadius: 4
-                                                }}]
-                                            }},
-                                            options: {{
-                                                responsive: true,
-                                                maintainAspectRatio: false,
-                                                plugins: {{
-                                                    legend: {{ display: false }},
-                                                    tooltip: {{
-                                                        callbacks: {{
-                                                            label: function(context) {{
-                                                                const pct = chart.percentages[context.dataIndex];
-                                                                return `Count: ${{context.raw.toLocaleString()}} (${{pct}}%)`;
-                                                            }}
-                                                        }}
-                                                    }}
-                                                }},
-                                                scales: {{
-                                                    x: {{
-                                                        grid: {{ display: false }},
-                                                        ticks: {{ color: '#94a3b8', font: {{ size: 11 }} }}
-                                                    }},
-                                                    y: {{
-                                                        grid: {{ color: 'rgba(148, 163, 184, 0.1)' }},
-                                                        ticks: {{ color: '#64748b' }}
+                        </details>
+                    </div>
+                    {imbalance_charts}
+                    <script>
+                    document.addEventListener('DOMContentLoaded', function() {{
+                        const imbalanceCharts = {json.dumps(imbalance_scripts)};
+                        const colors = ['rgba(139, 92, 246, 0.8)', 'rgba(59, 130, 246, 0.8)', 'rgba(16, 185, 129, 0.8)',
+                                       'rgba(245, 158, 11, 0.8)', 'rgba(239, 68, 68, 0.8)', 'rgba(236, 72, 153, 0.8)'];
+                        imbalanceCharts.forEach(chart => {{
+                            const ctx = document.getElementById(chart.id);
+                            if (ctx) {{
+                                new Chart(ctx, {{
+                                    type: 'bar',
+                                    data: {{
+                                        labels: chart.labels,
+                                        datasets: [{{
+                                            label: 'Count',
+                                            data: chart.data,
+                                            backgroundColor: colors.slice(0, chart.labels.length),
+                                            borderWidth: 0,
+                                            borderRadius: 4
+                                        }}]
+                                    }},
+                                    options: {{
+                                        responsive: true,
+                                        maintainAspectRatio: false,
+                                        plugins: {{
+                                            legend: {{ display: false }},
+                                            tooltip: {{
+                                                callbacks: {{
+                                                    label: function(context) {{
+                                                        const pct = chart.percentages[context.dataIndex];
+                                                        return `Count: ${{context.raw.toLocaleString()}} (${{pct}}%)`;
                                                     }}
                                                 }}
                                             }}
-                                        }});
+                                        }},
+                                        scales: {{
+                                            x: {{
+                                                grid: {{ display: false }},
+                                                ticks: {{ color: '#94a3b8', font: {{ size: 11 }} }}
+                                            }},
+                                            y: {{
+                                                grid: {{ color: 'rgba(148, 163, 184, 0.1)' }},
+                                                ticks: {{ color: '#64748b' }}
+                                            }}
+                                        }}
                                     }}
                                 }});
-                            }});
-                            </script>
-                        </div>
-                    </div>''')
+                            }}
+                        }});
+                    }});
+                    </script>''')
 
         # ═══════════════════════════════════════════════════════════════
         # 4. ACTIVITY TIMELINE (Temporal Density)
@@ -7305,7 +7807,7 @@ the largest difference between classes, which could be useful for predictive mod
                     <div class="accordion" data-accordion="viz-timeline">
                         <div class="accordion-header" onclick="toggleAccordion(this)">
                             <div class="accordion-title-group">
-                                <div class="accordion-icon" style="background: linear-gradient(135deg, #8b5cf6, #6d28d9);">📈</div>
+                                <div class="accordion-icon"><svg style="width:16px;height:16px;color:#64748b;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 7h6v6"/><path d="m22 7-8.5 8.5-5-5L2 17"/></svg></div>
                                 <div>
                                     <div class="accordion-title">Activity Timeline</div>
                                     <div class="accordion-subtitle">Event density over time - detect coverage gaps</div>
@@ -7313,25 +7815,25 @@ the largest difference between classes, which could be useful for predictive mod
                             </div>
                             <div class="accordion-meta">
                                 <span class="accordion-badge info">{len(temporal_density)} Temporal Fields</span>
-                                <span class="accordion-chevron">▼</span>
+                                <span class="accordion-chevron"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><polyline points="6 9 12 15 18 9"/></svg></span>
                             </div>
                         </div>
                         <div class="accordion-content">
                             <div class="dual-layer-explanation">
                                 <div class="dual-layer-summary">
-                                    <div class="dual-layer-summary-label">📘 Plain-English Summary</div>
+                                    <div class="dual-layer-summary-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7V17a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-2.3A7 7 0 0 0 12 2z"/></svg> What this means</div>
                                     <div class="dual-layer-summary-text">
-                                        This shows how records are spread out over time. Red bars highlight days with no activity - these gaps might be normal (weekends, holidays) or could indicate missing data.
+                                        Record volume over time showing data coverage and temporal gaps. Red bars highlight periods with zero records - investigate whether gaps are expected (weekends, holidays) or indicate data pipeline issues.
                                         {sample_note}
                                     </div>
                                 </div>
                                 <details class="dual-layer-technical">
-                                    <summary>🧠 Technical Details (click to expand)</summary>
+                                    <summary><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;vertical-align:-2px;margin-right:4px"><path d="M12 18V5"/><path d="M15 13a4.17 4.17 0 0 1-3-4 4.17 4.17 0 0 1-3 4"/><path d="M17.598 6.5A3 3 0 1 0 12 5a3 3 0 1 0-5.598 1.5"/><path d="M17.997 5.125a4 4 0 0 1 2.526 5.77"/><path d="M18 18a4 4 0 0 0 2-7.464"/><path d="M19.967 17.483A4 4 0 1 1 12 18a4 4 0 1 1-7.967-.517"/><path d="M6 18a4 4 0 0 1-2-7.464"/><path d="M6.003 5.125a4 4 0 0 0-2.526 5.77"/></svg> Technical Details (click to expand)</summary>
                                     <div class="dual-layer-technical-content" style="padding: 12px;">
                                         <ul style="margin: 0; padding-left: 20px; color: var(--text-secondary); font-size: 0.85em;">
-                                            <li>Daily aggregation of event counts</li>
-                                            <li>Gap detection compares consecutive dates</li>
-                                            <li>Red bars = calendar days with zero events</li>
+                                            <li>Daily/weekly aggregation depending on date range</li>
+                                            <li>Gap detection identifies missing time periods in date columns</li>
+                                            <li>Useful for validating ETL completeness and SLA monitoring</li>
                                         </ul>
                                     </div>
                                 </details>
@@ -7460,7 +7962,7 @@ the largest difference between classes, which could be useful for predictive mod
                 <div class="accordion" data-accordion="viz-autoencoder">
                     <div class="accordion-header" onclick="toggleAccordion(this)">
                         <div class="accordion-title-group">
-                            <div class="accordion-icon" style="background: linear-gradient(135deg, #ec4899, #be185d);">🧠</div>
+                            <div class="accordion-icon"><svg style="width:16px;height:16px;color:#64748b;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 18V5"/><path d="M15 13a4.17 4.17 0 0 1-3-4 4.17 4.17 0 0 1-3 4"/><path d="M17.598 6.5A3 3 0 1 0 12 5a3 3 0 1 0-5.598 1.5"/><path d="M6 18a4 4 0 0 1-2-7.464"/></svg></div>
                             <div>
                                 <div class="accordion-title">Autoencoder Reconstruction Errors</div>
                                 <div class="accordion-subtitle">Deep learning anomaly detection</div>
@@ -7468,7 +7970,7 @@ the largest difference between classes, which could be useful for predictive mod
                         </div>
                         <div class="accordion-meta">
                             <span class="accordion-badge {'critical' if anomaly_pct > 5 else 'warning' if anomaly_pct > 1 else 'good'}">{anomaly_count:,} Anomalies</span>
-                            <span class="accordion-chevron">▼</span>
+                            <span class="accordion-chevron"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><polyline points="6 9 12 15 18 9"/></svg></span>
                         </div>
                     </div>
                     <div class="accordion-content">
@@ -7561,7 +8063,7 @@ the largest difference between classes, which could be useful for predictive mod
                 <div class="accordion" data-accordion="viz-anomaly-scores">
                     <div class="accordion-header" onclick="toggleAccordion(this)">
                         <div class="accordion-title-group">
-                            <div class="accordion-icon" style="background: linear-gradient(135deg, #94a3b8, #64748b);">🔍</div>
+                            <div class="accordion-icon"><svg style="width:16px;height:16px;color:#64748b;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></svg></div>
                             <div>
                                 <div class="accordion-title">Isolation Forest Anomaly Scores</div>
                                 <div class="accordion-subtitle">Statistical outlier detection per numeric field</div>
@@ -7569,18 +8071,18 @@ the largest difference between classes, which could be useful for predictive mod
                         </div>
                         <div class="accordion-meta">
                             <span class="accordion-badge neutral">Not Available</span>
-                            <span class="accordion-chevron">▼</span>
+                            <span class="accordion-chevron"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><polyline points="6 9 12 15 18 9"/></svg></span>
                         </div>
                     </div>
                     <div class="accordion-content">
                         <div style="padding: 24px; background: var(--bg-card); border-radius: 8px; text-align: center;">
-                            <div style="font-size: 2em; margin-bottom: 12px;">🔍</div>
+                            <div style="margin-bottom: 12px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:48px;height:48px;color:var(--text-muted)"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div>
                             <h4 style="margin: 0 0 8px 0; color: var(--text-primary);">Insufficient Numeric Fields for Anomaly Detection</h4>
                             <p style="color: var(--text-muted); margin: 0; max-width: 500px; margin: 0 auto;">
                                 This dataset has too few continuous numeric fields for Isolation Forest analysis. Fields with only a few unique values (like binary flags or small categories) are excluded as they don't benefit from this type of analysis.
                             </p>
                             <p style="color: var(--text-muted); font-size: 0.85em; margin-top: 12px;">
-                                💡 <strong>Tip:</strong> Isolation Forest works best on continuous numeric data like amounts, counts, measurements, and scores with many distinct values.
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;vertical-align:-2px;color:#f59e0b"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> <strong>Tip:</strong> Isolation Forest works best on continuous numeric data like amounts, counts, measurements, and scores with many distinct values.
                             </p>
                         </div>
                     </div>
@@ -7658,7 +8160,7 @@ the largest difference between classes, which could be useful for predictive mod
                 <div class="accordion" data-accordion="viz-anomaly-scores">
                     <div class="accordion-header" onclick="toggleAccordion(this)">
                         <div class="accordion-title-group">
-                            <div class="accordion-icon" style="background: linear-gradient(135deg, #ef4444, #b91c1c);">🔍</div>
+                            <div class="accordion-icon"><svg style="width:16px;height:16px;color:#64748b;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></svg></div>
                             <div>
                                 <div class="accordion-title">Isolation Forest Anomaly Scores</div>
                                 <div class="accordion-subtitle">Statistical outlier detection per numeric field</div>
@@ -7666,7 +8168,7 @@ the largest difference between classes, which could be useful for predictive mod
                         </div>
                         <div class="accordion-meta">
                             <span class="accordion-badge info">{len(anomaly_scores)} Fields</span>
-                            <span class="accordion-chevron">▼</span>
+                            <span class="accordion-chevron"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><polyline points="6 9 12 15 18 9"/></svg></span>
                         </div>
                     </div>
                     <div class="accordion-content">
@@ -7687,7 +8189,7 @@ the largest difference between classes, which could be useful for predictive mod
                 <div class="accordion" data-accordion="viz-numeric-dist">
                     <div class="accordion-header" onclick="toggleAccordion(this)">
                         <div class="accordion-title-group">
-                            <div class="accordion-icon" style="background: linear-gradient(135deg, #94a3b8, #64748b);">📦</div>
+                            <div class="accordion-icon"><svg style="width:16px;height:16px;color:#64748b;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"/><path d="M12 22V12"/><polyline points="3.29 7 12 12 20.71 7"/></svg></div>
                             <div>
                                 <div class="accordion-title">Numeric Distribution Box Plots</div>
                                 <div class="accordion-subtitle">Visualize value distributions and outliers</div>
@@ -7695,18 +8197,18 @@ the largest difference between classes, which could be useful for predictive mod
                         </div>
                         <div class="accordion-meta">
                             <span class="accordion-badge neutral">Not Available</span>
-                            <span class="accordion-chevron">▼</span>
+                            <span class="accordion-chevron"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><polyline points="6 9 12 15 18 9"/></svg></span>
                         </div>
                     </div>
                     <div class="accordion-content">
                         <div style="padding: 24px; background: var(--bg-card); border-radius: 8px; text-align: center;">
-                            <div style="font-size: 2em; margin-bottom: 12px;">📦</div>
+                            <div style="margin-bottom: 12px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:48px;height:48px;color:var(--text-muted)"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg></div>
                             <h4 style="margin: 0 0 8px 0; color: var(--text-primary);">No Numeric Fields for Distribution Analysis</h4>
                             <p style="color: var(--text-muted); margin: 0; max-width: 500px; margin: 0 auto;">
                                 This dataset doesn't have enough continuous numeric fields for box plot visualization. Binary columns and fields with very few unique values are excluded since they don't have meaningful distributions to show.
                             </p>
                             <p style="color: var(--text-muted); font-size: 0.85em; margin-top: 12px;">
-                                💡 <strong>Tip:</strong> Box plots are most useful for numeric data like prices, ages, quantities, or measurements with many different values.
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;vertical-align:-2px;color:#f59e0b"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> <strong>Tip:</strong> Box plots are most useful for numeric data like prices, ages, quantities, or measurements with many different values.
                             </p>
                         </div>
                     </div>
@@ -7769,7 +8271,7 @@ the largest difference between classes, which could be useful for predictive mod
                     <div class="accordion" data-accordion="viz-box-plots">
                         <div class="accordion-header" onclick="toggleAccordion(this)">
                             <div class="accordion-title-group">
-                                <div class="accordion-icon" style="background: linear-gradient(135deg, #06b6d4, #0891b2);">📦</div>
+                                <div class="accordion-icon"><svg style="width:16px;height:16px;color:#64748b;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"/><path d="M12 22V12"/><polyline points="3.29 7 12 12 20.71 7"/></svg></div>
                                 <div>
                                     <div class="accordion-title">Numeric Distribution Summary</div>
                                     <div class="accordion-subtitle">Quartiles and outlier bounds at a glance</div>
@@ -7777,7 +8279,7 @@ the largest difference between classes, which could be useful for predictive mod
                             </div>
                             <div class="accordion-meta">
                                 <span class="accordion-badge info">{len(box_data)} Fields</span>
-                                <span class="accordion-chevron">▼</span>
+                                <span class="accordion-chevron"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><polyline points="6 9 12 15 18 9"/></svg></span>
                             </div>
                         </div>
                         <div class="accordion-content">
@@ -7874,7 +8376,7 @@ the largest difference between classes, which could be useful for predictive mod
                 <div class="accordion" data-accordion="viz-benford">
                     <div class="accordion-header" onclick="toggleAccordion(this)">
                         <div class="accordion-title-group">
-                            <div class="accordion-icon" style="background: linear-gradient(135deg, #94a3b8, #64748b);">📐</div>
+                            <div class="accordion-icon"><svg style="width:16px;height:16px;color:#64748b;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z"/><path d="M2 12a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 12"/></svg></div>
                             <div>
                                 <div class="accordion-title">Benford's Law Analysis</div>
                                 <div class="accordion-subtitle">Detect potential data fabrication in numeric columns</div>
@@ -7882,7 +8384,7 @@ the largest difference between classes, which could be useful for predictive mod
                         </div>
                         <div class="accordion-meta">
                             <span class="accordion-badge neutral">Not Available</span>
-                            <span class="accordion-chevron">▼</span>
+                            <span class="accordion-chevron"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><polyline points="6 9 12 15 18 9"/></svg></span>
                         </div>
                     </div>
                     <div class="accordion-content">
@@ -7893,7 +8395,7 @@ the largest difference between classes, which could be useful for predictive mod
                                 {fallback_reason}
                             </p>
                             <p style="color: var(--text-muted); font-size: 0.85em; margin-top: 12px;">
-                                💡 <strong>Tip:</strong> Benford's Law works best with data spanning multiple orders of magnitude,
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;vertical-align:-2px;color:#f59e0b"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> <strong>Tip:</strong> Benford's Law works best with data spanning multiple orders of magnitude,
                                 such as financial transactions, population counts, or invoice amounts. Binary fields, identifiers,
                                 and bounded data (like percentages) are not suitable.
                             </p>
@@ -7981,7 +8483,7 @@ the largest difference between classes, which could be useful for predictive mod
                     <div class="accordion" data-accordion="viz-benford">
                         <div class="accordion-header" onclick="toggleAccordion(this)">
                             <div class="accordion-title-group">
-                                <div class="accordion-icon" style="background: linear-gradient(135deg, #f97316, #ea580c);">📐</div>
+                                <div class="accordion-icon"><svg style="width:16px;height:16px;color:#64748b;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z"/><path d="M2 12a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 12"/></svg></div>
                                 <div>
                                     <div class="accordion-title">Benford's Law Analysis</div>
                                     <div class="accordion-subtitle">Detect potential data fabrication in numeric columns</div>
@@ -7989,7 +8491,7 @@ the largest difference between classes, which could be useful for predictive mod
                             </div>
                             <div class="accordion-meta">
                                 <span class="accordion-badge info">{len(benford_analysis)} Fields</span>
-                                <span class="accordion-chevron">▼</span>
+                                <span class="accordion-chevron"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><polyline points="6 9 12 15 18 9"/></svg></span>
                             </div>
                         </div>
                         <div class="accordion-content">
@@ -8097,7 +8599,7 @@ the largest difference between classes, which could be useful for predictive mod
                 <div class="accordion" data-accordion="viz-quality-radar">
                     <div class="accordion-header" onclick="toggleAccordion(this)">
                         <div class="accordion-title-group">
-                            <div class="accordion-icon" style="background: linear-gradient(135deg, #22c55e, #16a34a);">🎯</div>
+                            <div class="accordion-icon"><svg style="width:16px;height:16px;color:#64748b;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg></div>
                             <div>
                                 <div class="accordion-title">Data Quality Radar</div>
                                 <div class="accordion-subtitle">Multi-dimensional quality assessment at a glance</div>
@@ -8105,7 +8607,7 @@ the largest difference between classes, which could be useful for predictive mod
                         </div>
                         <div class="accordion-meta">
                             <span class="accordion-badge {'good' if quality_scores['Overall'] >= 80 else 'warning' if quality_scores['Overall'] >= 60 else 'critical'}">{quality_scores['Overall']}% Overall</span>
-                            <span class="accordion-chevron">▼</span>
+                            <span class="accordion-chevron"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><polyline points="6 9 12 15 18 9"/></svg></span>
                         </div>
                     </div>
                     <div class="accordion-content">
@@ -8249,7 +8751,7 @@ the largest difference between classes, which could be useful for predictive mod
                     <div class="accordion" data-accordion="viz-missing-pattern">
                         <div class="accordion-header" onclick="toggleAccordion(this)">
                             <div class="accordion-title-group">
-                                <div class="accordion-icon" style="background: linear-gradient(135deg, #a855f7, #7c3aed);">🔳</div>
+                                <div class="accordion-icon"><svg style="width:16px;height:16px;color:#64748b;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/></svg></div>
                                 <div>
                                     <div class="accordion-title">Missing Data Pattern Analysis</div>
                                     <div class="accordion-subtitle">Detect non-random missingness across target classes</div>
@@ -8257,7 +8759,7 @@ the largest difference between classes, which could be useful for predictive mod
                             </div>
                             <div class="accordion-meta">
                                 <span class="accordion-badge warning">{len(missing_cards)} Biased Fields</span>
-                                <span class="accordion-chevron">▼</span>
+                                <span class="accordion-chevron"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><polyline points="6 9 12 15 18 9"/></svg></span>
                             </div>
                         </div>
                         <div class="accordion-content">
@@ -8340,7 +8842,7 @@ the largest difference between classes, which could be useful for predictive mod
                     <div class="accordion" data-accordion="viz-correlation">
                         <div class="accordion-header" onclick="toggleAccordion(this)">
                             <div class="accordion-title-group">
-                                <div class="accordion-icon" style="background: linear-gradient(135deg, #3b82f6, #1d4ed8);">🔗</div>
+                                <div class="accordion-icon"><svg style="width:16px;height:16px;color:#64748b;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></div>
                                 <div>
                                     <div class="accordion-title">Feature Correlation Matrix</div>
                                     <div class="accordion-subtitle">Categorical-numeric associations using Correlation Ratio (η)</div>
@@ -8348,7 +8850,7 @@ the largest difference between classes, which could be useful for predictive mod
                             </div>
                             <div class="accordion-meta">
                                 <span class="accordion-badge info">{len(corr_ratio_data)} Pairs</span>
-                                <span class="accordion-chevron">▼</span>
+                                <span class="accordion-chevron"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><polyline points="6 9 12 15 18 9"/></svg></span>
                             </div>
                         </div>
                         <div class="accordion-content">
@@ -8374,7 +8876,7 @@ the largest difference between classes, which could be useful for predictive mod
                 <div class="accordion" data-accordion="viz-outlier-comparison">
                     <div class="accordion-header" onclick="toggleAccordion(this)">
                         <div class="accordion-title-group">
-                            <div class="accordion-icon" style="background: linear-gradient(135deg, #94a3b8, #64748b);">📊</div>
+                            <div class="accordion-icon"><svg style="width:16px;height:16px;color:#64748b;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M7 16h8"/><path d="M7 11h12"/><path d="M7 6h3"/></svg></div>
                             <div>
                                 <div class="accordion-title">Outlier Comparison</div>
                                 <div class="accordion-subtitle">Compare outlier rates across numeric fields</div>
@@ -8382,18 +8884,18 @@ the largest difference between classes, which could be useful for predictive mod
                         </div>
                         <div class="accordion-meta">
                             <span class="accordion-badge neutral">Not Available</span>
-                            <span class="accordion-chevron">▼</span>
+                            <span class="accordion-chevron"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><polyline points="6 9 12 15 18 9"/></svg></span>
                         </div>
                     </div>
                     <div class="accordion-content">
                         <div style="padding: 24px; background: var(--bg-card); border-radius: 8px; text-align: center;">
-                            <div style="font-size: 2em; margin-bottom: 12px;">📊</div>
+                            <div style="margin-bottom: 12px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:48px;height:48px;color:var(--text-muted)"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></div>
                             <h4 style="margin: 0 0 8px 0; color: var(--text-primary);">Insufficient Numeric Fields</h4>
                             <p style="color: var(--text-muted); margin: 0; max-width: 500px; margin: 0 auto;">
                                 {fallback_reason}. This chart compares outlier rates across multiple numeric columns to help identify which fields have unusual distributions.
                             </p>
                             <p style="color: var(--text-muted); font-size: 0.85em; margin-top: 12px;">
-                                💡 <strong>Tip:</strong> Datasets with monetary amounts, measurements, or counts typically have more numeric fields suitable for this analysis.
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;vertical-align:-2px;color:#f59e0b"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> <strong>Tip:</strong> Datasets with monetary amounts, measurements, or counts typically have more numeric fields suitable for this analysis.
                             </p>
                         </div>
                     </div>
@@ -8460,7 +8962,7 @@ the largest difference between classes, which could be useful for predictive mod
                 <div class="accordion" data-accordion="viz-outlier-comparison">
                     <div class="accordion-header" onclick="toggleAccordion(this)">
                         <div class="accordion-title-group">
-                            <div class="accordion-icon" style="background: linear-gradient(135deg, #22c55e, #16a34a);">✓</div>
+                            <div class="accordion-icon"><svg style="width:16px;height:16px;color:#64748b;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg></div>
                             <div>
                                 <div class="accordion-title">Outlier Comparison</div>
                                 <div class="accordion-subtitle">Compare outlier rates across numeric fields</div>
@@ -8468,13 +8970,13 @@ the largest difference between classes, which could be useful for predictive mod
                         </div>
                         <div class="accordion-meta">
                             <span class="accordion-badge good">No Outliers</span>
-                            <span class="accordion-chevron">▼</span>
+                            <span class="accordion-chevron"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><polyline points="6 9 12 15 18 9"/></svg></span>
                         </div>
                     </div>
                     <div class="accordion-content">
                         {outlier_dual_layer}
                         <div style="padding: 32px; background: var(--bg-card); border-radius: 8px; text-align: center; border: 2px solid rgba(34, 197, 94, 0.3);">
-                            <div style="font-size: 3em; margin-bottom: 16px;">✓</div>
+                            <div style="margin-bottom: 16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:56px;height:56px;color:#10b981"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div>
                             <h4 style="margin: 0 0 12px 0; color: #22c55e; font-size: 1.2em;">No IQR Outliers Detected</h4>
                             <p style="color: var(--text-muted); margin: 0; max-width: 500px; margin: 0 auto; line-height: 1.6;">
                                 All {len(outlier_comparison)} numeric columns have values within expected ranges.
@@ -8491,7 +8993,7 @@ the largest difference between classes, which could be useful for predictive mod
                 <div class="accordion" data-accordion="viz-outlier-comparison">
                     <div class="accordion-header" onclick="toggleAccordion(this)">
                         <div class="accordion-title-group">
-                            <div class="accordion-icon" style="background: linear-gradient(135deg, #ef4444, #dc2626);">📊</div>
+                            <div class="accordion-icon"><svg style="width:16px;height:16px;color:#64748b;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M7 16h8"/><path d="M7 11h12"/><path d="M7 6h3"/></svg></div>
                             <div>
                                 <div class="accordion-title">Outlier Comparison</div>
                                 <div class="accordion-subtitle">Compare outlier rates across numeric fields</div>
@@ -8499,7 +9001,7 @@ the largest difference between classes, which could be useful for predictive mod
                         </div>
                         <div class="accordion-meta">
                             <span class="accordion-badge info">{len(outlier_comparison)} Fields</span>
-                            <span class="accordion-chevron">▼</span>
+                            <span class="accordion-chevron"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><polyline points="6 9 12 15 18 9"/></svg></span>
                         </div>
                     </div>
                     <div class="accordion-content">
@@ -8589,66 +9091,51 @@ the largest difference between classes, which could be useful for predictive mod
         if type_counts.get('Datetime', 0) > 0:
             plain_english += f"There are also {type_counts.get('Datetime', 0)} date/time column(s) for temporal analysis."
 
+        # Return content directly without accordion wrapper (parent section-accordion provides structure)
         return f'''
-                <div class="accordion" data-accordion="overview">
-                    <div class="accordion-header" onclick="toggleAccordion(this)">
-                        <div class="accordion-title-group">
-                            <div class="accordion-icon overview">🔤</div>
-                            <div>
-                                <div class="accordion-title">Data Types</div>
-                                <div class="accordion-subtitle">{type_breakdown}</div>
-                            </div>
-                        </div>
-                        <div class="accordion-meta">
-                            <span class="accordion-badge info">{profile.column_count} columns</span>
-                            <span class="accordion-chevron">▼</span>
-                        </div>
+                <div class="dual-layer-explanation" style="margin-bottom: 20px;">
+                    <div class="dual-layer-summary">
+                        <div class="dual-layer-summary-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7V17a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-2.3A7 7 0 0 0 12 2z"/></svg> What this means</div>
+                        <div class="dual-layer-summary-text">{plain_english}</div>
                     </div>
-                    <div class="accordion-body">
-                        <div class="accordion-content">
-                            <div class="dual-layer-explanation">
-                                <div class="dual-layer-summary">
-                                    <div class="dual-layer-summary-label">📘 Plain-English Summary</div>
-                                    <div class="dual-layer-summary-text">{plain_english}</div>
+                    <details class="dual-layer-technical">
+                        <summary>
+                            <svg style="width: 14px; height: 14px; vertical-align: -2px; margin-right: 6px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a4 4 0 014 4c0 1.5-1 2.5-2 3l-2 1v2"/><circle cx="12" cy="17" r="1"/></svg>
+                            Technical Details (click to expand)
+                        </summary>
+                        <div class="dual-layer-technical-content">
+                            <div class="dual-layer-technical-grid">
+                                <div class="dual-layer-technical-item">
+                                    <span class="dual-layer-technical-item-label">Integer</span>
+                                    <span class="dual-layer-technical-item-value">{type_counts.get('Integer', 0)} columns</span>
                                 </div>
-                                <details class="dual-layer-technical">
-                                    <summary>🧠 Technical Details (click to expand)</summary>
-                                    <div class="dual-layer-technical-content">
-                                        <div class="dual-layer-technical-grid">
-                                            <div class="dual-layer-technical-item">
-                                                <span class="dual-layer-technical-item-label">Integer</span>
-                                                <span class="dual-layer-technical-item-value">{type_counts.get('Integer', 0)} columns</span>
-                                            </div>
-                                            <div class="dual-layer-technical-item">
-                                                <span class="dual-layer-technical-item-label">Float</span>
-                                                <span class="dual-layer-technical-item-value">{type_counts.get('Float', 0)} columns</span>
-                                            </div>
-                                            <div class="dual-layer-technical-item">
-                                                <span class="dual-layer-technical-item-label">String</span>
-                                                <span class="dual-layer-technical-item-value">{type_counts.get('String', 0)} columns</span>
-                                            </div>
-                                            <div class="dual-layer-technical-item">
-                                                <span class="dual-layer-technical-item-label">Datetime</span>
-                                                <span class="dual-layer-technical-item-value">{type_counts.get('Datetime', 0)} columns</span>
-                                            </div>
-                                        </div>
-                                        <div class="dual-layer-technical-context">
-                                            <ul>
-                                                <li>Integer: Whole numbers (counts, IDs, quantities)</li>
-                                                <li>Float: Decimal numbers (prices, percentages, measurements)</li>
-                                                <li>String: Text data (names, categories, codes)</li>
-                                                <li>Datetime: Date/time values for temporal analysis</li>
-                                            </ul>
-                                        </div>
-                                    </div>
-                                </details>
+                                <div class="dual-layer-technical-item">
+                                    <span class="dual-layer-technical-item-label">Float</span>
+                                    <span class="dual-layer-technical-item-value">{type_counts.get('Float', 0)} columns</span>
+                                </div>
+                                <div class="dual-layer-technical-item">
+                                    <span class="dual-layer-technical-item-label">String</span>
+                                    <span class="dual-layer-technical-item-value">{type_counts.get('String', 0)} columns</span>
+                                </div>
+                                <div class="dual-layer-technical-item">
+                                    <span class="dual-layer-technical-item-label">Datetime</span>
+                                    <span class="dual-layer-technical-item-value">{type_counts.get('Datetime', 0)} columns</span>
+                                </div>
                             </div>
-                            <div class="chart-container">
-                                <div class="chart-title">Data Type Distribution</div>
-                                <canvas id="typeChart" height="100"></canvas>
+                            <div class="dual-layer-technical-context">
+                                <ul>
+                                    <li>Integer: Whole numbers (counts, IDs, quantities)</li>
+                                    <li>Float: Decimal numbers (prices, percentages, measurements)</li>
+                                    <li>String: Text data (names, categories, codes)</li>
+                                    <li>Datetime: Date/time values for temporal analysis</li>
+                                </ul>
                             </div>
                         </div>
-                    </div>
+                    </details>
+                </div>
+                <div class="chart-container">
+                    <div class="chart-title">Data Type Distribution</div>
+                    <canvas id="typeChart" height="100"></canvas>
                 </div>'''
 
     def _generate_semantic_classification_accordion(self, profile: ProfileResult) -> str:
@@ -8794,7 +9281,7 @@ the largest difference between classes, which could be useful for predictive mod
                 <div class="accordion" data-accordion="semantics">
                     <div class="accordion-header" onclick="toggleAccordion(this)">
                         <div class="accordion-title-group">
-                            <div class="accordion-icon semantics" style="background: linear-gradient(135deg, #8b5cf6 0%, #3b82f6 100%);">🏷️</div>
+                            <div class="accordion-icon"><svg style="width:16px;height:16px;color:#64748b;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg></div>
                             <div>
                                 <div class="accordion-title">Semantic Classification</div>
                                 <div class="accordion-subtitle">What type of data is in each column?</div>
@@ -8802,7 +9289,7 @@ the largest difference between classes, which could be useful for predictive mod
                         </div>
                         <div class="accordion-meta">
                             <span class="accordion-badge info">{columns_with_semantics}/{len(columns)} classified</span>
-                            <span class="accordion-chevron">▼</span>
+                            <span class="accordion-chevron"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><polyline points="6 9 12 15 18 9"/></svg></span>
                         </div>
                     </div>
                     <div class="accordion-body">
@@ -8819,7 +9306,7 @@ the largest difference between classes, which could be useful for predictive mod
                             <!-- How it works -->
                             <div style="background: var(--bg-tertiary); border-radius: 8px; padding: 16px; margin-bottom: 20px;">
                                 <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 12px; font-size: 0.9em;">
-                                    🔍 How Classification Works
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;vertical-align:-2px;margin-right:4px"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> How Classification Works
                                 </div>
                                 <p style="color: var(--text-secondary); font-size: 0.85em; line-height: 1.6; margin-bottom: 12px;">
                                     DataK9 checks each column against two standard vocabularies, in order of priority:
@@ -8848,7 +9335,7 @@ the largest difference between classes, which could be useful for predictive mod
                             <!-- Results Summary -->
                             <div style="margin-bottom: 20px;">
                                 <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 12px; font-size: 0.9em;">
-                                    📊 Classification Results
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;vertical-align:-2px;margin-right:4px"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg> Classification Results
                                 </div>
                                 <div style="display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 16px;">
                                     <div style="background: var(--bg-tertiary); padding: 12px 16px; border-radius: 8px; text-align: center;">
@@ -8886,7 +9373,7 @@ the largest difference between classes, which could be useful for predictive mod
                             <!-- Technical Layer -->
                             <details style="margin-top: 16px;">
                                 <summary style="cursor: pointer; color: var(--text-secondary); font-size: 0.85em; padding: 8px 0;">
-                                    🔧 Technical Details: Column Mappings
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;vertical-align:-2px;margin-right:4px"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg> Technical Details: Column Mappings
                                 </summary>
                                 <div style="margin-top: 12px; overflow-x: auto;">
                                     <table style="width: 100%; border-collapse: collapse; font-size: 0.85em;">
@@ -8904,7 +9391,7 @@ the largest difference between classes, which could be useful for predictive mod
                                     </table>
                                 </div>
                                 <div class="hint-box" style="margin-top: 12px; border-left-color: #8b5cf6;">
-                                    <strong>💡 About Semantic Classification:</strong><br>
+                                    <strong><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;vertical-align:-2px;margin-right:2px;color:#f59e0b"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> About Semantic Classification:</strong><br>
                                     <strong>FIBO</strong> (Financial Industry Business Ontology) identifies financial domain patterns like accounts, transactions, and monetary values.
                                     <strong>Schema.org</strong> provides general web vocabulary for common types like Person, Organization, Email, and Address.
                                     DataK9 uses the best match from either ontology to drive intelligent validation suggestions.
@@ -8941,7 +9428,7 @@ the largest difference between classes, which could be useful for predictive mod
                             <!-- Unclassified Columns -->
                             <details style="margin-top: 16px;">
                                 <summary style="cursor: pointer; color: var(--warning-color); font-size: 0.85em; padding: 8px 0;">
-                                    ⚠️ Unclassified Columns ({len(unclassified_columns)}) - Why they didn't match
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;vertical-align:-2px;margin-right:4px;color:#f59e0b"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> Unclassified Columns ({len(unclassified_columns)}) - Why they didn't match
                                 </summary>
                                 <div style="margin-top: 12px; overflow-x: auto;">
                                     <p style="color: var(--text-secondary); font-size: 0.85em; margin-bottom: 12px;">
@@ -8996,67 +9483,52 @@ the largest difference between classes, which could be useful for predictive mod
         else:
             plain_english += "All columns have good data coverage with minimal missing values. "
 
+        # Return content directly without accordion wrapper (parent section-accordion provides structure)
         return f'''
-                <div class="accordion" id="section-missingness" data-accordion="quality">
-                    <div class="accordion-header" onclick="toggleAccordion(this)">
-                        <div class="accordion-title-group">
-                            <div class="accordion-icon quality">✓</div>
-                            <div>
-                                <div class="accordion-title">Missingness & Bias</div>
-                                <div class="accordion-subtitle">Completeness, null patterns, and data coverage</div>
-                            </div>
-                        </div>
-                        <div class="accordion-meta">
-                            <span class="accordion-badge {'good' if profile.overall_quality_score >= 80 else 'warning'}">{profile.overall_quality_score:.0f}%</span>
-                            <span class="accordion-chevron">▼</span>
-                        </div>
+                <div class="dual-layer-explanation" style="margin-bottom: 20px;">
+                    <div class="dual-layer-summary">
+                        <div class="dual-layer-summary-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7V17a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-2.3A7 7 0 0 0 12 2z"/></svg> What this means</div>
+                        <div class="dual-layer-summary-text">{plain_english}</div>
                     </div>
-                    <div class="accordion-body">
-                        <div class="accordion-content">
-                            <div class="dual-layer-explanation">
-                                <div class="dual-layer-summary">
-                                    <div class="dual-layer-summary-label">📘 Plain-English Summary</div>
-                                    <div class="dual-layer-summary-text">{plain_english}</div>
+                    <details class="dual-layer-technical">
+                        <summary>
+                            <svg style="width: 14px; height: 14px; vertical-align: -2px; margin-right: 6px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a4 4 0 014 4c0 1.5-1 2.5-2 3l-2 1v2"/><circle cx="12" cy="17" r="1"/></svg>
+                            Technical Details (click to expand)
+                        </summary>
+                        <div class="dual-layer-technical-content">
+                            <div class="dual-layer-technical-grid">
+                                <div class="dual-layer-technical-item">
+                                    <span class="dual-layer-technical-item-label">Overall Score</span>
+                                    <span class="dual-layer-technical-item-value">{profile.overall_quality_score:.1f}%</span>
                                 </div>
-                                <details class="dual-layer-technical">
-                                    <summary>🧠 Technical Details (click to expand)</summary>
-                                    <div class="dual-layer-technical-content">
-                                        <div class="dual-layer-technical-grid">
-                                            <div class="dual-layer-technical-item">
-                                                <span class="dual-layer-technical-item-label">Overall Score</span>
-                                                <span class="dual-layer-technical-item-value">{profile.overall_quality_score:.1f}%</span>
-                                            </div>
-                                            <div class="dual-layer-technical-item">
-                                                <span class="dual-layer-technical-item-label">Avg Completeness</span>
-                                                <span class="dual-layer-technical-item-value">{avg_completeness:.1f}%</span>
-                                            </div>
-                                            <div class="dual-layer-technical-item">
-                                                <span class="dual-layer-technical-item-label">Avg Validity</span>
-                                                <span class="dual-layer-technical-item-value">{avg_validity:.1f}%</span>
-                                            </div>
-                                            <div class="dual-layer-technical-item">
-                                                <span class="dual-layer-technical-item-label">Columns Below 90%</span>
-                                                <span class="dual-layer-technical-item-value">{len(low_completeness_cols)}</span>
-                                            </div>
-                                        </div>
-                                        <div class="dual-layer-technical-context">
-                                            <ul>
-                                                <li><strong>Quality Score Formula:</strong> (0.4 × Completeness) + (0.3 × Validity) + (0.2 × Consistency) + (0.1 × Uniqueness)</li>
-                                                <li>Completeness (40% weight): Percentage of non-null values</li>
-                                                <li>Validity (30% weight): Values matching expected type/format</li>
-                                                <li>Consistency (20% weight): Pattern uniformity across column</li>
-                                                <li>Uniqueness (10% weight): Cardinality relative to column type</li>
-                                            </ul>
-                                        </div>
-                                    </div>
-                                </details>
+                                <div class="dual-layer-technical-item">
+                                    <span class="dual-layer-technical-item-label">Avg Completeness</span>
+                                    <span class="dual-layer-technical-item-value">{avg_completeness:.1f}%</span>
+                                </div>
+                                <div class="dual-layer-technical-item">
+                                    <span class="dual-layer-technical-item-label">Avg Validity</span>
+                                    <span class="dual-layer-technical-item-value">{avg_validity:.1f}%</span>
+                                </div>
+                                <div class="dual-layer-technical-item">
+                                    <span class="dual-layer-technical-item-label">Columns Below 90%</span>
+                                    <span class="dual-layer-technical-item-value">{len(low_completeness_cols)}</span>
+                                </div>
                             </div>
-                            <div class="chart-container">
-                                <div class="chart-title">Quality Score by Column</div>
-                                <canvas id="qualityChart" height="120"></canvas>
+                            <div class="dual-layer-technical-context">
+                                <ul>
+                                    <li><strong>Quality Score Formula:</strong> (0.4 × Completeness) + (0.3 × Validity) + (0.2 × Consistency) + (0.1 × Uniqueness)</li>
+                                    <li>Completeness (40% weight): Percentage of non-null values</li>
+                                    <li>Validity (30% weight): Values matching expected type/format</li>
+                                    <li>Consistency (20% weight): Pattern uniformity across column</li>
+                                    <li>Uniqueness (10% weight): Cardinality relative to column type</li>
+                                </ul>
                             </div>
                         </div>
-                    </div>
+                    </details>
+                </div>
+                <div class="chart-container">
+                    <div class="chart-title">Quality Score by Column</div>
+                    <canvas id="qualityChart" height="120"></canvas>
                 </div>'''
 
     def _generate_distribution_accordion(self, profile: ProfileResult, categorical_columns: List[Dict]) -> str:
@@ -9118,71 +9590,56 @@ the largest difference between classes, which could be useful for predictive mod
         else:
             plain_english = "This dataset appears to be primarily numeric with limited categorical data. The bubble chart shows how each column performs across quality metrics."
 
+        # Return content directly without accordion wrapper (parent section-accordion provides structure)
         return f'''
-                <div class="accordion" id="section-distributions" data-accordion="distribution">
-                    <div class="accordion-header" onclick="toggleAccordion(this)">
-                        <div class="accordion-title-group">
-                            <div class="accordion-icon quality">📊</div>
-                            <div>
-                                <div class="accordion-title">Distributions</div>
-                                <div class="accordion-subtitle">Top values in categorical columns</div>
-                            </div>
-                        </div>
-                        <div class="accordion-meta">
-                            <span class="accordion-badge info">3 charts</span>
-                            <span class="accordion-chevron">▼</span>
-                        </div>
+                <div class="dual-layer-explanation" style="margin-bottom: 20px;">
+                    <div class="dual-layer-summary">
+                        <div class="dual-layer-summary-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7V17a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-2.3A7 7 0 0 0 12 2z"/></svg> What this means</div>
+                        <div class="dual-layer-summary-text">{plain_english}</div>
                     </div>
-                    <div class="accordion-body">
-                        <div class="accordion-content">
-                            <div class="dual-layer-explanation">
-                                <div class="dual-layer-summary">
-                                    <div class="dual-layer-summary-label">📘 Plain-English Summary</div>
-                                    <div class="dual-layer-summary-text">{plain_english}</div>
+                    <details class="dual-layer-technical">
+                        <summary>
+                            <svg style="width: 14px; height: 14px; vertical-align: -2px; margin-right: 6px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a4 4 0 014 4c0 1.5-1 2.5-2 3l-2 1v2"/><circle cx="12" cy="17" r="1"/></svg>
+                            Technical Details (click to expand)
+                        </summary>
+                        <div class="dual-layer-technical-content">
+                            <div class="dual-layer-technical-grid">
+                                <div class="dual-layer-technical-item">
+                                    <span class="dual-layer-technical-item-label">Categorical Columns</span>
+                                    <span class="dual-layer-technical-item-value">{num_categorical}</span>
                                 </div>
-                                <details class="dual-layer-technical">
-                                    <summary>🧠 Technical Details (click to expand)</summary>
-                                    <div class="dual-layer-technical-content">
-                                        <div class="dual-layer-technical-grid">
-                                            <div class="dual-layer-technical-item">
-                                                <span class="dual-layer-technical-item-label">Categorical Columns</span>
-                                                <span class="dual-layer-technical-item-value">{num_categorical}</span>
-                                            </div>
-                                            <div class="dual-layer-technical-item">
-                                                <span class="dual-layer-technical-item-label">Chart X-Axis</span>
-                                                <span class="dual-layer-technical-item-value">{x_axis_metric_name}</span>
-                                            </div>
-                                            <div class="dual-layer-technical-item">
-                                                <span class="dual-layer-technical-item-label">Completeness Range</span>
-                                                <span class="dual-layer-technical-item-value">{completeness_range:.1f}%</span>
-                                            </div>
-                                            <div class="dual-layer-technical-item">
-                                                <span class="dual-layer-technical-item-label">Uniqueness Range</span>
-                                                <span class="dual-layer-technical-item-value">{uniqueness_range:.1f}%</span>
-                                            </div>
-                                        </div>
-                                        <div class="dual-layer-technical-context">
-                                            <ul>
-                                                <li>Bubble chart: Each bubble represents a column; size = unique value count</li>
-                                                <li>Word cloud: Larger words appear more frequently in your data</li>
-                                                <li>Use these patterns to build ValidValuesCheck validations</li>
-                                            </ul>
-                                        </div>
-                                    </div>
-                                </details>
+                                <div class="dual-layer-technical-item">
+                                    <span class="dual-layer-technical-item-label">Chart X-Axis</span>
+                                    <span class="dual-layer-technical-item-value">{x_axis_metric_name}</span>
+                                </div>
+                                <div class="dual-layer-technical-item">
+                                    <span class="dual-layer-technical-item-label">Completeness Range</span>
+                                    <span class="dual-layer-technical-item-value">{completeness_range:.1f}%</span>
+                                </div>
+                                <div class="dual-layer-technical-item">
+                                    <span class="dual-layer-technical-item-label">Uniqueness Range</span>
+                                    <span class="dual-layer-technical-item-value">{uniqueness_range:.1f}%</span>
+                                </div>
                             </div>
-                            <div style="display: grid; gap: 20px;">
-                                <div class="chart-container">
-                                    <div class="chart-title">Column Quality: {x_axis_metric_name} vs Validity</div>
-                                    <canvas id="bubbleChart" height="200"></canvas>
-                                </div>
-                                <div class="chart-container">
-                                    <div class="chart-title">Categorical Values Word Cloud</div>
-                                    <div style="color: var(--text-muted); font-size: 0.85em; margin-bottom: 8px;">Showing top values from: {cat_names}</div>
-                                    <div id="wordCloudContainer" style="width: 100%; height: 250px; background: var(--bg-elevated); border-radius: var(--radius-md);"></div>
-                                </div>
+                            <div class="dual-layer-technical-context">
+                                <ul>
+                                    <li>Bubble chart: Each bubble represents a column; size = unique value count</li>
+                                    <li>Word cloud: Larger words appear more frequently in your data</li>
+                                    <li>Use these patterns to build ValidValuesCheck validations</li>
+                                </ul>
                             </div>
                         </div>
+                    </details>
+                </div>
+                <div style="display: grid; gap: 20px;">
+                    <div class="chart-container">
+                        <div class="chart-title">Column Quality: {x_axis_metric_name} vs Validity</div>
+                        <canvas id="bubbleChart" height="200"></canvas>
+                    </div>
+                    <div class="chart-container">
+                        <div class="chart-title">Categorical Values Word Cloud</div>
+                        <div style="color: var(--text-muted); font-size: 0.85em; margin-bottom: 8px;">Showing top values from: {cat_names}</div>
+                        <div id="wordCloudContainer" style="width: 100%; height: 250px; background: var(--bg-elevated); border-radius: var(--radius-md);"></div>
                     </div>
                 </div>'''
 
@@ -9224,7 +9681,7 @@ the largest difference between classes, which could be useful for predictive mod
                 <div class="accordion column-explorer" data-accordion="columns" id="section-columns">
                     <div class="accordion-header" onclick="toggleAccordion(this)">
                         <div class="accordion-title-group">
-                            <div class="accordion-icon columns">📋</div>
+                            <div class="accordion-icon columns"><svg style="width:16px;height:16px;color:white;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg></div>
                             <div>
                                 <div class="accordion-title">Column Explorer</div>
                                 <div class="accordion-subtitle">{profile.column_count} columns with semantic analysis</div>
@@ -9232,18 +9689,18 @@ the largest difference between classes, which could be useful for predictive mod
                         </div>
                         <div class="accordion-meta">
                             <span class="accordion-badge info">{tagged_count} tagged</span>
-                            <span class="accordion-chevron">▼</span>
+                            <span class="accordion-chevron"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><polyline points="6 9 12 15 18 9"/></svg></span>
                         </div>
                     </div>
                     <div class="accordion-body">
                         <div class="accordion-content">
                             <div class="dual-layer-explanation">
                                 <div class="dual-layer-summary">
-                                    <div class="dual-layer-summary-label">📘 Plain-English Summary</div>
+                                    <div class="dual-layer-summary-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7V17a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-2.3A7 7 0 0 0 12 2z"/></svg> What this means</div>
                                     <div class="dual-layer-summary-text">{plain_english}</div>
                                 </div>
                                 <details class="dual-layer-technical">
-                                    <summary>🧠 Technical Details (click to expand)</summary>
+                                    <summary><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;vertical-align:-2px;margin-right:4px"><path d="M12 18V5"/><path d="M15 13a4.17 4.17 0 0 1-3-4 4.17 4.17 0 0 1-3 4"/><path d="M17.598 6.5A3 3 0 1 0 12 5a3 3 0 1 0-5.598 1.5"/><path d="M17.997 5.125a4 4 0 0 1 2.526 5.77"/><path d="M18 18a4 4 0 0 0 2-7.464"/><path d="M19.967 17.483A4 4 0 1 1 12 18a4 4 0 1 1-7.967-.517"/><path d="M6 18a4 4 0 0 1-2-7.464"/><path d="M6.003 5.125a4 4 0 0 0-2.526 5.77"/></svg> Technical Details (click to expand)</summary>
                                     <div class="dual-layer-technical-content">
                                         <div class="dual-layer-technical-grid">
                                             <div class="dual-layer-technical-item">
@@ -9481,7 +9938,7 @@ the largest difference between classes, which could be useful for predictive mod
         if stats.sample_size and stats.sample_size < stats.count:
             stats_html += f'''
                                             <div class="column-stat" style="background: rgba(var(--info-color-rgb), 0.1); border: 1px dashed var(--info-color);" title="Unique values tracked for Top Values (memory optimization for high-cardinality columns)">
-                                                <div class="column-stat-label" style="color: var(--info-color);">📊 Values Tracked</div>
+                                                <div class="column-stat-label" style="color: var(--info-color);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;vertical-align:-1px;margin-right:2px"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg> Values Tracked</div>
                                                 <div class="column-stat-value" style="font-size: 0.75em;">{stats.sample_size:,}</div>
                                             </div>'''
 
@@ -9913,7 +10370,7 @@ the largest difference between classes, which could be useful for predictive mod
                                 <div class="suggestion-reason">{sugg.reason}</div>
                                 <div class="suggestion-yaml-container">
                                     <pre class="suggestion-yaml">{yaml_display}</pre>
-                                    <button class="copy-yaml-btn" onclick="copyYaml(`{yaml_content.replace('`', '\\`')}`)">📋 Copy</button>
+                                    <button class="copy-yaml-btn" onclick="copyYaml(`{yaml_content.replace('`', '\\`')}`)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;vertical-align:-1px;margin-right:3px"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy</button>
                                 </div>
                             </div>'''
 
@@ -9921,7 +10378,7 @@ the largest difference between classes, which could be useful for predictive mod
                 <div class="accordion" data-accordion="suggestions">
                     <div class="accordion-header" onclick="toggleAccordion(this)">
                         <div class="accordion-title-group">
-                            <div class="accordion-icon quality">💡</div>
+                            <div class="accordion-icon quality"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;color:white"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></div>
                             <div>
                                 <div class="accordion-title">Validation Suggestions</div>
                                 <div class="accordion-subtitle">{len(profile.suggested_validations)} suggested checks</div>
@@ -9929,20 +10386,20 @@ the largest difference between classes, which could be useful for predictive mod
                         </div>
                         <div class="accordion-meta">
                             <span class="accordion-badge info">{len(profile.suggested_validations)} suggestions</span>
-                            <span class="accordion-chevron">▼</span>
+                            <span class="accordion-chevron"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><polyline points="6 9 12 15 18 9"/></svg></span>
                         </div>
                     </div>
                     <div class="accordion-body">
                         <div class="accordion-content">
                             <div class="dual-layer-explanation">
                                 <div class="dual-layer-summary">
-                                    <div class="dual-layer-summary-label">📘 Plain-English Summary</div>
+                                    <div class="dual-layer-summary-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7V17a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-2.3A7 7 0 0 0 12 2z"/></svg> What this means</div>
                                     <div class="dual-layer-summary-text">
-                                        Based on what we learned about your data, here are recommended validations to help catch issues early. Each suggestion includes copy-ready configuration you can add to your validation file.
+                                        Auto-generated validation rules based on profiled column characteristics. Each rule includes ready-to-use YAML configuration for the DataK9 validation framework.
                                     </div>
                                 </div>
                                 <details class="dual-layer-technical">
-                                    <summary>🧠 Technical Details (click to expand)</summary>
+                                    <summary><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;vertical-align:-2px;margin-right:4px"><path d="M12 18V5"/><path d="M15 13a4.17 4.17 0 0 1-3-4 4.17 4.17 0 0 1-3 4"/><path d="M17.598 6.5A3 3 0 1 0 12 5a3 3 0 1 0-5.598 1.5"/><path d="M17.997 5.125a4 4 0 0 1 2.526 5.77"/><path d="M18 18a4 4 0 0 0 2-7.464"/><path d="M19.967 17.483A4 4 0 1 1 12 18a4 4 0 1 1-7.967-.517"/><path d="M6 18a4 4 0 0 1-2-7.464"/><path d="M6.003 5.125a4 4 0 0 0-2.526 5.77"/></svg> Technical Details (click to expand)</summary>
                                     <div class="dual-layer-technical-content" style="padding: 12px;">
                                         <ul style="margin: 0; padding-left: 20px; color: var(--text-secondary); font-size: 0.85em;">
                                             <li>Suggestions are derived from column statistics, patterns, and anomalies</li>
@@ -9972,7 +10429,7 @@ the largest difference between classes, which could be useful for predictive mod
                 <div class="accordion" data-accordion="config" id="section-yaml">
                     <div class="accordion-header" onclick="toggleAccordion(this)">
                         <div class="accordion-title-group">
-                            <div class="accordion-icon quality">⚙️</div>
+                            <div class="accordion-icon quality"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:20px;height:20px"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></div>
                             <div>
                                 <div class="accordion-title">YAML / Export</div>
                                 <div class="accordion-subtitle">Ready-to-use validation configuration</div>
@@ -9980,20 +10437,20 @@ the largest difference between classes, which could be useful for predictive mod
                         </div>
                         <div class="accordion-meta">
                             <span class="accordion-badge good">Ready</span>
-                            <span class="accordion-chevron">▼</span>
+                            <span class="accordion-chevron"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><polyline points="6 9 12 15 18 9"/></svg></span>
                         </div>
                     </div>
                     <div class="accordion-body">
                         <div class="accordion-content">
                             <div class="dual-layer-explanation">
                                 <div class="dual-layer-summary">
-                                    <div class="dual-layer-summary-label">📘 Plain-English Summary</div>
+                                    <div class="dual-layer-summary-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7V17a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-2.3A7 7 0 0 0 12 2z"/></svg> What this means</div>
                                     <div class="dual-layer-summary-text">
-                                        This is your complete validation configuration file, ready to use. Copy it, save as a .yaml file, and run validations with the DataK9 CLI command shown below.
+                                        Complete validation configuration generated from profile analysis. Copy to a .yaml file and run with: <code style="background: var(--bg-elevated); padding: 2px 6px; border-radius: 4px;">python3 -m validation_framework.cli validate config.yaml</code>
                                     </div>
                                 </div>
                                 <details class="dual-layer-technical">
-                                    <summary>🧠 Technical Details (click to expand)</summary>
+                                    <summary><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;vertical-align:-2px;margin-right:4px"><path d="M12 18V5"/><path d="M15 13a4.17 4.17 0 0 1-3-4 4.17 4.17 0 0 1-3 4"/><path d="M17.598 6.5A3 3 0 1 0 12 5a3 3 0 1 0-5.598 1.5"/><path d="M17.997 5.125a4 4 0 0 1 2.526 5.77"/><path d="M18 18a4 4 0 0 0 2-7.464"/><path d="M19.967 17.483A4 4 0 1 1 12 18a4 4 0 1 1-7.967-.517"/><path d="M6 18a4 4 0 0 1-2-7.464"/><path d="M6.003 5.125a4 4 0 0 0-2.526 5.77"/></svg> Technical Details (click to expand)</summary>
                                     <div class="dual-layer-technical-content" style="padding: 12px;">
                                         <ul style="margin: 0; padding-left: 20px; color: var(--text-secondary); font-size: 0.85em;">
                                             <li>Run command: <code>python3 -m validation_framework.cli validate config.yaml</code></li>
@@ -10005,7 +10462,7 @@ the largest difference between classes, which could be useful for predictive mod
                             </div>
                             <div class="full-config-container">
                                 <div class="config-actions">
-                                    <button class="copy-config-btn" onclick="copyFullConfig()">📋 Copy Full Config</button>
+                                    <button class="copy-config-btn" onclick="copyFullConfig()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;vertical-align:-1px;margin-right:3px"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy Full Config</button>
                                 </div>
                                 <pre class="full-config-yaml" id="fullConfigYaml">{yaml_escaped}</pre>
                             </div>
@@ -10168,7 +10625,7 @@ the largest difference between classes, which could be useful for predictive mod
         <div class="accordion" id="section-temporal" data-accordion="temporal">
             <div class="accordion-header" onclick="toggleAccordion(this)">
                 <div class="accordion-title-group">
-                    <div class="accordion-icon" style="background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);">📅</div>
+                    <div class="accordion-icon"><svg style="width:16px;height:16px;color:#64748b;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/></svg></div>
                     <div>
                         <div class="accordion-title">Temporal Analysis</div>
                         <div class="accordion-subtitle">Time series patterns and data freshness</div>
@@ -10176,18 +10633,18 @@ the largest difference between classes, which could be useful for predictive mod
                 </div>
                 <div class="accordion-meta">
                     <span class="accordion-badge good">{len(temporal_columns)} column(s)</span>
-                    <span class="accordion-chevron">▼</span>
+                    <span class="accordion-chevron"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><polyline points="6 9 12 15 18 9"/></svg></span>
                 </div>
             </div>
             <div class="accordion-body">
                 <div class="accordion-content">
                     <div class="dual-layer-explanation">
                         <div class="dual-layer-summary">
-                            <div class="dual-layer-summary-label">📘 Plain-English Summary</div>
+                            <div class="dual-layer-summary-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7V17a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-2.3A7 7 0 0 0 12 2z"/></svg> What this means</div>
                             <div class="dual-layer-summary-text">{plain_english}</div>
                         </div>
                         <details class="dual-layer-technical">
-                            <summary>🧠 Technical Details (click to expand)</summary>
+                            <summary><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;vertical-align:-2px;margin-right:4px"><path d="M12 18V5"/><path d="M15 13a4.17 4.17 0 0 1-3-4 4.17 4.17 0 0 1-3 4"/><path d="M17.598 6.5A3 3 0 1 0 12 5a3 3 0 1 0-5.598 1.5"/><path d="M17.997 5.125a4 4 0 0 1 2.526 5.77"/><path d="M18 18a4 4 0 0 0 2-7.464"/><path d="M19.967 17.483A4 4 0 1 1 12 18a4 4 0 1 1-7.967-.517"/><path d="M6 18a4 4 0 0 1-2-7.464"/><path d="M6.003 5.125a4 4 0 0 0-2.526 5.77"/></svg> Technical Details (click to expand)</summary>
                             <div class="dual-layer-technical-content">
                                 <div class="dual-layer-technical-grid">
                                     <div class="dual-layer-technical-item">
@@ -10407,11 +10864,11 @@ the largest difference between classes, which could be useful for predictive mod
             <div class="search-box">
                 <input type="text" id="columnSearch" placeholder="Search columns..."
                        onkeyup="filterColumns()" class="search-input">
-                <span class="search-icon">🔍</span>
+                <span class="search-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></span>
             </div>
             <div class="filter-buttons">
                 <button class="filter-btn active" onclick="filterByType('all')">All</button>
-                <button class="filter-btn" onclick="filterByType('issues')">⚠️ With Issues</button>
+                <button class="filter-btn" onclick="filterByType('issues')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;vertical-align:-1px;color:#f59e0b"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> With Issues</button>
                 <button class="filter-btn" onclick="filterByType('numeric')">Numeric</button>
                 <button class="filter-btn" onclick="filterByType('string')">String</button>
                 <button class="filter-btn" onclick="filterByType('date')">Date</button>
@@ -10628,9 +11085,9 @@ the largest difference between classes, which could be useful for predictive mod
                 </div>
             </div>
             <details style="margin-top: 12px; margin-bottom: 0;">
-                <summary style="cursor: pointer; color: var(--text-secondary); font-size: 0.9em; padding: 8px 0;">ℹ️ About the sampling methodology...</summary>
+                <summary style="cursor: pointer; color: var(--text-secondary); font-size: 0.9em; padding: 8px 0;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;vertical-align:-1px;margin-right:2px"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg> About the sampling methodology...</summary>
                 <div class="hint-box" style="margin-top: 8px; margin-bottom: 0; border-left-color: var(--info);">
-                    <p style="margin: 0 0 12px 0;"><strong>📊 Sampling Policy:</strong></p>
+                    <p style="margin: 0 0 12px 0;"><strong><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;vertical-align:-2px;margin-right:2px"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg> Sampling Policy:</strong></p>
                     <p style="margin: 0 0 12px 0; color: var(--text-secondary);">{sampling_explanation.replace(chr(10), '<br>')}</p>
 
                     <p style="margin: 12px 0 8px 0;"><strong>Full Dataset Metrics:</strong> <span style="color: var(--good);">{full_metrics_str}</span></p>
@@ -10725,7 +11182,7 @@ the largest difference between classes, which could be useful for predictive mod
                         <!-- Full Scan Section -->
                         <div style="background: rgba(16, 185, 129, 0.1); border-radius: 8px; padding: 12px; border-left: 3px solid #10b981;">
                             <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 8px;">
-                                <span style="color: #10b981; font-size: 1.1em;">✓</span>
+                                <span style="color: #10b981;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px;vertical-align:-3px"><polyline points="20 6 9 17 4 12"/></svg></span>
                                 <span style="font-weight: 600; color: #f1f5f9; font-size: 0.85em;">Full Dataset Scan</span>
                             </div>
                             <div style="font-size: 0.8em; color: #94a3b8; line-height: 1.5;">
@@ -10751,7 +11208,7 @@ the largest difference between classes, which could be useful for predictive mod
                         </div>''' if sample_used else f'''<!-- Full Analysis Section -->
                         <div style="background: rgba(16, 185, 129, 0.1); border-radius: 8px; padding: 12px; border-left: 3px solid #10b981;">
                             <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 8px;">
-                                <span style="color: #10b981; font-size: 1.1em;">✓</span>
+                                <span style="color: #10b981;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px;vertical-align:-3px"><polyline points="20 6 9 17 4 12"/></svg></span>
                                 <span style="font-weight: 600; color: #f1f5f9; font-size: 0.85em;">Advanced Analysis</span>
                             </div>
                             <div style="font-size: 0.8em; color: #94a3b8; line-height: 1.5;">
@@ -10775,7 +11232,7 @@ the largest difference between classes, which could be useful for predictive mod
                     <!-- Why No Sampling -->
                     <div style="background: rgba(16, 185, 129, 0.05); border-radius: 8px; padding: 12px; border: 1px solid rgba(16, 185, 129, 0.2);">
                         <div style="font-weight: 600; color: #f1f5f9; font-size: 0.85em; margin-bottom: 8px;">
-                            💡 Why wasn't sampling used?
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;vertical-align:-2px;color:#f59e0b;margin-right:2px"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> Why wasn't sampling used?
                         </div>
                         <p style="font-size: 0.8em; color: #94a3b8; margin: 0; line-height: 1.6;">
                             Your dataset has <strong>{total_rows:,} rows</strong>, which is small enough to analyze completely
@@ -11030,7 +11487,7 @@ the largest difference between classes, which could be useful for predictive mod
         return f'''
         <div class="fibo-summary">
             <div class="fibo-summary-header">
-                <span class="fibo-summary-icon">🏛️</span>
+                <span class="fibo-summary-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px;color:#8b5cf6"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg></span>
                 <span class="fibo-summary-title">Semantic Classification (FIBO)</span>
                 <span class="fibo-summary-count">{total_mapped} of {len(columns)} columns classified{f" ({unknown_count} unknown)" if unknown_count > 0 else ""}</span>
             </div>
