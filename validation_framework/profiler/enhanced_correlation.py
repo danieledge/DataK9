@@ -53,7 +53,7 @@ class EnhancedCorrelationAnalyzer(BackendAwareProfiler):
         self,
         max_correlation_columns: int = 20,
         significance_level: float = 0.05,
-        min_correlation_threshold: float = 0.5
+        min_correlation_threshold: float = 0.3
     ):
         """
         Initialize enhanced correlation analyzer.
@@ -61,7 +61,7 @@ class EnhancedCorrelationAnalyzer(BackendAwareProfiler):
         Args:
             max_correlation_columns: Maximum columns to analyze (performance limit)
             significance_level: P-value threshold for significance (default: 0.05)
-            min_correlation_threshold: Minimum correlation to report (default: 0.5)
+            min_correlation_threshold: Minimum correlation to report (default: 0.3)
         """
         self.max_correlation_columns = max_correlation_columns
         self.significance_level = significance_level

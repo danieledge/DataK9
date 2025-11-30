@@ -440,11 +440,12 @@ def version():
 @click.option('--disable-all-enhancements', is_flag=True, help='Disable all profiler enhancements (temporal, PII, correlation)')
 @click.option('--report-style', type=click.Choice(['classic', 'executive'], case_sensitive=False),
               default='executive', help='HTML report style: classic (detailed) or executive (dashboard view)')
-@click.option('--beta-ml', is_flag=True, help='[BETA] Enable ML-based anomaly detection and data quality analysis')
+@click.option('--no-ml', is_flag=True, help='Disable ML-based anomaly detection (Benford, outliers, autoencoder)')
+@click.option('--beta-llm', is_flag=True, help='[BETA] Enable AI-generated summary using local LLM (requires llama-cpp-python)')
 @click.option('--full-analysis', is_flag=True, help='Disable internal sampling - analyze full dataset (slower but more accurate for ML analysis)')
 @click.option('--analysis-sample-size', type=int, default=100000, help='Sample size for analysis when file exceeds this many rows (default: 100000). Files <= this size are analyzed fully.')
 def profile(file_path, format, database, table, query, html_output, json_output, config_output, chunk_size, sample, no_memory_check, log_level,
-            disable_temporal, disable_pii, disable_correlation, disable_all_enhancements, report_style, beta_ml, full_analysis, analysis_sample_size):
+            disable_temporal, disable_pii, disable_correlation, disable_all_enhancements, report_style, no_ml, beta_llm, full_analysis, analysis_sample_size):
     """
     Profile a data file or database table to understand its structure and quality.
 
@@ -650,10 +651,10 @@ def profile(file_path, format, database, table, query, html_output, json_output,
         # Compact summary
         click.echo(f"\n✓ Profile complete: {profile_result.row_count:,} rows × {profile_result.column_count} cols | Quality: {profile_result.overall_quality_score:.0f}% | {profile_result.processing_time_seconds:.1f}s")
 
-        # Run ML analysis if --beta-ml flag is set
+        # Run ML analysis by default (unless --no-ml flag is set)
         # NOTE: The profiler engine already runs ML analysis during profiling (50K sample)
         # Only run additional analysis here if ml_findings is not already populated
-        if beta_ml:
+        if not no_ml:
             if profile_result.ml_findings:
                 # ML analysis already completed during profiling - display results
                 click.echo("\n🧠 ML-based anomaly detection (from profiler):")
@@ -704,9 +705,9 @@ def profile(file_path, format, database, table, query, html_output, json_output,
                                     column_semantic_info[col_profile.name] = col_profile.semantic_info
 
                             # Run ML analysis with semantic context
+                            # Note: sampling is done before calling - sample_df is already the right size
                             ml_findings = run_ml_analysis(
                                 sample_df,
-                                sample_size=ml_sample_size,
                                 column_semantic_info=column_semantic_info
                             )
                             profile_result.ml_findings = ml_findings
@@ -741,7 +742,7 @@ def profile(file_path, format, database, table, query, html_output, json_output,
         if report_style and report_style.lower() == 'classic':
             reporter = ProfileHTMLReporter()
         else:
-            reporter = ExecutiveHTMLReporter()
+            reporter = ExecutiveHTMLReporter(enable_llm=beta_llm)
         reporter.generate_report(profile_result, html_output)
         click.echo(f"  → HTML: {html_output} ({report_style or 'executive'} style)")
 

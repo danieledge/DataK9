@@ -22,6 +22,18 @@ import re
 import logging
 import time
 
+# Import visualization fallback utilities for robust numeric detection
+from validation_framework.profiler.visualization_fallbacks import (
+    coerce_to_numeric,
+    is_numeric_for_analysis,
+    should_apply_benford_generic,
+    extract_benford_digits,
+    is_identifier_like,
+    is_binary_column,
+    is_bounded_data,
+    get_semantic_type_hint
+)
+
 logger = logging.getLogger(__name__)
 
 # Default sample size threshold - if file has more rows than this, sampling is applied
@@ -96,6 +108,50 @@ class ChunkedMLAccumulator:
                 return flattened
         except Exception:
             return {}
+
+    def _is_robust_numeric_column(self, series: pd.Series, col_name: str) -> bool:
+        """
+        Robust numeric column detection following generic rules.
+
+        A column is considered numeric if:
+        - It can be coerced to float (pd.to_numeric with errors="coerce")
+        - After coercion, it has > 1 unique numeric value
+        - It is not binary (≤ 3 unique numeric values)
+
+        Works for:
+        - float columns
+        - integer columns
+        - numeric strings (e.g. "100", "20.5", " ")
+        - mixed dtype columns that become numeric after coercion
+
+        Args:
+            series: Column data
+            col_name: Column name (for semantic hints)
+
+        Returns:
+            True if column should be treated as numeric for analysis
+        """
+        # First check native dtype
+        if pd.api.types.is_numeric_dtype(series):
+            # Check if it's binary/low-cardinality (likely categorical encoded as numeric)
+            valid = series.dropna()
+            if len(valid) > 0:
+                unique_count = valid.nunique()
+                if unique_count <= 3:
+                    # Binary or very low cardinality - treat as categorical
+                    return False
+            return True
+
+        # Try coercion for non-numeric dtypes
+        coerced, is_valid = coerce_to_numeric(series)
+        if not is_valid:
+            return False
+
+        # Additional check: if identifier-like, don't treat as numeric
+        if is_identifier_like(col_name, series):
+            return False
+
+        return True
 
     def _detect_target_columns(self, df: pd.DataFrame) -> List[str]:
         """
@@ -172,21 +228,33 @@ class ChunkedMLAccumulator:
         """
         Process a chunk of data and accumulate statistics.
 
+        Uses robust numeric detection that:
+        - Coerces string columns to numeric where possible
+        - Excludes binary/low-cardinality columns from numeric analysis
+        - Works for float, int, numeric strings, and mixed dtype columns
+
         Args:
             chunk: DataFrame chunk to process
             chunk_idx: Index of current chunk (0-based)
         """
         self.total_rows += len(chunk)
 
-        # Identify column types on first chunk
+        # Identify column types on first chunk using ROBUST detection
         if chunk_idx == 0:
             for col in chunk.columns:
-                if pd.api.types.is_numeric_dtype(chunk[col]):
+                # Use robust numeric detection instead of simple dtype check
+                is_numeric = self._is_robust_numeric_column(chunk[col], col)
+
+                if is_numeric:
                     self.column_types[col] = 'numeric'
                     self.benford_digit_counts[col] = Counter()
                     self.numeric_stats[col] = {'sum': 0, 'sum_sq': 0, 'count': 0, 'min': float('inf'), 'max': float('-inf')}
                     # Streaming histogram for percentiles - initialized after first pass to know range
                     self.numeric_histograms[col] = {'bins': None, 'counts': None, 'initialized': False}
+                    # Store Benford applicability for this column
+                    self._benford_applicability = getattr(self, '_benford_applicability', {})
+                    should_apply, reason = should_apply_benford_generic(chunk[col], col)
+                    self._benford_applicability[col] = {'applicable': should_apply, 'reason': reason}
                 else:
                     self.column_types[col] = 'string'
                     self.value_counts[col] = Counter()
@@ -215,7 +283,16 @@ class ChunkedMLAccumulator:
         self._reservoir_sample(chunk)
 
     def _accumulate_numeric(self, col: str, series: pd.Series) -> None:
-        """Accumulate statistics for a numeric column."""
+        """
+        Accumulate statistics for a numeric column.
+
+        Performs coercion BEFORE any analysis to handle numeric strings
+        and mixed dtype columns.
+        """
+        # ROBUST: Always coerce to numeric first to handle numeric strings
+        if not pd.api.types.is_numeric_dtype(series):
+            series = pd.to_numeric(series, errors='coerce')
+
         valid = series.dropna()
         if len(valid) == 0:
             return
@@ -296,15 +373,29 @@ class ChunkedMLAccumulator:
                 hist_data['counts'] += chunk_counts[:self.histogram_bins]
 
         # Benford's law - count first digits (no sampling - just counting)
-        positive_vals = valid[valid > 0]
-        if len(positive_vals) > 0:
-            # Extract first digit using vectorized operation
-            first_digits = positive_vals.apply(lambda x: int(str(abs(x)).lstrip('0').replace('.', '')[0]) if x != 0 else 0)
-            first_digits = first_digits[first_digits > 0]  # Benford only applies to 1-9
-            # Use value_counts() for memory efficiency (no list creation)
-            digit_counts = first_digits.value_counts()
-            for digit, count in digit_counts.items():
-                self.benford_digit_counts[col][digit] += count
+        # Check applicability first (stored during column type detection)
+        benford_applicable = getattr(self, '_benford_applicability', {}).get(col, {}).get('applicable', True)
+        if benford_applicable:
+            positive_vals = valid[valid > 0]
+            if len(positive_vals) > 0:
+                # Extract first digit using SAFE regex method
+                def safe_first_digit(x):
+                    """Extract first significant digit using safe regex."""
+                    try:
+                        s = str(abs(float(x))).lstrip('0').lstrip('.')
+                        if not s:
+                            return 0
+                        match = re.search(r'([1-9])', s)
+                        return int(match.group(1)) if match else 0
+                    except (ValueError, TypeError):
+                        return 0
+
+                first_digits = positive_vals.apply(safe_first_digit)
+                first_digits = first_digits[first_digits > 0]  # Benford only applies to 1-9
+                # Use value_counts() for memory efficiency (no list creation)
+                digit_counts = first_digits.value_counts()
+                for digit, count in digit_counts.items():
+                    self.benford_digit_counts[col][digit] += count
 
     def _accumulate_string(self, col: str, series: pd.Series) -> None:
         """Accumulate statistics for a string column."""
@@ -569,19 +660,42 @@ class ChunkedMLAccumulator:
 
         # 1. Benford's law analysis from accumulated digit counts
         # Include ALL results (both suspicious and natural) so users see full analysis
+        # Also track ineligible columns with reasons (for fallback rendering)
+        benford_ineligible = {}
         for col, digit_counts in self.benford_digit_counts.items():
+            applicability = getattr(self, '_benford_applicability', {}).get(col, {})
+            if not applicability.get('applicable', True):
+                # Store reason for fallback display
+                benford_ineligible[col] = applicability.get('reason', 'Not applicable')
+                continue
+
             if sum(digit_counts.values()) >= MIN_ROWS_FOR_ML:
                 benford_result = self._analyze_benford_from_counts(col, digit_counts)
                 if benford_result:
                     findings["benford_analysis"][col] = benford_result
+            else:
+                # Store reason for insufficient data
+                benford_ineligible[col] = f"Insufficient positive values ({sum(digit_counts.values())} < {MIN_ROWS_FOR_ML})"
+
+        # Add ineligible columns info to findings for fallback rendering
+        findings["benford_ineligible"] = benford_ineligible
 
         # 2. Numeric outliers from accumulated statistics using streaming histograms
+        # Include ALL numeric fields for visualization, even those with 0% outliers
+        all_numeric_outlier_stats = {}  # For IQR visualization (includes 0% outliers)
         for col, stats in self.numeric_stats.items():
             hist_data = self.numeric_histograms.get(col, {})
             if stats['count'] >= MIN_ROWS_FOR_ML and hist_data.get('initialized'):
                 outlier_result = self._analyze_outliers_from_stats(col, stats, hist_data)
-                if outlier_result and outlier_result.get("anomaly_count", 0) > 0:
-                    findings["numeric_outliers"][col] = outlier_result
+                if outlier_result:
+                    # Always include in all_numeric_outlier_stats for visualization
+                    all_numeric_outlier_stats[col] = outlier_result
+                    # Only include in main numeric_outliers if actual outliers found
+                    if outlier_result.get("anomaly_count", 0) > 0:
+                        findings["numeric_outliers"][col] = outlier_result
+
+        # Store all numeric stats for IQR visualization (even with 0 outliers)
+        findings["all_numeric_outlier_stats"] = all_numeric_outlier_stats
 
         # 3. Rare category detection from accumulated value counts
         for col, counts in self.value_counts.items():
@@ -1451,6 +1565,72 @@ class MLAnalyzer:
             logger.warning("scikit-learn not available - some ML features disabled")
             return False
 
+    def _get_numeric_columns(self, df: pd.DataFrame, exclude_binary: bool = True) -> Tuple[List[str], Dict[str, str]]:
+        """
+        Get numeric columns including string columns that can be coerced to numeric.
+
+        This improves on simple select_dtypes(include=[np.number]) by:
+        1. Including string columns where >80% of non-null values are coercible to float
+        2. Optionally excluding binary/near-binary columns (<=3 unique values)
+        3. Returning info about which columns were coerced
+
+        Args:
+            df: DataFrame to analyze
+            exclude_binary: If True, exclude columns with <=3 unique values
+
+        Returns:
+            Tuple of (list of numeric column names, dict of coerced columns with notes)
+        """
+        numeric_cols = []
+        coerced_info = {}
+
+        # Get native numeric columns
+        native_numeric = df.select_dtypes(include=[np.number]).columns.tolist()
+
+        for col in native_numeric:
+            # Check for binary/near-binary exclusion
+            if exclude_binary:
+                unique_vals = df[col].dropna().nunique()
+                if unique_vals <= 3:
+                    logger.debug(f"Excluding {col}: near-binary ({unique_vals} unique values)")
+                    coerced_info[col] = f"excluded: near-binary ({unique_vals} unique values)"
+                    continue
+            numeric_cols.append(col)
+
+        # Try to coerce object columns to numeric
+        object_cols = df.select_dtypes(include=['object']).columns.tolist()
+
+        for col in object_cols:
+            series = df[col]
+            non_null = series.dropna()
+
+            if len(non_null) == 0:
+                continue
+
+            # Try to convert to numeric
+            try:
+                converted = pd.to_numeric(non_null, errors='coerce')
+                valid_count = converted.notna().sum()
+                success_rate = valid_count / len(non_null) if len(non_null) > 0 else 0
+
+                # Include if >80% of values convert successfully
+                if success_rate >= 0.80:
+                    # Check for binary exclusion
+                    if exclude_binary:
+                        unique_vals = converted.dropna().nunique()
+                        if unique_vals <= 3:
+                            logger.debug(f"Excluding coerced {col}: near-binary ({unique_vals} unique values)")
+                            coerced_info[col] = f"excluded: near-binary ({unique_vals} unique values)"
+                            continue
+
+                    numeric_cols.append(col)
+                    coerced_info[col] = f"coerced from string ({success_rate*100:.1f}% success rate)"
+                    logger.info(f"Detected {col} as coercible numeric ({success_rate*100:.1f}% success)")
+            except Exception as e:
+                logger.debug(f"Could not coerce {col} to numeric: {e}")
+
+        return numeric_cols, coerced_info
+
     def _detect_target_columns(self, df: pd.DataFrame) -> List[str]:
         """
         Detect likely target/label columns using heuristics.
@@ -1741,9 +1921,20 @@ class MLAnalyzer:
             }
         }
 
-        # Get column types
-        numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+        # Get column types - use enhanced detection that coerces string columns to numeric
+        # This catches columns like "TotalCharges" that contain numeric values but are stored as strings
+        numeric_cols, coerced_info = self._get_numeric_columns(df, exclude_binary=True)
         string_cols = df.select_dtypes(include=['object']).columns.tolist()
+
+        # Log coercion info for transparency
+        if coerced_info:
+            coerced_cols = [col for col, info in coerced_info.items() if 'coerced' in info]
+            excluded_cols = [col for col, info in coerced_info.items() if 'excluded' in info]
+            if coerced_cols:
+                logger.info(f"Coerced {len(coerced_cols)} string columns to numeric: {coerced_cols}")
+            if excluded_cols:
+                logger.debug(f"Excluded {len(excluded_cols)} binary/near-binary columns: {excluded_cols}")
+            findings["numeric_column_detection"] = coerced_info
 
         # Filter out numeric columns that are semantically categorical (e.g., bank IDs)
         # These shouldn't have Isolation Forest applied - a bank ID of 1099 isn't an "outlier"
@@ -1763,10 +1954,18 @@ class MLAnalyzer:
             ]
 
         # 1. Univariate outlier detection with adaptive contamination (only on true numeric cols)
+        # Store ALL results for visualization (even 0% outliers)
+        all_numeric_outlier_stats = {}
         for col in actual_numeric_cols:
             outlier_result = self._detect_numeric_outliers(df, col)
-            if outlier_result and outlier_result.get("anomaly_count", 0) > 0:
-                findings["numeric_outliers"][col] = outlier_result
+            if outlier_result:
+                # Always store for visualization
+                all_numeric_outlier_stats[col] = outlier_result
+                # Only include in main findings if actual outliers found
+                if outlier_result.get("anomaly_count", 0) > 0:
+                    findings["numeric_outliers"][col] = outlier_result
+
+        findings["all_numeric_outlier_stats"] = all_numeric_outlier_stats
 
         # 2. Clustering analysis (INFORMATIONAL ONLY - shows data structure, not anomalies)
         # Note: Noise points are NOT counted as issues - they overlap with outlier detection
@@ -1823,12 +2022,23 @@ class MLAnalyzer:
 
         # 9. Benford's Law analysis (based on numeric properties, not just FIBO tags)
         # Include ALL results (both suspicious and natural) so users see full analysis
+        # Track ineligible columns with reasons for fallback display
+        benford_ineligible = {}
         for col in numeric_cols:
-            values = df[col].dropna().values
+            # Handle string columns that need coercion to numeric
+            series = df[col]
+            if series.dtype == 'object':
+                series = pd.to_numeric(series, errors='coerce')
+            values = series.dropna().values
             if self._should_apply_benford(col, values):
                 benford_result = self._detect_benford_anomalies(df, col)
                 if benford_result:
                     findings["benford_analysis"][col] = benford_result
+            else:
+                # Track why column was excluded
+                benford_ineligible[col] = self._get_benford_ineligibility_reason(col, values)
+
+        findings["benford_ineligible"] = benford_ineligible
 
         # 10. Autoencoder anomaly detection (on true numeric columns)
         if len(actual_numeric_cols) >= 2 and self._sklearn_available:
@@ -1849,7 +2059,11 @@ class MLAnalyzer:
         # 13. NEW: Distribution fitting (on key numeric columns)
         findings["distribution_analysis"] = {}
         for col in actual_numeric_cols[:5]:  # Limit to first 5 numeric columns for performance
-            values = df[col].dropna().values
+            # Handle string columns that need coercion to numeric
+            series = df[col]
+            if series.dtype == 'object':
+                series = pd.to_numeric(series, errors='coerce')
+            values = series.dropna().values
             if len(values) >= 100:
                 dist_result = self._fit_distribution(values)
                 if dist_result and dist_result.get("best_fit"):
@@ -2164,6 +2378,11 @@ class MLAnalyzer:
             return self._detect_outliers_statistical(df, col_name)
 
         series = df[col_name]
+
+        # Handle string columns that need coercion to numeric
+        if series.dtype == 'object':
+            series = pd.to_numeric(series, errors='coerce')
+
         values = series.dropna().values
         if len(values) < MIN_ROWS_FOR_ML:
             return None
@@ -2250,6 +2469,11 @@ class MLAnalyzer:
         Uses IQR method.
         """
         series = df[col_name]
+
+        # Handle string columns that need coercion to numeric
+        if series.dtype == 'object':
+            series = pd.to_numeric(series, errors='coerce')
+
         values = series.dropna().values
         if len(values) < MIN_ROWS_FOR_ML:
             return None
@@ -3350,6 +3574,139 @@ class MLAnalyzer:
 
         return "; ".join(interpretations) if interpretations else "Temporal patterns detected"
 
+    def _get_benford_ineligibility_reason(self, col_name: str, values: Optional[np.ndarray] = None) -> str:
+        """
+        Get the reason why Benford's Law should NOT be applied to this column.
+
+        Used for fallback display in reports.
+
+        Args:
+            col_name: Column name
+            values: Optional numpy array of column values
+
+        Returns:
+            Generic reason string explaining why Benford is not applicable
+        """
+        col_lower = col_name.lower()
+
+        # Check for identifier patterns
+        exclude_keywords = ['id', 'code', 'number', 'count', 'qty', 'quantity', 'bank', 'account',
+                           'index', 'row', 'sequence', 'version', 'rank', 'position']
+        if any(kw in col_lower for kw in exclude_keywords):
+            return "Column name suggests identifier/code (not suitable for Benford)"
+
+        # Bounded/demographic data (ages, ratings, percentages, etc.)
+        # These don't follow Benford's Law because they don't grow multiplicatively
+        bounded_keywords = ['age', 'rating', 'score', 'grade', 'percent', 'pct', 'rate',
+                           'level', 'class', 'tier', 'year', 'month', 'day', 'hour',
+                           'duration', 'tenure', 'pclass', 'survived']
+        if any(kw in col_lower for kw in bounded_keywords):
+            return "Column contains bounded/demographic data (not suitable for Benford)"
+
+        # Binary/flag indicators
+        if col_lower.startswith(('is_', 'has_', 'was_', 'can_')) or col_lower.endswith(('_flag', '_indicator')):
+            return "Column appears to be a binary flag"
+
+        # Check numeric properties
+        if values is not None and len(values) > 0:
+            positive_values = values[values > 0]
+
+            if len(positive_values) < 100:
+                return f"Insufficient positive values ({len(positive_values)} < 100)"
+
+            unique_count = len(np.unique(positive_values))
+            if unique_count < 20:
+                return f"Insufficient unique values ({unique_count} < 20) - data may be categorical"
+
+            min_val = np.min(positive_values)
+            max_val = np.max(positive_values)
+            if min_val > 0:
+                magnitude_span = np.log10(max_val / min_val)
+                if magnitude_span < 1.5:
+                    return f"Value range too narrow ({magnitude_span:.1f} < 1.5 orders of magnitude)"
+
+            # Check for structured pricing/tariff data
+            if self._looks_structured_pricing(col_name, positive_values):
+                return (
+                    "Column appears to contain structured prices or tariffs: a small set of repeated "
+                    "price points and/or highly concentrated first digits. Such pricing tables are not "
+                    "well suited for Benford's Law."
+                )
+
+        return "Column does not meet Benford's Law criteria"
+
+    def _looks_structured_pricing(self, col_name: str, positive_values: np.ndarray) -> bool:
+        """
+        Detect structured pricing/tariff data that should NOT use Benford's Law.
+
+        Structured pricing (e.g., ticket fares, toll fees) often has:
+        - A small set of repeated price points (tariff tables)
+        - Highly concentrated first digits due to pricing tiers
+
+        These violate Benford assumptions but are NOT indicators of data quality issues.
+
+        Args:
+            col_name: Column name
+            positive_values: Array of positive numeric values
+
+        Returns:
+            True if column appears to contain structured pricing data
+        """
+        # Pricing-related keywords
+        pricing_keywords = ['fare', 'price', 'fee', 'charge', 'tax', 'tariff', 'toll', 'rate']
+        lower = col_name.lower()
+        name_is_pricing = any(k in lower for k in pricing_keywords)
+
+        if not name_is_pricing:
+            return False  # Only apply this guard to pricing-named columns
+
+        n = len(positive_values)
+        if n < 100:
+            return False  # Not enough data to assess
+
+        # Check for low unique ratio (indicates tariff-like tables)
+        unique_count = len(np.unique(positive_values))
+        unique_ratio = unique_count / n
+        low_unique = unique_ratio < 0.10  # Less than 10% unique values
+
+        # Check for dominant first digit (≥75% concentration)
+        dominant_first_digit = False
+        first_digits = self._extract_first_digits_array(positive_values)
+        if len(first_digits) > 0:
+            counts = np.bincount(first_digits, minlength=10)
+            total = counts[1:].sum()  # Only digits 1-9
+            if total > 0:
+                max_share = counts[1:].max() / float(total)
+                dominant_first_digit = max_share >= 0.75
+
+        # Structured pricing if: pricing name AND (low unique OR dominant first digit)
+        return name_is_pricing and (low_unique or dominant_first_digit)
+
+    def _extract_first_digits_array(self, values: np.ndarray) -> np.ndarray:
+        """
+        Extract first significant digits from an array of positive values.
+
+        Args:
+            values: Array of positive numeric values
+
+        Returns:
+            Array of first digits (1-9), filtering out zeros
+        """
+        result = []
+        for x in values:
+            try:
+                if x <= 0:
+                    continue
+                s = str(abs(float(x))).lstrip('0').lstrip('.')
+                if not s:
+                    continue
+                match = re.search(r'([1-9])', s)
+                if match:
+                    result.append(int(match.group(1)))
+            except (ValueError, TypeError):
+                continue
+        return np.array(result, dtype=np.int32)
+
     def _should_apply_benford(self, col_name: str, values: Optional[np.ndarray] = None) -> bool:
         """
         Check if Benford's Law should be applied to this column.
@@ -3392,6 +3749,15 @@ class MLAnalyzer:
         if any(kw in col_lower for kw in exclude_keywords):
             return False
 
+        # Exclude bounded/demographic data (ages, ratings, percentages, etc.)
+        # These don't follow Benford's Law because they don't grow multiplicatively
+        bounded_keywords = ['age', 'rating', 'score', 'grade', 'percent', 'pct', 'rate',
+                           'level', 'class', 'tier', 'year', 'month', 'day', 'hour',
+                           'duration', 'tenure', 'pclass', 'survived']
+
+        if any(kw in col_lower for kw in bounded_keywords):
+            return False
+
         # Check if tagged as money-related (strong positive indicator)
         if primary_tag in benford_tags:
             return True
@@ -3426,14 +3792,20 @@ class MLAnalyzer:
                 if magnitude_span < 1.5:  # At least ~1.5 orders of magnitude
                     return False
 
-            # If we pass numeric criteria, apply Benford analysis
+            # Criterion 4: Check for structured pricing/tariff data
+            # Pricing tables with limited unique values or dominant first digits
+            # are not suitable for Benford analysis (but not data quality issues)
+            if self._looks_structured_pricing(col_name, positive_values):
+                return False
+
+            # If we pass all criteria, apply Benford analysis
             # FIBO tags or amount keywords boost confidence, but numeric properties are primary
             return True
 
         # Fallback if no values provided: rely on keywords/tags
         return has_amount_keyword
 
-    def _get_benford_applicability(self, col_name: str) -> Dict[str, Any]:
+    def _get_benford_applicability(self, col_name: str, values: Optional[np.ndarray] = None) -> Dict[str, Any]:
         """
         Assess whether Benford's Law is applicable to this column.
 
@@ -3447,11 +3819,30 @@ class MLAnalyzer:
         - Sequential counts that grow from zero
         - Data with hard minimum/maximum bounds
         - Assigned numbers (IDs, zip codes)
+        - Structured pricing/tariff tables
+
+        Args:
+            col_name: Column name
+            values: Optional numpy array of column values
 
         Returns:
             Dict with applicability assessment and explanation
         """
         col_lower = col_name.lower()
+
+        # Check for structured pricing/tariff data first (if values provided)
+        if values is not None and len(values) > 0:
+            positive_values = values[values > 0]
+            if len(positive_values) >= 100 and self._looks_structured_pricing(col_name, positive_values):
+                return {
+                    "applicable": False,
+                    "reason": "structured_pricing",
+                    "explanation": (
+                        "This column appears to contain structured prices/tariffs with limited unique "
+                        "values or dominant leading digits, which violates Benford assumptions."
+                    ),
+                    "recommendation": "Use distribution or frequency analysis instead of Benford."
+                }
 
         # Patterns indicating cumulative/running totals - Benford NOT applicable
         cumulative_patterns = [
@@ -3532,7 +3923,13 @@ class MLAnalyzer:
         Returns:
             Dictionary with Benford analysis results or None if not applicable
         """
-        series = df[col_name].dropna()
+        series = df[col_name]
+
+        # Handle string columns that need coercion to numeric
+        if series.dtype == 'object':
+            series = pd.to_numeric(series, errors='coerce')
+
+        series = series.dropna()
 
         # Need sufficient positive values for meaningful analysis
         positive_values = series[series > 0]
