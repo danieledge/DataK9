@@ -342,6 +342,72 @@ class ValidationSuggestion:
 
 
 @dataclass
+class DataLineage:
+    """
+    Data lineage and provenance tracking for audit trails.
+
+    Captures where data came from, when it was processed, and what
+    transformations/analysis were applied. Essential for regulatory
+    compliance and data governance.
+
+    Attributes:
+        source_type: Type of data source (file, database, api, etc.)
+        source_path: Original path/URI of the data source
+        source_hash: SHA-256 hash of source file for integrity verification
+        source_size_bytes: Original file size in bytes
+        source_modified_at: Last modification time of source file
+        source_created_at: Creation time of source file (if available)
+        profiled_at: When profiling was performed (ISO 8601)
+        profiled_by: Identifier of profiling system/user
+        profiler_version: Version of DataK9 profiler used
+        environment: Environment info (hostname, OS, Python version)
+        analysis_applied: List of analysis types that were applied
+        sampling_info: Details about any sampling applied
+        transformations: Any transformations applied during profiling
+        parent_lineage: Reference to parent data lineage (for derived data)
+    """
+    source_type: str = "file"
+    source_path: str = ""
+    source_hash: Optional[str] = None
+    source_size_bytes: int = 0
+    source_modified_at: Optional[str] = None
+    source_created_at: Optional[str] = None
+    profiled_at: str = ""
+    profiled_by: str = "DataK9 Profiler"
+    profiler_version: str = "1.55"
+    environment: Dict[str, str] = field(default_factory=dict)
+    analysis_applied: List[str] = field(default_factory=list)
+    sampling_info: Optional[Dict[str, Any]] = None
+    transformations: List[Dict[str, Any]] = field(default_factory=list)
+    parent_lineage: Optional[str] = None  # Reference ID to parent lineage
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary representation."""
+        return {
+            "source": {
+                "type": self.source_type,
+                "path": self.source_path,
+                "hash": self.source_hash,
+                "size_bytes": self.source_size_bytes,
+                "modified_at": self.source_modified_at,
+                "created_at": self.source_created_at
+            },
+            "profiling": {
+                "profiled_at": self.profiled_at,
+                "profiled_by": self.profiled_by,
+                "profiler_version": self.profiler_version,
+                "environment": self.environment
+            },
+            "processing": {
+                "analysis_applied": self.analysis_applied,
+                "sampling_info": self.sampling_info,
+                "transformations": self.transformations
+            },
+            "parent_lineage": self.parent_lineage
+        }
+
+
+@dataclass
 class ProfileResult:
     """
     Complete data profiling result.
@@ -364,6 +430,7 @@ class ProfileResult:
         enhanced_correlations: Enhanced multi-method correlation analysis results
         dataset_privacy_risk: Dataset-level privacy risk assessment
         file_metadata: Additional file metadata (compression, row groups, etc.)
+        data_lineage: Data lineage and provenance tracking
     """
     file_name: str
     file_path: str
@@ -383,6 +450,7 @@ class ProfileResult:
     dataset_privacy_risk: Optional[Dict[str, Any]] = None
     file_metadata: Optional[Dict[str, Any]] = None
     ml_findings: Optional[Dict[str, Any]] = None  # Beta ML analysis results
+    data_lineage: Optional[DataLineage] = None  # Data lineage and provenance tracking
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary representation."""
@@ -414,5 +482,9 @@ class ProfileResult:
         # Add ML findings if present (beta feature)
         if self.ml_findings:
             result["ml_findings"] = convert_numpy_types(self.ml_findings)
+
+        # Add data lineage for audit trails
+        if self.data_lineage:
+            result["data_lineage"] = self.data_lineage.to_dict()
 
         return result
