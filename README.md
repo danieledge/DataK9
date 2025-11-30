@@ -36,6 +36,28 @@ DataK9 is a Python framework for validating data quality before loading to datab
 
 ---
 
+## 🆕 What's New: Profiler Overhaul (v1.55)
+
+The DataK9 Profiler has received a **major enhancement** with intelligent semantic classification:
+
+| Feature | Description |
+|---------|-------------|
+| **Dual Ontology Classification** | FIBO (financial) + Schema.org (general) for comprehensive semantic understanding |
+| **Smart Validation Suggestions** | Semantic-aware rules that transfer across datasets (Age: 0-120, not 0.42-80) |
+| **Binary Flag Detection** | Auto-classifies 0/1 columns as Boolean with BooleanCheck suggestions |
+| **Intelligent UniqueKeyCheck** | Uses semantic types to avoid false positives (names aren't unique identifiers) |
+| **Executive HTML Reports** | Redesigned with plain-English explanations and consolidated sampling info |
+
+**Example improvements:**
+- `Age` field → RangeCheck 0-120 (human-sensible) instead of exact observed range
+- `Survived` (0/1) → BooleanCheck instead of ValidValuesCheck with string values
+- `Name` → No UniqueKeyCheck (correctly identified as `schema:name`, not an identifier)
+- `Fare` → Non-negative only (no restrictive upper bound for monetary fields)
+
+**[Read the full Profiler Guide →](docs/using-datak9/data-profiling.md)**
+
+---
+
 ## 🔥 Killer Features
 
 <details>

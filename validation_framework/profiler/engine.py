@@ -55,6 +55,16 @@ except ImportError:
     SEMANTIC_TAGGING_AVAILABLE = False
     # Semantic tagging is optional
 
+# Phase 2b: Schema.org General Semantics
+try:
+    from validation_framework.profiler.schema_org_tagger import SchemaOrgTagger
+    from validation_framework.profiler.semantic_resolver import SemanticResolver
+    SCHEMA_ORG_AVAILABLE = True
+except ImportError:
+    SCHEMA_ORG_AVAILABLE = False
+    SchemaOrgTagger = None
+    SemanticResolver = None
+
 # Phase 3: ML-based Anomaly Detection (Beta)
 try:
     from validation_framework.profiler.ml_analyzer import MLAnalyzer, ChunkedMLAccumulator
@@ -132,8 +142,12 @@ class DataProfiler:
         self.pii_detector = PIIDetector() if self.enable_pii_detection else None
         self.enhanced_correlation_analyzer = EnhancedCorrelationAnalyzer() if self.enable_enhanced_correlation else None
 
-        # Initialize Phase 2: Semantic tagger
+        # Initialize Phase 2: Semantic tagger (FIBO)
         self.semantic_tagger = SemanticTagger() if self.enable_semantic_tagging else None
+
+        # Initialize Phase 2b: Schema.org general semantics + resolver
+        self.schema_org_tagger = SchemaOrgTagger() if SCHEMA_ORG_AVAILABLE else None
+        self.semantic_resolver = SemanticResolver() if SCHEMA_ORG_AVAILABLE else None
 
         # Initialize Phase 3: ML analyzer (Beta)
         self.enable_ml_analysis = enable_ml_analysis and ML_ANALYSIS_AVAILABLE
@@ -313,33 +327,88 @@ class DataProfiler:
             phase_timings['pii_detection'] = time.time() - pii_start
             logger.debug(f"⏱  PII detection completed in {phase_timings['pii_detection']:.2f}s")
 
-        # Phase 2: Apply semantic tagging to all columns
-        if self.enable_semantic_tagging:
-            semantic_start = time.time()
-            logger.debug("🧠 Running FIBO-based semantic tagging on all columns...")
-            for column in columns:
-                try:
-                    # Get visions type from statistics (already computed)
-                    visions_type = getattr(column.statistics, 'semantic_type', None)
+        # Phase 2: Apply dual semantic tagging (Schema.org + FIBO) to all columns
+        semantic_start = time.time()
+        logger.debug("🧠 Running dual semantic tagging (Schema.org + FIBO) on all columns...")
+        for column in columns:
+            try:
+                # Get structural type from pandas dtype
+                structural_type = str(column.type_info.declared_type or column.type_info.inferred_type)
 
-                    # Apply semantic tagging
-                    semantic_info = self.semantic_tagger.tag_column(
+                # Step 1: Always compute Schema.org general semantics
+                schema_org_result = None
+                if self.schema_org_tagger:
+                    schema_org_result = self.schema_org_tagger.tag_column(
+                        column_name=column.name,
+                        inferred_type=column.type_info.inferred_type,
+                        statistics=column.statistics,
+                        quality=column.quality,
+                        sample_values=column.type_info.sample_values
+                    )
+
+                # Step 2: Compute FIBO semantics (optional, for financial/ID fields)
+                fibo_result = None
+                if self.enable_semantic_tagging and self.semantic_tagger:
+                    visions_type = getattr(column.statistics, 'semantic_type', None)
+                    fibo_info = self.semantic_tagger.tag_column(
                         column_name=column.name,
                         inferred_type=column.type_info.inferred_type,
                         visions_type=visions_type,
                         statistics=column.statistics,
                         quality=column.quality
                     )
+                    # Convert SemanticInfo to dict format for resolver
+                    if fibo_info and fibo_info.primary_tag != "unknown":
+                        fibo_result = {
+                            "type": fibo_info.fibo_source or fibo_info.primary_tag,
+                            "confidence": fibo_info.confidence,
+                            "signals": list(fibo_info.evidence.keys()) if fibo_info.evidence else []
+                        }
 
-                    # Store semantic info in column profile
-                    column.semantic_info = semantic_info.to_dict()
+                # Step 3: Resolve which layer is primary
+                if self.semantic_resolver:
+                    column.semantic_info = self.semantic_resolver.resolve(
+                        structural_type=structural_type,
+                        schema_org=schema_org_result,
+                        fibo=fibo_result
+                    )
+                    resolved = column.semantic_info.get("resolved", {})
+                    logger.debug(f"Semantic tagging for '{column.name}': {resolved.get('display_label')} (source: {resolved.get('primary_source')})")
+                elif schema_org_result:
+                    # Fallback if resolver not available
+                    column.semantic_info = {
+                        "structural_type": structural_type,
+                        "schema_org": schema_org_result,
+                        "fibo": fibo_result,
+                        "resolved": {
+                            "primary_source": "schema_org",
+                            "primary_type": schema_org_result.get("type"),
+                            "secondary_type": None,
+                            "display_label": schema_org_result.get("display_label", "Unknown"),
+                            "validation_driver": "schema_org"
+                        }
+                    }
+                else:
+                    # Legacy FIBO-only mode
+                    if fibo_result:
+                        column.semantic_info = {
+                            "structural_type": structural_type,
+                            "schema_org": None,
+                            "fibo": fibo_result,
+                            "resolved": {
+                                "primary_source": "fibo",
+                                "primary_type": fibo_result.get("type"),
+                                "secondary_type": None,
+                                "display_label": fibo_result.get("type", "Unknown"),
+                                "validation_driver": "fibo"
+                            }
+                        }
 
-                    logger.debug(f"Semantic tagging completed for '{column.name}': {semantic_info.primary_tag} (confidence: {semantic_info.confidence:.2f})")
-                except Exception as e:
-                    logger.warning(f"Semantic tagging failed for column {column.name}: {e}")
+            except Exception as e:
+                logger.warning(f"Semantic tagging failed for column {column.name}: {e}")
 
-            phase_timings['semantic_tagging'] = time.time() - semantic_start
-            logger.debug(f"⏱  Semantic tagging completed in {phase_timings['semantic_tagging']:.2f}s")
+        phase_timings['semantic_tagging'] = time.time() - semantic_start
+        logger.debug(f"⏱  Semantic tagging completed in {phase_timings['semantic_tagging']:.2f}s")
 
         # Calculate correlations
         correlation_start = time.time()
@@ -764,7 +833,8 @@ class DataProfiler:
 
                 # Collect numeric data for correlations with memory-efficient sampling
                 # Limit to MAX_CORRELATION_SAMPLES per column to prevent memory exhaustion with very large datasets
-                if column_profiles[col]["inferred_type"] in ["integer", "float"]:
+                # Note: Check pandas dtype directly since inferred_type is not set until after chunk processing
+                if pd.api.types.is_numeric_dtype(chunk[col]):
                     if col not in numeric_data:
                         numeric_data[col] = []
 
@@ -911,33 +981,88 @@ class DataProfiler:
             phase_timings['pii_detection'] = time.time() - pii_start
             logger.debug(f"⏱  PII detection completed in {phase_timings['pii_detection']:.2f}s")
 
-        # Phase 2: Apply semantic tagging to all columns
-        if self.enable_semantic_tagging:
-            semantic_start = time.time()
-            logger.debug("🧠 Running FIBO-based semantic tagging on all columns...")
-            for column in columns:
-                try:
-                    # Get visions type from statistics (already computed)
-                    visions_type = getattr(column.statistics, 'semantic_type', None)
+        # Phase 2: Apply dual semantic tagging (Schema.org + FIBO) to all columns
+        semantic_start = time.time()
+        logger.debug("🧠 Running dual semantic tagging (Schema.org + FIBO) on all columns...")
+        for column in columns:
+            try:
+                # Get structural type from pandas dtype
+                structural_type = str(column.type_info.declared_type or column.type_info.inferred_type)
 
-                    # Apply semantic tagging
-                    semantic_info = self.semantic_tagger.tag_column(
+                # Step 1: Always compute Schema.org general semantics
+                schema_org_result = None
+                if self.schema_org_tagger:
+                    schema_org_result = self.schema_org_tagger.tag_column(
+                        column_name=column.name,
+                        inferred_type=column.type_info.inferred_type,
+                        statistics=column.statistics,
+                        quality=column.quality,
+                        sample_values=column.type_info.sample_values
+                    )
+
+                # Step 2: Compute FIBO semantics (optional, for financial/ID fields)
+                fibo_result = None
+                if self.enable_semantic_tagging and self.semantic_tagger:
+                    visions_type = getattr(column.statistics, 'semantic_type', None)
+                    fibo_info = self.semantic_tagger.tag_column(
                         column_name=column.name,
                         inferred_type=column.type_info.inferred_type,
                         visions_type=visions_type,
                         statistics=column.statistics,
                         quality=column.quality
                     )
+                    # Convert SemanticInfo to dict format for resolver
+                    if fibo_info and fibo_info.primary_tag != "unknown":
+                        fibo_result = {
+                            "type": fibo_info.fibo_source or fibo_info.primary_tag,
+                            "confidence": fibo_info.confidence,
+                            "signals": list(fibo_info.evidence.keys()) if fibo_info.evidence else []
+                        }
 
-                    # Store semantic info in column profile
-                    column.semantic_info = semantic_info.to_dict()
+                # Step 3: Resolve which layer is primary
+                if self.semantic_resolver:
+                    column.semantic_info = self.semantic_resolver.resolve(
+                        structural_type=structural_type,
+                        schema_org=schema_org_result,
+                        fibo=fibo_result
+                    )
+                    resolved = column.semantic_info.get("resolved", {})
+                    logger.debug(f"Semantic tagging for '{column.name}': {resolved.get('display_label')} (source: {resolved.get('primary_source')})")
+                elif schema_org_result:
+                    # Fallback if resolver not available
+                    column.semantic_info = {
+                        "structural_type": structural_type,
+                        "schema_org": schema_org_result,
+                        "fibo": fibo_result,
+                        "resolved": {
+                            "primary_source": "schema_org",
+                            "primary_type": schema_org_result.get("type"),
+                            "secondary_type": None,
+                            "display_label": schema_org_result.get("display_label", "Unknown"),
+                            "validation_driver": "schema_org"
+                        }
+                    }
+                else:
+                    # Legacy FIBO-only mode
+                    if fibo_result:
+                        column.semantic_info = {
+                            "structural_type": structural_type,
+                            "schema_org": None,
+                            "fibo": fibo_result,
+                            "resolved": {
+                                "primary_source": "fibo",
+                                "primary_type": fibo_result.get("type"),
+                                "secondary_type": None,
+                                "display_label": fibo_result.get("type", "Unknown"),
+                                "validation_driver": "fibo"
+                            }
+                        }
 
-                    logger.debug(f"Semantic tagging completed for '{column.name}': {semantic_info.primary_tag} (confidence: {semantic_info.confidence:.2f})")
-                except Exception as e:
-                    logger.warning(f"Semantic tagging failed for column {column.name}: {e}")
+            except Exception as e:
+                logger.warning(f"Semantic tagging failed for column {column.name}: {e}")
 
-            phase_timings['semantic_tagging'] = time.time() - semantic_start
-            logger.debug(f"⏱  Semantic tagging completed in {phase_timings['semantic_tagging']:.2f}s")
+        phase_timings['semantic_tagging'] = time.time() - semantic_start
+        logger.debug(f"⏱  Semantic tagging completed in {phase_timings['semantic_tagging']:.2f}s")
 
         # Calculate correlations
         correlation_start = time.time()
@@ -1128,7 +1253,7 @@ class DataProfiler:
         if ml_findings:
             ml_suggestions_start = time.time()
             try:
-                ml_based_suggestions = self._generate_ml_based_validations(ml_findings)
+                ml_based_suggestions = self._generate_ml_based_validations(ml_findings, columns)
                 if ml_based_suggestions:
                     logger.debug(f"💡 Generated {len(ml_based_suggestions)} ML-based validation suggestions")
 
@@ -1894,8 +2019,8 @@ class DataProfiler:
                 for j, col2 in enumerate(numeric_columns):
                     if i < j:  # Upper triangle only
                         corr_value = corr_matrix.loc[col1, col2]
-                        # Include if correlation is significant (>0.5 or <-0.5)
-                        if abs(corr_value) > 0.5 and not np.isnan(corr_value):
+                        # Include if correlation is significant (>0.3 or <-0.3)
+                        if abs(corr_value) > 0.3 and not np.isnan(corr_value):
                             correlations.append(
                                 CorrelationResult(
                                     column1=col1,
@@ -2001,6 +2126,102 @@ class DataProfiler:
 
         # Default: suggest range check for numeric measurements with natural bounds
         return True
+
+    def _calculate_smart_range(
+        self,
+        col_name: str,
+        observed_min: float,
+        observed_max: float,
+        schema_org_type: Optional[str]
+    ) -> tuple:
+        """
+        Calculate semantically-aware range boundaries for validation.
+
+        Instead of using exact observed min/max (which is too restrictive for new data),
+        this method applies domain knowledge to suggest sensible ranges that will work
+        across datasets.
+
+        Args:
+            col_name: Column name for pattern matching
+            observed_min: Minimum value seen in data
+            observed_max: Maximum value seen in data
+            schema_org_type: Schema.org semantic type (e.g., 'schema:Integer', 'schema:Number')
+
+        Returns:
+            Tuple of (min_value, max_value, reason_string)
+        """
+        col_name_lower = col_name.lower()
+
+        # Age-related fields: use human-sensible bounds
+        age_keywords = ['age', 'years_old', 'yearsold', 'person_age']
+        if any(kw in col_name_lower for kw in age_keywords):
+            # Human age: 0-120 is sensible regardless of observed range
+            return (0, 120, "Age field with human-sensible bounds (0-120 years)")
+
+        # Percentage fields: 0-100 bounds
+        pct_keywords = ['percent', 'pct', 'percentage', 'rate', 'ratio']
+        if any(kw in col_name_lower for kw in pct_keywords):
+            # Check if observed values suggest 0-1 scale vs 0-100 scale
+            if observed_max <= 1.0:
+                return (0.0, 1.0, "Percentage field (0-1 scale)")
+            else:
+                return (0, 100, "Percentage field (0-100 scale)")
+
+        # Count fields: non-negative with generous upper bound
+        count_keywords = ['count', 'num_', 'number_of', 'qty', 'quantity']
+        if any(kw in col_name_lower for kw in count_keywords):
+            # Use 0 as min, but expand max by 50% to allow for growth
+            expanded_max = int(observed_max * 1.5) if observed_max > 0 else 100
+            return (0, expanded_max, f"Count field (non-negative, max expanded to {expanded_max})")
+
+        # Fare/price/monetary fields: non-negative only (no upper bound)
+        monetary_keywords = ['fare', 'price', 'cost', 'fee', 'amount', 'salary', 'payment']
+        if any(kw in col_name_lower for kw in monetary_keywords):
+            return (0, None, "Monetary field (must be non-negative)")
+
+        # Score/rating fields: common scales
+        score_keywords = ['score', 'rating', 'grade', 'rank']
+        if any(kw in col_name_lower for kw in score_keywords):
+            # Detect common scales
+            if observed_max <= 5:
+                return (0, 5, "Score field (0-5 scale)")
+            elif observed_max <= 10:
+                return (0, 10, "Score field (0-10 scale)")
+            elif observed_max <= 100:
+                return (0, 100, "Score field (0-100 scale)")
+
+        # Class/category numeric fields (like Pclass in Titanic): use observed as valid values
+        class_keywords = ['class', 'category', 'type', 'level', 'tier']
+        if any(kw in col_name_lower for kw in class_keywords):
+            # For categorical numerics, use exact observed range
+            return (int(observed_min), int(observed_max),
+                    f"Categorical field (observed values {int(observed_min)}-{int(observed_max)})")
+
+        # Default behavior: expand observed range by 20% on each side
+        # This allows for natural variation without being overly restrictive
+        range_span = observed_max - observed_min
+        if range_span > 0:
+            expansion = range_span * 0.2
+            suggested_min = observed_min - expansion
+            suggested_max = observed_max + expansion
+
+            # Don't allow negative min if observed min was non-negative
+            if observed_min >= 0:
+                suggested_min = max(0, suggested_min)
+
+            # Round for cleaner values
+            if isinstance(observed_min, int) and isinstance(observed_max, int):
+                suggested_min = int(suggested_min)
+                suggested_max = int(suggested_max)
+            else:
+                suggested_min = round(suggested_min, 2)
+                suggested_max = round(suggested_max, 2)
+
+            return (suggested_min, suggested_max,
+                    f"Range based on observed data ({observed_min}-{observed_max}) with 20% margin")
+        else:
+            # Single value case - use exact value
+            return (observed_min, observed_max, f"Single observed value: {observed_min}")
 
     def _generate_fibo_semantic_validations(self, col: ColumnProfile) -> List[ValidationSuggestion]:
         """
@@ -2452,21 +2673,96 @@ class DataProfiler:
 
         return suggestions
 
+    def _is_benford_semantic_confident(
+        self,
+        col_name: str,
+        columns: List[ColumnProfile]
+    ) -> tuple:
+        """
+        Determine if a column has high semantic confidence for Benford analysis.
+
+        Benford analysis should only emit BenfordLawCheck when BOTH:
+        - The Benford applicability flag is true (statistical criteria met)
+        - Semantic confidence is HIGH (field is truly numeric/monetary)
+
+        Returns:
+            tuple: (is_high_confidence: bool, reason: str)
+                - is_high_confidence: True if field is well-suited for Benford
+                - reason: Explanation or caution text for YAML/UI
+        """
+        if not columns:
+            return (False, "unknown_semantics")
+
+        # Find the column
+        col = None
+        for c in columns:
+            if c.name == col_name:
+                col = c
+                break
+
+        if not col or not col.semantic_info:
+            return (False, "unknown_semantics")
+
+        # Get primary type from resolved semantics
+        resolved = col.semantic_info.get('resolved', {})
+        primary_type = resolved.get('primary_type', '').lower() if resolved else ''
+
+        # If no resolved type, try schema_org or fibo directly
+        if not primary_type:
+            schema_org = col.semantic_info.get('schema_org', {})
+            primary_type = schema_org.get('type', '').lower() if schema_org else ''
+        if not primary_type:
+            fibo = col.semantic_info.get('fibo', {})
+            primary_type = fibo.get('type', '').lower() if fibo else ''
+
+        # HIGH confidence types for Benford (truly numeric/monetary measures)
+        high_conf_numeric = {
+            'schema:number', 'schema:integer', 'schema:quantitativevalue',
+            'schema:monetaryamount', 'schema:pricespecification',
+            'fibo:moneyamount', 'fibo:transactionamount', 'fibo:amount'
+        }
+
+        # Identifier/code types - not suitable
+        identifier_types = {
+            'schema:identifier', 'fibo:accountidentifier', 'fibo:identifier'
+        }
+
+        # Check for structured pricing pattern in semantic info
+        is_structured_pricing = False
+        if col.semantic_info:
+            # Check if the profiler detected structured pricing
+            pricing_info = col.semantic_info.get('pricing_pattern', {})
+            if pricing_info.get('is_structured', False):
+                is_structured_pricing = True
+
+        if primary_type in high_conf_numeric:
+            if is_structured_pricing:
+                return (False, "structured_pricing")
+            return (True, "numeric_monetary")
+        elif primary_type in identifier_types:
+            return (False, "identifier")
+        elif not primary_type:
+            return (False, "unknown_semantics")
+        else:
+            return (False, "other_semantic_type")
+
     def _generate_ml_based_validations(
         self,
-        ml_findings: Dict[str, Any]
+        ml_findings: Dict[str, Any],
+        columns: List[ColumnProfile] = None
     ) -> List[ValidationSuggestion]:
         """
         Generate validation suggestions based on ML analysis findings.
 
         This function translates ML insights into actionable validation rules:
         - Outlier detection → OutlierCheck with identified columns and thresholds
-        - Benford's Law violations → BenfordLawCheck for suspicious columns
+        - Benford's Law violations → BenfordLawCheck for semantic-confident columns only
         - Cross-field anomalies → CrossFieldValidation suggestions
         - Multivariate anomalies → Relationship-based validation hints
 
         Args:
             ml_findings: Results from MLAnalyzer.analyze()
+            columns: List of ColumnProfile objects for semantic confidence checks
 
         Returns:
             List of ValidationSuggestion objects based on ML findings
@@ -2510,7 +2806,7 @@ class DataProfiler:
 
         # ═══════════════════════════════════════════════════════════════
         # 2. BENFORD'S LAW VALIDATIONS
-        # If Benford analysis found suspicious digit patterns, suggest check
+        # Only emit BenfordLawCheck when BOTH applicability AND semantic confidence are high
         # ═══════════════════════════════════════════════════════════════
         benford_analysis = ml_findings.get('benford_analysis', {})
 
@@ -2520,30 +2816,38 @@ class DataProfiler:
             chi_square = benford_data.get('chi_square', 0)
             p_value = benford_data.get('p_value', 1)
 
-            # Suggest Benford check for suspicious columns OR high-value financial columns
-            if is_suspicious or confidence in ['Very Low', 'Low']:
-                suggestions.append(ValidationSuggestion(
-                    validation_type="BenfordLawCheck",
-                    severity="WARNING",
-                    params={
-                        "field": col_name,
-                        "significance_level": 0.05
-                    },
-                    reason=f"ML Benford analysis shows {confidence} confidence (χ²={chi_square:.2f}, p={p_value:.4f}). Digit distribution may indicate data quality issues.",
-                    confidence=75.0
-                ))
-            elif confidence in ['High', 'Very High']:
-                # Still suggest for financial/amount fields even if passing
-                suggestions.append(ValidationSuggestion(
-                    validation_type="BenfordLawCheck",
-                    severity="INFO",
-                    params={
-                        "field": col_name,
-                        "significance_level": 0.05
-                    },
-                    reason=f"Financial amount field follows Benford's Law ({confidence} confidence). Monitor for authenticity.",
-                    confidence=60.0
-                ))
+            # Check semantic confidence for this column
+            is_semantic_confident, semantic_reason = self._is_benford_semantic_confident(col_name, columns)
+
+            # Only emit BenfordLawCheck if semantic confidence is HIGH
+            # Low semantic confidence = informational only (shown in HTML but not as YAML validation)
+            if not is_semantic_confident:
+                logger.debug(f"Skipping BenfordLawCheck for '{col_name}' - semantic confidence is low ({semantic_reason})")
+                continue
+
+            # Generate nuanced reason text based on context
+            if semantic_reason == "structured_pricing":
+                reason_text = (
+                    f"First-digit frequencies deviate from Benford's Law (χ²={chi_square:.2f}, p={p_value:.4f}). "
+                    "This field appears to have structured pricing/tariffs; deviations may reflect pricing structure "
+                    "rather than data corruption. Treat as a weak signal and confirm with domain experts."
+                )
+            else:
+                reason_text = (
+                    f"First-digit frequencies deviate from Benford's Law (χ²={chi_square:.2f}, p={p_value:.4f}). "
+                    "For naturally occurring transactional datasets this can indicate anomalies, but for structured "
+                    "pricing or tariff-like fields it may simply reflect business rules. "
+                    "Treat this as a weak signal and confirm with domain experts."
+                )
+
+            # NOTE: BenfordLawCheck validation suggestions are intentionally disabled.
+            # Benford's Law analysis is performed and shown in reports for informational purposes,
+            # but automatic validation suggestions are not generated because:
+            # 1. Benford's Law has limited applicability (only for naturally occurring numeric data)
+            # 2. Many datasets legitimately don't follow Benford's Law (prices, IDs, measurements)
+            # 3. False positives are common and can cause confusion
+            # The ML findings section will still show Benford analysis results for review.
+            pass
 
         # ═══════════════════════════════════════════════════════════════
         # 3. CROSS-FIELD RELATIONSHIP VALIDATIONS
@@ -2795,15 +3099,25 @@ class DataProfiler:
                 # Only suggest range check for actual numeric measurements
                 if should_suggest_range:
                     if col.statistics.min_value is not None and col.statistics.max_value is not None:
+                        # Get semantic type for smarter range suggestions
+                        schema_org_type = None
+                        if col.semantic_info:
+                            schema_org_type = col.semantic_info.get('schema_org', {}).get('type', '')
+
+                        # Apply semantic-aware range expansion
+                        min_val, max_val, reason = self._calculate_smart_range(
+                            col.name, col.statistics.min_value, col.statistics.max_value, schema_org_type
+                        )
+
                         suggestions.append(ValidationSuggestion(
                             validation_type="RangeCheck",
                             severity="WARNING",
                             params={
                                 "field": col.name,
-                                "min_value": col.statistics.min_value,
-                                "max_value": col.statistics.max_value
+                                "min_value": min_val,
+                                "max_value": max_val
                             },
-                            reason=f"Values range from {col.statistics.min_value} to {col.statistics.max_value}",
+                            reason=reason,
                             confidence=90.0
                         ))
 
@@ -2812,52 +3126,100 @@ class DataProfiler:
                 valid_values = [item["value"] for item in col.statistics.top_values]
                 # Only suggest if we actually have valid values to check
                 if valid_values:
-                    suggestions.append(ValidationSuggestion(
-                        validation_type="ValidValuesCheck",
-                        severity="WARNING",
-                        params={
-                            "field": col.name,
-                            "valid_values": valid_values
-                        },
-                        reason=f"Low cardinality field with {col.statistics.unique_count} unique values",
-                        confidence=85.0
-                    ))
+                    # Check if this is a binary boolean field (0/1 or true/false)
+                    schema_org_type = None
+                    if col.semantic_info:
+                        schema_org_type = col.semantic_info.get('schema_org', {}).get('type', '')
+
+                    is_binary_flag = (
+                        col.statistics.unique_count == 2 and
+                        (schema_org_type == 'schema:Boolean' or
+                         set(str(v).lower() for v in valid_values) <= {'0', '1', 'true', 'false', 'yes', 'no', 'y', 'n'})
+                    )
+
+                    if is_binary_flag:
+                        # Use BooleanCheck for binary flags instead of ValidValuesCheck
+                        suggestions.append(ValidationSuggestion(
+                            validation_type="BooleanCheck",
+                            severity="WARNING",
+                            params={
+                                "field": col.name,
+                                "true_values": [1, "1", "true", "yes", "y", "True", "Yes", "Y"],
+                                "false_values": [0, "0", "false", "no", "n", "False", "No", "N"]
+                            },
+                            reason="Binary flag field (boolean values)",
+                            confidence=90.0
+                        ))
+                    else:
+                        suggestions.append(ValidationSuggestion(
+                            validation_type="ValidValuesCheck",
+                            severity="WARNING",
+                            params={
+                                "field": col.name,
+                                "valid_values": valid_values
+                            },
+                            reason=f"Low cardinality field with {col.statistics.unique_count} unique values",
+                            confidence=85.0
+                        ))
 
             # Unique key check for high cardinality
-            # CRITICAL FIX: Exclude amount/count/measurement/temporal fields from UniqueKeyCheck
-            # High cardinality in these fields is expected behavior, not indication of unique key
+            # CRITICAL: Only suggest UniqueKeyCheck for fields that are actually identifiers
+            # Use semantic classification to make smarter decisions
             if col.statistics.cardinality > 0.99 and row_count > 100:
-                semantic_type = getattr(col.statistics, 'semantic_type', None)
+                # Get semantic info from Schema.org/FIBO classification
+                schema_org_type = None
+                if col.semantic_info:
+                    schema_org_type = col.semantic_info.get('schema_org', {}).get('type', '')
+                    resolved_type = col.semantic_info.get('resolved', {}).get('primary_type', '')
 
-                # Exclude semantic types that naturally have high cardinality
-                # FIX: Added datetime/timestamp/date - timestamps are naturally unique but NOT primary keys
+                # Schema.org types that ARE likely unique identifiers
+                identifier_types = {'schema:identifier', 'schema:productID', 'schema:sku',
+                                   'schema:serialNumber', 'schema:accountId'}
+
+                # Schema.org types that are NOT unique identifiers (even with high cardinality)
+                exclude_schema_types = {'schema:name', 'schema:Text', 'schema:description',
+                                       'schema:MonetaryAmount', 'schema:QuantitativeValue',
+                                       'schema:DateTime', 'schema:Date', 'schema:Time',
+                                       'schema:PropertyValue', 'schema:Number'}
+
+                # Legacy exclusion types for backwards compatibility
+                semantic_type = getattr(col.statistics, 'semantic_type', None)
                 exclude_types = {'amount', 'count', 'measurement', 'float', 'decimal',
                                 'datetime', 'timestamp', 'date'}
 
-                # Also check inferred_type for temporal fields
+                # Check inferred_type for temporal fields
                 inferred_type = col.type_info.inferred_type
                 is_temporal = inferred_type == 'date' or getattr(col.type_info, 'is_temporal', False)
 
-                # Also exclude fields with names suggesting measurements or timestamps (case-insensitive)
+                # Measurement keyword check
                 measurement_keywords = ['amount', 'price', 'cost', 'value', 'balance', 'total',
                                        'sum', 'count', 'quantity', 'measure', 'metric',
                                        'timestamp', 'datetime', 'time', 'date']
                 field_name_lower = col.name.lower()
                 is_measurement_field = any(keyword in field_name_lower for keyword in measurement_keywords)
 
-                # Only suggest UniqueKeyCheck if NOT a measurement/temporal field
-                if semantic_type not in exclude_types and not is_measurement_field and not is_temporal:
+                # Decision logic using semantic classification
+                is_identifier = schema_org_type in identifier_types
+                is_excluded_type = (schema_org_type in exclude_schema_types or
+                                   semantic_type in exclude_types or
+                                   is_measurement_field or is_temporal)
+
+                # Only suggest UniqueKeyCheck if semantically an identifier OR high cardinality + not excluded
+                if is_identifier or (not is_excluded_type):
+                    confidence = 95.0 if is_identifier else 85.0
+                    reason = ("Field classified as identifier type" if is_identifier
+                             else "Field appears to be a unique identifier (high cardinality)")
                     suggestions.append(ValidationSuggestion(
                         validation_type="UniqueKeyCheck",
                         severity="WARNING",
                         params={
                             "fields": [col.name]
                         },
-                        reason="Field appears to be a unique identifier (high cardinality, non-measurement type)",
-                        confidence=95.0
+                        reason=reason,
+                        confidence=confidence
                     ))
                 else:
-                    logger.debug(f"Skipping UniqueKeyCheck for '{col.name}' - detected as measurement/temporal field (semantic_type={semantic_type}, is_temporal={is_temporal})")
+                    logger.debug(f"Skipping UniqueKeyCheck for '{col.name}' - schema_org={schema_org_type}, is_temporal={is_temporal}")
 
             # Date format check
             if col.type_info.inferred_type == "date":

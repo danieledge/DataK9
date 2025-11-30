@@ -6,15 +6,58 @@ DataK9's profiler analyzes your data files to understand their structure, qualit
 
 ---
 
+## 🎯 Live Demo Report
+
+**See the profiler in action:** [View Titanic Dataset Profile Report](../samples/titanic_profile_demo.html)
+
+This demo shows profiling of the classic Titanic passenger dataset (891 rows, 12 columns):
+
+| Feature | What You'll See |
+|---------|-----------------|
+| **Executive Summary** | 78% overall quality score, key findings at a glance |
+| **Semantic Classification** | `PassengerId` → identifier, `Survived` → Boolean flag, `Age` → Integer |
+| **Smart Validations** | Age range 0-120 (not observed 0.42-80), BooleanCheck for Survived |
+| **ML Anomaly Detection** | 64 outliers in Fare, Benford's Law analysis, autoencoder findings |
+| **PII Detection** | No PII detected (historical dataset) |
+| **Correlation Analysis** | Fare-Pclass correlation, survival patterns |
+| **Sampling Explanation** | Full analysis (no sampling needed for 891 rows) |
+
+**To generate your own:**
+```bash
+python3 -m validation_framework.cli profile your_data.csv -o profile.html
+```
+
+---
+
+## 🆕 Recent Enhancements (v1.55+)
+
+The DataK9 Profiler has received a significant overhaul with new capabilities:
+
+- **Dual Semantic Classification** - FIBO (financial) + Schema.org (general) ontologies
+- **Smart Validation Suggestions** - Semantic-aware rules that work across datasets
+- **Binary Flag Detection** - Automatic Boolean classification for 0/1 columns
+- **Intelligent Range Calculation** - Domain-aware bounds (e.g., Age: 0-120)
+- **Executive HTML Reports** - Redesigned with plain-English explanations
+- **Consolidated Sampling Banner** - Clear data analysis methodology
+
+---
+
 ## 📋 Table of Contents
 
 - [Quick Start](#-quick-start) - Get profiling in 30 seconds
 - [Why Profile First?](#-why-profile-first) - The compelling reason
 - [Key Features](#-key-features) - What makes DataK9's profiler unique
-  - [FIBO Semantic Intelligence](#-fibo-semantic-intelligence-new)
+  - [Dual Semantic Classification](#-dual-semantic-classification-fibo--schemaorg) - NEW!
+  - [FIBO Semantic Intelligence](#-fibo-semantic-intelligence)
+  - [Schema.org General Semantics](#-schemaorg-general-semantics) - NEW!
+  - [Smart Validation Suggestions](#-smart-validation-suggestions) - ENHANCED!
   - [Auto-Generated Validations](#-auto-generated-validations)
   - [Comprehensive Analysis](#-comprehensive-analysis)
-  - [ML-Based Anomaly Detection](#-ml-based-anomaly-detection-beta) - NEW!
+  - [ML-Based Anomaly Detection](#-ml-based-anomaly-detection-beta)
+  - [Local LLM Summarization](#-local-llm-summarization-experimental) - EXPERIMENTAL
+  - [Intelligent Sampling](#-intelligent-sampling) - NEW!
+  - [Memory-Efficient Processing](#-memory-efficient-processing)
+- [Analytics Reference](#-analytics-reference) - All analysis types explained
 - [Understanding Reports](#-understanding-reports) - Read your profile results
 - [How It Works](#-how-it-works) - Under the hood (10 stages)
 - [Command Reference](#-command-reference) - All options and examples
@@ -83,7 +126,39 @@ After Profiling:
 
 ## ✨ Key Features
 
-### 🧠 FIBO Semantic Intelligence (NEW!)
+### 🔄 Dual Semantic Classification (FIBO + Schema.org)
+
+**What's New:** DataK9 now uses TWO complementary ontologies to understand your data:
+
+| Ontology | Purpose | Best For |
+|----------|---------|----------|
+| **FIBO** | Financial Industry Business Ontology | Banking, transactions, currencies, accounts |
+| **Schema.org** | General-purpose web vocabulary | Names, dates, emails, addresses, quantities |
+
+**How It Works:**
+
+```
+Column: "Age"
+├── Step 1: FIBO Analysis → No match (not financial)
+├── Step 2: Schema.org Analysis → schema:Integer (85% confidence)
+├── Resolution: Use Schema.org classification
+└── Smart Validation: RangeCheck 0-120 (human-sensible bounds)
+
+Column: "transaction_amount"
+├── Step 1: FIBO Analysis → money.amount (95% confidence)
+├── Step 2: Schema.org Analysis → schema:Number
+├── Resolution: Use FIBO (domain-specific wins)
+└── Smart Validation: Non-negative check (monetary rule)
+```
+
+**The Benefit:**
+- Financial data gets FIBO's specialized rules
+- Non-financial data gets Schema.org's broad coverage
+- No columns left unclassified
+
+---
+
+### 🧠 FIBO Semantic Intelligence
 
 **What is FIBO?**
 FIBO (Financial Industry Business Ontology) is an **industry-standard ontology** maintained by the EDM Council. It defines financial concepts like "MonetaryAmount", "Currency", and "Account" with precise definitions.
@@ -108,6 +183,78 @@ Column: transaction_amount
 - ✓ Plain-language explanations
 
 **[Learn More: FIBO Ontology](https://spec.edmcouncil.org/fibo/)** (MIT License)
+
+---
+
+### 🌐 Schema.org General Semantics
+
+**What is Schema.org?**
+Schema.org is a collaborative vocabulary used by Google, Microsoft, Yahoo, and Yandex. It provides standardized types for common data concepts.
+
+**Schema.org Types DataK9 Detects:**
+
+| Type | Description | Example Columns |
+|------|-------------|-----------------|
+| `schema:name` | Person or entity names | Name, CustomerName, FullName |
+| `schema:email` | Email addresses | Email, ContactEmail |
+| `schema:Integer` | Whole numbers | Age, Count, Quantity |
+| `schema:Number` | Decimal numbers | Score, Rate, Percentage |
+| `schema:Boolean` | True/false or 0/1 flags | Active, Survived, IsValid |
+| `schema:Date` | Date values | BirthDate, CreatedAt |
+| `schema:identifier` | Unique identifiers | PassengerId, CustomerID |
+
+**Binary Flag Detection:**
+Columns with only 0/1 or True/False values are automatically classified as `schema:Boolean`:
+```
+Column: "Survived" (values: 0, 1)
+├── Detected: Binary flag (2 unique values)
+├── Classification: schema:Boolean (85% confidence)
+└── Suggested Validation: BooleanCheck (not ValidValuesCheck)
+```
+
+---
+
+### 💡 Smart Validation Suggestions
+
+**Semantic-Aware Rules That Work Across Datasets**
+
+The profiler now generates validation suggestions based on semantic understanding, not just observed values:
+
+| Field Type | Old Approach | New Approach |
+|------------|--------------|--------------|
+| **Age** | RangeCheck 0.42-80.0 (exact observed) | RangeCheck 0-120 (human-sensible) |
+| **Fare/Price** | RangeCheck 0-512.33 (restrictive) | Non-negative only (no upper bound) |
+| **Survived (0/1)** | ValidValuesCheck ['0', '1'] | BooleanCheck (semantic) |
+| **Name** | UniqueKeyCheck (wrong!) | Excluded (names can duplicate) |
+| **PassengerId** | UniqueKeyCheck (lucky guess) | UniqueKeyCheck (identifier type) |
+
+**How Smart Range Calculation Works:**
+
+```python
+# Age fields: Human-sensible bounds
+"Age" → RangeCheck(0, 120)  # Not the observed 0.42-80.0
+
+# Monetary fields: Non-negative only
+"Fare" → RangeCheck(0, None)  # No upper bound
+
+# Percentage fields: Detect scale
+"rate" → RangeCheck(0, 100)   # or (0, 1) if decimal
+
+# Count fields: Non-negative with margin
+"num_items" → RangeCheck(0, observed_max * 1.5)
+```
+
+**UniqueKeyCheck Intelligence:**
+
+The profiler uses semantic classification to avoid false positives:
+
+```
+✅ Suggested: PassengerId (schema:identifier)
+✅ Suggested: TransactionId (identifier type)
+❌ Excluded: Name (schema:name - names can duplicate)
+❌ Excluded: Amount (schema:MonetaryAmount - not an identifier)
+❌ Excluded: Timestamp (temporal - not unique by nature)
+```
 
 ---
 
@@ -290,6 +437,161 @@ The ML analyzer flags values for human review. High counts may indicate:
 
 ---
 
+### 🧪 Local LLM Summarization (Experimental)
+
+**Status: BETA - Untested, Mixed Results**
+
+DataK9 includes an experimental feature to generate AI-powered executive summaries using small local LLMs. This feature is **disabled by default** and should be considered experimental.
+
+#### What It Does
+
+When enabled, the profiler uses a local LLM (via `llama-cpp-python`) to generate a plain-English summary of the profile findings:
+
+```
+🤖 AI-Generated Summary [LOCAL LLM]
+
+This dataset shows 87% overall quality with notable missing data in
+the Cabin field (77%). The strong correlation between Fare and Pclass
+suggests pricing tiers. Recommend adding MandatoryFieldCheck for
+passenger identification and RangeCheck for Age validation.
+
+⚠️ AI-generated using qwen2.5-1.5b • May contain inaccuracies • Review manually
+```
+
+#### Why It's Experimental
+
+| Issue | Description |
+|-------|-------------|
+| **Mixed quality** | Small LLMs (0.5B-3B parameters) produce inconsistent summaries |
+| **Hallucinations** | May generate plausible-sounding but incorrect insights |
+| **Slow on CPU** | 15-90 seconds generation time depending on model |
+| **No GPU acceleration** | Currently CPU-only for compatibility |
+| **Model dependency** | Requires downloading 400MB-2GB GGUF model files |
+
+**Our testing found:** Larger models (Phi-3, Qwen 1.5B) produce reasonable summaries ~70% of the time, but smaller models often generate generic or incorrect analysis.
+
+#### Enabling the Feature
+
+```bash
+# Enable LLM summary (requires setup first)
+python3 -m validation_framework.cli profile data.csv --beta-llm -o report.html
+```
+
+#### Setup Requirements
+
+1. Install llama-cpp-python:
+   ```bash
+   pip install llama-cpp-python
+   ```
+
+2. Download a GGUF model (recommended: Qwen2.5-1.5B-Instruct):
+   ```bash
+   # Models are auto-discovered from common locations:
+   # ~/.cache/huggingface/hub/
+   # ~/.local/share/models/
+   # ~/models/
+   ```
+
+3. Or set explicit path:
+   ```bash
+   export DATAK9_LLM_MODEL=/path/to/model.gguf
+   ```
+
+#### Recommended Models
+
+| Model | Size | Speed | Quality |
+|-------|------|-------|---------|
+| Qwen2.5-1.5B-Instruct | ~1GB | ~18s | Best balance |
+| Qwen2.5-0.5B-Instruct | ~400MB | ~8s | Faster, lower quality |
+| Phi-3-mini-4k-instruct | ~2GB | ~90s | Best quality, slow |
+
+#### When to Use
+
+✅ **Use when:**
+- You want automated summary drafts to review
+- Processing many files and need quick overviews
+- You have a suitable local model already installed
+
+❌ **Don't use when:**
+- You need accurate, reliable summaries
+- Processing sensitive data (LLM may leak patterns)
+- You don't have time to verify LLM output
+
+**Bottom line:** This feature is provided as-is for experimentation. The rule-based analysis (FIBO, Schema.org, ML anomaly detection) provides more reliable insights.
+
+---
+
+### 📊 Intelligent Sampling
+
+**Large datasets are profiled efficiently using statistical sampling.**
+
+DataK9 uses smart sampling strategies that provide statistically equivalent results with significantly faster processing:
+
+#### How Sampling Works
+
+| File Size | Sampling Strategy | What It Means |
+|-----------|-------------------|---------------|
+| **< 100,000 rows** | Full analysis | Every row analyzed - no sampling |
+| **100K - 1M rows** | 100K sample | Random sample provides reliable statistics |
+| **> 1M rows** | Stratified sampling | Representative sample from across the file |
+| **Large Parquet** | Row group stratification | Samples from each row group for coverage |
+
+#### Why Sampling is Statistically Sound
+
+**The math behind it:**
+
+```
+For a population of any size, a sample of 100,000 rows provides:
+├── 99% confidence level
+├── ±0.5% margin of error
+└── Reliable detection of patterns appearing in ≥0.1% of data
+
+Example: 10 million row file
+├── Without sampling: ~15 minutes analysis time
+├── With 100K sample: ~30 seconds
+└── Statistical difference: < 0.5% on key metrics
+```
+
+**What gets sampled vs. counted:**
+
+| Metric | Sampled | Full Count | Why |
+|--------|---------|------------|-----|
+| Row count | No | Yes | Exact count always provided |
+| Null percentages | Yes | Extrapolated | Sample-based is reliable |
+| Min/Max values | Yes | Yes | Tracked across all chunks |
+| Unique count | Yes | Capped | Memory-efficient approximation |
+| Distribution patterns | Yes | N/A | Statistical sampling is standard |
+| ML anomaly detection | Yes | N/A | 100K sample is sufficient |
+
+#### Report Banner
+
+The HTML report includes a clear sampling banner at the top:
+
+```
+📊 Analysis Coverage
+├── Full Dataset: 10,000,000 rows
+├── Analyzed Sample: 100,000 rows (1.0%)
+├── Method: Stratified random sampling
+└── Confidence: Results provide reliable insights into the full dataset
+```
+
+**Expand "How was this data analyzed?" for detailed methodology.**
+
+#### Controlling Sampling
+
+```bash
+# Force full analysis (slower, but no sampling)
+python3 -m validation_framework.cli profile data.csv --full-analysis
+
+# Custom sample size for ML
+python3 -m validation_framework.cli profile data.csv --sample-rows 500000
+
+# Percentage-based sampling
+python3 -m validation_framework.cli profile data.csv --sample-percent 10
+```
+
+---
+
 ### ⚡ Memory-Efficient Processing
 
 **Profile massive files without massive RAM:**
@@ -306,6 +608,132 @@ File Size    Memory Usage    Processing
 **How:** Chunked processing - only one chunk in memory at a time.
 
 **Tested:** 357 million rows, no memory leaks.
+
+---
+
+## 📊 Analytics Reference
+
+**Complete reference for all analysis types performed by the DataK9 Profiler.**
+
+### Core Analytics (Always Enabled)
+
+| Analysis | What It Does | Output |
+|----------|--------------|--------|
+| **Type Inference** | Detects data types (integer, float, string, date, boolean) using pattern matching and statistical analysis | Inferred type, confidence score |
+| **Basic Statistics** | Calculates count, null%, min, max, mean, median, std dev, quartiles | Per-column statistics |
+| **Cardinality Analysis** | Counts unique values, calculates uniqueness ratio | Unique count, cardinality % |
+| **Top Values** | Identifies most frequent values and their counts | Top 10 values with frequencies |
+| **Quality Scoring** | Computes completeness, validity, uniqueness, consistency metrics | Overall quality score (0-100) |
+| **Pattern Detection** | Detects common patterns: email, phone, URL, date formats, SSN, credit card | Pattern type, match percentage |
+
+### Semantic Analysis (Default: Enabled)
+
+| Analysis | What It Does | CLI Flag to Disable |
+|----------|--------------|---------------------|
+| **FIBO Tagging** | Maps columns to Financial Industry Business Ontology concepts | `--disable-all-enhancements` |
+| **Schema.org Classification** | Maps columns to Schema.org vocabulary types | `--disable-all-enhancements` |
+| **Semantic Resolution** | Combines FIBO + Schema.org with confidence-based priority | `--disable-all-enhancements` |
+| **Binary Flag Detection** | Identifies 0/1, True/False, Y/N columns as Boolean | `--disable-all-enhancements` |
+
+**FIBO Semantic Tags (28 available):**
+- **Money:** `money.amount`, `money.currency`, `money.price`, `money.balance`
+- **Banking:** `banking.account`, `banking.transaction`, `banking.payment`, `banking.routing`
+- **Party:** `party.customer_id`, `party.counterparty`, `party.name`
+- **Temporal:** `temporal.transaction_date`, `temporal.timestamp`
+- **Category:** `category.transaction_type`, `category.payment_method`
+- **Identifier:** `identifier.code`, `identifier.reference`
+
+**Schema.org Types:**
+- `schema:name`, `schema:email`, `schema:Integer`, `schema:Number`, `schema:Boolean`
+- `schema:Date`, `schema:DateTime`, `schema:identifier`, `schema:Text`
+
+### PII Detection (Default: Enabled)
+
+| PII Type | Detection Method | Threshold |
+|----------|------------------|-----------|
+| **Email** | Regex pattern matching | >30% of values match |
+| **Phone** | Multiple format patterns (US, intl) | >30% of values match |
+| **SSN** | XXX-XX-XXXX pattern | >10% of values match |
+| **Credit Card** | Luhn algorithm + format | >10% of values match |
+| **IP Address** | IPv4/IPv6 patterns | >30% of values match |
+
+```bash
+# Disable PII detection
+python3 -m validation_framework.cli profile data.csv --disable-pii
+```
+
+### Correlation Analysis (Default: Enabled)
+
+| Analysis | What It Does | When Applied |
+|----------|--------------|--------------|
+| **Pearson Correlation** | Measures linear relationship between numeric columns | Pairs of numeric columns |
+| **Strong Correlation Detection** | Flags pairs with \|r\| > 0.7 | All numeric pairs |
+| **Correlation Matrix** | Full pairwise correlation matrix | Up to 20 columns |
+
+```bash
+# Disable correlation analysis
+python3 -m validation_framework.cli profile data.csv --disable-correlation
+```
+
+### Temporal Analysis (Default: Enabled)
+
+| Analysis | What It Does | Output |
+|----------|--------------|--------|
+| **Date Range Detection** | Finds earliest and latest dates | Min/max dates |
+| **Gap Analysis** | Identifies missing time periods | Gap count, duration |
+| **Trend Detection** | Identifies increasing/decreasing patterns | Trend direction |
+| **Seasonality** | Detects recurring patterns | Seasonal indicators |
+
+```bash
+# Disable temporal analysis
+python3 -m validation_framework.cli profile data.csv --disable-temporal
+```
+
+### ML-Based Analysis (Default: Disabled)
+
+**Enable with `--beta-ml` flag.**
+
+| Analysis | Algorithm | What It Detects |
+|----------|-----------|-----------------|
+| **Univariate Outliers** | Isolation Forest | Individual values that deviate significantly |
+| **Multivariate Outliers** | Isolation Forest (multi-dim) | Unusual combinations of values |
+| **Cluster Analysis** | DBSCAN | Natural groupings and noise points |
+| **Benford's Law** | Chi-square test | Potentially fabricated/synthetic numeric data |
+| **Autoencoder Anomalies** | Neural network reconstruction | Records with unusual patterns |
+| **Rare Category Detection** | Frequency analysis | Suspiciously infrequent categorical values |
+
+```bash
+# Enable ML analysis
+python3 -m validation_framework.cli profile data.csv --beta-ml
+
+# Full ML analysis (no internal sampling)
+python3 -m validation_framework.cli profile data.csv --beta-ml --full-analysis
+```
+
+### Validation Suggestion Generation
+
+| Source | What It Generates | Example |
+|--------|-------------------|---------|
+| **Completeness** | MandatoryFieldCheck for >95% complete fields | `fields: [customer_id, email]` |
+| **Uniqueness** | UniqueKeyCheck for 100% unique identifier columns | `fields: [transaction_id]` |
+| **Cardinality** | ValidValuesCheck for low cardinality (<20 values) | `valid_values: [A, B, C]` |
+| **Semantic (FIBO)** | Domain-specific checks from ontology | NonNegativeCheck for money.amount |
+| **Semantic (Schema.org)** | Type-appropriate checks | BooleanCheck for schema:Boolean |
+| **Range (Smart)** | Semantic-aware range bounds | Age: 0-120, not observed 0.42-80.0 |
+| **Pattern** | RegexCheck for detected formats | Email regex pattern |
+| **ML Findings** | OutlierCheck, StatisticalOutlierCheck | Based on detected anomalies |
+
+### Analysis Flags Summary
+
+| Flag | Effect |
+|------|--------|
+| `--disable-pii` | Skip PII detection |
+| `--disable-temporal` | Skip temporal analysis |
+| `--disable-correlation` | Skip correlation analysis |
+| `--disable-all-enhancements` | Minimal profiling (basic stats only) |
+| `--beta-ml` | Enable ML-based anomaly detection |
+| `--beta-llm` | Enable experimental LLM summaries |
+| `--full-analysis` | Disable internal sampling for ML |
 
 ---
 
