@@ -6994,6 +6994,103 @@ the largest difference between classes, which could be useful for predictive mod
 
                 # Target columns get a highlighted border and badge
                 if is_target:
+                    # Get feature importance data for this target
+                    target_feature_analysis = ml_findings.get('target_feature_analysis', {}).get(col, {})
+                    feature_associations = target_feature_analysis.get('feature_associations', [])[:5]
+
+                    # Build feature importance bars
+                    feature_bars = ''
+                    if feature_associations:
+                        for fa in feature_associations:
+                            feat_name = fa.get('feature', '')[:15]  # Truncate long names
+                            strength = fa.get('association_strength', 0)
+                            bar_width = min(100, strength * 100)
+                            bar_color = '#10b981' if strength >= 0.3 else '#f59e0b' if strength >= 0.15 else '#6b7280'
+                            feature_bars += f'''
+                                <div style="display: flex; align-items: center; margin-bottom: 6px;">
+                                    <span style="font-size: 0.75em; color: var(--text-secondary); width: 80px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{fa.get('feature', '')}">{feat_name}</span>
+                                    <div style="flex: 1; height: 8px; background: rgba(255,255,255,0.1); border-radius: 4px; margin: 0 8px; overflow: hidden;">
+                                        <div style="height: 100%; width: {bar_width}%; background: {bar_color}; border-radius: 4px;"></div>
+                                    </div>
+                                    <span style="font-size: 0.7em; color: var(--text-muted); width: 35px; text-align: right;">{strength:.2f}</span>
+                                </div>'''
+
+                    feature_importance_card = ''
+                    if feature_bars:
+                        feature_importance_card = f'''
+                        <div style="flex: 1; min-width: 280px; background: var(--bg-card); border-radius: 8px; padding: 16px; border: 2px solid #f59e0b; position: relative;">
+                            <div style="position: absolute; top: -10px; left: 12px; background: linear-gradient(135deg, #10b981, #059669); color: white; font-size: 0.7em; font-weight: 600; padding: 2px 8px; border-radius: 4px;">📊 FEATURE IMPORTANCE</div>
+                            <div style="margin-top: 8px;">
+                                <div style="font-size: 0.85em; color: var(--text-primary); margin-bottom: 12px; font-weight: 500;">Top Predictors for {col}</div>
+                                {feature_bars}
+                            </div>
+                            <div style="font-size: 0.7em; color: var(--text-muted); margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--border-color);">
+                                Higher values = stronger association with target
+                            </div>
+                        </div>'''
+
+                    # ML Readiness assessment
+                    ml_readiness_items = []
+                    ml_issues = []
+
+                    # Check class balance
+                    if is_binary and len(classes) >= 2:
+                        class_counts_sorted = sorted([c['count'] for c in classes], reverse=True)
+                        if len(class_counts_sorted) >= 2:
+                            minority_ratio = class_counts_sorted[-1] / class_counts_sorted[0]
+                            if minority_ratio < 0.1:
+                                ml_issues.append(('Severe class imbalance', f'Minority class is only {minority_ratio*100:.1f}% of majority'))
+                            elif minority_ratio < 0.3:
+                                ml_issues.append(('Moderate imbalance', 'Consider SMOTE or class weights'))
+                            else:
+                                ml_readiness_items.append(('✓ Class balance', 'OK for training'))
+
+                    # Check if we have enough features
+                    if feature_associations:
+                        strong_features = sum(1 for fa in feature_associations if fa.get('association_strength', 0) >= 0.2)
+                        if strong_features >= 2:
+                            ml_readiness_items.append(('✓ Feature signal', f'{strong_features} predictive features'))
+                        elif strong_features == 1:
+                            ml_issues.append(('Limited features', 'Only 1 strong predictor found'))
+                        else:
+                            ml_issues.append(('Weak signal', 'No strong predictors detected'))
+
+                    # Check sample size
+                    if total >= 1000:
+                        ml_readiness_items.append(('✓ Sample size', f'{total:,} rows sufficient'))
+                    elif total >= 100:
+                        ml_issues.append(('Small dataset', f'Only {total:,} rows - may overfit'))
+                    else:
+                        ml_issues.append(('Very small', f'{total:,} rows - insufficient'))
+
+                    # Build ML readiness card
+                    readiness_color = '#10b981' if len(ml_issues) == 0 else '#f59e0b' if len(ml_issues) <= 1 else '#ef4444'
+                    readiness_label = 'READY' if len(ml_issues) == 0 else 'CAUTION' if len(ml_issues) <= 1 else 'ISSUES'
+
+                    readiness_items_html = ''
+                    for label, detail in ml_readiness_items:
+                        readiness_items_html += f'<div style="font-size: 0.8em; color: #10b981; margin-bottom: 4px;">{label}: <span style="color: var(--text-muted);">{detail}</span></div>'
+                    for label, detail in ml_issues:
+                        readiness_items_html += f'<div style="font-size: 0.8em; color: #ef4444; margin-bottom: 4px;">⚠ {label}: <span style="color: var(--text-muted);">{detail}</span></div>'
+
+                    # Recommended model type
+                    model_rec = 'Logistic Regression, Random Forest' if is_binary else 'Multi-class Classifier'
+                    if total < 500:
+                        model_rec = 'Simple models (avoid deep learning)'
+
+                    ml_readiness_card = f'''
+                    <div style="flex: 1; min-width: 280px; background: var(--bg-card); border-radius: 8px; padding: 16px; border: 2px solid {readiness_color}; position: relative;">
+                        <div style="position: absolute; top: -10px; left: 12px; background: linear-gradient(135deg, {readiness_color}, {readiness_color}dd); color: white; font-size: 0.7em; font-weight: 600; padding: 2px 8px; border-radius: 4px;">🔬 ML {readiness_label}</div>
+                        <div style="margin-top: 8px;">
+                            <div style="font-size: 0.85em; color: var(--text-primary); margin-bottom: 10px; font-weight: 500;">Data Quality for ML</div>
+                            {readiness_items_html}
+                            <div style="margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--border-color);">
+                                <div style="font-size: 0.7em; color: var(--text-muted);">Suggested: {model_rec}</div>
+                            </div>
+                        </div>
+                    </div>'''
+                    feature_importance_card += ml_readiness_card
+
                     chart_html = f'''
                     <div style="flex: 1; min-width: 280px; background: var(--bg-card); border-radius: 8px; padding: 16px; border: 2px solid #f59e0b; position: relative;">
                         <div style="position: absolute; top: -10px; left: 12px; background: linear-gradient(135deg, #f59e0b, #d97706); color: white; font-size: 0.7em; font-weight: 600; padding: 2px 8px; border-radius: 4px;">🎯 ML TARGET</div>
@@ -7008,7 +7105,7 @@ the largest difference between classes, which could be useful for predictive mod
                             Total: {total:,}
                         </div>
                     </div>'''
-                    target_charts += chart_html
+                    target_charts += chart_html + feature_importance_card
                 else:
                     chart_html = f'''
                     <div style="flex: 1; min-width: 280px; background: var(--bg-card); border-radius: 8px; padding: 16px; border: 1px solid var(--border-subtle);">

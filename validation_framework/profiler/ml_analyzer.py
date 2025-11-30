@@ -513,16 +513,22 @@ class ChunkedMLAccumulator:
 
                     if is_numeric:
                         # 3. Numeric stats by target class (for target-class distribution analysis)
-                        valid_numeric = feature_subset.dropna()
-                        if len(valid_numeric) > 0:
-                            if target_val_str not in self.numeric_by_target[target_col][feature_col]:
-                                self.numeric_by_target[target_col][feature_col][target_val_str] = {
-                                    'sum': 0.0, 'sum_sq': 0.0, 'count': 0
-                                }
-                            stats = self.numeric_by_target[target_col][feature_col][target_val_str]
-                            stats['sum'] += float(valid_numeric.sum())
-                            stats['sum_sq'] += float((valid_numeric ** 2).sum())
-                            stats['count'] += len(valid_numeric)
+                        # Coerce to numeric to handle edge cases
+                        try:
+                            numeric_subset = pd.to_numeric(feature_subset, errors='coerce')
+                            valid_numeric = numeric_subset.dropna()
+                            if len(valid_numeric) > 0:
+                                if target_val_str not in self.numeric_by_target[target_col][feature_col]:
+                                    self.numeric_by_target[target_col][feature_col][target_val_str] = {
+                                        'sum': 0.0, 'sum_sq': 0.0, 'count': 0
+                                    }
+                                stats = self.numeric_by_target[target_col][feature_col][target_val_str]
+                                stats['sum'] += float(valid_numeric.sum())
+                                stats['sum_sq'] += float((valid_numeric ** 2).sum())
+                                stats['count'] += len(valid_numeric)
+                        except (ValueError, TypeError):
+                            # Fall back to treating as categorical if numeric conversion fails
+                            pass
                     else:
                         # 4. Categorical co-occurrence with target
                         if target_val_str not in self.target_feature_counts[target_col][feature_col]:
@@ -552,7 +558,11 @@ class ChunkedMLAccumulator:
                 if num_col not in self.correlation_ratio_stats[cat_col]:
                     self.correlation_ratio_stats[cat_col][num_col] = {}
 
-                num_series = chunk[num_col]
+                # Coerce to numeric to handle edge cases with mixed types
+                try:
+                    num_series = pd.to_numeric(chunk[num_col], errors='coerce')
+                except (ValueError, TypeError):
+                    continue
 
                 for cat_val in cat_series.unique():
                     if pd.isna(cat_val):
@@ -567,10 +577,13 @@ class ChunkedMLAccumulator:
                     mask = cat_series == cat_val
                     valid_numeric = num_series[mask].dropna()
                     if len(valid_numeric) > 0:
-                        stats = self.correlation_ratio_stats[cat_col][num_col][cat_val_str]
-                        stats['sum'] += float(valid_numeric.sum())
-                        stats['sum_sq'] += float((valid_numeric ** 2).sum())
-                        stats['count'] += len(valid_numeric)
+                        try:
+                            stats = self.correlation_ratio_stats[cat_col][num_col][cat_val_str]
+                            stats['sum'] += float(valid_numeric.sum())
+                            stats['sum_sq'] += float((valid_numeric ** 2).sum())
+                            stats['count'] += len(valid_numeric)
+                        except (ValueError, TypeError):
+                            pass
 
     def _reservoir_sample(self, chunk: pd.DataFrame) -> None:
         """Reservoir sampling for autoencoder training data.
@@ -1871,6 +1884,148 @@ class MLAnalyzer:
 
         return results
 
+    def _compute_target_feature_analysis_direct(self, df: pd.DataFrame) -> Dict[str, Any]:
+        """
+        Compute target-feature association analysis directly from DataFrame.
+
+        For each detected target column, calculate association strength with all
+        other features using correlation (numeric) and Cramér's V approximation (categorical).
+
+        Args:
+            df: DataFrame to analyze
+
+        Returns:
+            Dictionary with feature associations per target column
+        """
+        results = {}
+
+        for target_col in self.detected_targets:
+            if target_col not in df.columns:
+                continue
+
+            target_result = {
+                "target_column": target_col,
+                "target_distribution": {},
+                "feature_associations": [],
+                "total_rows_analyzed": 0,
+                "interpretation": ""
+            }
+
+            # Get target values
+            target_series = df[target_col].dropna()
+            if len(target_series) < 50:  # Need minimum sample
+                continue
+
+            target_result["total_rows_analyzed"] = len(target_series)
+
+            # Get target distribution
+            target_counts = target_series.value_counts()
+            total = len(target_series)
+            for val, count in target_counts.head(10).items():
+                target_result["target_distribution"][str(val)] = {
+                    "count": int(count),
+                    "percentage": round(count / total * 100, 2)
+                }
+
+            # Analyze each feature
+            for col in df.columns:
+                if col == target_col:
+                    continue
+
+                try:
+                    # Get feature series (aligned with target)
+                    feature_series = df.loc[target_series.index, col]
+
+                    # Determine if numeric or categorical
+                    is_numeric = pd.api.types.is_numeric_dtype(feature_series)
+
+                    if is_numeric:
+                        # Numeric: compute correlation with target
+                        # Convert target to numeric if binary (0/1)
+                        target_numeric = pd.to_numeric(target_series, errors='coerce')
+                        feature_numeric = pd.to_numeric(feature_series, errors='coerce')
+
+                        # Get valid pairs
+                        valid_mask = target_numeric.notna() & feature_numeric.notna()
+                        if valid_mask.sum() < 30:
+                            continue
+
+                        # Compute point-biserial correlation (or Pearson if both numeric)
+                        correlation = target_numeric[valid_mask].corr(feature_numeric[valid_mask])
+                        if pd.isna(correlation):
+                            continue
+
+                        association_strength = abs(correlation)
+                        association_type = "numeric_correlation"
+
+                    else:
+                        # Categorical: compute Cramér's V approximation
+                        # Create contingency table
+                        contingency = pd.crosstab(target_series, feature_series)
+
+                        if contingency.size < 4:  # Need at least 2x2
+                            continue
+
+                        # Chi-square approximation for Cramér's V
+                        n = contingency.sum().sum()
+                        chi2 = 0
+                        row_sums = contingency.sum(axis=1)
+                        col_sums = contingency.sum(axis=0)
+
+                        for i, row in enumerate(contingency.index):
+                            for j, col_name in enumerate(contingency.columns):
+                                observed = contingency.iloc[i, j]
+                                expected = (row_sums.iloc[i] * col_sums.iloc[j]) / n
+                                if expected > 0:
+                                    chi2 += ((observed - expected) ** 2) / expected
+
+                        # Cramér's V
+                        k = min(len(contingency.index), len(contingency.columns))
+                        if k > 1 and n > 0:
+                            cramers_v = (chi2 / (n * (k - 1))) ** 0.5
+                            association_strength = min(1.0, cramers_v)  # Cap at 1.0
+                        else:
+                            continue
+
+                        association_type = "categorical_cramers_v"
+
+                    # Only include meaningful associations
+                    if association_strength >= 0.05:
+                        target_result["feature_associations"].append({
+                            "feature": col,
+                            "association_strength": round(association_strength, 3),
+                            "type": association_type
+                        })
+
+                except Exception:
+                    # Skip problematic columns
+                    continue
+
+            # Sort by strength and keep top 10
+            target_result["feature_associations"].sort(
+                key=lambda x: x.get("association_strength", 0), reverse=True
+            )
+            target_result["feature_associations"] = target_result["feature_associations"][:10]
+
+            # Generate interpretation
+            if target_result["feature_associations"]:
+                top_feat = target_result["feature_associations"][0]
+                strength = top_feat["association_strength"]
+                strength_word = "strong" if strength >= 0.3 else "moderate" if strength >= 0.15 else "weak"
+                target_result["interpretation"] = (
+                    f"'{top_feat['feature']}' shows the {strength_word} association "
+                    f"with '{target_col}' (strength: {strength:.2f}). "
+                    f"Top {len(target_result['feature_associations'])} predictive features identified."
+                )
+            else:
+                target_result["interpretation"] = (
+                    f"No strong feature associations detected for '{target_col}'."
+                )
+
+            results[target_col] = target_result
+
+        return results
+
     def analyze(self, df: pd.DataFrame, column_semantic_info: Optional[Dict[str, Dict[str, Any]]] = None) -> Dict[str, Any]:
         """
         Run ML analysis on dataframe.
@@ -2074,6 +2229,12 @@ class MLAnalyzer:
             missingness_result = self._compute_missingness_impact_direct(df)
             if missingness_result:
                 findings["missingness_impact"] = missingness_result
+
+        # 15. Target-Feature Analysis (feature importance for detected targets)
+        if self.detected_targets:
+            target_feature_result = self._compute_target_feature_analysis_direct(df)
+            if target_feature_result:
+                findings["target_feature_analysis"] = target_feature_result
 
         # Generate summary
         findings["summary"] = self._generate_summary(findings)
