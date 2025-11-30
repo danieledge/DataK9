@@ -19,8 +19,11 @@ import gc  # Explicit garbage collection for memory management
 
 from validation_framework.profiler.profile_result import (
     ProfileResult, ColumnProfile, TypeInference, ColumnStatistics,
-    QualityMetrics, CorrelationResult, ValidationSuggestion
+    QualityMetrics, CorrelationResult, ValidationSuggestion, DataLineage
 )
+import hashlib
+import platform
+import socket
 from validation_framework.profiler.column_intelligence import SmartColumnAnalyzer
 from validation_framework.loaders.factory import LoaderFactory
 from validation_framework.utils.chunk_size_calculator import ChunkSizeCalculator
@@ -161,6 +164,99 @@ class DataProfiler:
 
         # Full analysis mode - disable internal sampling for ML
         self.full_analysis = full_analysis
+
+    def _create_data_lineage(
+        self,
+        file_path: str,
+        file_size_bytes: int,
+        row_count: int,
+        analysis_applied: List[str],
+        sampling_info: Optional[Dict[str, Any]] = None
+    ) -> DataLineage:
+        """
+        Create data lineage and provenance tracking for the profile.
+
+        Args:
+            file_path: Path to the source file
+            file_size_bytes: Size of source file in bytes
+            row_count: Total rows in dataset
+            analysis_applied: List of analysis types that were applied
+            sampling_info: Details about sampling if applied
+
+        Returns:
+            DataLineage object with full provenance information
+        """
+        path = Path(file_path)
+
+        # Get file timestamps
+        source_modified_at = None
+        source_created_at = None
+        source_hash = None
+
+        if path.exists():
+            stat = path.stat()
+            source_modified_at = datetime.fromtimestamp(stat.st_mtime).isoformat()
+            # Note: st_ctime is creation time on Windows, metadata change time on Unix
+            source_created_at = datetime.fromtimestamp(stat.st_ctime).isoformat()
+
+            # Calculate SHA-256 hash for smaller files (< 100MB for performance)
+            if file_size_bytes < 100 * 1024 * 1024:
+                try:
+                    sha256 = hashlib.sha256()
+                    with open(file_path, 'rb') as f:
+                        for chunk in iter(lambda: f.read(8192), b''):
+                            sha256.update(chunk)
+                    source_hash = sha256.hexdigest()
+                except Exception as e:
+                    logger.debug(f"Could not calculate file hash: {e}")
+
+        # Determine source type from file extension
+        suffix = path.suffix.lower()
+        source_type = "file"
+        if suffix in ['.csv', '.tsv']:
+            source_type = "csv_file"
+        elif suffix in ['.parquet', '.pq']:
+            source_type = "parquet_file"
+        elif suffix in ['.xlsx', '.xls']:
+            source_type = "excel_file"
+        elif suffix in ['.json', '.jsonl']:
+            source_type = "json_file"
+
+        # Build environment info
+        environment = {
+            "hostname": socket.gethostname(),
+            "platform": platform.system(),
+            "platform_version": platform.version(),
+            "python_version": platform.python_version(),
+            "processor": platform.processor() or "unknown"
+        }
+
+        # Build transformations list (what was done to the data)
+        transformations = []
+        if sampling_info and sampling_info.get('was_sampled'):
+            transformations.append({
+                "type": "sampling",
+                "method": sampling_info.get('method', 'random'),
+                "sample_size": sampling_info.get('sample_size'),
+                "original_size": sampling_info.get('original_size'),
+                "reason": "Large dataset optimized for memory efficiency"
+            })
+
+        return DataLineage(
+            source_type=source_type,
+            source_path=str(path.absolute()) if path.exists() else file_path,
+            source_hash=source_hash,
+            source_size_bytes=file_size_bytes,
+            source_modified_at=source_modified_at,
+            source_created_at=source_created_at,
+            profiled_at=datetime.now().isoformat(),
+            profiled_by="DataK9 Profiler",
+            profiler_version="1.55",
+            environment=environment,
+            analysis_applied=analysis_applied,
+            sampling_info=sampling_info,
+            transformations=transformations
+        )
 
     def _check_memory_safety(self, chunk_idx: int, row_count: int) -> bool:
         """
@@ -1333,6 +1429,42 @@ class DataProfiler:
             file_metadata['sampled_rows'] = row_count
             file_metadata['sampling_note'] = f"Statistics from metadata ({final_row_count:,} rows), detailed analysis from {row_count:,} row sample"
 
+        # Build list of analysis types applied for lineage tracking
+        analysis_applied = ["basic_statistics", "type_inference", "pattern_detection"]
+        if self.enable_temporal_analysis:
+            analysis_applied.append("temporal_analysis")
+        if self.enable_pii_detection:
+            analysis_applied.append("pii_detection")
+        if self.enable_ml_analysis:
+            analysis_applied.append("ml_analysis")
+        if self.enable_semantic_tagging:
+            analysis_applied.append("semantic_classification")
+        if correlations:
+            analysis_applied.append("correlation_analysis")
+        if self.enable_enhanced_correlation and enhanced_correlations:
+            analysis_applied.append("enhanced_correlation_analysis")
+
+        # Build sampling info for lineage
+        sampling_info = None
+        if actual_total_rows and row_count < actual_total_rows:
+            sampling_info = {
+                "sampling_applied": True,
+                "total_rows": actual_total_rows,
+                "sampled_rows": row_count,
+                "sampling_percentage": round((row_count / actual_total_rows) * 100, 2),
+                "sampling_strategy": "intelligent",
+                "analysis_sample_size": self.analysis_sample_size
+            }
+
+        # Create data lineage for provenance tracking
+        data_lineage = self._create_data_lineage(
+            file_path=file_path,
+            file_size_bytes=file_size,
+            row_count=final_row_count,
+            analysis_applied=analysis_applied,
+            sampling_info=sampling_info
+        )
+
         return ProfileResult(
             file_name=file_name,
             file_path=file_path,
@@ -1351,7 +1483,8 @@ class DataProfiler:
             enhanced_correlations=enhanced_correlations,
             dataset_privacy_risk=dataset_privacy_risk,
             file_metadata=file_metadata if file_metadata else None,
-            ml_findings=ml_findings
+            ml_findings=ml_findings,
+            data_lineage=data_lineage
         )
 
     def _initialize_column_profile(

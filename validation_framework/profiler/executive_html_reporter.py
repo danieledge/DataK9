@@ -215,6 +215,9 @@ class ExecutiveHTMLReporter:
         <!-- v2 Sampling Coverage Banner -->
         {self._generate_sampling_banner_v2(profile, insights)}
 
+        <!-- Condensed Lineage Banner (expandable) -->
+        {self._generate_lineage_banner(profile) if profile.data_lineage else ''}
+
         <!-- AI-Generated Executive Summary (only with --beta-llm flag) -->
         {self._get_llm_summary_html(profile_dict)}
 
@@ -328,6 +331,11 @@ class ExecutiveHTMLReporter:
                 {self._generate_full_config_accordion(profile)}
             </div>
         </div>
+
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <!-- 7. DATA LINEAGE & PROVENANCE                                    -->
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        {self._generate_lineage_section(profile) if profile.data_lineage else ''}
 
         <!-- ═══════════════════════════════════════════════════════════════ -->
         <!-- 13. GLOSSARY SECTION                                            -->
@@ -4783,6 +4791,256 @@ class ExecutiveHTMLReporter:
                             </div>
                         </div>
                     </details>
+                </div>
+            </div>
+        </div>'''
+
+    def _generate_lineage_banner(self, profile: ProfileResult) -> str:
+        """
+        Generate a condensed lineage banner for the report header.
+
+        Shows key provenance info at a glance with expandable details.
+        """
+        lineage = profile.data_lineage
+        if not lineage:
+            return ''
+
+        # Format key info
+        source_file = lineage.source_path.split("/")[-1] if lineage.source_path and "/" in lineage.source_path else (lineage.source_path or 'Unknown')
+        hash_short = lineage.source_hash[:12] + '...' if lineage.source_hash else 'N/A'
+        hash_full = lineage.source_hash or 'N/A'
+        profiled_at = lineage.profiled_at[:16] if lineage.profiled_at else 'Unknown'
+        version = lineage.profiler_version or 'Unknown'
+        env = lineage.environment or {}
+        hostname = env.get('hostname', 'Unknown')
+
+        # Count analysis types
+        analysis_count = len(lineage.analysis_applied) if lineage.analysis_applied else 0
+
+        # Analysis badges (condensed)
+        analysis_badges = ''
+        if lineage.analysis_applied:
+            badges = lineage.analysis_applied[:4]  # Show first 4
+            more_count = len(lineage.analysis_applied) - 4
+            analysis_badges = ''.join([
+                f'<span style="background: rgba(167,139,250,0.15); color: #a78bfa; padding: 2px 6px; border-radius: 3px; font-size: 0.7em; margin-right: 4px;">{a.replace("_", " ").title()}</span>'
+                for a in badges
+            ])
+            if more_count > 0:
+                analysis_badges += f'<span style="color: var(--text-muted); font-size: 0.7em;">+{more_count} more</span>'
+
+        return f'''
+        <div class="lineage-banner" style="margin: 12px 0; background: linear-gradient(135deg, rgba(76, 29, 149, 0.15) 0%, rgba(46, 16, 101, 0.1) 100%); border: 1px solid rgba(167, 139, 250, 0.3); border-radius: 8px; overflow: hidden;">
+            <div class="lineage-banner-header" onclick="this.parentElement.classList.toggle('expanded')" style="padding: 10px 16px; cursor: pointer; display: flex; justify-content: space-between; align-items: center;">
+                <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap;">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span style="font-size: 1em;">🔗</span>
+                        <span style="font-weight: 600; color: #a78bfa; font-size: 0.85em;">Data Lineage</span>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 12px; font-size: 0.75em; color: var(--text-secondary);">
+                        <span title="Source file"><span style="color: var(--text-muted);">Source:</span> <span style="color: var(--text-primary); font-family: monospace;">{source_file}</span></span>
+                        <span style="color: var(--border-color);">|</span>
+                        <span title="SHA-256 hash for integrity verification"><span style="color: var(--text-muted);">Hash:</span> <span style="color: #a78bfa; font-family: monospace;">{hash_short}</span></span>
+                        <span style="color: var(--border-color);">|</span>
+                        <span><span style="color: var(--text-muted);">Profiled:</span> {profiled_at}</span>
+                    </div>
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="background: rgba(167,139,250,0.2); color: #a78bfa; padding: 2px 8px; border-radius: 4px; font-size: 0.7em; font-weight: 600;">{analysis_count} ANALYSES</span>
+                    <span class="lineage-chevron" style="color: #a78bfa; font-size: 0.8em; transition: transform 0.2s;">▼</span>
+                </div>
+            </div>
+            <div class="lineage-banner-content" style="display: none; padding: 0 16px 12px 16px; border-top: 1px solid rgba(167, 139, 250, 0.2);">
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; padding-top: 12px; font-size: 0.8em;">
+                    <div>
+                        <div style="color: var(--text-muted); font-size: 0.85em; margin-bottom: 4px;">Full SHA-256 Hash</div>
+                        <div style="font-family: monospace; font-size: 0.75em; color: #a78bfa; word-break: break-all; background: rgba(0,0,0,0.2); padding: 6px 8px; border-radius: 4px;">{hash_full}</div>
+                    </div>
+                    <div>
+                        <div style="color: var(--text-muted); font-size: 0.85em; margin-bottom: 4px;">Environment</div>
+                        <div style="color: var(--text-primary);">DataK9 v{version} on {hostname}</div>
+                    </div>
+                    <div style="grid-column: span 2;">
+                        <div style="color: var(--text-muted); font-size: 0.85em; margin-bottom: 4px;">Analysis Applied</div>
+                        <div>{analysis_badges}</div>
+                    </div>
+                </div>
+                <div style="margin-top: 10px; text-align: right;">
+                    <a href="#section-lineage" style="color: #a78bfa; font-size: 0.75em; text-decoration: none;">View full lineage details →</a>
+                </div>
+            </div>
+        </div>
+        <style>
+            .lineage-banner.expanded .lineage-banner-content {{ display: block !important; }}
+            .lineage-banner.expanded .lineage-chevron {{ transform: rotate(180deg); }}
+        </style>
+        '''
+
+    def _generate_lineage_section(self, profile: ProfileResult) -> str:
+        """
+        Generate the Data Lineage & Provenance section.
+
+        Displays source tracking, integrity verification, and analysis audit trail
+        for regulatory compliance and data governance.
+        """
+        lineage = profile.data_lineage
+        if not lineage:
+            return ''
+
+        # Format source info
+        source_path = lineage.source_path or 'Unknown'
+        source_type = lineage.source_type.upper() if lineage.source_type else 'FILE'
+        source_hash_short = lineage.source_hash[:16] + '...' if lineage.source_hash else 'Not computed'
+        source_hash_full = lineage.source_hash or 'N/A'
+
+        # Format file size
+        size_bytes = lineage.source_size_bytes or 0
+        if size_bytes >= 1024 * 1024 * 1024:
+            size_display = f"{size_bytes / (1024*1024*1024):.2f} GB"
+        elif size_bytes >= 1024 * 1024:
+            size_display = f"{size_bytes / (1024*1024):.2f} MB"
+        elif size_bytes >= 1024:
+            size_display = f"{size_bytes / 1024:.2f} KB"
+        else:
+            size_display = f"{size_bytes} bytes"
+
+        # Format timestamps
+        profiled_at = lineage.profiled_at or 'Unknown'
+        source_modified = lineage.source_modified_at or 'Unknown'
+
+        # Environment info
+        env = lineage.environment or {}
+        hostname = env.get('hostname', 'Unknown')
+        os_info = env.get('os', 'Unknown')
+        python_version = env.get('python_version', 'Unknown')
+        profiler_version = lineage.profiler_version or 'Unknown'
+
+        # Analysis applied
+        analysis_list = lineage.analysis_applied or []
+        analysis_badges = ''.join([
+            f'<span style="display: inline-block; background: rgba(59, 130, 246, 0.15); color: #60a5fa; padding: 4px 10px; border-radius: 4px; font-size: 0.75em; margin: 2px 4px 2px 0; font-weight: 500;">{a.replace("_", " ").title()}</span>'
+            for a in analysis_list
+        ])
+
+        # Sampling info
+        sampling_html = ''
+        if lineage.sampling_info:
+            s = lineage.sampling_info
+            sampling_html = f'''
+                <div style="margin-top: 16px; padding: 12px; background: rgba(245, 158, 11, 0.08); border-radius: 6px; border-left: 3px solid #f59e0b;">
+                    <div style="font-weight: 600; color: #f59e0b; font-size: 0.85em; margin-bottom: 8px;">⚡ Sampling Applied</div>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; font-size: 0.8em;">
+                        <div><span style="color: var(--text-muted);">Total Rows:</span> <span style="color: var(--text-primary); font-weight: 500;">{s.get("total_rows", 0):,}</span></div>
+                        <div><span style="color: var(--text-muted);">Sampled:</span> <span style="color: var(--text-primary); font-weight: 500;">{s.get("sampled_rows", 0):,}</span></div>
+                        <div><span style="color: var(--text-muted);">Coverage:</span> <span style="color: var(--text-primary); font-weight: 500;">{s.get("sampling_percentage", 0)}%</span></div>
+                        <div><span style="color: var(--text-muted);">Strategy:</span> <span style="color: var(--text-primary); font-weight: 500;">{s.get("sampling_strategy", "intelligent")}</span></div>
+                    </div>
+                </div>
+            '''
+
+        return f'''
+        <div class="section-divider" id="section-lineage" style="margin: 24px 0 16px 0; padding: 12px 20px; background: linear-gradient(135deg, #4c1d95 0%, #2e1065 100%); border-radius: 8px; border-left: 4px solid #a78bfa;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <h2 style="margin: 0; font-size: 1.1em; color: #f1f5f9; font-weight: 600;">Data Lineage & Provenance</h2>
+                    <p style="margin: 4px 0 0 0; font-size: 0.85em; color: #c4b5fd;">Audit trail for compliance, governance, and traceability</p>
+                </div>
+                <div style="background: rgba(255,255,255,0.15); padding: 4px 12px; border-radius: 4px; font-size: 0.8em; font-weight: 600; color: white;">AUDIT</div>
+            </div>
+        </div>
+
+        <div class="layout-grid">
+            <div class="main-column">
+                <div class="accordion" data-accordion="lineage" style="border-left: 3px solid #a78bfa;">
+                    <div class="accordion-header" onclick="toggleAccordion(this)" style="background: var(--bg-card);">
+                        <div class="accordion-title-group">
+                            <div class="accordion-icon" style="background: linear-gradient(135deg, #7c3aed, #5b21b6);">🔗</div>
+                            <div>
+                                <div class="accordion-title">Source Provenance & Integrity</div>
+                                <div class="accordion-subtitle">Where this data came from and verification hash</div>
+                            </div>
+                        </div>
+                        <div class="accordion-meta">
+                            <span class="accordion-badge" style="background: rgba(167, 139, 250, 0.15); color: #a78bfa;">{source_type}</span>
+                            <span class="accordion-chevron">▼</span>
+                        </div>
+                    </div>
+                    <div class="accordion-content" style="display: block;">
+                        <!-- Source Information -->
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-bottom: 16px;">
+                            <div style="background: var(--bg-card); border-radius: 8px; padding: 16px; border: 1px solid var(--border-color);">
+                                <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 12px; font-size: 0.9em;">📁 Source Details</div>
+                                <div style="font-size: 0.8em; line-height: 1.8;">
+                                    <div style="display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid var(--border-color);">
+                                        <span style="color: var(--text-muted);">Path</span>
+                                        <span style="color: var(--text-primary); font-family: monospace; font-size: 0.85em; max-width: 200px; overflow: hidden; text-overflow: ellipsis;" title="{source_path}">{source_path.split("/")[-1] if "/" in source_path else source_path}</span>
+                                    </div>
+                                    <div style="display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid var(--border-color);">
+                                        <span style="color: var(--text-muted);">Size</span>
+                                        <span style="color: var(--text-primary); font-weight: 500;">{size_display}</span>
+                                    </div>
+                                    <div style="display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid var(--border-color);">
+                                        <span style="color: var(--text-muted);">Modified</span>
+                                        <span style="color: var(--text-primary);">{source_modified}</span>
+                                    </div>
+                                    <div style="display: flex; justify-content: space-between; padding: 4px 0;">
+                                        <span style="color: var(--text-muted);">Type</span>
+                                        <span style="color: var(--text-primary);">{source_type}</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div style="background: var(--bg-card); border-radius: 8px; padding: 16px; border: 1px solid var(--border-color);">
+                                <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 12px; font-size: 0.9em;">🔐 Integrity Verification</div>
+                                <div style="font-size: 0.8em;">
+                                    <div style="color: var(--text-muted); margin-bottom: 4px;">SHA-256 Hash</div>
+                                    <div style="background: rgba(0,0,0,0.3); padding: 8px 12px; border-radius: 4px; font-family: monospace; font-size: 0.85em; color: #a78bfa; word-break: break-all;" title="{source_hash_full}">{source_hash_full}</div>
+                                    <div style="margin-top: 8px; color: var(--text-muted); font-size: 0.75em;">Use this hash to verify data integrity and detect tampering</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Processing Info -->
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px;">
+                            <div style="background: var(--bg-card); border-radius: 8px; padding: 16px; border: 1px solid var(--border-color);">
+                                <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 12px; font-size: 0.9em;">⏱️ Processing Record</div>
+                                <div style="font-size: 0.8em; line-height: 1.8;">
+                                    <div style="display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid var(--border-color);">
+                                        <span style="color: var(--text-muted);">Profiled At</span>
+                                        <span style="color: var(--text-primary);">{profiled_at}</span>
+                                    </div>
+                                    <div style="display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid var(--border-color);">
+                                        <span style="color: var(--text-muted);">Profiler Version</span>
+                                        <span style="color: var(--text-primary);">DataK9 v{profiler_version}</span>
+                                    </div>
+                                    <div style="display: flex; justify-content: space-between; padding: 4px 0;">
+                                        <span style="color: var(--text-muted);">Host</span>
+                                        <span style="color: var(--text-primary);">{hostname}</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div style="background: var(--bg-card); border-radius: 8px; padding: 16px; border: 1px solid var(--border-color);">
+                                <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 12px; font-size: 0.9em;">🔬 Analysis Applied</div>
+                                <div style="font-size: 0.8em;">
+                                    {analysis_badges if analysis_badges else '<span style="color: var(--text-muted);">No advanced analysis applied</span>'}
+                                </div>
+                            </div>
+                        </div>
+
+                        {sampling_html}
+
+                        <!-- Export for Audit -->
+                        <div style="margin-top: 16px; padding: 12px; background: rgba(167, 139, 250, 0.08); border-radius: 6px; border: 1px dashed rgba(167, 139, 250, 0.3);">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <div>
+                                    <div style="font-size: 0.85em; font-weight: 500; color: var(--text-primary);">💾 Audit Export</div>
+                                    <div style="font-size: 0.75em; color: var(--text-muted);">Full lineage data is included in JSON output for audit trails and compliance reporting</div>
+                                </div>
+                                <span style="background: rgba(167, 139, 250, 0.2); color: #a78bfa; padding: 4px 10px; border-radius: 4px; font-size: 0.7em; font-weight: 600;">JSON EXPORT</span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>'''
