@@ -262,9 +262,11 @@ class RuleEngine:
         ml_sample_info = ml_findings.get("sample_info", {})
         actual_sample_size = ml_sample_info.get("analyzed_rows", 0)
         actual_original_rows = ml_sample_info.get("original_rows", total_rows)
+        # Use the explicit 'sampled' flag from ML analysis if available
+        ml_sampled = ml_sample_info.get("sampled", None)
 
-        if actual_sample_size > 0 and actual_original_rows > actual_sample_size:
-            # Use actual sampling info from ML analysis
+        if ml_sampled is True and actual_sample_size > 0:
+            # ML analysis explicitly reported sampling was used
             sampling_info = SamplingInfo(
                 total_rows=actual_original_rows,
                 sample_used=True,
@@ -278,8 +280,24 @@ class RuleEngine:
                     "cross_column_checks"
                 ]
             )
+        elif ml_sampled is False:
+            # ML analysis explicitly reported NO sampling - full analysis done
+            sampling_info = SamplingInfo(
+                total_rows=actual_original_rows if actual_original_rows > 0 else total_rows,
+                sample_used=False,
+                sample_size=actual_sample_size if actual_sample_size > 0 else total_rows,
+                sample_fraction=1.0,
+                full_dataset_metrics=[
+                    "row_count", "null_count", "column_types",
+                    "validity_checks", "pattern_analysis",
+                    "ml_anomaly_detection", "benford_analysis",
+                    "outlier_detection", "distribution_analysis",
+                    "cross_column_checks"
+                ],
+                sampled_metrics=[]
+            )
         else:
-            # Fallback to default logic
+            # No ML info available - fallback to default logic based on row count
             sampling_info = determine_sampling_info(total_rows)
 
         # Run all rule families

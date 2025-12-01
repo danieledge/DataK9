@@ -496,28 +496,15 @@ class ExecutiveHTMLReporter:
         <!-- Main Content Area -->
         <main class="dq-main page">
         <!-- ═══════════════════════════════════════════════════════════════ -->
-        <!-- 1. HEADER & SAMPLING BANNER                                     -->
+        <!-- 1. EXECUTIVE SUMMARY WITH DIAL WIDGETS                          -->
         <!-- ═══════════════════════════════════════════════════════════════ -->
-        <section class="page-header" id="section-overview">
-            <div class="page-title-block">
-                <h1>Data Profile Report</h1>
-                <p>Analysis of {profile.row_count:,} records across {profile.column_count} columns</p>
-            </div>
-        </section>
-
-        <!-- v2 Sampling Coverage Banner -->
-        {self._generate_sampling_banner_v2(profile, insights)}
+        {self._generate_exec1_summary(profile, avg_completeness, avg_validity, type_counts, insights)}
 
         <!-- Condensed Lineage Banner (expandable) -->
         {self._generate_lineage_banner(profile) if profile.data_lineage else ''}
 
         <!-- AI-Generated Executive Summary (only with --beta-llm flag) -->
         {self._get_llm_summary_html(profile_dict)}
-
-        <!-- ═══════════════════════════════════════════════════════════════ -->
-        <!-- 2. METRICS DASHBOARD (3 rows: Core, Quality, Types)             -->
-        <!-- ═══════════════════════════════════════════════════════════════ -->
-        {self._generate_metrics_dashboard_v2(profile, avg_completeness, avg_validity, avg_consistency, avg_uniqueness, type_counts)}
 
         <!-- ═══════════════════════════════════════════════════════════════ -->
         <!-- 3. DATA QUALITY OVERVIEW - High-level metrics first             -->
@@ -4127,6 +4114,15 @@ class ExecutiveHTMLReporter:
             align-items: center;
             gap: 8px;
             user-select: none;
+            list-style: none;
+        }
+        .dual-layer-technical summary::-webkit-details-marker {
+            display: none;
+        }
+        .dual-layer-technical summary svg {
+            flex-shrink: 0;
+            width: 14px;
+            height: 14px;
         }
 
         .dual-layer-technical summary:hover {
@@ -5520,7 +5516,7 @@ class ExecutiveHTMLReporter:
                     {pii_items}
 
                     <details class="dual-layer-technical" style="margin-top: 16px;">
-                        <summary><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;vertical-align:-2px;margin-right:4px"><path d="M12 18V5"/><path d="M15 13a4.17 4.17 0 0 1-3-4 4.17 4.17 0 0 1-3 4"/><path d="M17.598 6.5A3 3 0 1 0 12 5a3 3 0 1 0-5.598 1.5"/><path d="M17.997 5.125a4 4 0 0 1 2.526 5.77"/><path d="M18 18a4 4 0 0 0 2-7.464"/><path d="M19.967 17.483A4 4 0 1 1 12 18a4 4 0 1 1-7.967-.517"/><path d="M6 18a4 4 0 0 1-2-7.464"/><path d="M6.003 5.125a4 4 0 0 0-2.526 5.77"/></svg> PII Detection Logic (click to expand)</summary>
+                        <summary><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg> PII Detection Logic</summary>
                         <div class="dual-layer-technical-content">
                             <div class="dual-layer-technical-context">
                                 <p style="margin-bottom: 12px; color: var(--text-secondary);">The following semantic types are flagged as PII:</p>
@@ -7281,7 +7277,7 @@ the largest difference between classes, which could be useful for predictive mod
 
                 <!-- Technical Details (Collapsed by default) -->
                 <details class="dual-layer-technical">
-                    <summary><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;vertical-align:-2px;margin-right:4px"><path d="M12 18V5"/><path d="M15 13a4.17 4.17 0 0 1-3-4 4.17 4.17 0 0 1-3 4"/><path d="M17.598 6.5A3 3 0 1 0 12 5a3 3 0 1 0-5.598 1.5"/><path d="M17.997 5.125a4 4 0 0 1 2.526 5.77"/><path d="M18 18a4 4 0 0 0 2-7.464"/><path d="M19.967 17.483A4 4 0 1 1 12 18a4 4 0 1 1-7.967-.517"/><path d="M6 18a4 4 0 0 1-2-7.464"/><path d="M6.003 5.125a4 4 0 0 0-2.526 5.77"/></svg> Technical Details (click to expand)</summary>
+                    <summary><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg> Technical Details</summary>
                     <div class="dual-layer-technical-content">
                         <div class="dual-layer-technical-grid">
                             {technical_items}
@@ -7332,7 +7328,7 @@ the largest difference between classes, which could be useful for predictive mod
         if stats_html or context_html:
             technical_section = f'''
                 <details class="dual-layer-technical">
-                    <summary><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;vertical-align:-2px;margin-right:4px"><path d="M12 18V5"/><path d="M15 13a4.17 4.17 0 0 1-3-4 4.17 4.17 0 0 1-3 4"/><path d="M17.598 6.5A3 3 0 1 0 12 5a3 3 0 1 0-5.598 1.5"/><path d="M17.997 5.125a4 4 0 0 1 2.526 5.77"/><path d="M18 18a4 4 0 0 0 2-7.464"/><path d="M19.967 17.483A4 4 0 1 1 12 18a4 4 0 1 1-7.967-.517"/><path d="M6 18a4 4 0 0 1-2-7.464"/><path d="M6.003 5.125a4 4 0 0 0-2.526 5.77"/></svg> Technical Details (click to expand)</summary>
+                    <summary><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg> Technical Details</summary>
                     <div class="dual-layer-technical-content">
                         <div class="dual-layer-technical-grid">{stats_html}</div>
                         {context_html}
@@ -7501,7 +7497,7 @@ the largest difference between classes, which could be useful for predictive mod
                                     </div>
                                 </div>
                                 <details class="dual-layer-technical">
-                                    <summary><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;vertical-align:-2px;margin-right:4px"><path d="M12 18V5"/><path d="M15 13a4.17 4.17 0 0 1-3-4 4.17 4.17 0 0 1-3 4"/><path d="M17.598 6.5A3 3 0 1 0 12 5a3 3 0 1 0-5.598 1.5"/><path d="M17.997 5.125a4 4 0 0 1 2.526 5.77"/><path d="M18 18a4 4 0 0 0 2-7.464"/><path d="M19.967 17.483A4 4 0 1 1 12 18a4 4 0 1 1-7.967-.517"/><path d="M6 18a4 4 0 0 1-2-7.464"/><path d="M6.003 5.125a4 4 0 0 0-2.526 5.77"/></svg> Technical Details (click to expand)</summary>
+                                    <summary><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg> Technical Details</summary>
                                     <div class="dual-layer-technical-content" style="padding: 12px;">
                                         <ul style="margin: 0; padding-left: 20px; color: var(--text-secondary); font-size: 0.85em;">
                                             <li>Log-transformed bins handle heavy-tailed distributions</li>
@@ -7591,7 +7587,7 @@ the largest difference between classes, which could be useful for predictive mod
                                 </div>
                             </div>
                             <details class="dual-layer-technical">
-                                <summary><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;vertical-align:-2px;margin-right:4px"><path d="M12 18V5"/><path d="M15 13a4.17 4.17 0 0 1-3-4 4.17 4.17 0 0 1-3 4"/><path d="M17.598 6.5A3 3 0 1 0 12 5a3 3 0 1 0-5.598 1.5"/><path d="M17.997 5.125a4 4 0 0 1 2.526 5.77"/><path d="M18 18a4 4 0 0 0 2-7.464"/><path d="M19.967 17.483A4 4 0 1 1 12 18a4 4 0 1 1-7.967-.517"/><path d="M6 18a4 4 0 0 1-2-7.464"/><path d="M6.003 5.125a4 4 0 0 0-2.526 5.77"/></svg> Technical Details (click to expand)</summary>
+                                <summary><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg> Technical Details</summary>
                                 <div class="dual-layer-technical-content" style="padding: 12px;">
                                     <ul style="margin: 0; padding-left: 20px; color: var(--text-secondary); font-size: 0.85em;">
                                         <li>Reference line: y = x (perfect correlation)</li>
@@ -7895,8 +7891,8 @@ the largest difference between classes, which could be useful for predictive mod
                         </div>
                         <details class="dual-layer-technical">
                             <summary>
-                                <svg style="width: 14px; height: 14px; vertical-align: -2px; margin-right: 6px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a4 4 0 014 4c0 1.5-1 2.5-2 3l-2 1v2"/><circle cx="12" cy="17" r="1"/></svg>
-                                Technical Details (click to expand)
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+                                Technical Details
                             </summary>
                             <div class="dual-layer-technical-content" style="padding: 12px;">
                                 <p style="font-weight: 600; margin-bottom: 8px; color: var(--text-secondary);">Target Detection</p>
@@ -8038,7 +8034,7 @@ the largest difference between classes, which could be useful for predictive mod
                                     </div>
                                 </div>
                                 <details class="dual-layer-technical">
-                                    <summary><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;vertical-align:-2px;margin-right:4px"><path d="M12 18V5"/><path d="M15 13a4.17 4.17 0 0 1-3-4 4.17 4.17 0 0 1-3 4"/><path d="M17.598 6.5A3 3 0 1 0 12 5a3 3 0 1 0-5.598 1.5"/><path d="M17.997 5.125a4 4 0 0 1 2.526 5.77"/><path d="M18 18a4 4 0 0 0 2-7.464"/><path d="M19.967 17.483A4 4 0 1 1 12 18a4 4 0 1 1-7.967-.517"/><path d="M6 18a4 4 0 0 1-2-7.464"/><path d="M6.003 5.125a4 4 0 0 0-2.526 5.77"/></svg> Technical Details (click to expand)</summary>
+                                    <summary><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg> Technical Details</summary>
                                     <div class="dual-layer-technical-content" style="padding: 12px;">
                                         <ul style="margin: 0; padding-left: 20px; color: var(--text-secondary); font-size: 0.85em;">
                                             <li>Daily/weekly aggregation depending on date range</li>
@@ -9310,8 +9306,8 @@ the largest difference between classes, which could be useful for predictive mod
                     </div>
                     <details class="dual-layer-technical">
                         <summary>
-                            <svg style="width: 14px; height: 14px; vertical-align: -2px; margin-right: 6px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a4 4 0 014 4c0 1.5-1 2.5-2 3l-2 1v2"/><circle cx="12" cy="17" r="1"/></svg>
-                            Technical Details (click to expand)
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+                            Technical Details
                         </summary>
                         <div class="dual-layer-technical-content">
                             <div class="dual-layer-technical-grid">
@@ -9702,8 +9698,8 @@ the largest difference between classes, which could be useful for predictive mod
                     </div>
                     <details class="dual-layer-technical">
                         <summary>
-                            <svg style="width: 14px; height: 14px; vertical-align: -2px; margin-right: 6px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a4 4 0 014 4c0 1.5-1 2.5-2 3l-2 1v2"/><circle cx="12" cy="17" r="1"/></svg>
-                            Technical Details (click to expand)
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+                            Technical Details
                         </summary>
                         <div class="dual-layer-technical-content">
                             <div class="dual-layer-technical-grid">
@@ -9739,7 +9735,147 @@ the largest difference between classes, which could be useful for predictive mod
                 <div class="chart-container">
                     <div class="chart-title">Quality Score by Column</div>
                     <canvas id="qualityChart" height="120"></canvas>
+                </div>
+                {self._generate_duplicate_analysis_html(profile)}'''
+
+    def _generate_duplicate_analysis_html(self, profile: ProfileResult) -> str:
+        """Generate duplicate analysis and referential integrity HTML for Quality section."""
+        ml_findings = profile.ml_findings if hasattr(profile, 'ml_findings') and profile.ml_findings else {}
+
+        duplicate_analysis = ml_findings.get('duplicate_analysis', {})
+        referential_integrity = ml_findings.get('referential_integrity', {})
+
+        # If no analysis available, return empty
+        if not duplicate_analysis and not referential_integrity:
+            return ''
+
+        sections = []
+
+        # Duplicate Analysis Section
+        if duplicate_analysis:
+            exact_dups = duplicate_analysis.get('exact_duplicates', {})
+            fuzzy_dups = duplicate_analysis.get('fuzzy_duplicates', {})
+            key_cols = duplicate_analysis.get('potential_key_columns', [])
+            interpretation = duplicate_analysis.get('interpretation', '')
+            plain_english = duplicate_analysis.get('plain_english', '')
+
+            exact_count = exact_dups.get('count', 0)
+            fuzzy_count = fuzzy_dups.get('count', 0)
+
+            # Determine status color
+            if exact_count == 0 and fuzzy_count == 0:
+                status_color = 'var(--good)'
+                status_icon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>'
+                status_text = 'No duplicates found'
+            elif exact_count > 0:
+                status_color = 'var(--critical)'
+                status_icon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>'
+                status_text = f'{exact_count} exact duplicates'
+            else:
+                status_color = 'var(--warning)'
+                status_icon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>'
+                status_text = f'{fuzzy_count} potential fuzzy duplicates'
+
+            # Key columns HTML
+            key_cols_html = ''
+            if key_cols:
+                key_items = ''.join(f'<span style="display: inline-block; padding: 2px 8px; background: rgba(59, 130, 246, 0.15); color: #3b82f6; border-radius: 4px; font-size: 0.75em; margin: 2px;">{k.get("column", "")}: {k.get("uniqueness", 0):.1f}%</span>' for k in key_cols[:5])
+                key_cols_html = f'''
+                <div style="margin-top: 12px;">
+                    <div style="font-size: 0.75em; color: var(--text-muted); margin-bottom: 4px;">Potential Key Columns:</div>
+                    <div style="display: flex; flex-wrap: wrap; gap: 4px;">{key_items}</div>
                 </div>'''
+
+            sections.append(f'''
+                <div class="accordion" style="margin-top: 16px;">
+                    <div class="accordion-header" onclick="this.parentElement.classList.toggle('expanded')">
+                        <div class="accordion-icon" style="color: {status_color};">{status_icon}</div>
+                        <div>
+                            <div class="accordion-title">Duplicate Analysis</div>
+                            <div class="accordion-subtitle">Exact and fuzzy duplicate detection</div>
+                        </div>
+                        <div class="accordion-meta">
+                            <span class="accordion-badge" style="background: {status_color}22; color: {status_color};">{status_text}</span>
+                            <span class="accordion-chevron"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><polyline points="6 9 12 15 18 9"/></svg></span>
+                        </div>
+                    </div>
+                    <div class="accordion-content">
+                        <div class="dual-layer-explanation">
+                            <div class="dual-layer-summary">
+                                <div class="dual-layer-summary-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7V17a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-2.3A7 7 0 0 0 12 2z"/></svg> What this means</div>
+                                <div class="dual-layer-summary-text">{interpretation if interpretation else plain_english}</div>
+                            </div>
+                            <details class="dual-layer-technical">
+                                <summary>
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+                                    Technical Details
+                                </summary>
+                                <div class="dual-layer-technical-content">
+                                    <div class="dual-layer-technical-grid">
+                                        <div class="dual-layer-technical-item">
+                                            <span class="dual-layer-technical-item-label">Exact Duplicates</span>
+                                            <span class="dual-layer-technical-item-value">{exact_count} ({exact_dups.get("percentage", 0):.2f}%)</span>
+                                        </div>
+                                        <div class="dual-layer-technical-item">
+                                            <span class="dual-layer-technical-item-label">Fuzzy Duplicates</span>
+                                            <span class="dual-layer-technical-item-value">{fuzzy_count} ({fuzzy_dups.get("percentage", 0):.2f}%)</span>
+                                        </div>
+                                    </div>
+                                    <div class="dual-layer-technical-context" style="margin-top: 12px;">
+                                        <p style="margin: 0; font-size: 0.85em; color: var(--text-muted);">{plain_english}</p>
+                                    </div>
+                                    {key_cols_html}
+                                </div>
+                            </details>
+                        </div>
+                    </div>
+                </div>''')
+
+        # Referential Integrity Section
+        if referential_integrity:
+            fk_cols = referential_integrity.get('potential_foreign_keys', [])
+            orphan_analysis = referential_integrity.get('orphan_analysis', [])
+            self_ref = referential_integrity.get('self_referential_issues', [])
+            interpretation = referential_integrity.get('interpretation', '')
+            plain_english = referential_integrity.get('plain_english', '')
+
+            # Only show if there's meaningful content
+            if fk_cols or orphan_analysis or interpretation:
+                sections.append(f'''
+                <div class="accordion" style="margin-top: 16px;">
+                    <div class="accordion-header" onclick="this.parentElement.classList.toggle('expanded')">
+                        <div class="accordion-icon" style="color: #8b5cf6;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></div>
+                        <div>
+                            <div class="accordion-title">Referential Integrity</div>
+                            <div class="accordion-subtitle">Foreign key and relationship analysis</div>
+                        </div>
+                        <div class="accordion-meta">
+                            <span class="accordion-badge">{len(fk_cols)} potential FKs</span>
+                            <span class="accordion-chevron"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><polyline points="6 9 12 15 18 9"/></svg></span>
+                        </div>
+                    </div>
+                    <div class="accordion-content">
+                        <div class="dual-layer-explanation">
+                            <div class="dual-layer-summary">
+                                <div class="dual-layer-summary-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7V17a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-2.3A7 7 0 0 0 12 2z"/></svg> What this means</div>
+                                <div class="dual-layer-summary-text">{interpretation if interpretation else 'Analysis of potential relationships between columns in your dataset.'}</div>
+                            </div>
+                            <details class="dual-layer-technical">
+                                <summary>
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+                                    Technical Details
+                                </summary>
+                                <div class="dual-layer-technical-content">
+                                    <div class="dual-layer-technical-context">
+                                        <p style="margin: 0 0 12px 0; font-size: 0.85em; color: var(--text-muted);">{plain_english}</p>
+                                    </div>
+                                </div>
+                            </details>
+                        </div>
+                    </div>
+                </div>''')
+
+        return '\n'.join(sections)
 
     def _generate_distribution_accordion(self, profile: ProfileResult, categorical_columns: List[Dict]) -> str:
         """Generate the value distribution accordion with dual-layer explanation."""
@@ -9809,8 +9945,8 @@ the largest difference between classes, which could be useful for predictive mod
                     </div>
                     <details class="dual-layer-technical">
                         <summary>
-                            <svg style="width: 14px; height: 14px; vertical-align: -2px; margin-right: 6px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a4 4 0 014 4c0 1.5-1 2.5-2 3l-2 1v2"/><circle cx="12" cy="17" r="1"/></svg>
-                            Technical Details (click to expand)
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+                            Technical Details
                         </summary>
                         <div class="dual-layer-technical-content">
                             <div class="dual-layer-technical-grid">
@@ -9910,7 +10046,7 @@ the largest difference between classes, which could be useful for predictive mod
                                     <div class="dual-layer-summary-text">{plain_english}</div>
                                 </div>
                                 <details class="dual-layer-technical">
-                                    <summary><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;vertical-align:-2px;margin-right:4px"><path d="M12 18V5"/><path d="M15 13a4.17 4.17 0 0 1-3-4 4.17 4.17 0 0 1-3 4"/><path d="M17.598 6.5A3 3 0 1 0 12 5a3 3 0 1 0-5.598 1.5"/><path d="M17.997 5.125a4 4 0 0 1 2.526 5.77"/><path d="M18 18a4 4 0 0 0 2-7.464"/><path d="M19.967 17.483A4 4 0 1 1 12 18a4 4 0 1 1-7.967-.517"/><path d="M6 18a4 4 0 0 1-2-7.464"/><path d="M6.003 5.125a4 4 0 0 0-2.526 5.77"/></svg> Technical Details (click to expand)</summary>
+                                    <summary><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg> Technical Details</summary>
                                     <div class="dual-layer-technical-content">
                                         <div class="dual-layer-technical-grid">
                                             <div class="dual-layer-technical-item">
@@ -10609,7 +10745,7 @@ the largest difference between classes, which could be useful for predictive mod
                                     </div>
                                 </div>
                                 <details class="dual-layer-technical">
-                                    <summary><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;vertical-align:-2px;margin-right:4px"><path d="M12 18V5"/><path d="M15 13a4.17 4.17 0 0 1-3-4 4.17 4.17 0 0 1-3 4"/><path d="M17.598 6.5A3 3 0 1 0 12 5a3 3 0 1 0-5.598 1.5"/><path d="M17.997 5.125a4 4 0 0 1 2.526 5.77"/><path d="M18 18a4 4 0 0 0 2-7.464"/><path d="M19.967 17.483A4 4 0 1 1 12 18a4 4 0 1 1-7.967-.517"/><path d="M6 18a4 4 0 0 1-2-7.464"/><path d="M6.003 5.125a4 4 0 0 0-2.526 5.77"/></svg> Technical Details (click to expand)</summary>
+                                    <summary><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg> Technical Details</summary>
                                     <div class="dual-layer-technical-content" style="padding: 12px;">
                                         <ul style="margin: 0; padding-left: 20px; color: var(--text-secondary); font-size: 0.85em;">
                                             <li>Suggestions are derived from column statistics, patterns, and anomalies</li>
@@ -10660,7 +10796,7 @@ the largest difference between classes, which could be useful for predictive mod
                                     </div>
                                 </div>
                                 <details class="dual-layer-technical">
-                                    <summary><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;vertical-align:-2px;margin-right:4px"><path d="M12 18V5"/><path d="M15 13a4.17 4.17 0 0 1-3-4 4.17 4.17 0 0 1-3 4"/><path d="M17.598 6.5A3 3 0 1 0 12 5a3 3 0 1 0-5.598 1.5"/><path d="M17.997 5.125a4 4 0 0 1 2.526 5.77"/><path d="M18 18a4 4 0 0 0 2-7.464"/><path d="M19.967 17.483A4 4 0 1 1 12 18a4 4 0 1 1-7.967-.517"/><path d="M6 18a4 4 0 0 1-2-7.464"/><path d="M6.003 5.125a4 4 0 0 0-2.526 5.77"/></svg> Technical Details (click to expand)</summary>
+                                    <summary><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg> Technical Details</summary>
                                     <div class="dual-layer-technical-content" style="padding: 12px;">
                                         <ul style="margin: 0; padding-left: 20px; color: var(--text-secondary); font-size: 0.85em;">
                                             <li>Run command: <code>python3 -m validation_framework.cli validate config.yaml</code></li>
@@ -10854,7 +10990,7 @@ the largest difference between classes, which could be useful for predictive mod
                             <div class="dual-layer-summary-text">{plain_english}</div>
                         </div>
                         <details class="dual-layer-technical">
-                            <summary><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;vertical-align:-2px;margin-right:4px"><path d="M12 18V5"/><path d="M15 13a4.17 4.17 0 0 1-3-4 4.17 4.17 0 0 1-3 4"/><path d="M17.598 6.5A3 3 0 1 0 12 5a3 3 0 1 0-5.598 1.5"/><path d="M17.997 5.125a4 4 0 0 1 2.526 5.77"/><path d="M18 18a4 4 0 0 0 2-7.464"/><path d="M19.967 17.483A4 4 0 1 1 12 18a4 4 0 1 1-7.967-.517"/><path d="M6 18a4 4 0 0 1-2-7.464"/><path d="M6.003 5.125a4 4 0 0 0-2.526 5.77"/></svg> Technical Details (click to expand)</summary>
+                            <summary><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg> Technical Details</summary>
                             <div class="dual-layer-technical-content">
                                 <div class="dual-layer-technical-grid">
                                     <div class="dual-layer-technical-item">
@@ -11143,6 +11279,172 @@ the largest difference between classes, which could be useful for predictive mod
             {f'<div class="priority-actions"><div class="actions-header">Priority Actions</div>{actions_html}</div>' if actions else ''}
             <div class="summary-tools">
                 {export_btn}
+            </div>
+        </section>'''
+
+    def _generate_exec1_summary(self, profile: ProfileResult, avg_completeness: float, avg_validity: float, type_counts: dict, insights) -> str:
+        """
+        Generate the exec1 executive summary with dial widgets.
+        Shows header with status badge and compact grid with dials.
+        """
+        from datetime import datetime
+
+        # Calculate values
+        ml_issues = 0
+        if profile.ml_findings:
+            ml_issues = profile.ml_findings.get('summary', {}).get('total_issues', 0)
+
+        # Determine if sampled
+        is_sampled = insights and hasattr(insights, 'sampling_info') and insights.sampling_info and insights.sampling_info.was_sampled
+        if is_sampled:
+            status_badge = '<span class="exec1-status-badge sampled"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>Sampled Analysis</span>'
+            sample_pct = insights.sampling_info.sample_percentage if insights and insights.sampling_info else 100
+            analysis_note = f"Analyzed {sample_pct:.1f}% of data"
+        else:
+            status_badge = '<span class="exec1-status-badge complete"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>All Data Analysed</span>'
+            analysis_note = f"Complete: All {profile.row_count:,} rows analyzed"
+
+        # Format date
+        try:
+            profiled_dt = datetime.fromisoformat(profile.profiled_at) if isinstance(profile.profiled_at, str) else profile.profiled_at
+            date_str = profiled_dt.strftime("%d %b %Y • %H:%M")
+        except Exception:
+            date_str = str(profile.profiled_at)[:16] if profile.profiled_at else "Unknown"
+
+        # Lineage information
+        lineage = profile.data_lineage if hasattr(profile, 'data_lineage') else None
+        lineage_html = ''
+        if lineage:
+            hash_short = lineage.source_hash[:12] + '...' if lineage.source_hash else 'N/A'
+            hash_full = lineage.source_hash or 'N/A'
+            version = lineage.profiler_version or 'Unknown'
+            env = lineage.environment or {}
+            hostname = env.get('hostname', 'Unknown')
+
+            # Analysis badges
+            analysis_badges = ''
+            if lineage.analysis_applied:
+                badges = lineage.analysis_applied[:6]  # Show first 6
+                more_count = len(lineage.analysis_applied) - 6
+                analysis_badges = ''.join([
+                    f'<span style="background: rgba(167,139,250,0.15); color: #a78bfa; padding: 2px 6px; border-radius: 3px; font-size: 0.85em; margin-right: 4px; margin-bottom: 4px; display: inline-block;">{a.replace("_", " ").title()}</span>'
+                    for a in badges
+                ])
+                if more_count > 0:
+                    analysis_badges += f'<span style="color: var(--text-muted); font-size: 0.85em;">+{more_count} more</span>'
+
+            lineage_html = f'''
+                        <div class="exec1-detail-row" style="margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.1);">
+                            <span class="exec1-detail-label">Hash</span>
+                            <span style="font-family: monospace; color: #a78bfa;" title="{hash_full}">{hash_short}</span>
+                        </div>
+                        <div class="exec1-detail-row">
+                            <span class="exec1-detail-label">Version</span>
+                            <span>DataK9 v{version}</span>
+                        </div>
+                        <div class="exec1-detail-row">
+                            <span class="exec1-detail-label">Host</span>
+                            <span>{hostname}</span>
+                        </div>
+                        <div class="exec1-detail-section" style="margin-top: 8px;">
+                            <div style="color: var(--text-muted); font-size: 0.85em; margin-bottom: 6px;">Analyses Applied:</div>
+                            <div style="display: flex; flex-wrap: wrap; gap: 4px;">{analysis_badges}</div>
+                        </div>'''
+
+        # Type pills
+        numeric_count = type_counts.get('numeric', 0) + type_counts.get('integer', 0) + type_counts.get('float', 0)
+        text_count = type_counts.get('string', 0) + type_counts.get('text', 0)
+        date_count = type_counts.get('date', 0) + type_counts.get('datetime', 0) + type_counts.get('timestamp', 0)
+
+        type_pills = []
+        if numeric_count > 0:
+            type_pills.append(f'<span class="type-pill numeric">{numeric_count} Numeric</span>')
+        if text_count > 0:
+            type_pills.append(f'<span class="type-pill text">{text_count} Text</span>')
+        if date_count > 0:
+            type_pills.append(f'<span class="type-pill date">{date_count} Date</span>')
+        type_pills_html = ''.join(type_pills) if type_pills else '<span class="type-pill">Mixed types</span>'
+
+        # Calculate dial stroke-dasharray (circumference = 2 * pi * r = 2 * 3.14159 * 15.9155 ≈ 100)
+        completeness_dash = avg_completeness
+        validity_dash = avg_validity
+
+        # Dial colors based on value
+        def get_dial_color(value):
+            if value >= 90:
+                return '#10b981'  # green
+            elif value >= 70:
+                return '#f59e0b'  # amber
+            else:
+                return '#ef4444'  # red
+
+        completeness_color = get_dial_color(avg_completeness)
+        validity_color = get_dial_color(avg_validity)
+
+        return f'''
+        <section class="executive-summary" id="section-overview">
+            <!-- Data Profiling Header with Status Badge -->
+            <div class="exec1-summary-header">
+                <div class="exec1-summary-top">
+                    <h1 class="exec1-summary-title">Data Profiling</h1>
+                    {status_badge}
+                </div>
+                <details class="exec1-info-line">
+                    <summary>
+                        <svg style="width: 14px; height: 14px; vertical-align: -2px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                        {profile.file_name} • {date_str}
+                    </summary>
+                    <div class="exec1-info-detail">
+                        <div class="exec1-detail-row">
+                            <span class="exec1-detail-label">Analysis</span>
+                            <span>{analysis_note}</span>
+                        </div>
+                        <div class="exec1-detail-row">
+                            <span class="exec1-detail-label">Source</span>
+                            <span>{profile.file_name}</span>
+                        </div>
+                        <div class="exec1-detail-row">
+                            <span class="exec1-detail-label">Profiled</span>
+                            <span>{date_str}</span>
+                        </div>{lineage_html}
+                    </div>
+                </details>
+            </div>
+
+            <!-- Compact Grid: 4 widgets (2x2 on mobile) -->
+            <div class="exec1-compact-grid">
+                <!-- Records -->
+                <div class="exec1-compact-stat">
+                    <div class="exec1-compact-value">{profile.row_count:,}</div>
+                    <div class="exec1-compact-label">Records</div>
+                    <div class="exec1-compact-meta">{ml_issues:,} anomalies</div>
+                </div>
+                <!-- Columns -->
+                <div class="exec1-compact-stat">
+                    <div class="exec1-compact-value">{profile.column_count}</div>
+                    <div class="exec1-compact-label">Columns</div>
+                    <div class="exec1-compact-pills">{type_pills_html}</div>
+                </div>
+                <!-- Completeness Dial -->
+                <div class="exec1-dial-widget">
+                    <svg class="exec1-dial" viewBox="0 0 36 36">
+                        <circle class="exec1-dial-bg" cx="18" cy="18" r="15.9155"/>
+                        <circle class="exec1-dial-fill" cx="18" cy="18" r="15.9155"
+                            style="stroke-dasharray: {completeness_dash} 100; stroke-dashoffset: 25; stroke: {completeness_color};"/>
+                        <text x="18" y="21" class="exec1-dial-text">{avg_completeness:.0f}%</text>
+                    </svg>
+                    <div class="exec1-dial-label">Completeness</div>
+                </div>
+                <!-- Validity Dial -->
+                <div class="exec1-dial-widget">
+                    <svg class="exec1-dial" viewBox="0 0 36 36">
+                        <circle class="exec1-dial-bg" cx="18" cy="18" r="15.9155"/>
+                        <circle class="exec1-dial-fill" cx="18" cy="18" r="15.9155"
+                            style="stroke-dasharray: {validity_dash} 100; stroke-dashoffset: 25; stroke: {validity_color};"/>
+                        <text x="18" y="21" class="exec1-dial-text">{avg_validity:.0f}%</text>
+                    </svg>
+                    <div class="exec1-dial-label">Validity</div>
+                </div>
             </div>
         </section>'''
 
