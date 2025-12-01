@@ -2863,17 +2863,17 @@ class ExecutiveHTMLReporter:
             min-width: 140px;
         }
         .exec1-quality-dial {
-            width: 120px;
-            height: 120px;
+            width: 100px;
+            height: 100px;
         }
         .exec1-quality-dial-bg {
             fill: none;
-            stroke: rgba(255,255,255,0.1);
-            stroke-width: 8;
+            stroke: rgba(255,255,255,0.08);
+            stroke-width: 6;
         }
         .exec1-quality-dial-fill {
             fill: none;
-            stroke-width: 8;
+            stroke-width: 6;
             stroke-linecap: round;
             transform: rotate(-90deg);
             transform-origin: 50% 50%;
@@ -2881,13 +2881,16 @@ class ExecutiveHTMLReporter:
         }
         .exec1-quality-dial-text {
             fill: var(--text-primary);
-            font-size: 14px;
-            font-weight: 700;
+            font-size: 22px;
+            font-weight: 600;
             text-anchor: middle;
+            dominant-baseline: middle;
         }
         .exec1-quality-dial-subtext {
             fill: var(--text-muted);
-            font-size: 5px;
+            font-size: 9px;
+            font-weight: 500;
+            letter-spacing: 1px;
             text-anchor: middle;
         }
         .exec1-quality-dial-label {
@@ -11644,12 +11647,12 @@ the largest difference between classes, which could be useful for predictive mod
             <!-- Quality Widget: Large dial on left, breakdown bars on right -->
             <div class="exec1-quality-widget">
                 <div class="exec1-quality-dial-section">
-                    <svg class="exec1-quality-dial" viewBox="0 0 36 36">
-                        <circle class="exec1-quality-dial-bg" cx="18" cy="18" r="15.9155"/>
-                        <circle class="exec1-quality-dial-fill" cx="18" cy="18" r="15.9155"
-                            style="stroke-dasharray: {overall_quality} 100; stroke-dashoffset: 25; stroke: {quality_color};"/>
-                        <text x="18" y="20" class="exec1-quality-dial-text">{overall_quality:.0f}%</text>
-                        <text x="18" y="26" class="exec1-quality-dial-subtext">QUALITY</text>
+                    <svg class="exec1-quality-dial" viewBox="0 0 100 100">
+                        <circle class="exec1-quality-dial-bg" cx="50" cy="50" r="42"/>
+                        <circle class="exec1-quality-dial-fill" cx="50" cy="50" r="42"
+                            style="stroke-dasharray: {overall_quality * 2.639} 264; stroke-dashoffset: 66; stroke: {quality_color};"/>
+                        <text x="50" y="48" class="exec1-quality-dial-text">{overall_quality:.0f}%</text>
+                        <text x="50" y="62" class="exec1-quality-dial-subtext">QUALITY</text>
                     </svg>
                     <div class="exec1-quality-dial-label">Overall Score</div>
                 </div>
