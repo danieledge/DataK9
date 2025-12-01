@@ -211,9 +211,27 @@ def validate(config_file, html_output, json_output, verbose, fail_on_warning, de
         po.error(f"File not found: {str(e)}")
         sys.exit(1)
 
+    except RuntimeError as e:
+        # Graceful error from loaders (CSV parsing, encoding issues)
+        error_msg = str(e)
+        po.blank_line()
+        po.error("Error processing file:")
+        click.echo(f"   {error_msg}", err=True)
+        if "delimiter" in error_msg.lower():
+            po.blank_line()
+            po.info("Tip: Try specifying the delimiter with -d option or in config:")
+            click.echo("   Command line: python -m validation_framework.cli validate config.yaml -d \"|\"")
+            click.echo("   YAML config:  delimiter: \"|\"  (under files section)")
+        sys.exit(1)
+
     except Exception as e:
         po.blank_line()
         po.error(f"Unexpected error: {str(e)}")
+        po.blank_line()
+        po.info("If this is a CSV parsing issue, try:")
+        click.echo("   - Check the file encoding (UTF-8, CP1252, etc.)")
+        click.echo("   - Verify the delimiter is correct (-d option or in YAML)")
+        click.echo("   - Check for malformed rows (unquoted delimiters in data)")
         if verbose:
             import traceback
             po.blank_line()
@@ -817,11 +835,26 @@ def profile(file_path, format, delimiter, database, table, query, html_output, j
         sys.exit(0)
 
     except FileNotFoundError as e:
-        click.echo(f"❌ Error: {str(e)}", err=True)
+        click.echo(f"❌ File not found: {str(e)}", err=True)
+        sys.exit(1)
+
+    except RuntimeError as e:
+        # Graceful error from loaders (CSV parsing, encoding issues)
+        error_msg = str(e)
+        click.echo(f"\n❌ Error processing file:", err=True)
+        click.echo(f"   {error_msg}", err=True)
+        if "delimiter" in error_msg.lower():
+            click.echo(f"\n💡 Tip: Try specifying the delimiter with -d option:", err=True)
+            click.echo(f"   python -m validation_framework.cli profile {file_path} -d \"|\"", err=True)
+            click.echo(f"   python -m validation_framework.cli profile {file_path} -d \"\\t\"  # for tabs", err=True)
         sys.exit(1)
 
     except Exception as e:
-        click.echo(f"❌ Unexpected error: {str(e)}", err=True)
+        click.echo(f"\n❌ Unexpected error: {str(e)}", err=True)
+        click.echo(f"\n💡 If this is a CSV parsing issue, try:", err=True)
+        click.echo(f"   - Check the file encoding (UTF-8, CP1252, etc.)", err=True)
+        click.echo(f"   - Verify the delimiter is correct (-d option)", err=True)
+        click.echo(f"   - Check for malformed rows (unquoted delimiters in data)", err=True)
         import traceback
         traceback.print_exc()
         sys.exit(1)

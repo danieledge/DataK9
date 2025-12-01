@@ -1,16 +1,96 @@
 """CSV data loader with chunked reading for large files."""
 
-from typing import Iterator, Dict, Any
+import csv
+import logging
+from pathlib import Path
+from typing import Iterator, Dict, Any, Optional
 import pandas as pd
 from validation_framework.loaders.base import DataLoader
 
+logger = logging.getLogger(__name__)
+
+
+def detect_delimiter(file_path: str, sample_size: int = 8192) -> str:
+    """
+    Auto-detect the delimiter used in a CSV file.
+
+    Args:
+        file_path: Path to the CSV file
+        sample_size: Number of bytes to sample for detection
+
+    Returns:
+        Detected delimiter character, defaults to ',' if detection fails
+    """
+    encodings = ['utf-8', 'utf-8-sig', 'cp1252', 'latin-1']
+
+    for encoding in encodings:
+        try:
+            with open(file_path, 'r', newline='', encoding=encoding) as f:
+                sample = f.read(sample_size)
+
+            sniffer = csv.Sniffer()
+            dialect = sniffer.sniff(sample, delimiters=',\t|;:')
+            return dialect.delimiter
+        except (UnicodeDecodeError, csv.Error):
+            continue
+        except Exception:
+            break
+
+    return ','
+
+
+def detect_encoding(file_path: str) -> str:
+    """
+    Detect the encoding of a file by trying common encodings.
+
+    Args:
+        file_path: Path to the file
+
+    Returns:
+        Detected encoding name, defaults to 'utf-8'
+    """
+    encodings = ['utf-8', 'utf-8-sig', 'cp1252', 'latin-1', 'iso-8859-1']
+
+    for encoding in encodings:
+        try:
+            with open(file_path, 'r', encoding=encoding) as f:
+                f.read(8192)
+            return encoding
+        except UnicodeDecodeError:
+            continue
+
+    return 'utf-8'
+
 
 class CSVLoader(DataLoader):
-    """Loader for CSV and delimited text files."""
+    """Loader for CSV and delimited text files with robust error handling."""
+
+    def __init__(self, file_path: str, chunk_size: int = 10000, **kwargs):
+        """
+        Initialize CSVLoader with auto-detection capabilities.
+
+        Args:
+            file_path: Path to CSV file
+            chunk_size: Number of rows per chunk
+            **kwargs: Additional options (delimiter, encoding, header)
+        """
+        super().__init__(file_path, chunk_size, **kwargs)
+
+        # Auto-detect delimiter if not specified
+        if 'delimiter' not in kwargs or kwargs.get('delimiter') is None:
+            self.kwargs['delimiter'] = detect_delimiter(file_path)
+            if self.kwargs['delimiter'] != ',':
+                logger.info(f"Auto-detected delimiter: {repr(self.kwargs['delimiter'])}")
+
+        # Auto-detect encoding if not specified
+        if 'encoding' not in kwargs or kwargs.get('encoding') is None:
+            self.kwargs['encoding'] = detect_encoding(file_path)
+            if self.kwargs['encoding'] != 'utf-8':
+                logger.info(f"Auto-detected encoding: {self.kwargs['encoding']}")
 
     def load(self) -> Iterator[pd.DataFrame]:
         """
-        Load CSV data in chunks.
+        Load CSV data in chunks with robust error handling.
 
         Yields:
             DataFrames containing chunks of data
@@ -33,8 +113,28 @@ class CSVLoader(DataLoader):
                 yield chunk
 
         except pd.errors.EmptyDataError:
-            # Return empty DataFrame with no columns
+            logger.warning(f"Empty CSV file: {self.file_path}")
             yield pd.DataFrame()
+
+        except pd.errors.ParserError as e:
+            error_msg = str(e)
+            # Provide helpful error messages for common issues
+            if "Expected" in error_msg and "fields" in error_msg:
+                raise RuntimeError(
+                    f"CSV parsing error in {self.file_path}: Row has inconsistent number of columns. "
+                    f"This often means the delimiter is incorrect (current: {repr(delimiter)}) "
+                    f"or the file contains unquoted delimiters in data fields. "
+                    f"Try specifying --delimiter or check the file for formatting issues.\n"
+                    f"Original error: {error_msg}"
+                )
+            raise RuntimeError(f"CSV parsing error in {self.file_path}: {error_msg}")
+
+        except UnicodeDecodeError as e:
+            raise RuntimeError(
+                f"Encoding error in {self.file_path}: Cannot decode file with {encoding} encoding. "
+                f"Try specifying a different encoding (e.g., cp1252, latin-1, utf-16).\n"
+                f"Original error: {str(e)}"
+            )
 
         except Exception as e:
             raise RuntimeError(f"Error loading CSV file {self.file_path}: {str(e)}")
