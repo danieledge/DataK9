@@ -1896,7 +1896,7 @@ class MLAnalyzer:
         - Predictability: Some signal exists (measured via Cramér's V)
         - Not too predictable: Penalizes derived/redundant columns
         - Binary bonus: Binary columns are common targets
-        - Semantic hints: Column names suggesting targets
+        - Semantic type: Uses FIBO/Schema.org semantic classification
         - Completeness: Targets typically have no missing values
 
         Args:
@@ -1907,17 +1907,27 @@ class MLAnalyzer:
         Returns:
             List of recommended targets with scores and feature importance
         """
-        # Sample if large (aggressive sampling for speed)
+        # Only sample if dataset exceeds threshold
         if len(df) > sample_size:
             df = df.sample(n=sample_size, random_state=42)
 
-        # Semantic hints for likely targets (boost these)
-        target_hints = [
-            'target', 'label', 'class', 'outcome', 'response', 'y',
-            'survived', 'churn', 'fraud', 'default', 'status', 'result',
-            'category', 'segment', 'priority', 'type', 'grade', 'approved',
-            'rejected', 'success', 'failure', 'converted', 'purchased'
-        ]
+        # Semantic types that indicate likely ML targets (from FIBO taxonomy)
+        # These are category/classification types, not domain-specific field names
+        target_semantic_types = {
+            # High likelihood targets (outcome/classification fields)
+            'category.transaction_type': 0.30,
+            'category.account_type': 0.30,
+            'category.payment_method': 0.25,
+            'status': 0.35,  # Status fields are common targets
+        }
+
+        # Semantic types to SKIP as targets (identifiers, amounts)
+        skip_semantic_types = {
+            'identifier', 'identifier.uuid', 'identifier.code',
+            'banking.account', 'banking.transaction',
+            'party.customer_id', 'loan.identifier', 'security.identifier',
+            'money.amount', 'money.price', 'money.currency',
+        }
 
         candidates = []
         n_rows = len(df)
@@ -1926,6 +1936,21 @@ class MLAnalyzer:
             try:
                 n_unique = df[col].nunique(dropna=True)
                 completeness = df[col].notna().mean()
+
+                # Get semantic info for this column
+                sem_info = self._column_semantic_info.get(col, {})
+                primary_tag = sem_info.get('primary_tag', '')
+
+                # Skip identifier/amount columns based on semantic type
+                if primary_tag:
+                    # Check if tag or parent matches skip list
+                    should_skip = False
+                    for skip_type in skip_semantic_types:
+                        if primary_tag == skip_type or primary_tag.startswith(skip_type + '.'):
+                            should_skip = True
+                            break
+                    if should_skip:
+                        continue
 
                 # Candidate filters
                 is_low_cardinality = 2 <= n_unique <= 20
@@ -1937,7 +1962,8 @@ class MLAnalyzer:
                         'column': col,
                         'n_classes': n_unique,
                         'completeness': completeness,
-                        'is_binary': n_unique == 2
+                        'is_binary': n_unique == 2,
+                        'semantic_tag': primary_tag
                     })
             except Exception:
                 continue
@@ -1945,8 +1971,8 @@ class MLAnalyzer:
         if not candidates:
             return []
 
-        # Limit to 3 candidates for performance
-        candidates = candidates[:3]
+        # Limit candidates for performance
+        candidates = candidates[:5]
 
         # Compute predictability for each candidate
         for cand in candidates:
@@ -1976,12 +2002,22 @@ class MLAnalyzer:
                 score += 0.25
                 reasons.append("binary")
 
-            # 4. Semantic name match
-            col_lower = col.lower()
-            semantic_match = any(hint in col_lower for hint in target_hints)
-            if semantic_match:
-                score += 0.30
-                reasons.append("semantic")
+            # 4. Semantic type scoring (replaces hardcoded field name matching)
+            primary_tag = cand.get('semantic_tag', '')
+            semantic_boost = 0.0
+
+            # Check for exact match in target semantic types
+            if primary_tag in target_semantic_types:
+                semantic_boost = target_semantic_types[primary_tag]
+            # Check for parent category match (e.g., 'category.foo' → 'category')
+            elif '.' in primary_tag:
+                parent = primary_tag.split('.')[0]
+                if parent == 'category':
+                    semantic_boost = 0.20  # Category fields often good targets
+
+            if semantic_boost > 0:
+                score += semantic_boost
+                reasons.append(f"semantic:{primary_tag}")
 
             # 5. High completeness bonus
             if cand['completeness'] >= 0.99:
