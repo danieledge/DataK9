@@ -1916,6 +1916,8 @@ class DataProfiler:
             }
 
             # Return mapped type or original type_name in lowercase
+            if type_name is None:
+                return None
             return type_mapping.get(type_name, type_name.lower())
 
         except Exception as e:
