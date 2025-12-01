@@ -155,40 +155,40 @@ class ChunkedMLAccumulator:
 
     def _detect_target_columns(self, df: pd.DataFrame) -> List[str]:
         """
-        Detect likely target/label columns using heuristics.
+        Detect likely target/label columns using semantic types and patterns.
 
-        Generic detection logic (no hardcoded dataset-specific keywords):
-        1. Keyword matching: 'target', 'label', 'class', 'outcome', 'y', etc.
-           Keywords must be standalone or delimited (not part of another word)
+        Uses semantic-based detection (FIBO + Schema.org) plus generic patterns:
+        1. Semantic types: schema:Boolean, schema:CategoryCode, category.*, status
         2. Pattern matching: 'is_*', 'has_*', '*_flag', '*_indicator'
-        3. Binary columns with low cardinality (2 unique values)
-        4. Low-cardinality categorical columns (≤5 unique) with target-like names
+        3. Generic keywords: 'target', 'label', 'class', 'outcome', 'y', 'status'
+        4. Binary columns with low cardinality (2 unique values)
 
         Returns:
             List of detected target column names
         """
-        target_keywords = [
+        # Generic target keywords (domain-agnostic, no hardcoded field names)
+        generic_keywords = [
             'target', 'label', 'class', 'outcome', 'response', 'y',
-            'churn', 'fraud', 'default', 'laundering', 'spam', 'survived',
-            'conversion', 'click', 'purchase', 'attrition', 'failure', 'success',
-            'status', 'result', 'decision', 'category', 'segment', 'priority',
-            'type', 'grade', 'rating', 'level', 'tier', 'risk', 'approved', 'rejected'
+            'status', 'result', 'decision', 'category', 'segment',
+            'type', 'grade', 'rating', 'level', 'tier'
         ]
         prefix_patterns = ['is_', 'has_', 'was_', 'did_', 'will_']
         suffix_patterns = ['_flag', '_indicator', '_label', '_target', '_class', '_outcome', '_status', '_type', '_category']
 
+        # Semantic types indicating targets (FIBO + Schema.org)
+        target_semantic_types = {
+            'schema:Boolean', 'schema:CategoryCode', 'schema:ItemList',
+            'category.transaction_type', 'category.account_type', 'category.payment_method',
+            'status'
+        }
+
         def is_keyword_present(col_lower, keywords):
-            """Check if keyword is present as a whole word (not substring of another word)."""
+            """Check if keyword is present as a whole word (not substring)."""
             for kw in keywords:
-                # Exact match
                 if col_lower == kw:
                     return True
-                # Check with word boundaries (underscore, space, start/end)
-                # e.g., "class" matches "class", "_class", "class_", "_class_"
-                # but NOT "pclass" or "classification"
                 if f'_{kw}' in col_lower or f'{kw}_' in col_lower:
                     return True
-                # Check if keyword is at start or end with underscore
                 if col_lower.startswith(f'{kw}_') or col_lower.endswith(f'_{kw}'):
                     return True
             return False
@@ -197,14 +197,22 @@ class ChunkedMLAccumulator:
         for col in df.columns:
             col_lower = col.lower().strip()
 
-            # Check keyword match (with word boundary awareness)
-            is_keyword_match = is_keyword_present(col_lower, target_keywords)
+            # Check semantic type match (from column_semantic_info)
+            sem_info = self._column_semantic_info.get(col, {})
+            resolved = sem_info.get('resolved', {})
+            primary_type = resolved.get('primary_type', '') or sem_info.get('primary_tag', '')
+            is_semantic_target = primary_type in target_semantic_types or (
+                '.' in primary_type and primary_type.split('.')[0] == 'category'
+            )
+
+            # Check generic keyword match
+            is_keyword_match = is_keyword_present(col_lower, generic_keywords)
 
             # Check prefix/suffix patterns
             is_prefix_match = any(col_lower.startswith(p) for p in prefix_patterns)
             is_suffix_match = any(col_lower.endswith(s) for s in suffix_patterns)
 
-            # Check cardinality (binary or very low)
+            # Check cardinality
             try:
                 n_unique = df[col].nunique(dropna=True)
                 is_binary = n_unique == 2
@@ -213,15 +221,15 @@ class ChunkedMLAccumulator:
                 is_binary = False
                 is_low_cardinality = False
 
-            # Detection logic:
-            # - Exact keyword match with low cardinality -> definitely target
-            # - Prefix/suffix pattern with binary -> likely target
-            # - Binary column with any target hint -> target
-            if is_keyword_match and is_low_cardinality:
+            # Detection logic (semantic-first):
+            # - Semantic type match with low cardinality -> target
+            # - Generic keyword match with low cardinality -> target
+            # - Prefix/suffix pattern with binary -> target
+            if is_semantic_target and is_low_cardinality:
+                detected.append(col)
+            elif is_keyword_match and is_low_cardinality:
                 detected.append(col)
             elif (is_prefix_match or is_suffix_match) and is_binary:
-                detected.append(col)
-            elif is_binary and is_keyword_match:
                 detected.append(col)
 
         return detected
@@ -1648,40 +1656,40 @@ class MLAnalyzer:
 
     def _detect_target_columns(self, df: pd.DataFrame) -> List[str]:
         """
-        Detect likely target/label columns using heuristics.
+        Detect likely target/label columns using semantic types and patterns.
 
-        Generic detection logic (no hardcoded dataset-specific keywords):
-        1. Keyword matching: 'target', 'label', 'class', 'outcome', 'y', etc.
-           Keywords must be standalone or delimited (not part of another word)
+        Uses semantic-based detection (FIBO + Schema.org) plus generic patterns:
+        1. Semantic types: schema:Boolean, schema:CategoryCode, category.*, status
         2. Pattern matching: 'is_*', 'has_*', '*_flag', '*_indicator'
-        3. Binary columns with low cardinality (2 unique values)
-        4. Low-cardinality categorical columns (≤5 unique) with target-like names
+        3. Generic keywords: 'target', 'label', 'class', 'outcome', 'y', 'status'
+        4. Binary columns with low cardinality (2 unique values)
 
         Returns:
             List of detected target column names
         """
-        target_keywords = [
+        # Generic target keywords (domain-agnostic, no hardcoded field names)
+        generic_keywords = [
             'target', 'label', 'class', 'outcome', 'response', 'y',
-            'churn', 'fraud', 'default', 'laundering', 'spam', 'survived',
-            'conversion', 'click', 'purchase', 'attrition', 'failure', 'success',
-            'status', 'result', 'decision', 'category', 'segment', 'priority',
-            'type', 'grade', 'rating', 'level', 'tier', 'risk', 'approved', 'rejected'
+            'status', 'result', 'decision', 'category', 'segment',
+            'type', 'grade', 'rating', 'level', 'tier'
         ]
         prefix_patterns = ['is_', 'has_', 'was_', 'did_', 'will_']
         suffix_patterns = ['_flag', '_indicator', '_label', '_target', '_class', '_outcome', '_status', '_type', '_category']
 
+        # Semantic types indicating targets (FIBO + Schema.org)
+        target_semantic_types = {
+            'schema:Boolean', 'schema:CategoryCode', 'schema:ItemList',
+            'category.transaction_type', 'category.account_type', 'category.payment_method',
+            'status'
+        }
+
         def is_keyword_present(col_lower, keywords):
-            """Check if keyword is present as a whole word (not substring of another word)."""
+            """Check if keyword is present as a whole word (not substring)."""
             for kw in keywords:
-                # Exact match
                 if col_lower == kw:
                     return True
-                # Check with word boundaries (underscore, space, start/end)
-                # e.g., "class" matches "class", "_class", "class_", "_class_"
-                # but NOT "pclass" or "classification"
                 if f'_{kw}' in col_lower or f'{kw}_' in col_lower:
                     return True
-                # Check if keyword is at start or end with underscore
                 if col_lower.startswith(f'{kw}_') or col_lower.endswith(f'_{kw}'):
                     return True
             return False
@@ -1690,14 +1698,22 @@ class MLAnalyzer:
         for col in df.columns:
             col_lower = col.lower().strip()
 
-            # Check keyword match (with word boundary awareness)
-            is_keyword_match = is_keyword_present(col_lower, target_keywords)
+            # Check semantic type match (from column_semantic_info)
+            sem_info = self._column_semantic_info.get(col, {})
+            resolved = sem_info.get('resolved', {})
+            primary_type = resolved.get('primary_type', '') or sem_info.get('primary_tag', '')
+            is_semantic_target = primary_type in target_semantic_types or (
+                '.' in primary_type and primary_type.split('.')[0] == 'category'
+            )
+
+            # Check generic keyword match
+            is_keyword_match = is_keyword_present(col_lower, generic_keywords)
 
             # Check prefix/suffix patterns
             is_prefix_match = any(col_lower.startswith(p) for p in prefix_patterns)
             is_suffix_match = any(col_lower.endswith(s) for s in suffix_patterns)
 
-            # Check cardinality (binary or very low)
+            # Check cardinality
             try:
                 n_unique = df[col].nunique(dropna=True)
                 is_binary = n_unique == 2
@@ -1706,15 +1722,15 @@ class MLAnalyzer:
                 is_binary = False
                 is_low_cardinality = False
 
-            # Detection logic:
-            # - Exact keyword match with low cardinality -> definitely target
-            # - Prefix/suffix pattern with binary -> likely target
-            # - Binary column with any target hint -> target
-            if is_keyword_match and is_low_cardinality:
+            # Detection logic (semantic-first):
+            # - Semantic type match with low cardinality -> target
+            # - Generic keyword match with low cardinality -> target
+            # - Prefix/suffix pattern with binary -> target
+            if is_semantic_target and is_low_cardinality:
+                detected.append(col)
+            elif is_keyword_match and is_low_cardinality:
                 detected.append(col)
             elif (is_prefix_match or is_suffix_match) and is_binary:
-                detected.append(col)
-            elif is_binary and is_keyword_match:
                 detected.append(col)
 
         return detected
@@ -4022,9 +4038,10 @@ class MLAnalyzer:
 
         # Bounded/demographic data (ages, ratings, percentages, etc.)
         # These don't follow Benford's Law because they don't grow multiplicatively
+        # Note: uses generic patterns only, not domain-specific field names
         bounded_keywords = ['age', 'rating', 'score', 'grade', 'percent', 'pct', 'rate',
                            'level', 'class', 'tier', 'year', 'month', 'day', 'hour',
-                           'duration', 'tenure', 'pclass', 'survived']
+                           'duration', 'tenure', 'rank', 'priority']
         if any(kw in col_lower for kw in bounded_keywords):
             return "Column contains bounded/demographic data (not suitable for Benford)"
 
@@ -4176,9 +4193,10 @@ class MLAnalyzer:
 
         # Exclude bounded/demographic data (ages, ratings, percentages, etc.)
         # These don't follow Benford's Law because they don't grow multiplicatively
+        # Note: uses generic patterns only, not domain-specific field names
         bounded_keywords = ['age', 'rating', 'score', 'grade', 'percent', 'pct', 'rate',
                            'level', 'class', 'tier', 'year', 'month', 'day', 'hour',
-                           'duration', 'tenure', 'pclass', 'survived']
+                           'duration', 'tenure', 'rank', 'priority']
 
         if any(kw in col_lower for kw in bounded_keywords):
             return False
