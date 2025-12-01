@@ -9470,10 +9470,10 @@ the largest difference between classes, which could be useful for predictive mod
         # Build FIBO chips
         fibo_chips = ''
         for category, cols in sorted(fibo_types.items(), key=lambda x: -len(x[1])):
-            icon = category_icons.get(category.lower(), '📋')
+            cat_icon = category_icons.get(category.lower(), '📋')
             fibo_chips += f'''
                 <div class="semantic-chip fibo" title="FIBO: {category} - {len(cols)} column(s)">
-                    <span class="chip-icon">{icon}</span>
+                    <span class="chip-icon">{cat_icon}</span>
                     <span class="chip-label">{category.title()}</span>
                     <span class="chip-count">{len(cols)}</span>
                     <span class="chip-source">FIBO</span>
@@ -9482,10 +9482,10 @@ the largest difference between classes, which could be useful for predictive mod
         # Build Schema.org chips
         schema_chips = ''
         for schema_type, cols in sorted(schema_org_types.items(), key=lambda x: -len(x[1])):
-            icon = category_icons.get(schema_type.lower(), '📋')
+            cat_icon = category_icons.get(schema_type.lower(), '📋')
             schema_chips += f'''
                 <div class="semantic-chip schema-org" title="Schema.org: {schema_type} - {len(cols)} column(s)">
-                    <span class="chip-icon">{icon}</span>
+                    <span class="chip-icon">{cat_icon}</span>
                     <span class="chip-label">{schema_type}</span>
                     <span class="chip-count">{len(cols)}</span>
                     <span class="chip-source">Schema.org</span>
@@ -9508,11 +9508,18 @@ the largest difference between classes, which could be useful for predictive mod
         # Build summary stats
         unclassified_count = len(unclassified_columns)
 
+        # Pre-compute icon HTML (before local 'icon' variable shadowing)
+        icon_tag = icon('tag', 16, color='#64748b')
+        icon_chevron = icon('chevron-down', 14)
+        icon_search = icon('search', 14)
+        icon_bar_chart = icon('bar-chart', 14)
+        icon_key = icon('key', 14)
+
         return f'''
                 <div class="accordion" data-accordion="semantics">
                     <div class="accordion-header" onclick="toggleAccordion(this)">
                         <div class="accordion-title-group">
-                            <div class="accordion-icon">{icon('tag', 16, color='#64748b')}</div>
+                            <div class="accordion-icon">{icon_tag}</div>
                             <div>
                                 <div class="accordion-title">Semantic Classification</div>
                                 <div class="accordion-subtitle">What type of data is in each column?</div>
@@ -9520,7 +9527,7 @@ the largest difference between classes, which could be useful for predictive mod
                         </div>
                         <div class="accordion-meta">
                             <span class="accordion-badge info">{columns_with_semantics}/{len(columns)} classified</span>
-                            <span class="accordion-chevron">{icon('chevron-down', 14)}</span>
+                            <span class="accordion-chevron">{icon_chevron}</span>
                         </div>
                     </div>
                     <div class="accordion-body">
@@ -9537,7 +9544,7 @@ the largest difference between classes, which could be useful for predictive mod
                             <!-- How it works -->
                             <div style="background: var(--bg-tertiary); border-radius: 8px; padding: 16px; margin-bottom: 20px;">
                                 <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 12px; font-size: 0.9em;">
-                                    {icon('search', 14)} How Classification Works
+                                    {icon_search} How Classification Works
                                 </div>
                                 <p style="color: var(--text-secondary); font-size: 0.85em; line-height: 1.6; margin-bottom: 12px;">
                                     DataK9 checks each column against two standard vocabularies, in order of priority:
@@ -9566,7 +9573,7 @@ the largest difference between classes, which could be useful for predictive mod
                             <!-- Results Summary -->
                             <div style="margin-bottom: 20px;">
                                 <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 12px; font-size: 0.9em;">
-                                    {icon('bar-chart', 14)} Classification Results
+                                    {icon_bar_chart} Classification Results
                                 </div>
                                 <div style="display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 16px;">
                                     <div style="background: var(--bg-tertiary); padding: 12px 16px; border-radius: 8px; text-align: center;">
@@ -9604,7 +9611,7 @@ the largest difference between classes, which could be useful for predictive mod
                             <!-- Technical Layer -->
                             <details style="margin-top: 16px;">
                                 <summary style="cursor: pointer; color: var(--text-secondary); font-size: 0.85em; padding: 8px 0;">
-                                    {icon('key', 14)} Technical Details: Column Mappings
+                                    {icon_key} Technical Details: Column Mappings
                                 </summary>
                                 <div style="margin-top: 12px; overflow-x: auto;">
                                     <table style="width: 100%; border-collapse: collapse; font-size: 0.85em;">
