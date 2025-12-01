@@ -357,9 +357,13 @@ class ValidationEngine:
                     file_report.add_result(error_result)
 
                 except Exception as e:
+                    import traceback
+                    tb = traceback.format_exc()
+                    logger.error(f"Validation {validation_type} failed: {e}")
+                    logger.debug(f"Traceback:\n{tb}")
                     if verbose:
                         print(f"{po.ERROR}{po.CROSS} ERROR{po.RESET}")
-                    # Create error result
+                    # Create error result with traceback in details
                     from validation_framework.core.results import ValidationResult
                     error_result = ValidationResult(
                         rule_name=validation_type,
@@ -367,6 +371,7 @@ class ValidationEngine:
                         passed=False,
                         message=f"Error executing validation: {str(e)}",
                         failed_count=1,
+                        details=[{"traceback": tb, "exception_type": type(e).__name__}],
                     )
                     file_report.add_result(error_result)
 
@@ -461,8 +466,10 @@ class ValidationEngine:
                     from validation_framework.cda import CDAGapAnalyzer
                     analyzer = CDAGapAnalyzer()
                     cda_report = analyzer.analyze(raw_config)
-                except Exception:
-                    pass  # CDA analysis is optional
+                except ImportError:
+                    logger.debug("CDA module not available - skipping CDA analysis")
+                except Exception as e:
+                    logger.debug(f"CDA analysis skipped due to error: {e}")
 
         reporter = HTMLReporter()
         reporter.generate(report, output_path, cda_report=cda_report)
