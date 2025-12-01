@@ -1624,6 +1624,12 @@ class ExecutiveHTMLReporter:
             padding: 20px;
             border-radius: var(--radius-md);
             margin-bottom: 16px;
+            overflow: hidden;
+            position: relative;
+        }
+        .chart-container canvas {
+            max-width: 100%;
+            height: auto !important;
         }
 
         .chart-title {
@@ -4857,6 +4863,8 @@ class ExecutiveHTMLReporter:
             }},
             options: {{
                 ...chartDefaults,
+                responsive: true,
+                maintainAspectRatio: true,
                 plugins: {{
                     legend: {{ display: false }},
                     tooltip: {{
