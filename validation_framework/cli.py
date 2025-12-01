@@ -423,6 +423,7 @@ def version():
 @click.argument('file_path', type=click.Path(exists=True), required=False)
 @click.option('--format', '-f', type=click.Choice(['csv', 'excel', 'json', 'parquet'], case_sensitive=False),
               help='File format (auto-detected if not specified)')
+@click.option('--delimiter', '-d', default=None, help='Column delimiter for CSV files (default: comma). Use "\\t" for tab-separated files.')
 @click.option('--database', '--db', help='Database connection string (e.g., sqlite:///test.db or postgresql://...)')
 @click.option('--table', '-t', help='Database table name to profile')
 @click.option('--query', '-q', help='SQL query to profile (alternative to --table)')
@@ -444,7 +445,7 @@ def version():
 @click.option('--beta-llm', is_flag=True, help='[BETA] Enable AI-generated summary using local LLM (requires llama-cpp-python)')
 @click.option('--full-analysis', is_flag=True, help='Disable internal sampling - analyze full dataset (slower but more accurate for ML analysis)')
 @click.option('--analysis-sample-size', type=int, default=100000, help='Sample size for analysis when file exceeds this many rows (default: 100000). Files <= this size are analyzed fully.')
-def profile(file_path, format, database, table, query, html_output, json_output, config_output, chunk_size, sample, no_memory_check, log_level,
+def profile(file_path, format, delimiter, database, table, query, html_output, json_output, config_output, chunk_size, sample, no_memory_check, log_level,
             disable_temporal, disable_pii, disable_correlation, disable_all_enhancements, report_style, no_ml, beta_llm, full_analysis, analysis_sample_size):
     """
     Profile a data file or database table to understand its structure and quality.
@@ -631,10 +632,17 @@ def profile(file_path, format, database, table, query, html_output, json_output,
                 click.echo(f"🔍 Profiling {file_path} (first {sample:,} rows)...")
             else:
                 click.echo(f"🔍 Profiling {file_path}...")
+            # Build loader kwargs
+            loader_kwargs = {}
+            if delimiter:
+                # Handle escape sequences like \t for tab
+                loader_kwargs['delimiter'] = delimiter.encode().decode('unicode_escape')
+
             profile_result = profiler.profile_file(
                 file_path=file_path,
                 file_format=format,
-                sample_rows=sample
+                sample_rows=sample,
+                **loader_kwargs
             )
 
         # Format file size
