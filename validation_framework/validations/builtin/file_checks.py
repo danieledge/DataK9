@@ -369,3 +369,217 @@ class FileSizeCheck(FileValidationRule):
                 message=f"Error checking file size: {str(e)}",
                 failed_count=1,
             )
+
+
+class CSVFormatCheck(FileValidationRule):
+    """
+    Validates CSV file format integrity before processing.
+
+    Detects common CSV formatting issues:
+    - Inconsistent column counts (rows with wrong number of fields)
+    - Unquoted delimiters in data fields
+    - Encoding issues
+    - Malformed quoting
+
+    This validation samples the file to detect issues early,
+    before full processing begins.
+
+    Configuration:
+        params:
+            delimiter (str, optional): Expected delimiter. Default: auto-detect
+            sample_rows (int, optional): Number of rows to check. Default: 1000
+            max_errors (int, optional): Max errors before failing. Default: 10
+
+    Example YAML:
+        - type: "CSVFormatCheck"
+          severity: "ERROR"
+          params:
+            delimiter: ","
+            sample_rows: 5000
+            max_errors: 5
+    """
+
+    def get_description(self) -> str:
+        """Get human-readable description."""
+        sample_rows = self.params.get("sample_rows", 1000)
+        return f"Checks CSV format integrity (samples {sample_rows} rows for inconsistencies)"
+
+    def validate_file(self, context: Dict[str, Any]) -> ValidationResult:
+        """
+        Check CSV file for formatting issues.
+
+        Args:
+            context: Must contain 'file_path' key
+
+        Returns:
+            ValidationResult with details of any formatting issues found
+        """
+        import csv
+
+        try:
+            file_path = context.get("file_path")
+            if not file_path:
+                return self._create_result(
+                    passed=False,
+                    message="File path not provided in context",
+                    failed_count=1,
+                )
+
+            # Get parameters
+            delimiter = self.params.get("delimiter")
+            sample_rows = self.params.get("sample_rows", 1000)
+            max_errors = self.params.get("max_errors", 10)
+
+            # Auto-detect delimiter if not specified
+            if not delimiter:
+                delimiter = self._detect_delimiter(file_path)
+
+            # Auto-detect encoding
+            encoding = self._detect_encoding(file_path)
+
+            issues = []
+            row_count = 0
+            expected_columns = None
+            inconsistent_rows = []
+
+            # Try multiple encodings if needed
+            encodings_to_try = [encoding, 'utf-8', 'utf-8-sig', 'cp1252', 'latin-1']
+            file_opened = False
+
+            for enc in encodings_to_try:
+                try:
+                    with open(file_path, 'r', newline='', encoding=enc) as f:
+                        reader = csv.reader(f, delimiter=delimiter)
+
+                        for i, row in enumerate(reader):
+                            row_count = i + 1
+
+                            # First row defines expected column count
+                            if expected_columns is None:
+                                expected_columns = len(row)
+                                continue
+
+                            # Check column count consistency
+                            if len(row) != expected_columns:
+                                inconsistent_rows.append({
+                                    'row': i + 1,
+                                    'expected': expected_columns,
+                                    'actual': len(row),
+                                    'sample': str(row[:3])[:100] if row else '(empty)'
+                                })
+
+                            # Stop after sample_rows
+                            if i >= sample_rows:
+                                break
+
+                    file_opened = True
+                    break  # Successfully read file
+
+                except UnicodeDecodeError:
+                    continue  # Try next encoding
+
+            if not file_opened:
+                return self._create_result(
+                    passed=False,
+                    message=f"Cannot read file with any supported encoding. File may be binary or use an unsupported encoding.",
+                    failed_count=1,
+                )
+
+            # Analyze results
+            error_count = len(inconsistent_rows)
+
+            if error_count == 0:
+                return self._create_result(
+                    passed=True,
+                    message=f"CSV format valid: {row_count} rows checked, {expected_columns} columns, delimiter={repr(delimiter)}",
+                    total_count=row_count,
+                )
+
+            # Build failure details
+            sample_failures = []
+            for issue in inconsistent_rows[:MAX_SAMPLE_FAILURES]:
+                sample_failures.append({
+                    'row': issue['row'],
+                    'issue': f"Expected {issue['expected']} columns, found {issue['actual']}",
+                    'sample': issue['sample']
+                })
+
+            # Determine if this is a critical failure
+            error_rate = error_count / row_count if row_count > 0 else 1
+            passed = error_count <= max_errors and error_rate < 0.1  # Fail if >10% bad rows
+
+            message = (
+                f"CSV format issues detected: {error_count} rows have inconsistent column counts "
+                f"(expected {expected_columns}, delimiter={repr(delimiter)}). "
+            )
+
+            if error_rate >= 0.1:
+                message += f"Error rate: {error_rate:.1%}. "
+
+            if not passed:
+                message += (
+                    f"\n\nPossible causes:\n"
+                    f"  1. Wrong delimiter (current: {repr(delimiter)})\n"
+                    f"  2. Unquoted {repr(delimiter)} characters in data fields\n"
+                    f"  3. Missing or extra columns in some rows\n\n"
+                    f"Solutions:\n"
+                    f"  - Specify correct delimiter in config: delimiter: \"|\"\n"
+                    f"  - Quote fields containing delimiters: \"value with {delimiter}\"\n"
+                    f"  - Fix source data"
+                )
+
+            return self._create_result(
+                passed=passed,
+                message=message,
+                total_count=row_count,
+                failed_count=error_count,
+                sample_failures=sample_failures,
+            )
+
+        except FileNotFoundError:
+            return self._create_result(
+                passed=False,
+                message=f"File not found: {file_path}",
+                failed_count=1,
+            )
+
+        except Exception as e:
+            return self._create_result(
+                passed=False,
+                message=f"Error checking CSV format: {str(e)}",
+                failed_count=1,
+            )
+
+    def _detect_delimiter(self, file_path: str, sample_size: int = 8192) -> str:
+        """Auto-detect CSV delimiter."""
+        import csv
+        encodings = ['utf-8', 'utf-8-sig', 'cp1252', 'latin-1']
+
+        for encoding in encodings:
+            try:
+                with open(file_path, 'r', newline='', encoding=encoding) as f:
+                    sample = f.read(sample_size)
+
+                sniffer = csv.Sniffer()
+                dialect = sniffer.sniff(sample, delimiters=',\t|;:')
+                return dialect.delimiter
+            except (UnicodeDecodeError, csv.Error):
+                continue
+            except Exception:
+                break
+
+        return ','
+
+    def _detect_encoding(self, file_path: str) -> str:
+        """Auto-detect file encoding."""
+        encodings = ['utf-8', 'utf-8-sig', 'cp1252', 'latin-1', 'iso-8859-1']
+
+        for encoding in encodings:
+            try:
+                with open(file_path, 'r', encoding=encoding) as f:
+                    f.read(8192)
+                return encoding
+            except UnicodeDecodeError:
+                continue
+
+        return 'utf-8'
