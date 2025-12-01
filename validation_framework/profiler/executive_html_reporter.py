@@ -9508,6 +9508,42 @@ the largest difference between classes, which could be useful for predictive mod
         # Build summary stats
         unclassified_count = len(unclassified_columns)
 
+        # Build dynamic plain English summary based on actual results
+        plain_english_parts = []
+        if columns_with_semantics == len(columns):
+            plain_english_parts.append(f"DataK9 successfully identified all {columns_with_semantics} columns in your data.")
+        elif columns_with_semantics > 0:
+            plain_english_parts.append(f"DataK9 identified {columns_with_semantics} of {len(columns)} columns ({columns_with_semantics * 100 // len(columns)}%).")
+        else:
+            plain_english_parts.append("DataK9 couldn't confidently classify any columns in this dataset.")
+
+        # Describe FIBO matches
+        if fibo_matched > 0:
+            fibo_categories = list(fibo_types.keys())
+            if len(fibo_categories) == 1:
+                plain_english_parts.append(f"{fibo_matched} column(s) match financial data patterns ({fibo_categories[0].title()}).")
+            else:
+                plain_english_parts.append(f"{fibo_matched} columns match financial data patterns including {', '.join([c.title() for c in fibo_categories[:3]])}.")
+
+        # Describe Schema.org matches
+        if schema_org_matched > 0:
+            schema_categories = list(schema_org_types.keys())
+            if len(schema_categories) == 1:
+                plain_english_parts.append(f"{schema_org_matched} column(s) match general data patterns ({schema_categories[0]}).")
+            elif len(schema_categories) <= 3:
+                plain_english_parts.append(f"{schema_org_matched} columns match general patterns: {', '.join(schema_categories)}.")
+            else:
+                plain_english_parts.append(f"{schema_org_matched} columns match general patterns including {', '.join(schema_categories[:3])}.")
+
+        # Mention unclassified columns (extract column names from dict structure)
+        unclassified_names = [c['column'] if isinstance(c, dict) else str(c) for c in unclassified_columns]
+        if unclassified_count > 0 and unclassified_count <= 3:
+            plain_english_parts.append(f"Columns like '{', '.join(unclassified_names[:2])}' don't match known patterns and may need manual review.")
+        elif unclassified_count > 3:
+            plain_english_parts.append(f"{unclassified_count} columns don't match known patterns and may contain custom or domain-specific data.")
+
+        plain_english = " ".join(plain_english_parts)
+
         # Pre-compute icon HTML (before local 'icon' variable shadowing)
         icon_tag = icon('tag', 16, color='#64748b')
         icon_chevron = icon('chevron-down', 14)
@@ -9532,107 +9568,79 @@ the largest difference between classes, which could be useful for predictive mod
                     </div>
                     <div class="accordion-body">
                         <div class="accordion-content">
-                            <!-- Plain English Explanation -->
-                            <div class="dual-layer plain-layer">
-                                <div class="layer-label">📖 What is this?</div>
-                                <p style="color: var(--text-secondary); line-height: 1.7; margin-bottom: 12px;">
-                                    DataK9 analyzes each column to understand what kind of real-world data it contains.
-                                    For example, is "amount" a price? Is "cust_id" a customer identifier? This helps generate smarter validation rules.
-                                </p>
+                            <!-- Plain English Summary (consistent with other sections) -->
+                            <div class="dual-layer-summary">
+                                <div class="dual-layer-summary-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7V17a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-2.3A7 7 0 0 0 12 2z"/></svg> What this means</div>
+                                <div class="dual-layer-summary-text">{plain_english}</div>
                             </div>
 
-                            <!-- How it works -->
-                            <div style="background: var(--bg-tertiary); border-radius: 8px; padding: 16px; margin-bottom: 20px;">
-                                <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 12px; font-size: 0.9em;">
-                                    {icon_search} How Classification Works
+                            <!-- Classification Results - Visual Summary -->
+                            <div style="display: flex; gap: 16px; flex-wrap: wrap; margin: 16px 0;">
+                                <div style="background: var(--bg-tertiary); padding: 12px 16px; border-radius: 8px; text-align: center;">
+                                    <div style="font-size: 1.5em; font-weight: 700; color: var(--success-color);">{columns_with_semantics}</div>
+                                    <div style="font-size: 0.75em; color: var(--text-muted);">Classified</div>
                                 </div>
-                                <p style="color: var(--text-secondary); font-size: 0.85em; line-height: 1.6; margin-bottom: 12px;">
-                                    DataK9 checks each column against two standard vocabularies, in order of priority:
-                                </p>
-                                <div style="display: flex; flex-direction: column; gap: 12px;">
-                                    <div style="display: flex; align-items: flex-start; gap: 12px;">
-                                        <div style="background: linear-gradient(135deg, #059669 0%, #10b981 100%); color: white; padding: 4px 10px; border-radius: 6px; font-weight: 600; font-size: 0.8em; white-space: nowrap;">1. FIBO</div>
-                                        <div style="font-size: 0.85em; color: var(--text-secondary);">
-                                            <strong>Financial Industry Business Ontology</strong> — Matches financial patterns like account numbers, transaction amounts, currencies, and party identifiers.
-                                            Best for banking, insurance, and financial datasets.
-                                        </div>
-                                    </div>
-                                    <div style="display: flex; align-items: flex-start; gap: 12px;">
-                                        <div style="background: linear-gradient(135deg, #3b82f6 0%, #6366f1 100%); color: white; padding: 4px 10px; border-radius: 6px; font-weight: 600; font-size: 0.8em; white-space: nowrap;">2. Schema.org</div>
-                                        <div style="font-size: 0.85em; color: var(--text-secondary);">
-                                            <strong>Web Vocabulary Standard</strong> — Matches general patterns like names, emails, dates, addresses, phone numbers, and categories.
-                                            Works across all types of datasets.
-                                        </div>
-                                    </div>
-                                </div>
-                                <p style="color: var(--text-muted); font-size: 0.8em; margin-top: 12px; font-style: italic;">
-                                    FIBO is checked first. If no strong financial match is found, Schema.org provides a general classification.
-                                </p>
-                            </div>
-
-                            <!-- Results Summary -->
-                            <div style="margin-bottom: 20px;">
-                                <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 12px; font-size: 0.9em;">
-                                    {icon_bar_chart} Classification Results
-                                </div>
-                                <div style="display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 16px;">
-                                    <div style="background: var(--bg-tertiary); padding: 12px 16px; border-radius: 8px; text-align: center;">
-                                        <div style="font-size: 1.5em; font-weight: 700; color: var(--success-color);">{columns_with_semantics}</div>
-                                        <div style="font-size: 0.75em; color: var(--text-muted);">Classified</div>
-                                    </div>
-                                    {f'<div style="background: var(--bg-tertiary); padding: 12px 16px; border-radius: 8px; text-align: center;"><div style="font-size: 1.5em; font-weight: 700; color: #10b981;">{fibo_matched}</div><div style="font-size: 0.75em; color: var(--text-muted);">FIBO matches</div></div>' if fibo_matched > 0 else ''}
-                                    {f'<div style="background: var(--bg-tertiary); padding: 12px 16px; border-radius: 8px; text-align: center;"><div style="font-size: 1.5em; font-weight: 700; color: #6366f1;">{schema_org_matched}</div><div style="font-size: 0.75em; color: var(--text-muted);">Schema.org matches</div></div>' if schema_org_matched > 0 else ''}
-                                    {f'<div style="background: var(--bg-tertiary); padding: 12px 16px; border-radius: 8px; text-align: center;"><div style="font-size: 1.5em; font-weight: 700; color: var(--warning-color);">{unclassified_count}</div><div style="font-size: 0.75em; color: var(--text-muted);">Unclassified</div></div>' if unclassified_count > 0 else ''}
-                                </div>
-
-                                {f"""<div style="margin-bottom: 16px;">
-                                    <div style="font-size: 0.8em; color: var(--text-muted); margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
-                                        <span style="background: linear-gradient(135deg, #059669 0%, #10b981 100%); color: white; padding: 2px 8px; border-radius: 4px; font-weight: 600;">FIBO</span>
-                                        Financial patterns detected
-                                    </div>
-                                    <div style="display: flex; flex-wrap: wrap; gap: 8px;">
-                                        {fibo_chips}
-                                    </div>
-                                </div>""" if fibo_chips else ""}
-
-                                {f"""<div style="margin-bottom: 16px;">
-                                    <div style="font-size: 0.8em; color: var(--text-muted); margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
-                                        <span style="background: linear-gradient(135deg, #3b82f6 0%, #6366f1 100%); color: white; padding: 2px 8px; border-radius: 4px; font-weight: 600;">Schema.org</span>
-                                        General patterns detected
-                                    </div>
-                                    <div style="display: flex; flex-wrap: wrap; gap: 8px;">
-                                        {schema_chips}
-                                    </div>
-                                </div>""" if schema_chips else ""}
+                                {f'<div style="background: var(--bg-tertiary); padding: 12px 16px; border-radius: 8px; text-align: center;"><div style="font-size: 1.5em; font-weight: 700; color: #10b981;">{fibo_matched}</div><div style="font-size: 0.75em; color: var(--text-muted);">FIBO</div></div>' if fibo_matched > 0 else ''}
+                                {f'<div style="background: var(--bg-tertiary); padding: 12px 16px; border-radius: 8px; text-align: center;"><div style="font-size: 1.5em; font-weight: 700; color: #6366f1;">{schema_org_matched}</div><div style="font-size: 0.75em; color: var(--text-muted);">Schema.org</div></div>' if schema_org_matched > 0 else ''}
+                                {f'<div style="background: var(--bg-tertiary); padding: 12px 16px; border-radius: 8px; text-align: center;"><div style="font-size: 1.5em; font-weight: 700; color: var(--warning-color);">{unclassified_count}</div><div style="font-size: 0.75em; color: var(--text-muted);">Unclassified</div></div>' if unclassified_count > 0 else ''}
                             </div>
 
                             {self._generate_unclassified_section(unclassified_columns)}
 
-                            <!-- Technical Layer -->
-                            <details style="margin-top: 16px;">
-                                <summary style="cursor: pointer; color: var(--text-secondary); font-size: 0.85em; padding: 8px 0;">
-                                    {icon_key} Technical Details: Column Mappings
+                            <!-- Technical Details (collapsed by default) -->
+                            <details class="dual-layer-technical">
+                                <summary>
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+                                    Technical Details
                                 </summary>
-                                <div style="margin-top: 12px; overflow-x: auto;">
-                                    <table style="width: 100%; border-collapse: collapse; font-size: 0.85em;">
-                                        <thead>
-                                            <tr style="border-bottom: 1px solid var(--border-subtle);">
-                                                <th style="text-align: left; padding: 8px; color: var(--text-muted);">Column</th>
-                                                <th style="text-align: left; padding: 8px; color: var(--text-muted);">Semantic Type</th>
-                                                <th style="text-align: left; padding: 8px; color: var(--text-muted);">Source</th>
-                                                <th style="text-align: left; padding: 8px; color: var(--text-muted);">Confidence</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {table_rows}
-                                        </tbody>
-                                    </table>
-                                </div>
-                                <div class="hint-box" style="margin-top: 12px; border-left-color: #8b5cf6;">
-                                    <strong><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;vertical-align:-2px;margin-right:2px;color:#f59e0b"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> About Semantic Classification:</strong><br>
-                                    <strong>FIBO</strong> (Financial Industry Business Ontology) identifies financial domain patterns like accounts, transactions, and monetary values.
-                                    <strong>Schema.org</strong> provides general web vocabulary for common types like Person, Organization, Email, and Address.
-                                    DataK9 uses the best match from either ontology to drive intelligent validation suggestions.
+                                <div class="dual-layer-technical-content">
+                                    <!-- Classification breakdown by ontology -->
+                                    {f"""<div style="margin-bottom: 16px;">
+                                        <div style="font-size: 0.8em; color: var(--text-muted); margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+                                            <span style="background: linear-gradient(135deg, #059669 0%, #10b981 100%); color: white; padding: 2px 8px; border-radius: 4px; font-weight: 600;">FIBO</span>
+                                            Financial patterns
+                                        </div>
+                                        <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                                            {fibo_chips}
+                                        </div>
+                                    </div>""" if fibo_chips else ""}
+
+                                    {f"""<div style="margin-bottom: 16px;">
+                                        <div style="font-size: 0.8em; color: var(--text-muted); margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+                                            <span style="background: linear-gradient(135deg, #3b82f6 0%, #6366f1 100%); color: white; padding: 2px 8px; border-radius: 4px; font-weight: 600;">Schema.org</span>
+                                            General patterns
+                                        </div>
+                                        <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                                            {schema_chips}
+                                        </div>
+                                    </div>""" if schema_chips else ""}
+
+                                    <!-- Column mappings table -->
+                                    <div style="margin-top: 16px; overflow-x: auto;">
+                                        <div style="font-size: 0.8em; color: var(--text-muted); margin-bottom: 8px;">{icon_key} Column Mappings</div>
+                                        <table style="width: 100%; border-collapse: collapse; font-size: 0.85em;">
+                                            <thead>
+                                                <tr style="border-bottom: 1px solid var(--border-subtle);">
+                                                    <th style="text-align: left; padding: 8px; color: var(--text-muted);">Column</th>
+                                                    <th style="text-align: left; padding: 8px; color: var(--text-muted);">Semantic Type</th>
+                                                    <th style="text-align: left; padding: 8px; color: var(--text-muted);">Source</th>
+                                                    <th style="text-align: left; padding: 8px; color: var(--text-muted);">Confidence</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {table_rows}
+                                            </tbody>
+                                        </table>
+                                    </div>
+
+                                    <!-- Ontology explanation -->
+                                    <div class="dual-layer-technical-context" style="margin-top: 16px;">
+                                        <ul>
+                                            <li><strong>FIBO</strong> (Financial Industry Business Ontology) identifies financial domain patterns like accounts, transactions, and monetary values.</li>
+                                            <li><strong>Schema.org</strong> provides general web vocabulary for common types like Person, Organization, Email, and Address.</li>
+                                            <li>FIBO is checked first; if no strong financial match is found, Schema.org provides a general classification.</li>
+                                        </ul>
+                                    </div>
                                 </div>
                             </details>
                         </div>
