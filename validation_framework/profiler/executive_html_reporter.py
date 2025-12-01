@@ -10717,16 +10717,16 @@ the largest difference between classes, which could be useful for predictive mod
             return (True, "")
 
         # Get primary type from resolved semantics
-        resolved = col.semantic_info.get('resolved', {})
-        primary_type = resolved.get('primary_type', '').lower() if resolved else ''
+        resolved = col.semantic_info.get('resolved', {}) or {}
+        primary_type = (resolved.get('primary_type') or '').lower()
 
         # If no resolved type, try schema_org or fibo directly
         if not primary_type:
-            schema_org = col.semantic_info.get('schema_org', {})
-            primary_type = schema_org.get('type', '').lower() if schema_org else ''
+            schema_org = col.semantic_info.get('schema_org', {}) or {}
+            primary_type = (schema_org.get('type') or '').lower()
         if not primary_type:
-            fibo = col.semantic_info.get('fibo', {})
-            primary_type = fibo.get('type', '').lower() if fibo else ''
+            fibo = col.semantic_info.get('fibo', {}) or {}
+            primary_type = (fibo.get('type') or '').lower()
 
         # Define high-confidence types for numeric analytics (outliers, Benford)
         # These are truly numeric/monetary measures well-suited for distribution analysis
@@ -11291,7 +11291,7 @@ the largest difference between classes, which could be useful for predictive mod
                 interval_display = frequency.get('median_interval', 'Unknown')
 
             # Granularity icon based on frequency
-            freq_inferred = frequency.get('inferred', 'unknown').lower()
+            freq_inferred = (frequency.get('inferred') or 'unknown').lower()
             if freq_inferred in ('secondly', 'minutely'):
                 granularity_icon = '⚡'
                 granularity_color = '#ef4444'  # red - high frequency
