@@ -105,6 +105,48 @@
       "notes": "File-only validation. Not applicable to database tables."
     }
   },
+  "CSVFormatCheck": {
+    "category": "File-Level",
+    "icon": "📋",
+    "description": "Validates CSV file format integrity before processing",
+    "params": [
+      {
+        "name": "delimiter",
+        "label": "Delimiter",
+        "type": "string",
+        "required": false,
+        "help": "Expected delimiter character. Auto-detected if not specified.",
+        "placeholder": ","
+      },
+      {
+        "name": "sample_rows",
+        "label": "Sample Rows",
+        "type": "number",
+        "required": false,
+        "help": "Number of rows to check for format issues",
+        "default": 1000,
+        "min": 100
+      },
+      {
+        "name": "max_errors",
+        "label": "Max Errors",
+        "type": "number",
+        "required": false,
+        "help": "Maximum number of format errors before failing",
+        "default": 10,
+        "min": 1
+      }
+    ],
+    "examples": "Detect malformed CSVs with inconsistent columns, unquoted delimiters, or encoding issues before processing",
+    "tips": "Run this check first to catch file format issues early. Useful for validating files from external sources.",
+    "severity_recommendation": "ERROR",
+    "python_module": "validation_framework.validations.file_checks",
+    "source_compatibility": {
+      "file": true,
+      "database": false,
+      "notes": "CSV file-only validation. Not applicable to database tables or other file formats."
+    }
+  },
   "SchemaMatchCheck": {
     "category": "Schema",
     "icon": "🎨",
