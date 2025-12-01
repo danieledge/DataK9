@@ -17,6 +17,9 @@ import psutil
 import os
 import gc  # Explicit garbage collection for memory management
 
+# Initialize logger FIRST before any conditional imports that may use it
+logger = logging.getLogger(__name__)
+
 from validation_framework.profiler.profile_result import (
     ProfileResult, ColumnProfile, TypeInference, ColumnStatistics,
     QualityMetrics, CorrelationResult, ValidationSuggestion, DataLineage
@@ -34,21 +37,21 @@ try:
     TEMPORAL_ANALYSIS_AVAILABLE = True
 except ImportError:
     TEMPORAL_ANALYSIS_AVAILABLE = False
-    logger.warning("Temporal analysis not available - statsmodels may be missing")
+    logger.debug("Temporal analysis not available - statsmodels may be missing")
 
 try:
     from validation_framework.profiler.pii_detector import PIIDetector
     PII_DETECTION_AVAILABLE = True
 except ImportError:
     PII_DETECTION_AVAILABLE = False
-    logger.warning("PII detection not available")
+    logger.debug("PII detection not available")
 
 try:
     from validation_framework.profiler.enhanced_correlation import EnhancedCorrelationAnalyzer
     ENHANCED_CORRELATION_AVAILABLE = True
 except ImportError:
     ENHANCED_CORRELATION_AVAILABLE = False
-    logger.warning("Enhanced correlation not available")
+    logger.debug("Enhanced correlation not available")
 
 # Phase 2: Semantic Tagging with FIBO
 try:
@@ -82,9 +85,7 @@ try:
     VISIONS_AVAILABLE = True
 except ImportError:
     VISIONS_AVAILABLE = False
-    # Don't log warning yet - logger not initialized
-
-logger = logging.getLogger(__name__)
+    logger.debug("Visions library not available - using fallback type inference")
 
 
 def check_csv_format(file_path: str, sample_rows: int = 1000) -> Dict[str, Any]:
