@@ -70,11 +70,12 @@ def cli():
 @click.option('--json-output', '-j', help='Path for JSON report output')
 @click.option('--verbose/--quiet', '-v/-q', default=True, help='Verbose output')
 @click.option('--fail-on-warning', is_flag=True, help='Fail if warnings are found')
+@click.option('--delimiter', '-d', default=None, help='Column delimiter for CSV files (overrides config). Use "\\t" for tab.')
 @click.option('--log-level', type=click.Choice(['DEBUG', 'INFO', 'WARNING', 'ERROR'], case_sensitive=False),
               default='WARNING', help='Logging level')
 @click.option('--log-file', type=click.Path(), help='Optional log file path')
 @click.option('--no-optimize', is_flag=True, help='Disable single-pass optimization (use standard engine)')
-def validate(config_file, html_output, json_output, verbose, fail_on_warning, log_level, log_file, no_optimize):
+def validate(config_file, html_output, json_output, verbose, fail_on_warning, delimiter, log_level, log_file, no_optimize):
     """
     Run data validation from a configuration file.
 
@@ -132,6 +133,13 @@ def validate(config_file, html_output, json_output, verbose, fail_on_warning, lo
             logger.info("Using optimized validation engine (single-pass mode)")
             engine = OptimizedValidationEngine.from_config(config_file, use_single_pass=True)
         logger.info(f"Configuration loaded: {engine.config.job_name}")
+
+        # Override delimiter for all files if specified on CLI
+        if delimiter:
+            delim_char = delimiter.encode().decode('unicode_escape')
+            for file_config in engine.config.files:
+                file_config['delimiter'] = delim_char
+            logger.info(f"Using delimiter: {repr(delim_char)}")
 
         # Performance advisory: Check files and recommend Parquet if needed
         # (Skip database sources)
