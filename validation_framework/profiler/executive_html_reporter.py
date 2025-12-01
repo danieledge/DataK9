@@ -502,6 +502,9 @@ class ExecutiveHTMLReporter:
 
         <!-- Main Content Area -->
         <main class="dq-main page">
+        <!-- CSV Format Warning Banner (if issues detected) -->
+        {self._generate_csv_format_warning(profile)}
+
         <!-- ═══════════════════════════════════════════════════════════════ -->
         <!-- 1. EXECUTIVE SUMMARY WITH DIAL WIDGETS                          -->
         <!-- ═══════════════════════════════════════════════════════════════ -->
@@ -1444,6 +1447,82 @@ class ExecutiveHTMLReporter:
                 grid-column: 1 / -1;
                 margin-top: 4px;
             }
+        }
+
+        /* CSV Format Warning Banner */
+        .csv-format-warning {
+            background: linear-gradient(135deg, rgba(245, 158, 11, 0.12), rgba(239, 68, 68, 0.08));
+            border: 1px solid rgba(245, 158, 11, 0.4);
+            border-left: 4px solid #f59e0b;
+            border-radius: var(--radius-md);
+            padding: 16px 20px;
+            margin-bottom: 20px;
+            animation: slideIn 0.3s ease-out;
+        }
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .csv-format-warning-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 8px;
+        }
+        .csv-format-warning-header svg {
+            width: 20px;
+            height: 20px;
+            color: #f59e0b;
+            flex-shrink: 0;
+        }
+        .csv-format-warning-title {
+            font-weight: 600;
+            color: #f59e0b;
+            font-size: 1em;
+        }
+        .csv-format-warning-body {
+            color: var(--text-secondary);
+            font-size: 0.9em;
+            line-height: 1.5;
+        }
+        .csv-format-warning-details {
+            margin-top: 12px;
+            padding: 12px;
+            background: rgba(0, 0, 0, 0.15);
+            border-radius: var(--radius-sm);
+            font-family: monospace;
+            font-size: 0.85em;
+        }
+        .csv-format-warning-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 4px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        .csv-format-warning-row:last-child {
+            border-bottom: none;
+        }
+        .csv-format-warning-row-label {
+            color: var(--text-muted);
+        }
+        .csv-format-warning-row-value {
+            color: var(--text-primary);
+        }
+        .csv-format-warning-issues {
+            margin-top: 10px;
+        }
+        .csv-format-warning-issue {
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+            padding: 6px 0;
+            color: var(--text-secondary);
+            font-size: 0.9em;
+        }
+        .csv-format-warning-issue-icon {
+            color: #ef4444;
+            flex-shrink: 0;
+            margin-top: 2px;
         }
 
         .accordion {
@@ -11498,6 +11577,93 @@ the largest difference between classes, which could be useful for predictive mod
                 {export_btn}
             </div>
         </section>'''
+
+    def _generate_csv_format_warning(self, profile: ProfileResult) -> str:
+        """
+        Generate a warning banner if CSV format issues were detected during profiling.
+
+        Args:
+            profile: ProfileResult containing csv_format_issues data
+
+        Returns:
+            HTML string for the warning banner, or empty string if no issues
+        """
+        # Check if csv_format_issues exists and has issues
+        csv_issues = getattr(profile, 'csv_format_issues', None)
+        if not csv_issues or csv_issues.get('valid', True):
+            return ''
+
+        issues = csv_issues.get('issues', [])
+        if not issues:
+            return ''
+
+        # Get details for display
+        delimiter = csv_issues.get('delimiter', ',')
+        delimiter_display = {'\\t': 'Tab', '\t': 'Tab', ',': 'Comma', '|': 'Pipe', ';': 'Semicolon', ':': 'Colon'}.get(delimiter, delimiter)
+        encoding = csv_issues.get('encoding', 'utf-8')
+        expected_cols = csv_issues.get('column_count', 0)
+        rows_checked = csv_issues.get('rows_checked', 0)
+        inconsistent_rows = csv_issues.get('inconsistent_rows', [])
+
+        # Build issues list
+        issues_html = ''
+        for issue in issues[:5]:  # Limit to first 5 issues
+            issues_html += f'''
+                <div class="csv-format-warning-issue">
+                    <span class="csv-format-warning-issue-icon">{icon('x-circle', 14)}</span>
+                    <span>{issue}</span>
+                </div>'''
+
+        if len(issues) > 5:
+            issues_html += f'''
+                <div class="csv-format-warning-issue">
+                    <span class="csv-format-warning-issue-icon">{icon('alert-circle', 14)}</span>
+                    <span>...and {len(issues) - 5} more issue(s)</span>
+                </div>'''
+
+        # Build inconsistent rows sample
+        rows_sample_html = ''
+        if inconsistent_rows:
+            sample_rows = inconsistent_rows[:3]
+            rows_list = ', '.join([f"Row {r['row']}: {r['actual']} cols (expected {r['expected']})" for r in sample_rows])
+            if len(inconsistent_rows) > 3:
+                rows_list += f' (+{len(inconsistent_rows) - 3} more)'
+            rows_sample_html = f'''
+                <div class="csv-format-warning-row">
+                    <span class="csv-format-warning-row-label">Sample rows</span>
+                    <span class="csv-format-warning-row-value">{rows_list}</span>
+                </div>'''
+
+        return f'''
+        <div class="csv-format-warning">
+            <div class="csv-format-warning-header">
+                {icon('alert-triangle', 20)}
+                <span class="csv-format-warning-title">CSV Format Issues Detected</span>
+            </div>
+            <div class="csv-format-warning-body">
+                The source file has structural inconsistencies that may affect data quality analysis.
+                This could indicate unescaped delimiters, malformed rows, or encoding issues.
+            </div>
+            <div class="csv-format-warning-details">
+                <div class="csv-format-warning-row">
+                    <span class="csv-format-warning-row-label">Detected delimiter</span>
+                    <span class="csv-format-warning-row-value">{delimiter_display}</span>
+                </div>
+                <div class="csv-format-warning-row">
+                    <span class="csv-format-warning-row-label">Encoding</span>
+                    <span class="csv-format-warning-row-value">{encoding}</span>
+                </div>
+                <div class="csv-format-warning-row">
+                    <span class="csv-format-warning-row-label">Expected columns</span>
+                    <span class="csv-format-warning-row-value">{expected_cols}</span>
+                </div>
+                <div class="csv-format-warning-row">
+                    <span class="csv-format-warning-row-label">Rows checked</span>
+                    <span class="csv-format-warning-row-value">{rows_checked:,}</span>
+                </div>{rows_sample_html}
+            </div>
+            <div class="csv-format-warning-issues">{issues_html}</div>
+        </div>'''
 
     def _generate_exec1_summary(self, profile: ProfileResult, avg_completeness: float, avg_validity: float, type_counts: dict, insights) -> str:
         """
