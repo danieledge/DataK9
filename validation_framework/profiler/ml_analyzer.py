@@ -1911,22 +1911,32 @@ class MLAnalyzer:
         if len(df) > sample_size:
             df = df.sample(n=sample_size, random_state=42)
 
-        # Semantic types that indicate likely ML targets (from FIBO taxonomy)
-        # These are category/classification types, not domain-specific field names
+        # Semantic types that indicate likely ML targets (FIBO + Schema.org)
+        # These are category/classification/outcome types, not domain-specific field names
         target_semantic_types = {
-            # High likelihood targets (outcome/classification fields)
+            # FIBO categories (high likelihood targets)
             'category.transaction_type': 0.30,
             'category.account_type': 0.30,
             'category.payment_method': 0.25,
-            'status': 0.35,  # Status fields are common targets
+            'status': 0.35,
+            # Schema.org categories (resolved primary_type)
+            'schema:Boolean': 0.35,      # Boolean flags are very common targets
+            'schema:CategoryCode': 0.30,  # Category codes are common targets
+            'schema:ItemList': 0.20,      # Enumerated lists can be targets
         }
 
-        # Semantic types to SKIP as targets (identifiers, amounts)
+        # Semantic types to SKIP as targets (identifiers, amounts, etc.)
         skip_semantic_types = {
+            # FIBO identifiers
             'identifier', 'identifier.uuid', 'identifier.code',
             'banking.account', 'banking.transaction',
             'party.customer_id', 'loan.identifier', 'security.identifier',
             'money.amount', 'money.price', 'money.currency',
+            # Schema.org identifiers and non-target types
+            'schema:identifier', 'schema:URL', 'schema:email',
+            'schema:telephone', 'schema:PostalAddress',
+            'schema:MonetaryAmount', 'schema:QuantitativeValue',
+            'schema:DateTime', 'schema:Date', 'schema:Time',
         }
 
         candidates = []
@@ -1937,16 +1947,18 @@ class MLAnalyzer:
                 n_unique = df[col].nunique(dropna=True)
                 completeness = df[col].notna().mean()
 
-                # Get semantic info for this column
+                # Get semantic info for this column (supports both old and new format)
                 sem_info = self._column_semantic_info.get(col, {})
-                primary_tag = sem_info.get('primary_tag', '')
+                # Try resolved format first (schema_org/fibo combined), then fallback to old primary_tag
+                resolved = sem_info.get('resolved', {})
+                primary_type = resolved.get('primary_type', '') or sem_info.get('primary_tag', '')
 
                 # Skip identifier/amount columns based on semantic type
-                if primary_tag:
+                if primary_type:
                     # Check if tag or parent matches skip list
                     should_skip = False
                     for skip_type in skip_semantic_types:
-                        if primary_tag == skip_type or primary_tag.startswith(skip_type + '.'):
+                        if primary_type == skip_type or primary_type.startswith(skip_type + '.'):
                             should_skip = True
                             break
                     if should_skip:
@@ -1963,7 +1975,8 @@ class MLAnalyzer:
                         'n_classes': n_unique,
                         'completeness': completeness,
                         'is_binary': n_unique == 2,
-                        'semantic_tag': primary_tag
+                        'semantic_type': primary_type,
+                        'semantic_source': resolved.get('primary_source', '')
                     })
             except Exception:
                 continue
@@ -2002,22 +2015,27 @@ class MLAnalyzer:
                 score += 0.25
                 reasons.append("binary")
 
-            # 4. Semantic type scoring (replaces hardcoded field name matching)
-            primary_tag = cand.get('semantic_tag', '')
+            # 4. Semantic type scoring (FIBO + Schema.org combined)
+            sem_type = cand.get('semantic_type', '')
+            sem_source = cand.get('semantic_source', '')
             semantic_boost = 0.0
 
             # Check for exact match in target semantic types
-            if primary_tag in target_semantic_types:
-                semantic_boost = target_semantic_types[primary_tag]
+            if sem_type in target_semantic_types:
+                semantic_boost = target_semantic_types[sem_type]
             # Check for parent category match (e.g., 'category.foo' → 'category')
-            elif '.' in primary_tag:
-                parent = primary_tag.split('.')[0]
+            elif '.' in sem_type:
+                parent = sem_type.split('.')[0]
                 if parent == 'category':
                     semantic_boost = 0.20  # Category fields often good targets
+            # Check for Schema.org type prefix match
+            elif sem_type.startswith('schema:') and 'Category' in sem_type:
+                semantic_boost = 0.25  # Generic category boost for Schema.org
 
             if semantic_boost > 0:
                 score += semantic_boost
-                reasons.append(f"semantic:{primary_tag}")
+                source_label = f"[{sem_source}]" if sem_source else ""
+                reasons.append(f"semantic:{sem_type}{source_label}")
 
             # 5. High completeness bonus
             if cand['completeness'] >= 0.99:
