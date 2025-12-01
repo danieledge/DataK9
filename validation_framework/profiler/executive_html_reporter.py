@@ -2845,7 +2845,102 @@ class ExecutiveHTMLReporter:
             height: 12px;
         }
 
-        /* Compact Grid Layout - 4 widgets */
+        /* Main Quality Widget - Dial + Breakdown Bars */
+        .exec1-quality-widget {
+            display: flex;
+            gap: 24px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 12px;
+        }
+        .exec1-quality-dial-section {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-width: 140px;
+        }
+        .exec1-quality-dial {
+            width: 120px;
+            height: 120px;
+        }
+        .exec1-quality-dial-bg {
+            fill: none;
+            stroke: rgba(255,255,255,0.1);
+            stroke-width: 8;
+        }
+        .exec1-quality-dial-fill {
+            fill: none;
+            stroke-width: 8;
+            stroke-linecap: round;
+            transform: rotate(-90deg);
+            transform-origin: 50% 50%;
+            transition: stroke-dasharray 0.8s ease;
+        }
+        .exec1-quality-dial-text {
+            fill: var(--text-primary);
+            font-size: 14px;
+            font-weight: 700;
+            text-anchor: middle;
+        }
+        .exec1-quality-dial-subtext {
+            fill: var(--text-muted);
+            font-size: 5px;
+            text-anchor: middle;
+        }
+        .exec1-quality-dial-label {
+            font-size: 0.9em;
+            color: var(--text-secondary);
+            margin-top: 8px;
+            font-weight: 500;
+        }
+
+        /* Quality Breakdown Bars */
+        .exec1-quality-breakdown {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            gap: 10px;
+        }
+        .exec1-breakdown-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .exec1-breakdown-label {
+            font-size: 0.85em;
+            color: var(--text-secondary);
+            min-width: 100px;
+        }
+        .exec1-breakdown-bar-container {
+            flex: 1;
+            height: 8px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        .exec1-breakdown-bar {
+            height: 100%;
+            border-radius: 4px;
+            transition: width 0.5s ease;
+        }
+        .exec1-breakdown-value {
+            font-size: 0.85em;
+            font-weight: 600;
+            color: var(--text-primary);
+            min-width: 45px;
+            text-align: right;
+        }
+        .exec1-breakdown-weight {
+            font-size: 0.7em;
+            color: var(--text-muted);
+            min-width: 35px;
+        }
+
+        /* Compact Stats Row */
         .exec1-compact-grid {
             display: grid;
             grid-template-columns: repeat(4, 1fr);
@@ -2989,8 +3084,18 @@ class ExecutiveHTMLReporter:
             text-align: center;
         }
 
-        /* Compact Grid Responsive - 2x2 on phones */
+        /* Responsive - Stack on smaller screens */
         @media (max-width: 768px) {
+            .exec1-quality-widget {
+                flex-direction: column;
+                align-items: center;
+            }
+            .exec1-quality-dial-section {
+                min-width: auto;
+            }
+            .exec1-breakdown-label {
+                min-width: 80px;
+            }
             .exec1-compact-grid {
                 grid-template-columns: repeat(2, 1fr);
             }
@@ -11474,11 +11579,19 @@ the largest difference between classes, which could be useful for predictive mod
             type_pills.append(f'<span class="type-pill date">{date_count} Date</span>')
         type_pills_html = ''.join(type_pills) if type_pills else '<span class="type-pill">Mixed types</span>'
 
-        # Calculate dial stroke-dasharray (circumference = 2 * pi * r = 2 * 3.14159 * 15.9155 ≈ 100)
-        completeness_dash = avg_completeness
-        validity_dash = avg_validity
+        # Calculate overall quality score and component scores
+        overall_quality = profile.overall_quality_score
 
-        # Dial colors based on value
+        # Get average consistency and uniqueness from columns
+        avg_consistency = 0
+        avg_uniqueness = 0
+        if profile.columns:
+            consistencies = [col.quality.consistency for col in profile.columns if hasattr(col.quality, 'consistency')]
+            uniquenesses = [col.quality.uniqueness for col in profile.columns if hasattr(col.quality, 'uniqueness')]
+            avg_consistency = sum(consistencies) / len(consistencies) if consistencies else 85.0
+            avg_uniqueness = sum(uniquenesses) / len(uniquenesses) if uniquenesses else 70.0
+
+        # Dial color based on overall quality score
         def get_dial_color(value):
             if value >= 90:
                 return '#10b981'  # green
@@ -11487,8 +11600,16 @@ the largest difference between classes, which could be useful for predictive mod
             else:
                 return '#ef4444'  # red
 
-        completeness_color = get_dial_color(avg_completeness)
-        validity_color = get_dial_color(avg_validity)
+        quality_color = get_dial_color(overall_quality)
+
+        # Bar colors for each metric
+        def get_bar_color(value):
+            if value >= 90:
+                return '#10b981'
+            elif value >= 70:
+                return '#f59e0b'
+            else:
+                return '#ef4444'
 
         return f'''
         <section class="executive-summary" id="section-overview">
@@ -11520,7 +11641,55 @@ the largest difference between classes, which could be useful for predictive mod
                 </details>
             </div>
 
-            <!-- Compact Grid: 4 widgets (2x2 on mobile) -->
+            <!-- Quality Widget: Large dial on left, breakdown bars on right -->
+            <div class="exec1-quality-widget">
+                <div class="exec1-quality-dial-section">
+                    <svg class="exec1-quality-dial" viewBox="0 0 36 36">
+                        <circle class="exec1-quality-dial-bg" cx="18" cy="18" r="15.9155"/>
+                        <circle class="exec1-quality-dial-fill" cx="18" cy="18" r="15.9155"
+                            style="stroke-dasharray: {overall_quality} 100; stroke-dashoffset: 25; stroke: {quality_color};"/>
+                        <text x="18" y="20" class="exec1-quality-dial-text">{overall_quality:.0f}%</text>
+                        <text x="18" y="26" class="exec1-quality-dial-subtext">QUALITY</text>
+                    </svg>
+                    <div class="exec1-quality-dial-label">Overall Score</div>
+                </div>
+                <div class="exec1-quality-breakdown">
+                    <div class="exec1-breakdown-item">
+                        <span class="exec1-breakdown-label">Completeness</span>
+                        <div class="exec1-breakdown-bar-container">
+                            <div class="exec1-breakdown-bar" style="width: {avg_completeness}%; background: {get_bar_color(avg_completeness)};"></div>
+                        </div>
+                        <span class="exec1-breakdown-value">{avg_completeness:.0f}%</span>
+                        <span class="exec1-breakdown-weight">40%</span>
+                    </div>
+                    <div class="exec1-breakdown-item">
+                        <span class="exec1-breakdown-label">Validity</span>
+                        <div class="exec1-breakdown-bar-container">
+                            <div class="exec1-breakdown-bar" style="width: {avg_validity}%; background: {get_bar_color(avg_validity)};"></div>
+                        </div>
+                        <span class="exec1-breakdown-value">{avg_validity:.0f}%</span>
+                        <span class="exec1-breakdown-weight">30%</span>
+                    </div>
+                    <div class="exec1-breakdown-item">
+                        <span class="exec1-breakdown-label">Consistency</span>
+                        <div class="exec1-breakdown-bar-container">
+                            <div class="exec1-breakdown-bar" style="width: {avg_consistency}%; background: {get_bar_color(avg_consistency)};"></div>
+                        </div>
+                        <span class="exec1-breakdown-value">{avg_consistency:.0f}%</span>
+                        <span class="exec1-breakdown-weight">20%</span>
+                    </div>
+                    <div class="exec1-breakdown-item">
+                        <span class="exec1-breakdown-label">Uniqueness</span>
+                        <div class="exec1-breakdown-bar-container">
+                            <div class="exec1-breakdown-bar" style="width: {avg_uniqueness}%; background: {get_bar_color(avg_uniqueness)};"></div>
+                        </div>
+                        <span class="exec1-breakdown-value">{avg_uniqueness:.0f}%</span>
+                        <span class="exec1-breakdown-weight">10%</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Compact Stats Row -->
             <div class="exec1-compact-grid">
                 <!-- Records -->
                 <div class="exec1-compact-stat">
@@ -11534,25 +11703,17 @@ the largest difference between classes, which could be useful for predictive mod
                     <div class="exec1-compact-label">Columns</div>
                     <div class="exec1-compact-pills">{type_pills_html}</div>
                 </div>
-                <!-- Completeness Dial -->
-                <div class="exec1-dial-widget">
-                    <svg class="exec1-dial" viewBox="0 0 36 36">
-                        <circle class="exec1-dial-bg" cx="18" cy="18" r="15.9155"/>
-                        <circle class="exec1-dial-fill" cx="18" cy="18" r="15.9155"
-                            style="stroke-dasharray: {completeness_dash} 100; stroke-dashoffset: 25; stroke: {completeness_color};"/>
-                        <text x="18" y="21" class="exec1-dial-text">{avg_completeness:.0f}%</text>
-                    </svg>
-                    <div class="exec1-dial-label">Completeness</div>
+                <!-- Completeness -->
+                <div class="exec1-compact-stat">
+                    <div class="exec1-compact-value" style="color: {get_bar_color(avg_completeness)};">{avg_completeness:.0f}%</div>
+                    <div class="exec1-compact-label">Completeness</div>
+                    <div class="exec1-compact-meta">Non-null values</div>
                 </div>
-                <!-- Validity Dial -->
-                <div class="exec1-dial-widget">
-                    <svg class="exec1-dial" viewBox="0 0 36 36">
-                        <circle class="exec1-dial-bg" cx="18" cy="18" r="15.9155"/>
-                        <circle class="exec1-dial-fill" cx="18" cy="18" r="15.9155"
-                            style="stroke-dasharray: {validity_dash} 100; stroke-dashoffset: 25; stroke: {validity_color};"/>
-                        <text x="18" y="21" class="exec1-dial-text">{avg_validity:.0f}%</text>
-                    </svg>
-                    <div class="exec1-dial-label">Validity</div>
+                <!-- Validity -->
+                <div class="exec1-compact-stat">
+                    <div class="exec1-compact-value" style="color: {get_bar_color(avg_validity)};">{avg_validity:.0f}%</div>
+                    <div class="exec1-compact-label">Validity</div>
+                    <div class="exec1-compact-meta">Type conformance</div>
                 </div>
             </div>
         </section>'''
