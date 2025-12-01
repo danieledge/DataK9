@@ -4377,6 +4377,11 @@ class ExecutiveHTMLReporter:
                     section.classList.remove('expanded');
                 }}
             }});
+
+            // Toggle plain/tech view sections
+            document.querySelectorAll('.plain-view, .tech-view').forEach(view => {{
+                view.style.display = allExpanded ? 'block' : '';
+            }});
         }}
 
         // ======================================================
@@ -4391,9 +4396,9 @@ class ExecutiveHTMLReporter:
             btn.innerHTML = '<span class="pdf-icon">⏳</span> Preparing...';
 
             // First, expand all sections to ensure nothing is hidden
-            // Expand all accordions
+            // Expand all accordions (remove 'collapsed' class to show content)
             document.querySelectorAll('.accordion').forEach(acc => {{
-                acc.classList.add('open');
+                acc.classList.remove('collapsed');
             }});
 
             // Expand all column rows
@@ -4409,6 +4414,11 @@ class ExecutiveHTMLReporter:
             // Expand all technical sections
             document.querySelectorAll('.insight-technical').forEach(section => {{
                 section.classList.add('open');
+            }});
+
+            // Expand all section accordions
+            document.querySelectorAll('.section-accordion').forEach(section => {{
+                section.classList.add('expanded');
             }});
 
             // Switch all dual-view tabs to show both Plain English content
