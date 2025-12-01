@@ -9512,7 +9512,7 @@ the largest difference between classes, which could be useful for predictive mod
                 <div class="accordion" data-accordion="semantics">
                     <div class="accordion-header" onclick="toggleAccordion(this)">
                         <div class="accordion-title-group">
-                            <div class="accordion-icon"><svg style="width:16px;height:16px;color:#64748b;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg></div>
+                            <div class="accordion-icon">{icon('tag', 16, color='#64748b')}</div>
                             <div>
                                 <div class="accordion-title">Semantic Classification</div>
                                 <div class="accordion-subtitle">What type of data is in each column?</div>
@@ -9520,7 +9520,7 @@ the largest difference between classes, which could be useful for predictive mod
                         </div>
                         <div class="accordion-meta">
                             <span class="accordion-badge info">{columns_with_semantics}/{len(columns)} classified</span>
-                            <span class="accordion-chevron"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><polyline points="6 9 12 15 18 9"/></svg></span>
+                            <span class="accordion-chevron">{icon('chevron-down', 14)}</span>
                         </div>
                     </div>
                     <div class="accordion-body">
@@ -9537,7 +9537,7 @@ the largest difference between classes, which could be useful for predictive mod
                             <!-- How it works -->
                             <div style="background: var(--bg-tertiary); border-radius: 8px; padding: 16px; margin-bottom: 20px;">
                                 <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 12px; font-size: 0.9em;">
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;vertical-align:-2px;margin-right:4px"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> How Classification Works
+                                    {icon('search', 14)} How Classification Works
                                 </div>
                                 <p style="color: var(--text-secondary); font-size: 0.85em; line-height: 1.6; margin-bottom: 12px;">
                                     DataK9 checks each column against two standard vocabularies, in order of priority:
@@ -9566,7 +9566,7 @@ the largest difference between classes, which could be useful for predictive mod
                             <!-- Results Summary -->
                             <div style="margin-bottom: 20px;">
                                 <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 12px; font-size: 0.9em;">
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;vertical-align:-2px;margin-right:4px"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg> Classification Results
+                                    {icon('bar-chart', 14)} Classification Results
                                 </div>
                                 <div style="display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 16px;">
                                     <div style="background: var(--bg-tertiary); padding: 12px 16px; border-radius: 8px; text-align: center;">
@@ -9604,7 +9604,7 @@ the largest difference between classes, which could be useful for predictive mod
                             <!-- Technical Layer -->
                             <details style="margin-top: 16px;">
                                 <summary style="cursor: pointer; color: var(--text-secondary); font-size: 0.85em; padding: 8px 0;">
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;vertical-align:-2px;margin-right:4px"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg> Technical Details: Column Mappings
+                                    {icon('key', 14)} Technical Details: Column Mappings
                                 </summary>
                                 <div style="margin-top: 12px; overflow-x: auto;">
                                     <table style="width: 100%; border-collapse: collapse; font-size: 0.85em;">
