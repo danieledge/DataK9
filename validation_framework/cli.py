@@ -31,16 +31,24 @@ def detect_csv_delimiter(file_path: str, sample_size: int = 8192) -> str:
     Uses Python's csv.Sniffer to analyze a sample of the file.
     Returns the detected delimiter or ',' as default.
     """
-    try:
-        with open(file_path, 'r', newline='', encoding='utf-8') as f:
-            sample = f.read(sample_size)
+    # Try multiple encodings (Windows often uses cp1252)
+    encodings = ['utf-8', 'utf-8-sig', 'cp1252', 'latin-1']
 
-        sniffer = csv.Sniffer()
-        dialect = sniffer.sniff(sample, delimiters=',\t|;:')
-        return dialect.delimiter
-    except Exception:
-        # Fall back to comma if detection fails
-        return ','
+    for encoding in encodings:
+        try:
+            with open(file_path, 'r', newline='', encoding=encoding) as f:
+                sample = f.read(sample_size)
+
+            sniffer = csv.Sniffer()
+            dialect = sniffer.sniff(sample, delimiters=',\t|;:')
+            return dialect.delimiter
+        except (UnicodeDecodeError, csv.Error):
+            continue
+        except Exception:
+            break
+
+    # Fall back to comma if detection fails
+    return ','
 
 
 @click.group()
