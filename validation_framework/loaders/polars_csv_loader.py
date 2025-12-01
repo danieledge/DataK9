@@ -143,8 +143,9 @@ class PolarsCSVLoader(DataLoader):
                 separator=delimiter,
                 encoding=encoding,
                 has_header=has_header,
-                ignore_errors=True,  # Similar to pandas on_bad_lines='warn'
+                ignore_errors=True,  # Skip rows with parsing errors
                 low_memory=False,  # Better performance for large files
+                quote_char='"',  # Handle quoted fields properly
             )
 
             # Collect the data (Polars is memory efficient)
@@ -166,9 +167,14 @@ class PolarsCSVLoader(DataLoader):
             if "expected" in error_msg.lower() and "column" in error_msg.lower():
                 raise RuntimeError(
                     f"CSV parsing error in {self.file_path}: Row has inconsistent number of columns. "
-                    f"This often means the delimiter is incorrect (current: {repr(delimiter)}) "
-                    f"or the file contains unquoted delimiters in data fields. "
-                    f"Try specifying --delimiter or check the file for formatting issues.\n"
+                    f"This often means:\n"
+                    f"  1. The delimiter is incorrect (current: {repr(delimiter)})\n"
+                    f"  2. The file contains unquoted {repr(delimiter)} characters in data fields\n"
+                    f"  3. Some rows have missing or extra columns\n\n"
+                    f"Solutions:\n"
+                    f"  - If fields contain {repr(delimiter)}, they should be quoted: \"field with {delimiter}\"\n"
+                    f"  - Try a different delimiter with --delimiter option\n"
+                    f"  - Check and fix the source file\n\n"
                     f"Original error: {error_msg}"
                 )
             raise RuntimeError(f"CSV parsing error in {self.file_path}: {error_msg}")

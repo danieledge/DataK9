@@ -109,6 +109,7 @@ class CSVLoader(DataLoader):
                 chunksize=self.chunk_size,
                 low_memory=False,
                 on_bad_lines='warn',  # Warn but don't fail on bad lines
+                quoting=0,  # QUOTE_MINIMAL - handle quoted fields properly
             ):
                 yield chunk
 
@@ -120,11 +121,35 @@ class CSVLoader(DataLoader):
             error_msg = str(e)
             # Provide helpful error messages for common issues
             if "Expected" in error_msg and "fields" in error_msg:
+                # Try to recover by skipping bad lines
+                logger.warning(f"CSV has inconsistent columns, attempting recovery with on_bad_lines='skip'")
+                try:
+                    for chunk in pd.read_csv(
+                        self.file_path,
+                        delimiter=delimiter,
+                        encoding=encoding,
+                        header=header,
+                        chunksize=self.chunk_size,
+                        low_memory=False,
+                        on_bad_lines='skip',  # Skip problematic rows
+                        quoting=0,
+                    ):
+                        yield chunk
+                    logger.warning("CSV loaded with some rows skipped due to parsing errors")
+                    return
+                except Exception:
+                    pass  # Recovery failed, raise original error
+
                 raise RuntimeError(
                     f"CSV parsing error in {self.file_path}: Row has inconsistent number of columns. "
-                    f"This often means the delimiter is incorrect (current: {repr(delimiter)}) "
-                    f"or the file contains unquoted delimiters in data fields. "
-                    f"Try specifying --delimiter or check the file for formatting issues.\n"
+                    f"This often means:\n"
+                    f"  1. The delimiter is incorrect (current: {repr(delimiter)})\n"
+                    f"  2. The file contains unquoted {repr(delimiter)} characters in data fields\n"
+                    f"  3. Some rows have missing or extra columns\n\n"
+                    f"Solutions:\n"
+                    f"  - If fields contain {repr(delimiter)}, they should be quoted: \"field with {delimiter}\"\n"
+                    f"  - Try a different delimiter with --delimiter option\n"
+                    f"  - Check and fix the source file\n\n"
                     f"Original error: {error_msg}"
                 )
             raise RuntimeError(f"CSV parsing error in {self.file_path}: {error_msg}")
