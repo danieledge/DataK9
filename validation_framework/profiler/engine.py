@@ -248,7 +248,7 @@ class DataProfiler:
 
         # Memory safety configuration
         self.disable_memory_safety = disable_memory_safety  # WARNING: Only for development/testing
-        self.memory_check_interval = 10  # Check memory every N chunks
+        self.memory_check_interval = 5  # Check memory every N chunks (reduced from 10)
         self.memory_warning_threshold = 70  # Warn at 70% memory usage
         self.memory_critical_threshold = 80  # Terminate at 80% memory usage (failsafe)
 
@@ -348,13 +348,14 @@ class DataProfiler:
             transformations=transformations
         )
 
-    def _check_memory_safety(self, chunk_idx: int, row_count: int) -> bool:
+    def _check_memory_safety(self, chunk_idx: int, row_count: int, force_check: bool = False) -> bool:
         """
         Check system memory usage and terminate if critical threshold exceeded.
 
         Args:
             chunk_idx: Current chunk index
             row_count: Total rows processed so far
+            force_check: If True, bypass the interval check and always check memory
 
         Returns:
             True if safe to continue, False if critical threshold exceeded
@@ -362,8 +363,8 @@ class DataProfiler:
         Raises:
             MemoryError: If memory usage exceeds critical threshold
         """
-        # Only check every N chunks to minimize overhead
-        if chunk_idx % self.memory_check_interval != 0:
+        # Check every N chunks to minimize overhead, or always if force_check=True
+        if not force_check and chunk_idx % self.memory_check_interval != 0:
             return True
 
         try:
@@ -1109,6 +1110,8 @@ class DataProfiler:
             # Process chunk for ML analysis (full_analysis mode)
             # This accumulates ML stats without loading all data at once
             if ml_accumulator is not None:
+                # Force memory check before ML processing (heavy operation)
+                self._check_memory_safety(chunk_idx, row_count, force_check=True)
                 ml_accumulator.process_chunk(chunk, chunk_idx)
 
             # Clean up chunk immediately after processing to free memory
