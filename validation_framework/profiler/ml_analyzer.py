@@ -195,7 +195,9 @@ class ChunkedMLAccumulator:
 
         detected = []
         for col in df.columns:
-            col_lower = col.lower().strip()
+            if col is None:
+                continue
+            col_lower = str(col).lower().strip()
 
             # Check semantic type match (from column_semantic_info)
             sem_info = self._column_semantic_info.get(col, {})
@@ -797,7 +799,7 @@ class ChunkedMLAccumulator:
         # 1. Amount field distributions (log-scaled histograms)
         amount_keywords = ['amount', 'price', 'cost', 'fee', 'total', 'balance', 'value', 'sum', 'payment', 'fare']
         for col, samples in self.numeric_samples.items():
-            col_lower = col.lower()
+            col_lower = str(col).lower() if col is not None else ''
             # Check if column looks like an amount field
             is_amount = any(kw in col_lower for kw in amount_keywords)
             if is_amount and len(samples) >= 100:
@@ -807,7 +809,7 @@ class ChunkedMLAccumulator:
         received_col = None
         paid_col = None
         for col in self.numeric_samples.keys():
-            col_lower = col.lower()
+            col_lower = str(col).lower() if col is not None else ''
             if 'received' in col_lower or 'recv' in col_lower or 'in' in col_lower.split('_'):
                 received_col = col
             elif 'paid' in col_lower or 'sent' in col_lower or 'out' in col_lower.split('_'):
@@ -1696,7 +1698,9 @@ class MLAnalyzer:
 
         detected = []
         for col in df.columns:
-            col_lower = col.lower().strip()
+            if col is None:
+                continue
+            col_lower = str(col).lower().strip()
 
             # Check semantic type match (from column_semantic_info)
             sem_info = self._column_semantic_info.get(col, {})
@@ -2555,7 +2559,7 @@ class MLAnalyzer:
         # 1. Amount field distributions (log-scaled histograms)
         amount_keywords = ['amount', 'price', 'cost', 'fee', 'total', 'balance', 'value', 'sum', 'payment', 'fare']
         for col in numeric_cols:
-            col_lower = col.lower()
+            col_lower = str(col).lower() if col is not None else ''
             is_amount = any(kw in col_lower for kw in amount_keywords)
             if is_amount:
                 values = df[col].dropna().values
@@ -2566,7 +2570,7 @@ class MLAnalyzer:
         received_col = None
         paid_col = None
         for col in numeric_cols:
-            col_lower = col.lower()
+            col_lower = str(col).lower() if col is not None else ''
             if 'received' in col_lower or 'recv' in col_lower:
                 received_col = col
             elif 'paid' in col_lower or 'sent' in col_lower:
@@ -5028,7 +5032,7 @@ class MLAnalyzer:
         potential_fks = []
 
         for col in df.columns:
-            col_lower = col.lower()
+            col_lower = str(col).lower() if col is not None else ''
             if any(pattern in col_lower for pattern in fk_patterns):
                 unique_ratio = df[col].nunique() / len(df) if len(df) > 0 else 0
                 null_ratio = df[col].isna().sum() / len(df) if len(df) > 0 else 0
