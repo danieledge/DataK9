@@ -507,9 +507,6 @@ class ExecutiveHTMLReporter:
         <!-- ═══════════════════════════════════════════════════════════════ -->
         {self._generate_exec1_summary(profile, avg_completeness, avg_validity, type_counts, insights)}
 
-        <!-- Condensed Lineage Banner (expandable) -->
-        {self._generate_lineage_banner(profile) if profile.data_lineage else ''}
-
         <!-- AI-Generated Executive Summary (only with --beta-llm flag) -->
         {self._get_llm_summary_html(profile_dict)}
 
