@@ -8077,25 +8077,50 @@ the largest difference between classes, which could be useful for predictive mod
                                     const ctx = document.getElementById(chart.id);
                                     if (ctx) {{
                                         // Color bars - highlight gaps in red
-                                        const bgColors = chart.data.map((val, idx) => {{
-                                            return chart.gaps.includes(chart.labels[idx]) ? 'rgba(239, 68, 68, 0.7)' : 'rgba(139, 92, 246, 0.6)';
+                                        // Create point colors - highlight gaps in red
+                                        const pointColors = chart.data.map((val, idx) => {{
+                                            return chart.gaps.includes(chart.labels[idx]) ? 'rgba(239, 68, 68, 1)' : 'rgba(139, 92, 246, 1)';
+                                        }});
+                                        const pointSizes = chart.data.map((val, idx) => {{
+                                            return chart.gaps.includes(chart.labels[idx]) ? 6 : 3;
                                         }});
 
                                         new Chart(ctx, {{
-                                            type: 'bar',
+                                            type: 'line',
                                             data: {{
                                                 labels: chart.labels,
                                                 datasets: [{{
                                                     label: 'Events',
                                                     data: chart.data,
-                                                    backgroundColor: bgColors,
-                                                    borderWidth: 0
+                                                    borderColor: 'rgba(139, 92, 246, 0.8)',
+                                                    backgroundColor: 'rgba(139, 92, 246, 0.1)',
+                                                    borderWidth: 2,
+                                                    fill: true,
+                                                    tension: 0.3,
+                                                    pointBackgroundColor: pointColors,
+                                                    pointBorderColor: pointColors,
+                                                    pointRadius: pointSizes,
+                                                    pointHoverRadius: 6
                                                 }}]
                                             }},
                                             options: {{
                                                 responsive: true,
                                                 maintainAspectRatio: false,
-                                                plugins: {{ legend: {{ display: false }} }},
+                                                interaction: {{
+                                                    intersect: false,
+                                                    mode: 'index'
+                                                }},
+                                                plugins: {{
+                                                    legend: {{ display: false }},
+                                                    tooltip: {{
+                                                        callbacks: {{
+                                                            label: function(context) {{
+                                                                const isGap = chart.gaps.includes(context.label);
+                                                                return isGap ? `⚠️ Gap: ${{context.raw}} events` : `${{context.raw}} events`;
+                                                            }}
+                                                        }}
+                                                    }}
+                                                }},
                                                 scales: {{
                                                     x: {{
                                                         title: {{ display: true, text: 'Time Period', color: '#64748b' }},
@@ -8111,7 +8136,8 @@ the largest difference between classes, which could be useful for predictive mod
                                                     y: {{
                                                         title: {{ display: true, text: 'Event Count', color: '#64748b' }},
                                                         grid: {{ color: 'rgba(148, 163, 184, 0.1)' }},
-                                                        ticks: {{ color: '#64748b' }}
+                                                        ticks: {{ color: '#64748b' }},
+                                                        beginAtZero: true
                                                     }}
                                                 }}
                                             }}
@@ -11137,22 +11163,62 @@ the largest difference between classes, which could be useful for predictive mod
             else:
                 gap_detail = f'{display_gaps:,} {gap_label}'
 
+            # Format median interval for display
+            median_interval_secs = frequency.get('median_interval_seconds', 0)
+            if median_interval_secs > 0:
+                if median_interval_secs < 60:
+                    interval_display = f"~{median_interval_secs:.0f} seconds"
+                elif median_interval_secs < 3600:
+                    interval_display = f"~{median_interval_secs/60:.0f} minutes"
+                elif median_interval_secs < 86400:
+                    interval_display = f"~{median_interval_secs/3600:.1f} hours"
+                elif median_interval_secs < 604800:
+                    interval_display = f"~{median_interval_secs/86400:.1f} days"
+                else:
+                    interval_display = f"~{median_interval_secs/604800:.1f} weeks"
+            else:
+                interval_display = frequency.get('median_interval', 'Unknown')
+
+            # Granularity icon based on frequency
+            freq_inferred = frequency.get('inferred', 'unknown').lower()
+            if freq_inferred in ('secondly', 'minutely'):
+                granularity_icon = '⚡'
+                granularity_color = '#ef4444'  # red - high frequency
+            elif freq_inferred == 'hourly':
+                granularity_icon = '🕐'
+                granularity_color = '#f59e0b'  # amber
+            elif freq_inferred == 'daily':
+                granularity_icon = '📆'
+                granularity_color = '#10b981'  # green
+            elif freq_inferred == 'weekly':
+                granularity_icon = '📅'
+                granularity_color = '#3b82f6'  # blue
+            elif freq_inferred == 'monthly':
+                granularity_icon = '🗓️'
+                granularity_color = '#8b5cf6'  # purple
+            else:
+                granularity_icon = '📊'
+                granularity_color = '#64748b'  # gray
+
             temporal_items += f'''
                 <div class="temporal-column-card" style="background: var(--card-bg); border-radius: 12px; padding: 20px; margin-bottom: 16px; border: 1px solid var(--border-color);">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
                         <h4 style="color: var(--text-primary); margin: 0; font-size: 1.1em;">📅 {col.name}</h4>
-                        <span class="accordion-badge {'warning' if has_gaps else 'good'}">{display_gaps:,} {gap_label}</span>
+                        <div style="display: flex; gap: 8px; align-items: center;">
+                            <span style="background: {granularity_color}20; color: {granularity_color}; padding: 4px 10px; border-radius: 6px; font-size: 0.8em; font-weight: 600;">{granularity_icon} {freq_inferred.title()}</span>
+                            <span class="accordion-badge {'warning' if has_gaps else 'good'}">{display_gaps:,} {gap_label}</span>
+                        </div>
                     </div>
-                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px;">
                         <div class="temporal-stat">
                             <div style="color: var(--text-secondary); font-size: 0.85em; margin-bottom: 4px;">Date Range</div>
                             <div style="color: var(--text-primary); font-weight: 500;">{start_str} → {end_str}</div>
                             <div style="color: var(--text-tertiary); font-size: 0.8em;">{span_label}</div>
                         </div>
                         <div class="temporal-stat">
-                            <div style="color: var(--text-secondary); font-size: 0.85em; margin-bottom: 4px;">Frequency</div>
-                            <div style="color: var(--text-primary); font-weight: 500;">{frequency.get('inferred', 'Unknown')}</div>
-                            <div style="color: var(--text-tertiary); font-size: 0.8em;">{frequency.get('confidence', 0)*100:.0f}% confidence</div>
+                            <div style="color: var(--text-secondary); font-size: 0.85em; margin-bottom: 4px;">Typical Interval</div>
+                            <div style="color: var(--text-primary); font-weight: 500;">{interval_display}</div>
+                            <div style="color: var(--text-tertiary); font-size: 0.8em;">{frequency.get('confidence', 0)*100:.0f}% regularity</div>
                         </div>
                         <div class="temporal-stat">
                             <div style="color: var(--text-secondary); font-size: 0.85em; margin-bottom: 4px;">Trend</div>
