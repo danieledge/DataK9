@@ -256,6 +256,16 @@ run_comprehensive_regression() {
     fi
 }
 
+run_code_quality_regression() {
+    if [ -f "$TEST_DIR/test_code_quality_regression.py" ]; then
+        run_tests "$TEST_DIR/test_code_quality_regression.py -v" \
+            "Running Code Quality Regression Tests (Titanic Dataset)"
+    else
+        print_error "Code quality regression test file not found"
+        read -p "Press Enter to continue..."
+    fi
+}
+
 # Category: Component Tests
 run_database_tests() {
     local database_test_files=(
@@ -728,6 +738,7 @@ show_menu() {
     echo -e "${YELLOW}▶ VALIDATION TESTS${NC}"
     echo "  7) All Validation Tests       - All validation rule types"
     echo "  8) Regression Tests           - Comprehensive regression suite"
+    echo "  23) Code Quality Regression   - Titanic-based regression tests"
     echo ""
 
     echo -e "${YELLOW}▶ COMPONENT TESTS${NC}"
@@ -759,7 +770,7 @@ show_menu() {
     echo "  0) Exit"
     echo ""
     echo -e "${WHITE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -n "Enter choice [0-22]: "
+    echo -n "Enter choice [0-23]: "
 }
 
 ################################################################################
@@ -779,6 +790,7 @@ show_help() {
     echo "  --security           Run security tests only"
     echo "  --validations        Run all validation rule tests"
     echo "  --regression         Run comprehensive regression tests"
+    echo "  --code-quality       Run code quality regression tests (Titanic)"
     echo "  --database           Run database tests"
     echo "  --profiler           Run profiler tests (all)"
     echo "  --profiler-enhancements  Run profiler enhancements only (Phase 1)"
@@ -849,6 +861,7 @@ main() {
                 20) check_test_environment ;;
                 21) clean_test_artifacts ;;
                 22) run_profiler_demo ;;
+                23) run_code_quality_regression ;;
                 0)
                     echo ""
                     print_info "Exiting test runner. Goodbye!"
@@ -883,6 +896,9 @@ main() {
                 ;;
             --regression)
                 run_comprehensive_regression
+                ;;
+            --code-quality)
+                run_code_quality_regression
                 ;;
             --database)
                 run_database_tests
