@@ -7690,7 +7690,13 @@ the largest difference between classes, which could be useful for predictive mod
             other_charts = ''
             imbalance_scripts = []
 
-            for idx, (col, data) in enumerate(list(class_data.items())[:4]):
+            # Sort to prioritize target columns first, then limit to 6 total
+            sorted_items = sorted(
+                class_data.items(),
+                key=lambda x: (not x[1].get('is_target_like', False), x[0])
+            )
+
+            for idx, (col, data) in enumerate(sorted_items[:6]):
                 classes = data.get('classes', [])
                 if not classes:
                     continue
