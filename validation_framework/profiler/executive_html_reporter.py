@@ -463,16 +463,17 @@ class ExecutiveHTMLReporter:
                     <div class="dq-sidebar-label">Navigation</div>
                     <ul class="dq-nav-list">
                         <li class="dq-nav-item"><button class="dq-nav-link active" data-section="overview"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Overview</button></li>
-                        <li class="dq-nav-item"><button class="dq-nav-link" data-section="structure"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3h18v18H3z"/><path d="M3 9h18M9 3v18"/></svg>Dataset Structure</button></li>
-                        <li class="dq-nav-item"><button class="dq-nav-link" data-section="missingness"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 3v18" stroke-dasharray="3 3"/></svg>Data Quality</button></li>
+                        <li class="dq-nav-item"><button class="dq-nav-link" data-section="structure"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3h18v18H3z"/><path d="M3 9h18M9 3v18"/></svg>Structure</button></li>
+                        <li class="dq-nav-item"><button class="dq-nav-link" data-section="missingness"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 3v18" stroke-dasharray="3 3"/></svg>Quality</button></li>
                         <li class="dq-nav-item"><button class="dq-nav-link" data-section="distributions"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 20h18M5 20V10M9 20V4M13 20v-8M17 20V8M21 20v-6"/></svg>Distributions</button></li>
-                        <li class="dq-nav-item"><button class="dq-nav-link" data-section="predictive-ml"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>Predictive ML</button></li>
+                        <li class="dq-nav-item"><button class="dq-nav-link" data-section="temporal"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>Time Series</button></li>
+                        <li class="dq-nav-item"><button class="dq-nav-link" data-section="predictive-ml"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>ML Ready</button></li>
                         <li class="dq-nav-item"><button class="dq-nav-link" data-section="anomalies"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>Anomalies</button></li>
                         <li class="dq-nav-item"><button class="dq-nav-link" data-section="correlations"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="6" r="3"/><circle cx="18" cy="18" r="3"/><path d="M8.5 8.5l7 7"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/></svg>Correlations</button></li>
-                        <li class="dq-nav-item"><button class="dq-nav-link" data-section="columns"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v4H4zM4 10h16v4H4zM4 16h16v4H4z"/></svg>Field Profiles</button></li>
+                        <li class="dq-nav-item"><button class="dq-nav-link" data-section="columns"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v4H4zM4 10h16v4H4zM4 16h16v4H4z"/></svg>Fields</button></li>
                         <li class="dq-nav-item"><button class="dq-nav-link" data-section="validations"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3 8-8"/><path d="M20 12v6a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h9"/></svg>Validations</button></li>
                         <li class="dq-nav-item"><button class="dq-nav-link" data-section="yaml"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h8"/></svg>YAML Config</button></li>
-                        <li class="dq-nav-item"><button class="dq-nav-link" data-section="lineage"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>Data Lineage</button></li>
+                        <li class="dq-nav-item"><button class="dq-nav-link" data-section="lineage"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>Lineage</button></li>
                         <li class="dq-nav-item"><button class="dq-nav-link" data-section="glossary"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/><path d="M8 7h8M8 11h6"/></svg>Glossary</button></li>
                     </ul>
                 </div>
@@ -527,8 +528,8 @@ class ExecutiveHTMLReporter:
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3h18v18H3z"/><path d="M3 9h18M9 3v18"/></svg>
                 </div>
                 <div class="section-accordion-content-wrap">
-                    <h2 class="section-accordion-title">Dataset Structure & Semantics</h2>
-                    <p class="section-accordion-subtitle">Type distribution, value patterns, and quality scores by column</p>
+                    <h2 class="section-accordion-title">Structure</h2>
+                    <p class="section-accordion-subtitle">Column types, meanings, and inferred patterns</p>
                 </div>
                 <div class="section-accordion-meta">
                     <div class="section-accordion-badge">Structure</div>
@@ -553,8 +554,8 @@ class ExecutiveHTMLReporter:
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
                 </div>
                 <div class="section-accordion-content-wrap">
-                    <h2 class="section-accordion-title">Data Quality</h2>
-                    <p class="section-accordion-subtitle">Completeness, validity, consistency, and uniqueness metrics</p>
+                    <h2 class="section-accordion-title">Quality</h2>
+                    <p class="section-accordion-subtitle">Completeness, validity, and data health scores</p>
                 </div>
                 <div class="section-accordion-meta">
                     <div class="section-accordion-badge">Quality</div>
@@ -580,7 +581,7 @@ class ExecutiveHTMLReporter:
                 </div>
                 <div class="section-accordion-content-wrap">
                     <h2 class="section-accordion-title">Distributions</h2>
-                    <p class="section-accordion-subtitle">Value distributions, categorical breakdowns, and temporal patterns</p>
+                    <p class="section-accordion-subtitle">How values spread across your columns</p>
                 </div>
                 <div class="section-accordion-meta">
                     <div class="section-accordion-badge">{ml_field_count} Categorical</div>
@@ -593,17 +594,33 @@ class ExecutiveHTMLReporter:
 
                 <!-- Distribution Visualizations (relocated from Advanced Visualizations) -->
                 {distribution_charts}
-
-                <!-- Temporal Analysis Accordion -->
-                {self._generate_temporal_accordion(temporal_columns) if temporal_columns else ''}
-
-                <!-- Temporal Visualizations (relocated from Advanced Visualizations) -->
-                {temporal_charts}
             </div>
         </div>
 
         <!-- ═══════════════════════════════════════════════════════════════ -->
-        <!-- 3D. PREDICTIVE ML - Target variable analysis                    -->
+        <!-- 3D. TEMPORAL ANALYSIS - Date/time patterns and trends           -->
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <div class="section-accordion" id="section-temporal" style="--section-accent: #f59e0b; --section-accent-dark: #d97706;">
+            <div class="section-accordion-header" onclick="toggleSectionAccordion(this)">
+                <div class="section-accordion-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                </div>
+                <div class="section-accordion-content-wrap">
+                    <h2 class="section-accordion-title">Time Series</h2>
+                    <p class="section-accordion-subtitle">Date patterns, trends, and gaps over time</p>
+                </div>
+                <div class="section-accordion-meta">
+                    <div class="section-accordion-badge">{temporal_count} Fields</div>
+                    <span class="section-accordion-chevron"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><polyline points="6 9 12 15 18 9"/></svg></span>
+                </div>
+            </div>
+            <div class="section-accordion-content">
+                {self._generate_temporal_section_content(temporal_columns, temporal_charts) if temporal_columns else '<p style="color: var(--text-muted); padding: 20px;">No date/time columns detected in this dataset.</p>'}
+            </div>
+        </div>
+
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <!-- 3E. PREDICTIVE ML - Target variable analysis                    -->
         <!-- ═══════════════════════════════════════════════════════════════ -->
         <div class="section-accordion expanded" id="section-predictive-ml" style="--section-accent: #ec4899; --section-accent-dark: #db2777;">
             <div class="section-accordion-header" onclick="toggleSectionAccordion(this)">
@@ -611,8 +628,8 @@ class ExecutiveHTMLReporter:
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
                 </div>
                 <div class="section-accordion-content-wrap">
-                    <h2 class="section-accordion-title">Predictive ML</h2>
-                    <p class="section-accordion-subtitle">Target variable analysis, class balance, and feature associations</p>
+                    <h2 class="section-accordion-title">ML Ready</h2>
+                    <p class="section-accordion-subtitle">Target variables and features for modeling</p>
                 </div>
                 <div class="section-accordion-meta">
                     <div class="section-accordion-badge">{ml_field_count} Fields</div>
@@ -634,8 +651,8 @@ class ExecutiveHTMLReporter:
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
                 </div>
                 <div class="section-accordion-content-wrap">
-                    <h2 class="section-accordion-title">Data Insights & Anomalies</h2>
-                    <p class="section-accordion-subtitle">ML-powered pattern detection, outliers, and data quality issues</p>
+                    <h2 class="section-accordion-title">Anomalies</h2>
+                    <p class="section-accordion-subtitle">Outliers, unusual patterns, and notable observations</p>
                 </div>
                 <div class="section-accordion-meta">
                     <div class="section-accordion-badge">{anomaly_count} Issues</div>
@@ -666,8 +683,8 @@ class ExecutiveHTMLReporter:
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
                 </div>
                 <div class="section-accordion-content-wrap">
-                    <h2 class="section-accordion-title">Correlations & Relationships</h2>
-                    <p class="section-accordion-subtitle">Statistical relationships between columns</p>
+                    <h2 class="section-accordion-title">Correlations</h2>
+                    <p class="section-accordion-subtitle">How columns relate to each other</p>
                 </div>
                 <div class="section-accordion-meta">
                     <div class="section-accordion-badge">{correlation_count} Pairs</div>
@@ -692,8 +709,8 @@ class ExecutiveHTMLReporter:
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v4H4zM4 10h16v4H4zM4 16h16v4H4z"/></svg>
                 </div>
                 <div class="section-accordion-content-wrap">
-                    <h2 class="section-accordion-title">Field Profiles</h2>
-                    <p class="section-accordion-subtitle">Detailed statistics, patterns, and quality metrics for each field</p>
+                    <h2 class="section-accordion-title">Fields</h2>
+                    <p class="section-accordion-subtitle">Detailed stats and quality for each column</p>
                 </div>
                 <div class="section-accordion-meta">
                     <div class="section-accordion-badge">{profile.column_count} Fields</div>
@@ -715,8 +732,8 @@ class ExecutiveHTMLReporter:
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3 8-8"/><path d="M20 12v6a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h9"/></svg>
                 </div>
                 <div class="section-accordion-content-wrap">
-                    <h2 class="section-accordion-title">Recommended Validations</h2>
-                    <p class="section-accordion-subtitle">Data quality rules based on pattern analysis</p>
+                    <h2 class="section-accordion-title">Validations</h2>
+                    <p class="section-accordion-subtitle">Suggested data quality rules</p>
                 </div>
                 <div class="section-accordion-meta">
                     <div class="section-accordion-badge">Action</div>
@@ -747,7 +764,7 @@ class ExecutiveHTMLReporter:
                 </div>
                 <div class="section-accordion-content-wrap">
                     <h2 class="section-accordion-title">Glossary</h2>
-                    <p class="section-accordion-subtitle">Key terms and concepts used in this report</p>
+                    <p class="section-accordion-subtitle">Key terms explained</p>
                 </div>
                 <div class="section-accordion-meta">
                     <div class="section-accordion-badge">Reference</div>
@@ -2790,6 +2807,199 @@ class ExecutiveHTMLReporter:
         }
 
         /* ======================================================
+           EXEC1 COMPACT EXECUTIVE SUMMARY (Reconstructed)
+           ====================================================== */
+        .exec1-summary-header {
+            margin-bottom: 20px;
+        }
+        .exec1-summary-title {
+            font-size: 1.75em;
+            font-weight: 400;
+            color: var(--text-primary);
+            margin: 0 0 6px 0;
+        }
+        .exec1-summary-top {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        .exec1-status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 10px;
+            border-radius: 16px;
+            font-size: 0.75em;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .exec1-status-badge.complete {
+            background: rgba(16, 185, 129, 0.15);
+            color: #10b981;
+        }
+        .exec1-status-badge.sampled {
+            background: rgba(59, 130, 246, 0.15);
+            color: #3b82f6;
+        }
+        .exec1-status-badge svg {
+            width: 12px;
+            height: 12px;
+        }
+
+        /* Compact Grid Layout - 4 widgets */
+        .exec1-compact-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
+            align-items: stretch;
+        }
+        .exec1-compact-stat {
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: 10px;
+            padding: 14px;
+        }
+        .exec1-compact-value {
+            font-size: 1.6em;
+            font-weight: 300;
+            color: var(--text-primary);
+            line-height: 1.1;
+        }
+        .exec1-compact-label {
+            font-size: 0.85em;
+            color: var(--text-secondary);
+            margin-top: 2px;
+        }
+        .exec1-compact-meta {
+            font-size: 0.7em;
+            color: var(--text-muted);
+            margin-top: 6px;
+        }
+        .exec1-compact-pills {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            margin-top: 6px;
+        }
+
+        /* Collapsed Info Lines */
+        .exec1-info-line {
+            margin-top: 6px;
+        }
+        .exec1-info-line summary {
+            font-size: 0.8em;
+            color: var(--text-muted);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            list-style: none;
+        }
+        .exec1-info-line summary::-webkit-details-marker {
+            display: none;
+        }
+        .exec1-info-line summary::after {
+            content: '›';
+            font-size: 1.2em;
+            margin-left: auto;
+            opacity: 0.5;
+            transition: transform 0.2s, opacity 0.2s;
+        }
+        .exec1-info-line[open] summary::after {
+            transform: rotate(90deg);
+            opacity: 0.8;
+        }
+        .exec1-info-line summary:hover {
+            color: var(--text-secondary);
+        }
+        .exec1-info-line summary:hover::after {
+            opacity: 0.8;
+        }
+        .exec1-info-detail {
+            margin-top: 6px;
+            padding: 10px 12px;
+            background: rgba(255,255,255,0.03);
+            border-radius: 6px;
+            font-size: 0.8em;
+            color: var(--text-secondary);
+        }
+        .exec1-detail-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 4px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+        .exec1-detail-row:last-child {
+            border-bottom: none;
+        }
+        .exec1-detail-label {
+            color: var(--text-muted);
+            min-width: 70px;
+        }
+        .exec1-detail-section {
+            padding: 6px 0;
+            font-size: 0.95em;
+            line-height: 1.4;
+        }
+        .exec1-detail-note {
+            padding: 6px 0;
+            font-size: 0.85em;
+            color: var(--text-muted);
+            font-style: italic;
+        }
+
+        /* Circular Dial Widgets */
+        .exec1-dial-widget {
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: 10px;
+            padding: 14px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        .exec1-dial {
+            width: 70px;
+            height: 70px;
+        }
+        .exec1-dial-bg {
+            fill: none;
+            stroke: rgba(255,255,255,0.1);
+            stroke-width: 3;
+        }
+        .exec1-dial-fill {
+            fill: none;
+            stroke: #3b82f6;
+            stroke-width: 3;
+            stroke-linecap: round;
+            transform: rotate(-90deg);
+            transform-origin: 50% 50%;
+            transition: stroke-dasharray 0.5s ease;
+        }
+        .exec1-dial-text {
+            fill: var(--text-primary);
+            font-size: 7px;
+            font-weight: 600;
+            text-anchor: middle;
+        }
+        .exec1-dial-label {
+            font-size: 0.8em;
+            color: var(--text-secondary);
+            margin-top: 6px;
+            text-align: center;
+        }
+
+        /* Compact Grid Responsive - 2x2 on phones */
+        @media (max-width: 768px) {
+            .exec1-compact-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        /* ======================================================
            COLUMN QUALITY HEATMAP
            ====================================================== */
         .column-heatmap {
@@ -3875,25 +4085,25 @@ class ExecutiveHTMLReporter:
         }
 
         .dual-layer-summary {
-            background: rgba(var(--info-color-rgb), 0.08);
-            border-left: 3px solid var(--info-color);
+            background: rgba(245, 158, 11, 0.12);
+            border-left: 3px solid #f59e0b;
             padding: 12px 16px;
             border-radius: 0 8px 8px 0;
             margin-bottom: 12px;
         }
 
         .dual-layer-summary-label {
-            font-size: 0.85em;
+            font-size: 0.8em;
             font-weight: 600;
-            color: var(--text-primary);
-            margin-bottom: 8px;
+            color: #fbbf24;
+            margin-bottom: 6px;
             display: flex;
             align-items: center;
             gap: 6px;
         }
 
         .dual-layer-summary-label svg {
-            color: var(--info-color);
+            color: #f59e0b;
         }
 
         .dual-layer-summary-text {
@@ -5478,8 +5688,8 @@ class ExecutiveHTMLReporter:
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
                 </div>
                 <div class="section-accordion-content-wrap">
-                    <h2 class="section-accordion-title">Data Lineage & Provenance</h2>
-                    <p class="section-accordion-subtitle">Audit trail for compliance, governance, and traceability</p>
+                    <h2 class="section-accordion-title">Lineage</h2>
+                    <p class="section-accordion-subtitle">Where your data came from</p>
                 </div>
                 <div class="section-accordion-meta">
                     <div class="section-accordion-badge">{source_type}</div>
@@ -10694,6 +10904,127 @@ the largest difference between classes, which could be useful for predictive mod
 
         return f'''      - type: "{sugg.validation_type}"
         severity: "{sugg.severity}"{params_str if params_str else ""}'''
+
+    def _generate_temporal_section_content(self, temporal_columns: List[ColumnProfile], temporal_charts: str) -> str:
+        """Generate content for the Time Series section-accordion (moved from nested inside Distributions)."""
+        if not temporal_columns:
+            return '<p style="color: var(--text-muted); padding: 20px;">No date/time columns detected in this dataset.</p>'
+
+        # Build content for all temporal columns
+        temporal_items = ''
+
+        # Get ML temporal patterns for consistent gap counts
+        ml_temporal = {}
+        if hasattr(self, 'profile') and hasattr(self.profile, 'ml_findings') and self.profile.ml_findings:
+            ml_temporal = self.profile.ml_findings.get('temporal_patterns', {})
+
+        for col in temporal_columns:
+            analysis = col.temporal_analysis or {}
+            date_range = analysis.get('date_range', {})
+            frequency = analysis.get('frequency', {})
+            gaps = analysis.get('gaps', {})
+            trend = analysis.get('trend', {})
+
+            ml_col_data = ml_temporal.get(col.name, {})
+            significant_gaps = ml_col_data.get('large_gaps_count', 0)
+            total_gaps = gaps.get('gap_count', 0)
+            has_gaps = significant_gaps > 0 or total_gaps > 0
+            display_gaps = significant_gaps if significant_gaps > 0 else total_gaps
+            gap_label = "large gaps" if significant_gaps > 0 else "gaps"
+
+            true_min = col.statistics.min_value if col.statistics else None
+            true_max = col.statistics.max_value if col.statistics else None
+
+            if true_min and true_max:
+                start_str = str(true_min)[:10] if true_min else 'N/A'
+                end_str = str(true_max)[:10] if true_max else 'N/A'
+            else:
+                start_str = date_range.get('start', 'N/A')[:10] if date_range.get('start') else 'N/A'
+                end_str = date_range.get('end', 'N/A')[:10] if date_range.get('end') else 'N/A'
+
+            ml_span = ml_col_data.get('date_range', {}).get('span_days', date_range.get('span_days', 'N/A'))
+            is_sampled = bool(ml_col_data)
+            span_label = f"{ml_span} days (in sample)" if is_sampled and ml_span != 'N/A' else f"{ml_span} days"
+
+            ml_largest_gap_days = ml_col_data.get('largest_gap_days', None)
+            profiler_largest_gap = gaps.get('largest_gap', None)
+
+            if significant_gaps > 0 and ml_largest_gap_days is not None:
+                largest_gap_display = f"{ml_largest_gap_days} days" if isinstance(ml_largest_gap_days, (int, float)) else str(ml_largest_gap_days)
+            else:
+                largest_gap_display = str(profiler_largest_gap) if profiler_largest_gap else 'None'
+
+            if significant_gaps > 0 and total_gaps > 0 and significant_gaps != total_gaps:
+                gap_detail = f'{significant_gaps:,} large • {total_gaps:,} total'
+            elif significant_gaps > 0:
+                gap_detail = f'{significant_gaps:,} {gap_label}'
+            else:
+                gap_detail = f'{display_gaps:,} {gap_label}'
+
+            temporal_items += f'''
+                <div class="temporal-column-card" style="background: var(--card-bg); border-radius: 12px; padding: 20px; margin-bottom: 16px; border: 1px solid var(--border-color);">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                        <h4 style="color: var(--text-primary); margin: 0; font-size: 1.1em;">📅 {col.name}</h4>
+                        <span class="accordion-badge {'warning' if has_gaps else 'good'}">{display_gaps:,} {gap_label}</span>
+                    </div>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
+                        <div class="temporal-stat">
+                            <div style="color: var(--text-secondary); font-size: 0.85em; margin-bottom: 4px;">Date Range</div>
+                            <div style="color: var(--text-primary); font-weight: 500;">{start_str} → {end_str}</div>
+                            <div style="color: var(--text-tertiary); font-size: 0.8em;">{span_label}</div>
+                        </div>
+                        <div class="temporal-stat">
+                            <div style="color: var(--text-secondary); font-size: 0.85em; margin-bottom: 4px;">Frequency</div>
+                            <div style="color: var(--text-primary); font-weight: 500;">{frequency.get('inferred', 'Unknown')}</div>
+                            <div style="color: var(--text-tertiary); font-size: 0.8em;">{frequency.get('confidence', 0)*100:.0f}% confidence</div>
+                        </div>
+                        <div class="temporal-stat">
+                            <div style="color: var(--text-secondary); font-size: 0.85em; margin-bottom: 4px;">Trend</div>
+                            <div style="color: var(--text-primary); font-weight: 500;">{'📈' if trend.get('direction') == 'increasing' else '📉' if trend.get('direction') == 'decreasing' else '➡️'} {trend.get('direction', 'Unknown')}</div>
+                            <div style="color: var(--text-tertiary); font-size: 0.8em;">{trend.get('strength', 'N/A')} strength</div>
+                        </div>
+                        <div class="temporal-stat">
+                            <div style="color: var(--text-secondary); font-size: 0.85em; margin-bottom: 4px;">Gaps</div>
+                            <div style="color: {'#f59e0b' if has_gaps else 'var(--text-primary)'}; font-weight: 500;">{gap_detail}</div>
+                            <div style="color: var(--text-tertiary); font-size: 0.8em;">Largest: {largest_gap_display}</div>
+                        </div>
+                    </div>
+                </div>'''
+
+        # Build plain-English summary
+        col_names = [col.name for col in temporal_columns]
+        col_names_str = ', '.join(col_names[:3]) + ('...' if len(col_names) > 3 else '')
+
+        total_gaps_sum = sum(
+            (col.temporal_analysis or {}).get('gaps', {}).get('gap_count', 0)
+            for col in temporal_columns
+        )
+        trends = [
+            (col.temporal_analysis or {}).get('trend', {}).get('direction', 'unknown')
+            for col in temporal_columns
+        ]
+        increasing_count = trends.count('increasing')
+        decreasing_count = trends.count('decreasing')
+
+        plain_english = f"Your data has {len(temporal_columns)} date/time column(s) ({col_names_str}). "
+        if total_gaps_sum > 0:
+            plain_english += "There are gaps where data appears to be missing. "
+        else:
+            plain_english += "Time coverage looks continuous. "
+        if increasing_count > 0:
+            plain_english += f"Activity trending up in {increasing_count} column(s). "
+        elif decreasing_count > 0:
+            plain_english += f"Activity trending down in {decreasing_count} column(s). "
+
+        return f'''
+            <div class="dual-layer-explanation" style="margin-bottom: 20px;">
+                <div class="dual-layer-summary">
+                    <div class="dual-layer-summary-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> What this means</div>
+                    <div class="dual-layer-summary-text">{plain_english}</div>
+                </div>
+            </div>
+            {temporal_items}
+            {temporal_charts if temporal_charts else ''}'''
 
     # =========================================================================
     # NEW PRESENTATION IMPROVEMENTS
