@@ -110,6 +110,13 @@ FEATHER_ICONS = {
     'thumbs-down': '<path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17"/>',
     'cpu': '<rect x="4" y="4" width="16" height="16" rx="2" ry="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="14" x2="23" y2="14"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="14" x2="4" y2="14"/>',
 
+    # Navigation Icons (for sidebar nav and section headers)
+    'layout-grid': '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
+    'table': '<path d="M3 3h18v18H3z"/><path d="M3 9h18M9 3v18"/>',
+    'layout-list': '<path d="M4 4h16v4H4zM4 10h16v4H4zM4 16h16v4H4z"/>',
+    'check-square': '<path d="M9 11l3 3 8-8"/><path d="M20 12v6a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h9"/>',
+    'sun': '<path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>',
+
     # AI/ML Icons (from Lucide - MIT License)
     'brain': '<path d="M12 18V5"/><path d="M15 13a4.17 4.17 0 0 1-3-4 4.17 4.17 0 0 1-3 4"/><path d="M17.598 6.5A3 3 0 1 0 12 5a3 3 0 1 0-5.598 1.5"/><path d="M17.997 5.125a4 4 0 0 1 2.526 5.77"/><path d="M18 18a4 4 0 0 0 2-7.464"/><path d="M19.967 17.483A4 4 0 1 1 12 18a4 4 0 1 1-7.967-.517"/><path d="M6 18a4 4 0 0 1-2-7.464"/><path d="M6.003 5.125a4 4 0 0 0-2.526 5.77"/>',
     'brain-circuit': '<path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/><path d="M9 13a4.5 4.5 0 0 0 3-4"/><path d="M6.003 5.125A3 3 0 0 0 6.401 6.5"/><path d="M3.477 10.896a4 4 0 0 1 .585-.396"/><path d="M6 18a4 4 0 0 1-1.967-.516"/><path d="M12 13h4"/><path d="M12 18h6a2 2 0 0 1 2 2v1"/><path d="M12 8h8"/><path d="M16 8V5a2 2 0 0 1 2-2"/><circle cx="16" cy="13" r=".5"/><circle cx="18" cy="3" r=".5"/><circle cx="20" cy="21" r=".5"/><circle cx="20" cy="8" r=".5"/>',
@@ -462,19 +469,19 @@ class ExecutiveHTMLReporter:
                 <div class="dq-sidebar-section">
                     <div class="dq-sidebar-label">Navigation</div>
                     <ul class="dq-nav-list">
-                        <li class="dq-nav-item"><button class="dq-nav-link active" data-section="overview"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Overview</button></li>
-                        <li class="dq-nav-item"><button class="dq-nav-link" data-section="structure"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3h18v18H3z"/><path d="M3 9h18M9 3v18"/></svg>Structure</button></li>
-                        <li class="dq-nav-item"><button class="dq-nav-link" data-section="missingness"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 3v18" stroke-dasharray="3 3"/></svg>Quality</button></li>
-                        <li class="dq-nav-item"><button class="dq-nav-link" data-section="distributions"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 20h18M5 20V10M9 20V4M13 20v-8M17 20V8M21 20v-6"/></svg>Distributions</button></li>
-                        <li class="dq-nav-item"><button class="dq-nav-link" data-section="temporal"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>Time Series</button></li>
-                        <li class="dq-nav-item"><button class="dq-nav-link" data-section="predictive-ml"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>ML Ready</button></li>
-                        <li class="dq-nav-item"><button class="dq-nav-link" data-section="anomalies"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>Anomalies</button></li>
-                        <li class="dq-nav-item"><button class="dq-nav-link" data-section="correlations"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="6" r="3"/><circle cx="18" cy="18" r="3"/><path d="M8.5 8.5l7 7"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/></svg>Correlations</button></li>
-                        <li class="dq-nav-item"><button class="dq-nav-link" data-section="columns"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v4H4zM4 10h16v4H4zM4 16h16v4H4z"/></svg>Fields</button></li>
-                        <li class="dq-nav-item"><button class="dq-nav-link" data-section="validations"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3 8-8"/><path d="M20 12v6a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h9"/></svg>Validations</button></li>
-                        <li class="dq-nav-item"><button class="dq-nav-link" data-section="yaml"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h8"/></svg>YAML Config</button></li>
-                        <li class="dq-nav-item"><button class="dq-nav-link" data-section="lineage"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>Lineage</button></li>
-                        <li class="dq-nav-item"><button class="dq-nav-link" data-section="glossary"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/><path d="M8 7h8M8 11h6"/></svg>Glossary</button></li>
+                        <li class="dq-nav-item"><button class="dq-nav-link active" data-section="overview">{icon('layout-grid', 16, class_name='nav-icon')}Overview</button></li>
+                        <li class="dq-nav-item"><button class="dq-nav-link" data-section="structure">{icon('table', 16, class_name='nav-icon')}Structure</button></li>
+                        <li class="dq-nav-item"><button class="dq-nav-link" data-section="missingness">{icon('check-circle', 16, class_name='nav-icon')}Quality</button></li>
+                        <li class="dq-nav-item"><button class="dq-nav-link" data-section="distributions">{icon('bar-chart', 16, class_name='nav-icon')}Distributions</button></li>
+                        <li class="dq-nav-item"><button class="dq-nav-link" data-section="temporal">{icon('clock', 16, class_name='nav-icon')}Time Series</button></li>
+                        <li class="dq-nav-item"><button class="dq-nav-link" data-section="predictive-ml">{icon('target', 16, class_name='nav-icon')}ML Ready</button></li>
+                        <li class="dq-nav-item"><button class="dq-nav-link" data-section="anomalies">{icon('activity', 16, class_name='nav-icon')}Anomalies</button></li>
+                        <li class="dq-nav-item"><button class="dq-nav-link" data-section="correlations">{icon('network', 16, class_name='nav-icon')}Correlations</button></li>
+                        <li class="dq-nav-item"><button class="dq-nav-link" data-section="columns">{icon('layout-list', 16, class_name='nav-icon')}Fields</button></li>
+                        <li class="dq-nav-item"><button class="dq-nav-link" data-section="validations">{icon('check-square', 16, class_name='nav-icon')}Validations</button></li>
+                        <li class="dq-nav-item"><button class="dq-nav-link" data-section="yaml">{icon('file-text', 16, class_name='nav-icon')}YAML Config</button></li>
+                        <li class="dq-nav-item"><button class="dq-nav-link" data-section="lineage">{icon('git-branch', 16, class_name='nav-icon')}Lineage</button></li>
+                        <li class="dq-nav-item"><button class="dq-nav-link" data-section="glossary">{icon('book-open', 16, class_name='nav-icon')}Glossary</button></li>
                     </ul>
                 </div>
             </div>
@@ -483,7 +490,7 @@ class ExecutiveHTMLReporter:
                     <span class="expand-icon">+</span> Expand All
                 </button>
                 <button class="export-pdf-btn" id="exportPdfBtn" onclick="exportToPDF()" title="Export report to PDF">
-                    <span class="pdf-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;vertical-align:-2px"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg></span> Export PDF
+                    <span class="pdf-icon">{icon('file-text', 14)}</span> Export PDF
                 </button>
             </div>
         </aside>
@@ -512,7 +519,7 @@ class ExecutiveHTMLReporter:
         <div class="section-accordion expanded" id="section-structure" style="--section-accent: #3b82f6; --section-accent-dark: #1d4ed8;">
             <div class="section-accordion-header" onclick="toggleSectionAccordion(this)">
                 <div class="section-accordion-icon">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3h18v18H3z"/><path d="M3 9h18M9 3v18"/></svg>
+                    {icon('table', 20)}
                 </div>
                 <div class="section-accordion-content-wrap">
                     <h2 class="section-accordion-title">Structure</h2>
@@ -520,7 +527,7 @@ class ExecutiveHTMLReporter:
                 </div>
                 <div class="section-accordion-meta">
                     <div class="section-accordion-badge">Structure</div>
-                    <span class="section-accordion-chevron"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><polyline points="6 9 12 15 18 9"/></svg></span>
+                    <span class="section-accordion-chevron">{icon('chevron-down', 16)}</span>
                 </div>
             </div>
             <div class="section-accordion-content">
@@ -538,7 +545,7 @@ class ExecutiveHTMLReporter:
         <div class="section-accordion expanded" id="section-missingness" style="--section-accent: #f59e0b; --section-accent-dark: #d97706;">
             <div class="section-accordion-header" onclick="toggleSectionAccordion(this)">
                 <div class="section-accordion-icon">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                    {icon('check-circle', 20)}
                 </div>
                 <div class="section-accordion-content-wrap">
                     <h2 class="section-accordion-title">Quality</h2>
@@ -546,7 +553,7 @@ class ExecutiveHTMLReporter:
                 </div>
                 <div class="section-accordion-meta">
                     <div class="section-accordion-badge">Quality</div>
-                    <span class="section-accordion-chevron"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><polyline points="6 9 12 15 18 9"/></svg></span>
+                    <span class="section-accordion-chevron">{icon('chevron-down', 16)}</span>
                 </div>
             </div>
             <div class="section-accordion-content">
@@ -564,7 +571,7 @@ class ExecutiveHTMLReporter:
         <div class="section-accordion expanded" id="section-distributions" style="--section-accent: #06b6d4; --section-accent-dark: #0891b2;">
             <div class="section-accordion-header" onclick="toggleSectionAccordion(this)">
                 <div class="section-accordion-icon">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
+                    {icon('bar-chart', 20)}
                 </div>
                 <div class="section-accordion-content-wrap">
                     <h2 class="section-accordion-title">Distributions</h2>
@@ -572,7 +579,7 @@ class ExecutiveHTMLReporter:
                 </div>
                 <div class="section-accordion-meta">
                     <div class="section-accordion-badge">{ml_field_count} Categorical</div>
-                    <span class="section-accordion-chevron"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><polyline points="6 9 12 15 18 9"/></svg></span>
+                    <span class="section-accordion-chevron">{icon('chevron-down', 16)}</span>
                 </div>
             </div>
             <div class="section-accordion-content">
@@ -590,7 +597,7 @@ class ExecutiveHTMLReporter:
         <div class="section-accordion" id="section-temporal" style="--section-accent: #f59e0b; --section-accent-dark: #d97706;">
             <div class="section-accordion-header" onclick="toggleSectionAccordion(this)">
                 <div class="section-accordion-icon">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                    {icon('clock', 20)}
                 </div>
                 <div class="section-accordion-content-wrap">
                     <h2 class="section-accordion-title">Time Series</h2>
@@ -598,7 +605,7 @@ class ExecutiveHTMLReporter:
                 </div>
                 <div class="section-accordion-meta">
                     <div class="section-accordion-badge">{temporal_count} Fields</div>
-                    <span class="section-accordion-chevron"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><polyline points="6 9 12 15 18 9"/></svg></span>
+                    <span class="section-accordion-chevron">{icon('chevron-down', 16)}</span>
                 </div>
             </div>
             <div class="section-accordion-content">
@@ -612,7 +619,7 @@ class ExecutiveHTMLReporter:
         <div class="section-accordion expanded" id="section-predictive-ml" style="--section-accent: #ec4899; --section-accent-dark: #db2777;">
             <div class="section-accordion-header" onclick="toggleSectionAccordion(this)">
                 <div class="section-accordion-icon">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+                    {icon('target', 20)}
                 </div>
                 <div class="section-accordion-content-wrap">
                     <h2 class="section-accordion-title">ML Ready</h2>
@@ -620,7 +627,7 @@ class ExecutiveHTMLReporter:
                 </div>
                 <div class="section-accordion-meta">
                     <div class="section-accordion-badge">{ml_field_count} Fields</div>
-                    <span class="section-accordion-chevron"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><polyline points="6 9 12 15 18 9"/></svg></span>
+                    <span class="section-accordion-chevron">{icon('chevron-down', 16)}</span>
                 </div>
             </div>
             <div class="section-accordion-content">
@@ -635,7 +642,7 @@ class ExecutiveHTMLReporter:
         <div class="section-accordion expanded" id="section-anomalies" style="--section-accent: #ef4444; --section-accent-dark: #dc2626;">
             <div class="section-accordion-header" onclick="toggleSectionAccordion(this)">
                 <div class="section-accordion-icon">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                    {icon('activity', 20)}
                 </div>
                 <div class="section-accordion-content-wrap">
                     <h2 class="section-accordion-title">Anomalies</h2>
@@ -643,7 +650,7 @@ class ExecutiveHTMLReporter:
                 </div>
                 <div class="section-accordion-meta">
                     <div class="section-accordion-badge">{anomaly_count} Issues</div>
-                    <span class="section-accordion-chevron"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><polyline points="6 9 12 15 18 9"/></svg></span>
+                    <span class="section-accordion-chevron">{icon('chevron-down', 16)}</span>
                 </div>
             </div>
             <div class="section-accordion-content">
@@ -667,7 +674,7 @@ class ExecutiveHTMLReporter:
         <div class="section-accordion expanded" id="section-correlations" style="--section-accent: #8b5cf6; --section-accent-dark: #7c3aed;">
             <div class="section-accordion-header" onclick="toggleSectionAccordion(this)">
                 <div class="section-accordion-icon">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+                    {icon('network', 20)}
                 </div>
                 <div class="section-accordion-content-wrap">
                     <h2 class="section-accordion-title">Correlations</h2>
@@ -675,7 +682,7 @@ class ExecutiveHTMLReporter:
                 </div>
                 <div class="section-accordion-meta">
                     <div class="section-accordion-badge">{correlation_count} Pairs</div>
-                    <span class="section-accordion-chevron"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><polyline points="6 9 12 15 18 9"/></svg></span>
+                    <span class="section-accordion-chevron">{icon('chevron-down', 16)}</span>
                 </div>
             </div>
             <div class="section-accordion-content">
@@ -693,7 +700,7 @@ class ExecutiveHTMLReporter:
         <div class="section-accordion expanded" id="section-columns" style="--section-accent: #6366f1; --section-accent-dark: #4f46e5;">
             <div class="section-accordion-header" onclick="toggleSectionAccordion(this)">
                 <div class="section-accordion-icon">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v4H4zM4 10h16v4H4zM4 16h16v4H4z"/></svg>
+                    {icon('layout-list', 20)}
                 </div>
                 <div class="section-accordion-content-wrap">
                     <h2 class="section-accordion-title">Fields</h2>
@@ -701,7 +708,7 @@ class ExecutiveHTMLReporter:
                 </div>
                 <div class="section-accordion-meta">
                     <div class="section-accordion-badge">{profile.column_count} Fields</div>
-                    <span class="section-accordion-chevron"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><polyline points="6 9 12 15 18 9"/></svg></span>
+                    <span class="section-accordion-chevron">{icon('chevron-down', 16)}</span>
                 </div>
             </div>
             <div class="section-accordion-content">
@@ -716,7 +723,7 @@ class ExecutiveHTMLReporter:
         <div class="section-accordion expanded" id="section-validations" style="--section-accent: #10b981; --section-accent-dark: #059669;">
             <div class="section-accordion-header" onclick="toggleSectionAccordion(this)">
                 <div class="section-accordion-icon">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3 8-8"/><path d="M20 12v6a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h9"/></svg>
+                    {icon('check-square', 20)}
                 </div>
                 <div class="section-accordion-content-wrap">
                     <h2 class="section-accordion-title">Validations</h2>
@@ -724,7 +731,7 @@ class ExecutiveHTMLReporter:
                 </div>
                 <div class="section-accordion-meta">
                     <div class="section-accordion-badge">Action</div>
-                    <span class="section-accordion-chevron"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><polyline points="6 9 12 15 18 9"/></svg></span>
+                    <span class="section-accordion-chevron">{icon('chevron-down', 16)}</span>
                 </div>
             </div>
             <div class="section-accordion-content">
@@ -747,7 +754,7 @@ class ExecutiveHTMLReporter:
         <div class="section-accordion expanded" id="section-glossary" style="--section-accent: #64748b; --section-accent-dark: #475569;">
             <div class="section-accordion-header" onclick="toggleSectionAccordion(this)">
                 <div class="section-accordion-icon">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/><path d="M8 7h8M8 11h6"/></svg>
+                    {icon('book-open', 20)}
                 </div>
                 <div class="section-accordion-content-wrap">
                     <h2 class="section-accordion-title">Glossary</h2>
@@ -755,7 +762,7 @@ class ExecutiveHTMLReporter:
                 </div>
                 <div class="section-accordion-meta">
                     <div class="section-accordion-badge">Reference</div>
-                    <span class="section-accordion-chevron"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><polyline points="6 9 12 15 18 9"/></svg></span>
+                    <span class="section-accordion-chevron">{icon('chevron-down', 16)}</span>
                 </div>
             </div>
             <div class="section-accordion-content">
@@ -5675,7 +5682,7 @@ class ExecutiveHTMLReporter:
             s = lineage.sampling_info
             sampling_html = f'''
                 <div style="margin-top: 16px; padding: 12px; background: rgba(245, 158, 11, 0.08); border-radius: 6px; border-left: 3px solid #f59e0b;">
-                    <div style="font-weight: 600; color: #f59e0b; font-size: 0.85em; margin-bottom: 8px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;vertical-align:-2px;margin-right:2px"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> Sampling Applied</div>
+                    <div style="font-weight: 600; color: #f59e0b; font-size: 0.85em; margin-bottom: 8px;">{icon('zap', 14)} Sampling Applied</div>
                     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; font-size: 0.8em;">
                         <div><span style="color: var(--text-muted);">Total Rows:</span> <span style="color: var(--text-primary); font-weight: 500;">{s.get("total_rows", 0):,}</span></div>
                         <div><span style="color: var(--text-muted);">Sampled:</span> <span style="color: var(--text-primary); font-weight: 500;">{s.get("sampled_rows", 0):,}</span></div>
@@ -5689,7 +5696,7 @@ class ExecutiveHTMLReporter:
         <div class="section-accordion expanded" id="section-lineage" style="--section-accent: #8b5cf6; --section-accent-dark: #7c3aed;">
             <div class="section-accordion-header" onclick="toggleSectionAccordion(this)">
                 <div class="section-accordion-icon">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+                    {icon('git-branch', 20)}
                 </div>
                 <div class="section-accordion-content-wrap">
                     <h2 class="section-accordion-title">Lineage</h2>
@@ -5697,7 +5704,7 @@ class ExecutiveHTMLReporter:
                 </div>
                 <div class="section-accordion-meta">
                     <div class="section-accordion-badge">{source_type}</div>
-                    <span class="section-accordion-chevron"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><polyline points="6 9 12 15 18 9"/></svg></span>
+                    <span class="section-accordion-chevron">{icon('chevron-down', 16)}</span>
                 </div>
             </div>
             <div class="section-accordion-content">
