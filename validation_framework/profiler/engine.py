@@ -133,7 +133,8 @@ def check_csv_format(file_path: str, sample_rows: int = 1000) -> Dict[str, Any]:
         sniffer = csv.Sniffer()
         dialect = sniffer.sniff(sample, delimiters=',\t|;:')
         result['delimiter'] = dialect.delimiter
-    except Exception:
+    except (csv.Error, UnicodeDecodeError, IOError) as e:
+        logger.debug(f"Delimiter auto-detection failed, defaulting to comma: {e}")
         result['delimiter'] = ','
 
     # Check for structural issues
@@ -1094,8 +1095,8 @@ class DataProfiler:
                                                 logger.debug(f"💾 Memory optimization: Column '{col}' temporal sampling limit reached at {row_count:,} rows (using {MAX_TEMPORAL_SAMPLES:,} samples)")
                                         else:
                                             datetime_data[col].extend(dt_series.tolist())
-                        except Exception:
-                            pass
+                        except (ValueError, TypeError) as e:
+                            logger.debug(f"Could not convert column '{col}' to datetime: {e}")
 
                 # Collect sample data for PII detection (Phase 1) - limit to 1000 samples per column
                 if self.enable_pii_detection:
@@ -1335,8 +1336,8 @@ class DataProfiler:
                     skip_ml_analysis = True
                 else:
                     logger.debug(f"💾 Memory check before ML: {system_memory.percent:.1f}% (threshold: {self.memory_critical_threshold}%)")
-            except Exception:
-                pass  # Continue if we can't check memory
+            except (psutil.Error, OSError) as e:
+                logger.debug(f"Could not check system memory: {e}")
 
         if self.enable_ml_analysis and self.ml_analyzer and not skip_ml_analysis:
             ml_start = time.time()
