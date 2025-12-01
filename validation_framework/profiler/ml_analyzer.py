@@ -170,10 +170,12 @@ class ChunkedMLAccumulator:
         target_keywords = [
             'target', 'label', 'class', 'outcome', 'response', 'y',
             'churn', 'fraud', 'default', 'laundering', 'spam', 'survived',
-            'conversion', 'click', 'purchase', 'attrition', 'failure', 'success'
+            'conversion', 'click', 'purchase', 'attrition', 'failure', 'success',
+            'status', 'result', 'decision', 'category', 'segment', 'priority',
+            'type', 'grade', 'rating', 'level', 'tier', 'risk', 'approved', 'rejected'
         ]
         prefix_patterns = ['is_', 'has_', 'was_', 'did_', 'will_']
-        suffix_patterns = ['_flag', '_indicator', '_label', '_target', '_class', '_outcome']
+        suffix_patterns = ['_flag', '_indicator', '_label', '_target', '_class', '_outcome', '_status', '_type', '_category']
 
         def is_keyword_present(col_lower, keywords):
             """Check if keyword is present as a whole word (not substring of another word)."""
@@ -831,8 +833,8 @@ class ChunkedMLAccumulator:
         # Use detected_targets from proper target detection (not simple keyword matching)
         for col, counts in self.value_counts.items():
             is_target = col in self.detected_targets
-            # Include low-cardinality categorical columns (binary or detected targets)
-            if len(counts) <= 10 and (is_target or len(counts) == 2):
+            # Include all low-cardinality categorical columns (useful as ML features or targets)
+            if len(counts) <= 10:
                 total = sum(counts.values())
                 viz_data["class_imbalance"][col] = {
                     "classes": [{"value": str(v), "count": c, "percentage": round(c/total*100, 2)}
@@ -1661,10 +1663,12 @@ class MLAnalyzer:
         target_keywords = [
             'target', 'label', 'class', 'outcome', 'response', 'y',
             'churn', 'fraud', 'default', 'laundering', 'spam', 'survived',
-            'conversion', 'click', 'purchase', 'attrition', 'failure', 'success'
+            'conversion', 'click', 'purchase', 'attrition', 'failure', 'success',
+            'status', 'result', 'decision', 'category', 'segment', 'priority',
+            'type', 'grade', 'rating', 'level', 'tier', 'risk', 'approved', 'rejected'
         ]
         prefix_patterns = ['is_', 'has_', 'was_', 'did_', 'will_']
-        suffix_patterns = ['_flag', '_indicator', '_label', '_target', '_class', '_outcome']
+        suffix_patterns = ['_flag', '_indicator', '_label', '_target', '_class', '_outcome', '_status', '_type', '_category']
 
         def is_keyword_present(col_lower, keywords):
             """Check if keyword is present as a whole word (not substring of another word)."""
@@ -1883,6 +1887,202 @@ class MLAnalyzer:
             results[target_col] = target_result
 
         return results
+
+    def _recommend_targets_mi(self, df: pd.DataFrame, max_targets: int = 3, sample_size: int = 1000) -> List[Dict[str, Any]]:
+        """
+        Data-driven ML target recommendation using Cramér's V (fast).
+
+        Uses a balanced scoring approach:
+        - Predictability: Some signal exists (measured via Cramér's V)
+        - Not too predictable: Penalizes derived/redundant columns
+        - Binary bonus: Binary columns are common targets
+        - Semantic hints: Column names suggesting targets
+        - Completeness: Targets typically have no missing values
+
+        Args:
+            df: DataFrame to analyze
+            max_targets: Maximum number of targets to recommend
+            sample_size: Sample size for computation (for performance)
+
+        Returns:
+            List of recommended targets with scores and feature importance
+        """
+        # Sample if large (aggressive sampling for speed)
+        if len(df) > sample_size:
+            df = df.sample(n=sample_size, random_state=42)
+
+        # Semantic hints for likely targets (boost these)
+        target_hints = [
+            'target', 'label', 'class', 'outcome', 'response', 'y',
+            'survived', 'churn', 'fraud', 'default', 'status', 'result',
+            'category', 'segment', 'priority', 'type', 'grade', 'approved',
+            'rejected', 'success', 'failure', 'converted', 'purchased'
+        ]
+
+        candidates = []
+        n_rows = len(df)
+
+        for col in df.columns:
+            try:
+                n_unique = df[col].nunique(dropna=True)
+                completeness = df[col].notna().mean()
+
+                # Candidate filters
+                is_low_cardinality = 2 <= n_unique <= 20
+                is_complete = completeness >= 0.90
+                is_not_id = (n_unique / n_rows) < 0.5
+
+                if is_low_cardinality and is_complete and is_not_id:
+                    candidates.append({
+                        'column': col,
+                        'n_classes': n_unique,
+                        'completeness': completeness,
+                        'is_binary': n_unique == 2
+                    })
+            except Exception:
+                continue
+
+        if not candidates:
+            return []
+
+        # Limit to 3 candidates for performance
+        candidates = candidates[:3]
+
+        # Compute predictability for each candidate
+        for cand in candidates:
+            col = cand['column']
+            max_mi, top_features = self._compute_mi_predictability(df, col)
+            cand['raw_predictability'] = max_mi
+            cand['top_features'] = top_features
+
+            # === BALANCED SCORING ===
+            score = 0.0
+            reasons = []
+
+            # 1. Base predictability (has SOME signal, 0.05-0.5 is sweet spot)
+            if max_mi >= 0.05:
+                signal_score = min(max_mi, 0.5) / 0.5  # Cap at 0.5
+                score += signal_score * 0.35
+                reasons.append(f"signal:{max_mi:.2f}")
+
+            # 2. Penalize TOO predictable (likely derived column)
+            if max_mi > 0.6:
+                penalty = (max_mi - 0.6) * 0.5
+                score -= penalty
+                reasons.append("derived-penalty")
+
+            # 3. Binary bonus (binary columns are common targets)
+            if cand['is_binary']:
+                score += 0.25
+                reasons.append("binary")
+
+            # 4. Semantic name match
+            col_lower = col.lower()
+            semantic_match = any(hint in col_lower for hint in target_hints)
+            if semantic_match:
+                score += 0.30
+                reasons.append("semantic")
+
+            # 5. High completeness bonus
+            if cand['completeness'] >= 0.99:
+                score += 0.10
+                reasons.append("complete")
+
+            cand['score'] = max(0, score)
+            cand['reasons'] = reasons
+
+        # Rank by balanced score
+        candidates.sort(key=lambda x: x['score'], reverse=True)
+
+        # Assign confidence and prepare output
+        results = []
+        for c in candidates[:max_targets]:
+            if c['score'] > 0.5:
+                confidence = 'high'
+            elif c['score'] > 0.3:
+                confidence = 'medium'
+            else:
+                confidence = 'low'
+
+            results.append({
+                'column': c['column'],
+                'n_classes': c['n_classes'],
+                'completeness': c['completeness'],
+                'is_binary': c['is_binary'],
+                'score': c['score'],
+                'confidence': confidence,
+                'raw_predictability': c['raw_predictability'],
+                'reasons': c['reasons'],
+                'top_features': c['top_features']
+            })
+
+        return results
+
+    def _compute_mi_predictability(self, df: pd.DataFrame, target_col: str) -> Tuple[float, List[Dict]]:
+        """
+        Compute how predictable a column is using Cramér's V (fast scipy-based).
+
+        Uses scipy.stats.chi2_contingency for vectorized chi-squared computation.
+
+        Args:
+            df: DataFrame
+            target_col: Column to evaluate as potential target
+
+        Returns:
+            Tuple of (max_score, list of top features with importance)
+        """
+        try:
+            from scipy.stats import chi2_contingency
+        except ImportError:
+            return 0.0, []
+
+        # Skip high-cardinality and ID-like columns as features
+        feature_cols = []
+        for c in df.columns:
+            if c == target_col:
+                continue
+            n_unique = df[c].nunique()
+            if n_unique > 50 or n_unique == len(df):  # Skip high-cardinality
+                continue
+            feature_cols.append(c)
+            if len(feature_cols) >= 8:  # Limit features for speed
+                break
+
+        if not feature_cols:
+            return 0.0, []
+
+        scores = []
+        target_series = df[target_col].fillna('__NA__').astype(str)
+
+        for col in feature_cols:
+            try:
+                feature_series = df[col].fillna('__NA__').astype(str)
+
+                # Compute Cramér's V using scipy (vectorized)
+                contingency = pd.crosstab(target_series, feature_series)
+                if contingency.size < 4:
+                    scores.append((col, 0.0))
+                    continue
+
+                n = contingency.sum().sum()
+                chi2, _, _, _ = chi2_contingency(contingency.values)
+
+                # Cramér's V
+                min_dim = min(contingency.shape) - 1
+                if min_dim > 0 and n > 0:
+                    cramers_v = np.sqrt(chi2 / (n * min_dim))
+                else:
+                    cramers_v = 0.0
+
+                scores.append((col, min(cramers_v, 1.0)))  # Cap at 1.0
+            except Exception:
+                scores.append((col, 0.0))
+
+        # Sort by score
+        scores.sort(key=lambda x: x[1], reverse=True)
+        top_features = [{'feature': f, 'importance': float(s)} for f, s in scores[:5]]
+
+        return float(max(s for _, s in scores)) if scores else 0.0, top_features
 
     def _compute_target_feature_analysis_direct(self, df: pd.DataFrame) -> Dict[str, Any]:
         """
@@ -2236,6 +2436,15 @@ class MLAnalyzer:
             if target_feature_result:
                 findings["target_feature_analysis"] = target_feature_result
 
+        # 16. MI-based Target Recommendation (data-driven target detection)
+        try:
+            target_recommendations = self._recommend_targets_mi(df, max_targets=3)
+            if target_recommendations:
+                findings["recommended_targets"] = target_recommendations
+                logger.info(f"Recommended {len(target_recommendations)} ML targets: {[t['column'] for t in target_recommendations]}")
+        except Exception as e:
+            logger.debug(f"Target recommendation failed: {e}")
+
         # Generate summary
         findings["summary"] = self._generate_summary(findings)
         findings["analysis_time_seconds"] = round(time.time() - start_time, 2)
@@ -2315,7 +2524,8 @@ class MLAnalyzer:
 
             try:
                 unique_count = df[col].nunique()
-                if unique_count <= 10 and (is_target or unique_count == 2):
+                # Include all low-cardinality categorical columns (useful as ML features or targets)
+                if unique_count <= 10:
                     value_counts = df[col].value_counts()
                     total = len(df[col].dropna())
                     if total > 0:
