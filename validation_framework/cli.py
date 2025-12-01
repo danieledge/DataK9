@@ -8,6 +8,7 @@ Provides commands for:
 """
 
 import click
+import csv
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -21,6 +22,25 @@ from validation_framework.utils.performance_advisor import get_performance_advis
 from validation_framework.utils.path_patterns import PathPatternExpander
 
 logger = get_logger(__name__)
+
+
+def detect_csv_delimiter(file_path: str, sample_size: int = 8192) -> str:
+    """
+    Auto-detect the delimiter used in a CSV file.
+
+    Uses Python's csv.Sniffer to analyze a sample of the file.
+    Returns the detected delimiter or ',' as default.
+    """
+    try:
+        with open(file_path, 'r', newline='', encoding='utf-8') as f:
+            sample = f.read(sample_size)
+
+        sniffer = csv.Sniffer()
+        dialect = sniffer.sniff(sample, delimiters=',\t|;:')
+        return dialect.delimiter
+    except Exception:
+        # Fall back to comma if detection fails
+        return ','
 
 
 @click.group()
@@ -637,6 +657,13 @@ def profile(file_path, format, delimiter, database, table, query, html_output, j
             if delimiter:
                 # Handle escape sequences like \t for tab
                 loader_kwargs['delimiter'] = delimiter.encode().decode('unicode_escape')
+            elif format == 'csv':
+                # Auto-detect delimiter for CSV files
+                detected_delimiter = detect_csv_delimiter(file_path)
+                if detected_delimiter and detected_delimiter != ',':
+                    loader_kwargs['delimiter'] = detected_delimiter
+                    delim_display = repr(detected_delimiter).strip("'")
+                    click.echo(f"📋 Auto-detected delimiter: {delim_display}")
 
             profile_result = profiler.profile_file(
                 file_path=file_path,
