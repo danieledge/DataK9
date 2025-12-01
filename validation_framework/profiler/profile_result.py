@@ -451,6 +451,7 @@ class ProfileResult:
     file_metadata: Optional[Dict[str, Any]] = None
     ml_findings: Optional[Dict[str, Any]] = None  # Beta ML analysis results
     data_lineage: Optional[DataLineage] = None  # Data lineage and provenance tracking
+    csv_format_issues: Optional[Dict[str, Any]] = None  # CSV structural issues detected
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary representation."""
@@ -486,5 +487,9 @@ class ProfileResult:
         # Add data lineage for audit trails
         if self.data_lineage:
             result["data_lineage"] = self.data_lineage.to_dict()
+
+        # Add CSV format issues if present
+        if self.csv_format_issues:
+            result["csv_format_issues"] = self.csv_format_issues
 
         return result

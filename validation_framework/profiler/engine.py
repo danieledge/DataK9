@@ -87,6 +87,94 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 
+def check_csv_format(file_path: str, sample_rows: int = 1000) -> Dict[str, Any]:
+    """
+    Check CSV file for structural issues before profiling.
+
+    Args:
+        file_path: Path to CSV file
+        sample_rows: Number of rows to check
+
+    Returns:
+        Dict with 'valid', 'issues', 'delimiter', 'encoding', 'column_count'
+    """
+    import csv
+
+    result = {
+        'valid': True,
+        'issues': [],
+        'delimiter': ',',
+        'encoding': 'utf-8',
+        'column_count': 0,
+        'rows_checked': 0,
+        'inconsistent_rows': []
+    }
+
+    # Auto-detect delimiter
+    encodings = ['utf-8', 'utf-8-sig', 'cp1252', 'latin-1']
+    detected_encoding = 'utf-8'
+
+    for encoding in encodings:
+        try:
+            with open(file_path, 'r', newline='', encoding=encoding) as f:
+                sample = f.read(8192)
+            detected_encoding = encoding
+            break
+        except UnicodeDecodeError:
+            continue
+
+    result['encoding'] = detected_encoding
+
+    # Detect delimiter
+    try:
+        with open(file_path, 'r', newline='', encoding=detected_encoding) as f:
+            sample = f.read(8192)
+        sniffer = csv.Sniffer()
+        dialect = sniffer.sniff(sample, delimiters=',\t|;:')
+        result['delimiter'] = dialect.delimiter
+    except Exception:
+        result['delimiter'] = ','
+
+    # Check for structural issues
+    try:
+        with open(file_path, 'r', newline='', encoding=detected_encoding) as f:
+            reader = csv.reader(f, delimiter=result['delimiter'])
+
+            expected_columns = None
+            for i, row in enumerate(reader):
+                result['rows_checked'] = i + 1
+
+                if expected_columns is None:
+                    expected_columns = len(row)
+                    result['column_count'] = expected_columns
+                    continue
+
+                if len(row) != expected_columns:
+                    result['valid'] = False
+                    result['inconsistent_rows'].append({
+                        'row': i + 1,
+                        'expected': expected_columns,
+                        'actual': len(row)
+                    })
+
+                if i >= sample_rows:
+                    break
+
+    except Exception as e:
+        result['valid'] = False
+        result['issues'].append(f"Error reading file: {str(e)}")
+
+    # Summarize issues
+    if result['inconsistent_rows']:
+        count = len(result['inconsistent_rows'])
+        result['issues'].append(
+            f"{count} row(s) have inconsistent column counts "
+            f"(expected {result['column_count']}, delimiter={repr(result['delimiter'])})"
+        )
+
+    return result
+
+
 class DataProfiler:
     """
     Comprehensive data profiler with type inference and quality analysis.
@@ -771,6 +859,13 @@ class DataProfiler:
 
         # Track timing for each phase
         phase_timings = {}
+
+        # CSV format check for CSV files
+        csv_format_check = None
+        if file_format.lower() == 'csv':
+            csv_format_check = check_csv_format(file_path)
+            if not csv_format_check['valid']:
+                logger.warning(f"CSV format issues detected: {csv_format_check['issues']}")
 
         # 50k Sampling Policy:
         # Datasets >= 50k rows use a 50k sample for statistical/ML analysis.
@@ -1484,7 +1579,8 @@ class DataProfiler:
             dataset_privacy_risk=dataset_privacy_risk,
             file_metadata=file_metadata if file_metadata else None,
             ml_findings=ml_findings,
-            data_lineage=data_lineage
+            data_lineage=data_lineage,
+            csv_format_issues=csv_format_check if csv_format_check and not csv_format_check['valid'] else None
         )
 
     def _initialize_column_profile(
