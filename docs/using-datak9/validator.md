@@ -193,6 +193,7 @@ Check properties of the entire file before processing rows.
 | `EmptyFileCheck` | Ensure file is not empty |
 | `RowCountRangeCheck` | Verify row count within bounds |
 | `FileSizeCheck` | Check file size limits |
+| `CSVFormatCheck` | Validate CSV formatting (delimiters, quoting) |
 
 ### Schema Validations
 Validate the structure of your data.
@@ -209,6 +210,7 @@ Check individual field values.
 |------------|---------|
 | `MandatoryFieldCheck` | Required fields are not null |
 | `RegexCheck` | Values match pattern |
+| `InlineRegexCheck` | Inline regex with custom error messages |
 | `ValidValuesCheck` | Values in allowed list |
 | `RangeCheck` | Numeric values within bounds |
 | `DateFormatCheck` | Dates match expected format |
@@ -231,9 +233,11 @@ Complex business rules and statistics.
 | Validation | Purpose |
 |------------|---------|
 | `StatisticalOutlierCheck` | Detect statistical anomalies |
+| `AdvancedAnomalyDetectionCheck` | ML-based anomaly detection |
 | `InlineBusinessRuleCheck` | Custom business logic |
 | `InlineLookupCheck` | Reference data validation |
 | `CompletenessCheck` | Field completeness percentage |
+| `ConditionalValidation` | Apply validations based on conditions |
 
 ### Cross-File Validations
 Validate relationships between files.
@@ -243,7 +247,6 @@ Validate relationships between files.
 | `ReferentialIntegrityCheck` | Foreign key validation |
 | `CrossFileComparisonCheck` | Compare data across files |
 | `CrossFileDuplicateCheck` | Find duplicates across files |
-| `CrossFileKeyCheck` | Validate keys across files |
 
 ### Database Validations
 Direct database validation support.

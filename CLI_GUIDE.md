@@ -80,13 +80,15 @@ python3 -m validation_framework.cli validate <config_file> [options]
 
 | Option | Short | Description | Default |
 |--------|-------|-------------|---------|
-| `--html-output` | `-o` | Path for HTML report output (supports patterns) | `validation_report.html` |
+| `--html-output` | `-o` | Path for HTML report output (supports patterns) | None |
 | `--json-output` | `-j` | Path for JSON report output (supports patterns) | None |
 | `--verbose` | `-v` | Verbose output (shows progress) | True |
 | `--quiet` | `-q` | Minimal output | False |
-| `--fail-on-warning` | | Fail if warnings are found | False |
+| `--fail-on-warning` | | Exit code 2 if warnings are found | False |
+| `--delimiter` | `-d` | Column delimiter for CSV files (overrides config). Use `\t` for tab. | None |
 | `--log-level` | | Logging level (DEBUG, INFO, WARNING, ERROR) | INFO |
 | `--log-file` | | Optional log file path (supports patterns) | None |
+| `--no-optimize` | | Disable single-pass optimization (use standard engine) | False |
 
 **Date/Time Patterns:**
 
@@ -133,9 +135,9 @@ python3 -m validation_framework.cli validate config.yaml --quiet
 ```
 
 **Exit Codes:**
-- `0` - Validation passed (all ERROR validations passed; warnings OK)
-- `1` - Validation failed (ERROR-severity issues found)
-- `2` - Command error (bad config, file not found, etc.)
+- `0` - Validation passed (all ERROR validations passed; warnings OK unless `--fail-on-warning`)
+- `1` - Validation failed (ERROR-severity issues found, or file/runtime errors)
+- `2` - Validation failed with warnings (only when `--fail-on-warning` is set)
 
 **Sample YAML Configuration:**
 
@@ -223,14 +225,26 @@ python3 -m validation_framework.cli profile \
 | Option | Short | Description | Default |
 |--------|-------|-------------|---------|
 | `--format` | `-f` | File format (csv, excel, json, parquet) | Auto-detected |
+| `--delimiter` | `-d` | Column delimiter for CSV files. Use `\t` for tab. | comma |
 | `--database` | `--db` | Database connection string | None |
 | `--table` | `-t` | Database table name to profile | None |
 | `--query` | `-q` | SQL query to profile (alternative to `--table`) | None |
-| `--html-output` | `-o` | Path for HTML profile report | `<file>_profile_report.html` |
+| `--html-output` | `-o` | Path for HTML profile report (supports patterns) | `{file_name}_profile_{date}.html` |
 | `--json-output` | `-j` | Path for JSON profile output | None |
-| `--config-output` | `-c` | Path to save generated validation config | `<file>_validation.yaml` |
-| `--chunk-size` | | Rows per chunk for large files/tables | 50000 |
-| `--log-level` | | Logging level | INFO |
+| `--config-output` | `-c` | Path to save generated validation config | `{file_name}_validation_{timestamp}.yaml` |
+| `--chunk-size` | | Rows per chunk for large files/tables | Auto-calculated |
+| `--sample` | `-s` | Profile only first N rows (quick analysis) | None (full file) |
+| `--no-memory-check` | | Disable memory usage warnings | False |
+| `--log-level` | | Logging level (DEBUG, INFO, WARNING, ERROR) | INFO |
+| `--report-style` | | HTML report style: `classic` or `executive` | executive |
+| `--disable-temporal` | | Disable temporal analysis for datetime columns | False |
+| `--disable-pii` | | Disable PII detection with privacy risk scoring | False |
+| `--disable-correlation` | | Disable enhanced correlation analysis | False |
+| `--disable-all-enhancements` | | Disable all profiler enhancements | False |
+| `--no-ml` | | Disable ML-based anomaly detection | False |
+| `--beta-llm` | | Enable AI summary using local LLM (experimental) | False |
+| `--full-analysis` | | Disable internal sampling (slower but more accurate) | False |
+| `--analysis-sample-size` | | Sample size for analysis when file exceeds this | 100000 |
 
 **Examples:**
 
@@ -733,8 +747,8 @@ DataK9 uses standard exit codes for automation and pipeline integration:
 | Exit Code | Status | Description | Action |
 |-----------|--------|-------------|--------|
 | `0` | SUCCESS | All ERROR-severity validations passed (warnings OK) | Proceed with pipeline |
-| `1` | VALIDATION_FAILED | ERROR-severity validation failures found | Block pipeline, review failures |
-| `2` | COMMAND_ERROR | Bad config, file not found, syntax error | Fix configuration/paths |
+| `1` | VALIDATION_FAILED | ERROR-severity validation failures, file not found, or runtime errors | Block pipeline, review failures |
+| `2` | WARNING_FAILURE | WARNING-severity validations failed (only with `--fail-on-warning` flag) | Review warnings |
 
 **Using Exit Codes in Scripts:**
 
@@ -746,19 +760,20 @@ if [ $? -ne 0 ]; then
   exit 1
 fi
 
-# Detailed check
-python3 -m validation_framework.cli validate config.yaml
+# Detailed check (with --fail-on-warning)
+python3 -m validation_framework.cli validate config.yaml --fail-on-warning
 EXIT_CODE=$?
 
 if [ $EXIT_CODE -eq 0 ]; then
   echo "✓ Validation passed - proceeding with load"
   ./load_data.sh
 elif [ $EXIT_CODE -eq 1 ]; then
-  echo "✗ Validation failed - data quality issues"
+  echo "✗ Validation failed - data quality errors"
   ./send_alert.sh
   exit 1
 elif [ $EXIT_CODE -eq 2 ]; then
-  echo "✗ Configuration error - check config file"
+  echo "⚠ Validation warnings found - review report"
+  ./send_warning.sh
   exit 2
 fi
 ```

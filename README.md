@@ -301,16 +301,16 @@ DataK9 includes 35 built-in validation types across 10 categories:
 - SchemaMatchCheck, ColumnPresenceCheck
 
 ### Field-Level Validations
-- MandatoryFieldCheck, RegexCheck, ValidValuesCheck, RangeCheck, DateFormatCheck, StringLengthCheck, NumericPrecisionCheck, CompletenessCheck
+- MandatoryFieldCheck, RegexCheck, InlineRegexCheck, ValidValuesCheck, RangeCheck, DateFormatCheck, StringLengthCheck, NumericPrecisionCheck
 
 ### Record-Level Validations
 - UniqueKeyCheck, DuplicateRowCheck, CrossFieldComparisonCheck, BlankRecordCheck
 
 ### Advanced Validations
-- InlineBusinessRuleCheck, InlineLookupCheck, InlineRegexCheck, AdvancedAnomalyDetectionCheck
+- StatisticalOutlierCheck, AdvancedAnomalyDetectionCheck, InlineBusinessRuleCheck, InlineLookupCheck, CompletenessCheck, ConditionalValidation
 
 ### Cross-File Validations
-- ReferentialIntegrityCheck, CrossFileComparisonCheck, CrossFileDuplicateCheck, CrossFileKeyCheck
+- ReferentialIntegrityCheck, CrossFileComparisonCheck, CrossFileDuplicateCheck
 
 ### Database Validations
 - SQLCustomCheck, DatabaseConstraintCheck, DatabaseReferentialIntegrityCheck
@@ -319,7 +319,7 @@ DataK9 includes 35 built-in validation types across 10 categories:
 - FreshnessCheck, BaselineComparisonCheck, TrendDetectionCheck
 
 ### Statistical Validations
-- StatisticalOutlierCheck, CorrelationCheck, DistributionCheck
+- DistributionCheck, CorrelationCheck
 
 ### Custom Validations
 - Easy plugin architecture for custom validation logic
