@@ -392,6 +392,13 @@ class ExecutiveHTMLReporter:
         profile_dict = profile.to_dict()
         insights = generate_insights(profile_dict)
 
+        # Extract field descriptions and context store for friendly names and context-aware insights
+        field_descriptions = {}
+        context_store = {}
+        if profile.ml_findings:
+            context_store = profile.ml_findings.get('context_store', {})
+            field_descriptions = context_store.get('field_descriptions', {})
+
         # Generate advanced visualization charts categorized by section
         viz_charts = self._generate_advanced_visualizations(
             profile.ml_findings, profile.columns
@@ -687,7 +694,7 @@ class ExecutiveHTMLReporter:
             </div>
             <div class="section-accordion-content">
                 <!-- Column Relationships / Correlations -->
-                {self._generate_correlations_section(profile.correlations) if profile.correlations else '<p style="color: var(--text-muted);">No significant correlations detected.</p>'}
+                {self._generate_correlations_section(profile.correlations, field_descriptions, context_store) if profile.correlations else '<p style="color: var(--text-muted);">No significant correlations detected.</p>'}
 
                 <!-- Correlation Visualizations (relocated from Advanced Visualizations) -->
                 {correlation_charts}
@@ -5436,10 +5443,24 @@ class ExecutiveHTMLReporter:
             </div>
         </section>'''
 
-    def _generate_correlations_section(self, correlations: List) -> str:
+    def _generate_correlations_section(self, correlations: List, field_descriptions: Dict = None, context_store: Dict = None) -> str:
         """Generate column correlations/associations section with dual-view."""
         if not correlations:
             return ''
+
+        # Helper to get friendly name
+        def get_friendly(col):
+            if field_descriptions and col in field_descriptions:
+                return field_descriptions[col].get('friendly_name', col)
+            return col
+
+        # Get correlations used for context-aware validation
+        context_correlations = set()
+        if context_store:
+            for corr in context_store.get('correlations', []):
+                col1 = corr.get('col1', '')
+                col2 = corr.get('col2', '')
+                context_correlations.add(tuple(sorted([col1, col2])))
 
         # Deduplicate correlations (keep strongest per pair)
         seen = {}
@@ -5468,8 +5489,10 @@ class ExecutiveHTMLReporter:
         # Build correlation items with plain English and technical views
         items_html = []
         for rank, c in enumerate(unique_correlations, 1):  # Show all correlations with rank
-            col1 = c.get('column1', '')
-            col2 = c.get('column2', '')
+            col1_raw = c.get('column1', '')
+            col2_raw = c.get('column2', '')
+            col1 = get_friendly(col1_raw)
+            col2 = get_friendly(col2_raw)
             corr = c.get('correlation', 0)
             strength = c.get('strength', 'moderate') or 'moderate'
             direction = c.get('direction', 'positive' if corr > 0 else 'negative')
@@ -5491,13 +5514,31 @@ class ExecutiveHTMLReporter:
 
             arrow = '↓' if corr < 0 else '↑'
 
+            # Check if this correlation was used in context-aware anomaly filtering
+            pair_key = tuple(sorted([col1_raw, col2_raw]))
+            used_for_context = pair_key in context_correlations
+
             # Plain English explanation
             if corr < 0:
                 plain_english = f"When <strong>{col1}</strong> increases, <strong>{col2}</strong> tends to decrease (and vice versa)."
-                business_insight = "These columns move in opposite directions - this inverse relationship may indicate a trade-off or constraint in your data."
+                if used_for_context:
+                    business_insight = "This inverse relationship was used to filter false-positive anomalies — values that seemed unusual in isolation but are normal given this correlation."
+                else:
+                    business_insight = "These columns move in opposite directions - this inverse relationship may indicate a trade-off or constraint in your data."
             else:
                 plain_english = f"When <strong>{col1}</strong> increases, <strong>{col2}</strong> also tends to increase."
-                business_insight = "These columns move together - they may be derived from the same source, or one may influence the other."
+                if used_for_context:
+                    business_insight = "This relationship was used to filter false-positive anomalies — values that seemed unusual in isolation but are normal given this correlation."
+                else:
+                    business_insight = "These columns move together - they may be derived from the same source, or one may influence the other."
+
+            # Context-aware badge
+            context_badge = ''
+            if used_for_context:
+                context_badge = '''<div style="position: absolute; top: 12px; left: 12px; background: linear-gradient(135deg, #10b981, #059669); color: white; padding: 4px 10px; border-radius: 12px; font-size: 0.7em; font-weight: 600; display: flex; align-items: center; gap: 4px;">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:12px;height:12px"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                    Used in Anomaly Filtering
+                </div>'''
 
             # Technical details
             r_squared = corr ** 2
@@ -5505,6 +5546,8 @@ class ExecutiveHTMLReporter:
 
             items_html.append(f'''
                 <div class="correlation-card" style="background: var(--bg-card); border-radius: 12px; border-left: 4px solid {color}; margin-bottom: 16px; overflow: hidden; position: relative; border: 1px solid var(--border-subtle);">
+                    <!-- Context Badge (if used for anomaly filtering) -->
+                    {context_badge}
                     <!-- Rank Badge -->
                     <div style="position: absolute; top: 12px; right: 12px; background: {color}; color: white; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.85em;">#{rank}</div>
                     <!-- Header -->
@@ -5574,18 +5617,232 @@ class ExecutiveHTMLReporter:
                 </div>
             ''')
 
-        # Return content directly without accordion wrapper (parent section-accordion provides structure)
+        # Build unified list of all relationships (both categorical groupings and numeric correlations)
+        # sorted by strength (variance explained for subgroups, r² for correlations)
+        subgroups = context_store.get('subgroups', []) if context_store else []
+        has_context_patterns = context_correlations or subgroups
+
+        # Create unified relationship items
+        all_relationships = []
+
+        # Add subgroups (categorical groupings)
+        for sg in subgroups:
+            seg_col = sg.get('segment_col', '')
+            val_col = sg.get('value_col', '')
+            var_explained = sg.get('variance_explained', 0)
+            all_relationships.append({
+                'type': 'categorical',
+                'strength': var_explained,
+                'col1_raw': val_col,
+                'col2_raw': seg_col,
+                'col1': get_friendly(val_col),
+                'col2': get_friendly(seg_col),
+                'used_for_context': True,
+                'variance_explained': var_explained
+            })
+
+        # Add numeric correlations
+        for c in unique_correlations:
+            col1_raw = c.get('column1', '')
+            col2_raw = c.get('column2', '')
+            corr_val = c.get('correlation', 0)
+            r_squared = corr_val ** 2
+            pair_key = tuple(sorted([col1_raw, col2_raw]))
+            all_relationships.append({
+                'type': 'numeric',
+                'strength': r_squared,
+                'col1_raw': col1_raw,
+                'col2_raw': col2_raw,
+                'col1': get_friendly(col1_raw),
+                'col2': get_friendly(col2_raw),
+                'correlation': corr_val,
+                'used_for_context': pair_key in context_correlations,
+                'method': c.get('type', 'pearson')
+            })
+
+        # Sort by strength (highest first)
+        all_relationships.sort(key=lambda x: x['strength'], reverse=True)
+
+        # Helper to get strength tier
+        def get_strength_tier(pct):
+            if pct >= 0.50:
+                return ('Very Strong', '#dc2626', '🔥')
+            elif pct >= 0.30:
+                return ('Strong', '#ea580c', '💪')
+            elif pct >= 0.15:
+                return ('Moderate', '#ca8a04', '📊')
+            elif pct >= 0.05:
+                return ('Weak', '#6b7280', '📉')
+            else:
+                return ('Minimal', '#9ca3af', '○')
+
+        # Count relationships by strength for summary
+        very_strong = sum(1 for r in all_relationships if r['strength'] >= 0.50)
+        strong = sum(1 for r in all_relationships if 0.30 <= r['strength'] < 0.50)
+        moderate = sum(1 for r in all_relationships if 0.15 <= r['strength'] < 0.30)
+        weak = sum(1 for r in all_relationships if r['strength'] < 0.15)
+        context_used = sum(1 for r in all_relationships if r['used_for_context'])
+
+        # Build plain English summary
+        summary_points = []
+        if very_strong > 0:
+            summary_points.append(f"<strong>{very_strong}</strong> very strong relationship{'s' if very_strong > 1 else ''}")
+        if strong > 0:
+            summary_points.append(f"<strong>{strong}</strong> strong")
+        if moderate > 0:
+            summary_points.append(f"<strong>{moderate}</strong> moderate")
+
+        # Get top relationships for narrative
+        top_relationships = all_relationships[:3]
+        narrative_items = []
+        for rel in top_relationships:
+            tier_label, _, _ = get_strength_tier(rel['strength'])
+            if rel['type'] == 'categorical':
+                narrative_items.append(f"<strong>{rel['col1']}</strong> varies significantly by <strong>{rel['col2']}</strong>")
+            else:
+                direction = "move together" if rel['correlation'] > 0 else "move inversely"
+                narrative_items.append(f"<strong>{rel['col1']}</strong> and <strong>{rel['col2']}</strong> {direction}")
+
+        # Build relationship cards with dual-view (Plain English + Technical)
+        relationship_cards = []
+        for rank, rel in enumerate(all_relationships, 1):
+            used_for_context = rel['used_for_context']
+            strength = rel['strength']
+            tier_label, tier_color, tier_icon = get_strength_tier(strength)
+
+            # Context badge
+            context_badge = ''
+            if used_for_context:
+                context_badge = '''<div style="position: absolute; top: 8px; left: 8px; background: linear-gradient(135deg, #10b981, #059669); color: white; padding: 3px 8px; border-radius: 10px; font-size: 0.65em; font-weight: 600; display: flex; align-items: center; gap: 3px;">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:10px;height:10px"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                    Anomaly Filter
+                </div>'''
+
+            if rel['type'] == 'categorical':
+                var_explained = rel['variance_explained']
+                rel_title = f"{rel['col1']} varies by {rel['col2']}"
+                plain_text = f"The values of <strong>{rel['col1']}</strong> change significantly depending on which <strong>{rel['col2']}</strong> category you're looking at."
+                implication = "What looks unusual overall may be perfectly normal within a specific group."
+                tech_details = f'''
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 0.8em;">
+                        <div><span style="color: var(--text-muted);">Type:</span> Categorical Grouping (ANOVA)</div>
+                        <div><span style="color: var(--text-muted);">Variance Explained:</span> {var_explained*100:.1f}%</div>
+                        <div><span style="color: var(--text-muted);">Grouping Column:</span> {rel['col2']}</div>
+                        <div><span style="color: var(--text-muted);">Value Column:</span> {rel['col1']}</div>
+                    </div>'''
+            else:
+                corr_val = rel['correlation']
+                r_squared = rel['strength']
+                direction_word = "decreases" if corr_val < 0 else "increases"
+                rel_title = f"{rel['col1']} ↔ {rel['col2']}"
+                plain_text = f"When <strong>{rel['col1']}</strong> goes up, <strong>{rel['col2']}</strong> tends to go {'down' if corr_val < 0 else 'up'} (and vice versa)."
+                implication = "These columns are linked — changes in one are associated with changes in the other."
+                tech_details = f'''
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 0.8em;">
+                        <div><span style="color: var(--text-muted);">Type:</span> Numeric Correlation (Pearson)</div>
+                        <div><span style="color: var(--text-muted);">Correlation (r):</span> {corr_val:+.3f}</div>
+                        <div><span style="color: var(--text-muted);">R² (Variance Explained):</span> {r_squared*100:.1f}%</div>
+                        <div><span style="color: var(--text-muted);">Direction:</span> {'Negative (inverse)' if corr_val < 0 else 'Positive'}</div>
+                    </div>'''
+
+            relationship_cards.append(f'''
+            <div class="relationship-card" style="background: var(--bg-card); border-radius: 10px; border-left: 4px solid {tier_color}; margin-bottom: 12px; overflow: hidden; position: relative; border: 1px solid var(--border-subtle);">
+                {context_badge}
+                <!-- Header -->
+                <div style="padding: 12px 16px; display: flex; align-items: center; gap: 12px;">
+                    <div style="font-size: 1.3em;">{tier_icon}</div>
+                    <div style="flex: 1; min-width: 0;">
+                        <div style="font-weight: 600; color: var(--text-primary); font-size: 0.95em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                            {rel_title}
+                        </div>
+                        <div style="font-size: 0.8em; color: {tier_color}; font-weight: 600; margin-top: 2px;">
+                            {tier_label} Relationship
+                        </div>
+                    </div>
+                    <div style="text-align: right; flex-shrink: 0;">
+                        <div style="font-weight: 700; font-size: 1.1em; color: {tier_color};">{strength*100:.0f}%</div>
+                        <div style="font-size: 0.7em; color: var(--text-muted);">explanatory<br>power</div>
+                    </div>
+                </div>
+                <!-- Dual View Tabs -->
+                <div style="border-top: 1px solid var(--border-subtle);">
+                    <div class="corr-tabs" style="display: flex; border-bottom: 1px solid var(--border-subtle);">
+                        <button class="corr-tab-btn active" onclick="this.parentElement.nextElementSibling.querySelector('.corr-plain').style.display='block'; this.parentElement.nextElementSibling.querySelector('.corr-tech').style.display='none'; this.classList.add('active'); this.nextElementSibling.classList.remove('active');"
+                            style="flex: 1; padding: 8px; border: none; background: var(--bg-card); cursor: pointer; font-size: 0.75em; font-weight: 600; color: {tier_color}; border-bottom: 2px solid {tier_color};">
+                            Plain English
+                        </button>
+                        <button class="corr-tab-btn" onclick="this.parentElement.nextElementSibling.querySelector('.corr-plain').style.display='none'; this.parentElement.nextElementSibling.querySelector('.corr-tech').style.display='block'; this.classList.add('active'); this.previousElementSibling.classList.remove('active');"
+                            style="flex: 1; padding: 8px; border: none; background: var(--bg-primary); cursor: pointer; font-size: 0.75em; font-weight: 500; color: var(--text-muted); border-bottom: 2px solid transparent;">
+                            Technical Details
+                        </button>
+                    </div>
+                    <div style="padding: 12px 16px;">
+                        <!-- Plain English View -->
+                        <div class="corr-plain">
+                            <p style="margin: 0 0 8px 0; font-size: 0.85em; color: var(--text-primary); line-height: 1.5;">{plain_text}</p>
+                            <p style="margin: 0; font-size: 0.8em; color: var(--text-secondary); font-style: italic;">{implication}</p>
+                        </div>
+                        <!-- Technical View -->
+                        <div class="corr-tech" style="display: none; color: var(--text-secondary);">
+                            {tech_details}
+                        </div>
+                    </div>
+                </div>
+            </div>''')
+
+        # Build the complete section with summary
+        summary_html = f'''
+            <!-- Plain English Summary -->
+            <div class="insight-widget" style="background: var(--bg-card); border-radius: 12px; padding: 20px; margin-bottom: 20px; border: 1px solid var(--border-subtle);">
+                <div style="display: flex; align-items: flex-start; gap: 16px; margin-bottom: 16px;">
+                    <div style="background: linear-gradient(135deg, #8b5cf6, #6366f1); width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" style="width: 24px; height: 24px;"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
+                    </div>
+                    <div>
+                        <h3 style="margin: 0 0 8px 0; font-size: 1.1em; color: var(--text-primary);">How Your Columns Relate</h3>
+                        <p style="margin: 0; font-size: 0.9em; color: var(--text-secondary); line-height: 1.6;">
+                            We found <strong>{len(all_relationships)} relationships</strong> between columns in your data{' — ' + ', '.join(summary_points) if summary_points else ''}.
+                            {f'<strong style="color: #10b981;">{context_used}</strong> of these were used to improve anomaly detection accuracy.' if context_used > 0 else ''}
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Key Findings -->
+                {f"""<div style="background: var(--bg-primary); border-radius: 8px; padding: 12px 16px; border-left: 3px solid #8b5cf6;">
+                    <div style="font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.5px; color: #a78bfa; font-weight: 600; margin-bottom: 8px;">Key Findings</div>
+                    <ul style="margin: 0; padding: 0 0 0 20px; font-size: 0.9em; color: var(--text-primary); line-height: 1.8;">
+                        {''.join(f'<li>{item}</li>' for item in narrative_items)}
+                    </ul>
+                </div>""" if narrative_items else ''}
+            </div>
+
+            <!-- Strength Legend -->
+            <div style="display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; padding: 12px; background: var(--bg-primary); border-radius: 8px;">
+                <span style="font-size: 0.8em; color: var(--text-muted); margin-right: 8px;">Strength:</span>
+                <span style="font-size: 0.8em;">🔥 <span style="color: #dc2626;">Very Strong</span> (50%+)</span>
+                <span style="font-size: 0.8em;">💪 <span style="color: #ea580c;">Strong</span> (30-49%)</span>
+                <span style="font-size: 0.8em;">📊 <span style="color: #ca8a04;">Moderate</span> (15-29%)</span>
+                <span style="font-size: 0.8em;">📉 <span style="color: #6b7280;">Weak</span> (&lt;15%)</span>
+            </div>
+        '''
+
+        # Context-aware notice if applicable
+        context_notice = ''
+        if has_context_patterns:
+            context_notice = f'''
+            <div style="background: linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(5, 150, 105, 0.1)); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 8px; padding: 12px 16px; margin-bottom: 16px; display: flex; align-items: flex-start; gap: 10px;">
+                <svg style="width: 18px; height: 18px; flex-shrink: 0; margin-top: 2px;" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                <p style="margin: 0; font-size: 0.85em; color: var(--text-secondary);">
+                    Relationships marked <span style="background: linear-gradient(135deg, #10b981, #059669); color: white; padding: 2px 6px; border-radius: 6px; font-size: 0.85em;">Anomaly Filter</span> were used to distinguish between true anomalies and values that only appear unusual when viewed in isolation.
+                </p>
+            </div>'''
+
         return f'''
-                <div style="background: rgba(67, 56, 202, 0.1); border: 1px solid rgba(99, 102, 241, 0.3); border-radius: 8px; padding: 12px 16px; margin-bottom: 16px; display: flex; align-items: center; gap: 10px;">
-                    <svg style="width: 20px; height: 20px; flex-shrink: 0;" viewBox="0 0 24 24" fill="none" stroke="#818cf8" stroke-width="2"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
-                    <p style="margin: 0; font-size: 0.9em; color: var(--text-secondary);">
-                        <strong style="color: var(--text-primary);">Ranked by correlation strength</strong> - Strongest relationships appear first.
-                        Values closer to +1 or -1 indicate stronger associations between columns.
-                    </p>
-                </div>
-                <div style="display: flex; flex-direction: column; gap: 0;">
-                    {''.join(items_html)}
-                </div>
+            {summary_html}
+            {context_notice}
+            <div style="display: flex; flex-direction: column; gap: 0;">
+                {''.join(relationship_cards)}
+            </div>
         '''
 
     def _generate_fibo_section(self, profile: ProfileResult) -> str:
@@ -6538,13 +6795,101 @@ class ExecutiveHTMLReporter:
         # ═══════════════════════════════════════════════════════════════
         # INSIGHT 1: OUTLIER PATTERNS (Isolation Forest ML)
         # ═══════════════════════════════════════════════════════════════
+        # Get context validation results if available
+        context_validation = ml_findings.get('context_validation', {})
+        context_store = ml_findings.get('context_store', {})
+        has_context_validation = context_validation and context_validation.get('total_original', 0) > 0
+
         if numeric_outliers:
             total_outliers = sum(f.get('anomaly_count', 0) for f in numeric_outliers.values())
             outlier_pct = (total_outliers / analyzed_rows * 100) if analyzed_rows > 0 else 0
 
-            # Plain English explanation (domain-neutral, no jargon)
-            # Add bridge text explaining relationship to IQR
-            plain_english = f'''About {outlier_pct:.2f}% of values ({total_outliers:,} records) stand out as very different
+            # Extract field descriptions for friendly names
+            field_descs = context_store.get('field_descriptions', {})
+
+            # Helper to get friendly name for a column
+            def get_friendly(col):
+                if field_descs and col in field_descs:
+                    return field_descs[col].get('friendly_name', col)
+                return col
+
+            # Check if context validation has reduced outlier count
+            validated_count = context_validation.get('total_validated', total_outliers) if has_context_validation else total_outliers
+            explained_count = context_validation.get('total_explained', 0) if has_context_validation else 0
+            reduction_pct = context_validation.get('reduction_percentage', 0) if has_context_validation else 0
+            context_patterns = context_validation.get('context_patterns_used', [])
+
+            # Plain English explanation - include context validation insight
+            if has_context_validation and reduction_pct > 10:
+                # Build description of discovered patterns from context_store
+                patterns_description = ""
+                if context_store:
+                    subgroup_items = []
+                    correlation_items = []
+
+                    # Describe subgroup patterns (e.g., "Fare varies by Passenger Class")
+                    subgroups = context_store.get('subgroups', [])
+                    for sg in subgroups[:3]:  # Show top 3 subgroup patterns
+                        seg_col = sg.get('segment_col', '')
+                        val_col = sg.get('value_col', '')
+                        var_explained = sg.get('variance_explained', 0)
+                        seg_name = get_friendly(seg_col)
+                        val_name = get_friendly(val_col)
+                        subgroup_items.append(
+                            f"<strong>{val_name}</strong> varies significantly by <strong>{seg_name}</strong> "
+                            f"<span style='color: var(--text-muted);'>(explains {var_explained*100:.0f}% of variance)</span>"
+                        )
+
+                    # Describe correlation patterns - link to Correlations section
+                    correlations = context_store.get('correlations', [])
+                    for corr in correlations[:2]:  # Show top 2 correlation patterns
+                        col1 = corr.get('col1', '')
+                        col2 = corr.get('col2', '')
+                        r = corr.get('correlation', 0)
+                        col1_name = get_friendly(col1)
+                        col2_name = get_friendly(col2)
+                        direction = "move together" if r > 0 else "move inversely"
+                        correlation_items.append(
+                            f"<strong>{col1_name}</strong> and <strong>{col2_name}</strong> {direction} "
+                            f"<span style='color: var(--text-muted);'>(r={r:.2f})</span>"
+                        )
+
+                    # Build patterns description with better structure
+                    if subgroup_items or correlation_items:
+                        patterns_html = ""
+                        if subgroup_items:
+                            patterns_html += f'''
+<div style="margin-bottom: 12px;">
+<div style="font-weight: 600; color: #a78bfa; margin-bottom: 6px; font-size: 0.9em;">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;vertical-align:-2px;margin-right:4px"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+Categorical Groupings</div>
+<ul style="margin: 0 0 0 20px; padding: 0; list-style: disc;">{''.join(f"<li style='margin: 4px 0; line-height: 1.4;'>{p}</li>" for p in subgroup_items)}</ul>
+</div>'''
+
+                        if correlation_items:
+                            patterns_html += f'''
+<div>
+<div style="font-weight: 600; color: #34d399; margin-bottom: 6px; font-size: 0.9em;">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;vertical-align:-2px;margin-right:4px"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+Numeric Correlations <a href="#section-correlations" style="color: #60a5fa; font-weight: 400; font-size: 0.85em;">(see Correlations section)</a></div>
+<ul style="margin: 0 0 0 20px; padding: 0; list-style: disc;">{''.join(f"<li style='margin: 4px 0; line-height: 1.4;'>{p}</li>" for p in correlation_items)}</ul>
+</div>'''
+
+                        patterns_description = f'''
+<div style="margin: 16px 0; padding: 14px; background: linear-gradient(135deg, rgba(59, 130, 246, 0.08), rgba(139, 92, 246, 0.08)); border-radius: 10px; border: 1px solid rgba(139, 92, 246, 0.2);">
+<div style="font-weight: 700; color: #818cf8; margin-bottom: 10px; font-size: 0.95em;">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;vertical-align:-3px;margin-right:6px"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+Patterns Used for Context-Aware Validation</div>
+{patterns_html}
+</div>'''
+
+                plain_english = f'''<div style="margin-bottom: 8px;">Initially <strong>{total_outliers:,} values ({outlier_pct:.2f}%)</strong> appeared unusual based on statistical isolation.</div>
+<div style="margin-bottom: 8px;">After analyzing relationships in your data, <strong style="color: #34d399;">{explained_count:,} ({reduction_pct:.0f}%)</strong> were found to be <em>normal within their context</em> — these are values that only look unusual when viewed in isolation, but make sense when you consider related columns.</div>
+<div><strong style="color: #f59e0b;">{validated_count:,} values remain as genuine anomalies</strong> worth investigating — these stand out even after accounting for groupings and correlations.</div>
+{patterns_description}'''
+            else:
+                # Standard explanation without context validation
+                plain_english = f'''About {outlier_pct:.2f}% of values ({total_outliers:,} records) stand out as very different
 from most other values in their columns. These might be typos, special cases, or simply
 unusual but valid entries worth reviewing. These anomalies are based on statistical isolation,
 not just being outside the IQR bounds. It is normal for this method to find unusual points
@@ -6578,9 +6923,10 @@ even when IQR outliers are rare.'''
                         except:
                             val_display = str(val)
                         median_display = f'{median:,.2f}' if median else 'N/A'
+                        friendly_name = get_friendly(col_name)
                         example_rows += f'''
                         <tr>
-                            <td>{col_name}</td>
+                            <td>{friendly_name}</td>
                             <td class="value-highlight">{val_display}</td>
                             <td class="value-normal">{median_display}</td>
                         </tr>'''
@@ -6591,6 +6937,7 @@ even when IQR outliers are rare.'''
 
                 # If no sample_rows, use top_anomalies values - deduplicated
                 if not samples and top_anomalies:
+                    friendly_name = get_friendly(col_name)
                     for val in top_anomalies[:4]:  # Check more to find unique ones
                         val_key = (col_name, str(val))
                         if val_key in seen_values:
@@ -6604,7 +6951,7 @@ even when IQR outliers are rare.'''
                         median_display = f'{median:,.2f}' if median else 'N/A'
                         example_rows += f'''
                         <tr>
-                            <td>{col_name}</td>
+                            <td>{friendly_name}</td>
                             <td class="value-highlight">{val_display}</td>
                             <td class="value-normal">{median_display}</td>
                         </tr>'''
@@ -6615,6 +6962,7 @@ even when IQR outliers are rare.'''
             # If no sample rows found, generate examples from top_anomalies or outlier bounds
             if not example_rows:
                 for col_name, data in list(numeric_outliers.items())[:3]:
+                    friendly_name = get_friendly(col_name)
                     top_anomalies = data.get('top_anomalies', [])
                     normal_range = data.get('normal_range', {})
                     median = normal_range.get('median', data.get('median', 0))
@@ -6636,7 +6984,7 @@ even when IQR outliers are rare.'''
                             median_display = f'{median:,.2f}' if median else 'N/A'
                             example_rows += f'''
                         <tr>
-                            <td>{col_name}</td>
+                            <td>{friendly_name}</td>
                             <td class="value-highlight">{val_display}</td>
                             <td class="value-normal">{median_display}</td>
                         </tr>'''
@@ -6649,7 +6997,7 @@ even when IQR outliers are rare.'''
                         median_display = f'{median:,.2f}' if median else 'N/A'
                         example_rows += f'''
                         <tr>
-                            <td>{col_name}</td>
+                            <td>{friendly_name}</td>
                             <td class="value-highlight">{bound_info} (threshold)</td>
                             <td class="value-normal">{median_display}</td>
                         </tr>'''
@@ -6661,12 +7009,13 @@ even when IQR outliers are rare.'''
             # Technical details
             tech_items = []
             for col_name, data in list(numeric_outliers.items())[:3]:
+                friendly_name = get_friendly(col_name)
                 method = data.get('method', 'Isolation Forest')
                 count = data.get('anomaly_count', 0)
                 confidence = data.get('confidence', 'N/A')
                 tech_items.append(f'''
                     <div class="insight-technical-item">
-                        <span class="insight-technical-item-label">{col_name}</span>
+                        <span class="insight-technical-item-label">{friendly_name}</span>
                         <span class="insight-technical-item-value">{count:,} outliers • {method} • confidence: {confidence}</span>
                     </div>''')
 
@@ -6674,12 +7023,13 @@ even when IQR outliers are rare.'''
             outlier_semantic_badges = []
             has_caution = False
             for col_name in list(numeric_outliers.keys())[:3]:
+                friendly_name = get_friendly(col_name)
                 is_high, explanation = self._get_semantic_analytic_confidence(col_name, 'outlier', columns)
                 if not is_high and explanation:
                     has_caution = True
-                    outlier_semantic_badges.append(self._generate_semantic_confidence_badge(is_high, f"{col_name}: {explanation}"))
+                    outlier_semantic_badges.append(self._generate_semantic_confidence_badge(is_high, f"{friendly_name}: {explanation}"))
                 elif is_high and explanation:
-                    outlier_semantic_badges.append(self._generate_semantic_confidence_badge(is_high, f"{col_name}: {explanation}"))
+                    outlier_semantic_badges.append(self._generate_semantic_confidence_badge(is_high, f"{friendly_name}: {explanation}"))
 
             # Build combined semantic badge (show caution if any column has caution)
             semantic_badge = ''
@@ -6694,21 +7044,40 @@ even when IQR outliers are rare.'''
                     "This analysis is well-suited to these fields based on their semantic types."
                 )
 
+            # Build technical context with context validation info
+            tech_context = [
+                f"ML Model: Isolation Forest (unsupervised anomaly detection)",
+                f"Sample Size: {analyzed_rows:,} rows",
+                f"Columns Analyzed: {len(numeric_outliers)}"
+            ]
+
+            # Add context validation info to technical context
+            if has_context_validation and reduction_pct > 5:
+                tech_context.append(f"Context Validation: {reduction_pct:.0f}% false positives filtered")
+                if context_patterns:
+                    patterns_display = ', '.join(context_patterns[:3])
+                    tech_context.append(f"Patterns Used: {patterns_display}")
+
+            # Adjust badge based on validated count
+            if has_context_validation and reduction_pct > 10:
+                validated_pct = (validated_count / analyzed_rows * 100) if analyzed_rows > 0 else 0
+                badge_text = f"{validated_count:,} validated ({validated_pct:.2f}%)"
+                badge_class = "warning" if validated_pct > 1 else "info"
+            else:
+                badge_text = f"{outlier_pct:.2f}% of rows"
+                badge_class = "warning" if outlier_pct > 1 else "info"
+
             widgets_html += self._build_insight_widget(
                 icon="🧠",
-                title="Field-Level Outliers",
-                badge_text=f"{outlier_pct:.2f}% of rows",
-                badge_class="warning" if outlier_pct > 1 else "info",
+                title="Field-Level Outliers" + (" (Context-Aware)" if has_context_validation and reduction_pct > 10 else ""),
+                badge_text=badge_text,
+                badge_class=badge_class,
                 plain_english=plain_english,
                 table_headers=["Column", "Outlier Value", "Typical (Median)"],
                 table_rows=example_rows,
                 technical_items=''.join(tech_items),
-                technical_context=[
-                    f"ML Model: Isolation Forest (unsupervised anomaly detection)",
-                    f"Sample Size: {analyzed_rows:,} rows",
-                    f"Columns Analyzed: {len(numeric_outliers)}"
-                ],
-                ml_model="Isolation Forest",
+                technical_context=tech_context,
+                ml_model="Isolation Forest + Context Discovery" if has_context_validation and reduction_pct > 10 else "Isolation Forest",
                 semantic_confidence=semantic_badge
             )
         else:

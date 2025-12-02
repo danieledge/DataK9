@@ -499,8 +499,9 @@ def version():
 @click.option('--beta-llm', is_flag=True, help='[BETA] Enable AI-generated summary using local LLM (requires llama-cpp-python)')
 @click.option('--full-analysis', is_flag=True, help='Disable internal sampling - analyze full dataset (slower but more accurate for ML analysis)')
 @click.option('--analysis-sample-size', type=int, default=100000, help='Sample size for analysis when file exceeds this many rows (default: 100000). Files <= this size are analyzed fully.')
+@click.option('--field-descriptions', type=click.Path(exists=True), help='YAML file with friendly field names and descriptions for better anomaly explanations')
 def profile(file_path, format, delimiter, database, table, query, html_output, json_output, config_output, chunk_size, sample, no_memory_check, log_level,
-            disable_temporal, disable_pii, disable_correlation, disable_all_enhancements, report_style, no_ml, beta_llm, full_analysis, analysis_sample_size):
+            disable_temporal, disable_pii, disable_correlation, disable_all_enhancements, report_style, no_ml, beta_llm, full_analysis, analysis_sample_size, field_descriptions):
     """
     Profile a data file or database table to understand its structure and quality.
 
@@ -581,6 +582,17 @@ def profile(file_path, format, delimiter, database, table, query, html_output, j
             disable_pii = True
             disable_correlation = True
 
+        # Load field descriptions if provided
+        field_desc_dict = None
+        if field_descriptions:
+            try:
+                from validation_framework.profiler.context_discovery import load_field_descriptions
+                field_desc_dict = load_field_descriptions(field_descriptions)
+                if field_desc_dict:
+                    po.info(f"Loaded {len(field_desc_dict)} field descriptions")
+            except Exception as e:
+                logger.warning(f"Could not load field descriptions: {e}")
+
         # Initialize profiler with enhancements (enabled by default, disabled if flag set)
         profiler = DataProfiler(
             chunk_size=chunk_size,
@@ -589,7 +601,8 @@ def profile(file_path, format, delimiter, database, table, query, html_output, j
             enable_enhanced_correlation=not disable_correlation,
             disable_memory_safety=no_memory_check,  # Pass through the --no-memory-check flag
             full_analysis=full_analysis,  # Disable internal sampling for ML analysis
-            analysis_sample_size=analysis_sample_size  # Configurable sample size
+            analysis_sample_size=analysis_sample_size,  # Configurable sample size
+            field_descriptions=field_desc_dict  # For context-aware anomaly detection
         )
 
         # DATABASE MODE

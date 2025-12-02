@@ -1,0 +1,55 @@
+# Field Descriptions for Titanic Dataset
+# These friendly names and descriptions are used to generate
+# human-readable anomaly explanations.
+#
+# Usage:
+#   python3 -m validation_framework.cli profile data.csv --field-descriptions titanic_field_descriptions.yaml
+
+field_descriptions:
+  PassengerId:
+    friendly_name: "Passenger ID"
+    description: "Unique identifier for each passenger"
+
+  Survived:
+    friendly_name: "Survived"
+    description: "Survival status (0=No, 1=Yes)"
+
+  Pclass:
+    friendly_name: "Passenger Class"
+    description: "Ticket class (1=First, 2=Second, 3=Third)"
+
+  Name:
+    friendly_name: "Name"
+    description: "Full name of passenger"
+
+  Sex:
+    friendly_name: "Gender"
+    description: "Passenger's gender (male/female)"
+
+  Age:
+    friendly_name: "Age"
+    description: "Age of passenger in years"
+
+  SibSp:
+    friendly_name: "Siblings/Spouses"
+    description: "Number of siblings and spouses aboard"
+
+  Parch:
+    friendly_name: "Parents/Children"
+    description: "Number of parents and children aboard"
+
+  Ticket:
+    friendly_name: "Ticket Number"
+    description: "Ticket identifier"
+
+  Fare:
+    friendly_name: "Ticket Fare"
+    description: "Price paid for ticket in British pounds"
+
+  Cabin:
+    friendly_name: "Cabin"
+    description: "Cabin number (if assigned)"
+
+  Embarked:
+    friendly_name: "Port of Embarkation"
+    description: "Port where passenger boarded (C=Cherbourg, Q=Queenstown, S=Southampton)"

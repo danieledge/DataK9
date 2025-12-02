@@ -210,7 +210,8 @@ class DataProfiler:
         enable_ml_analysis: bool = True,
         disable_memory_safety: bool = False,
         full_analysis: bool = False,
-        analysis_sample_size: int = 100000
+        analysis_sample_size: int = 100000,
+        field_descriptions: Optional[Dict[str, Dict[str, str]]] = None
     ):
         """
         Initialize data profiler.
@@ -226,6 +227,7 @@ class DataProfiler:
             disable_memory_safety: Disable memory safety termination (default: False, USE WITH CAUTION)
             full_analysis: Disable internal sampling for ML analysis (default: False, slower but more accurate)
             analysis_sample_size: Sample size for analysis when file exceeds this many rows (default: 100000)
+            field_descriptions: Dict of friendly field names/descriptions for context-aware anomaly detection
         """
         self.chunk_size = chunk_size  # None means auto-calculate
         self.analysis_sample_size = analysis_sample_size  # Configurable sample size
@@ -272,6 +274,9 @@ class DataProfiler:
 
         # Full analysis mode - disable internal sampling for ML
         self.full_analysis = full_analysis
+
+        # Field descriptions for context-aware anomaly detection
+        self.field_descriptions = field_descriptions
 
     def _create_data_lineage(
         self,
@@ -1491,12 +1496,45 @@ class DataProfiler:
                                 analyzed / true_original_rows * 100, 2
                             )
 
-                    # Clean up
+                    # ═══════════════════════════════════════════════════════════════
+                    # CONTEXT-AWARE ANOMALY VALIDATION
+                    # Validate outliers against discovered patterns to reduce false positives
+                    # Must run before ml_df cleanup!
+                    # ═══════════════════════════════════════════════════════════════
+                    if ml_findings.get('numeric_outliers') or ml_findings.get('outliers'):
+                        context_start = time.time()
+                        try:
+                            from validation_framework.profiler.contextual_validator import validate_outliers_with_context
+
+                            # Get outliers from ml_findings
+                            outliers = ml_findings.get('numeric_outliers', {}) or ml_findings.get('outliers', {})
+
+                            # Run context-aware validation using ml_df (still in memory)
+                            context_result, context_store = validate_outliers_with_context(
+                                outliers, ml_df,
+                                field_descriptions=self.field_descriptions
+                            )
+
+                            # Add context validation results to ml_findings
+                            ml_findings['context_validation'] = context_result.to_dict()
+                            ml_findings['context_store'] = context_store.to_dict()
+
+                            # Log results
+                            if context_result.total_explained > 0:
+                                reduction = (context_result.total_original - context_result.total_validated) / context_result.total_original * 100
+                                logger.debug(f"🎯 Context validation: {context_result.total_original} → {context_result.total_validated} outliers ({reduction:.0f}% reduction)")
+
+                            phase_timings['context_validation'] = time.time() - context_start
+                        except Exception as e:
+                            logger.debug(f"Context validation failed: {e}")
+
+                    # Clean up ml_df after context validation
                     del ml_df
                     gc.collect()
 
                 phase_timings['ml_analysis'] = time.time() - ml_start
                 logger.debug(f"🧠 ML analysis complete: {ml_findings.get('summary', {}).get('total_issues', 0)} potential issues found")
+
             except Exception as e:
                 logger.warning(f"ML analysis failed: {e}")
                 import traceback
