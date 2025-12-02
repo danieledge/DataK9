@@ -85,7 +85,7 @@ python3 -m validation_framework.cli validate <config_file> [options]
 | `--verbose` | `-v` | Verbose output (shows progress) | True |
 | `--quiet` | `-q` | Minimal output | False |
 | `--fail-on-warning` | | Exit code 2 if warnings are found | False |
-| `--delimiter` | `-d` | Column delimiter for CSV files (overrides config). Use `\t` for tab. | None |
+| `--delimiter` | `-d` | Column delimiter for CSV files (overrides config/auto-detection). Use `\t` for tab. | Auto-detected |
 | `--log-level` | | Logging level (DEBUG, INFO, WARNING, ERROR) | INFO |
 | `--log-file` | | Optional log file path (supports patterns) | None |
 | `--no-optimize` | | Disable single-pass optimization (use standard engine) | False |
@@ -225,7 +225,7 @@ python3 -m validation_framework.cli profile \
 | Option | Short | Description | Default |
 |--------|-------|-------------|---------|
 | `--format` | `-f` | File format (csv, excel, json, parquet) | Auto-detected |
-| `--delimiter` | `-d` | Column delimiter for CSV files. Use `\t` for tab. | comma |
+| `--delimiter` | `-d` | Column delimiter for CSV files. Use `\t` for tab. | Auto-detected |
 | `--database` | `--db` | Database connection string | None |
 | `--table` | `-t` | Database table name to profile | None |
 | `--query` | `-q` | SQL query to profile (alternative to `--table`) | None |
@@ -271,6 +271,25 @@ python3 -m validation_framework.cli profile large_data.parquet \
 # Profile JSON file
 python3 -m validation_framework.cli profile transactions.json \
   --format json
+```
+
+**Auto-Detection Features:**
+
+DataK9 automatically detects several file properties when profiling:
+
+| Property | Detection Method | Supported Values |
+|----------|------------------|------------------|
+| **Format** | File extension | csv, xlsx, xls, json, parquet, feather |
+| **Delimiter** | CSV sniffer (first 8KB) | `,` `;` `\t` `|` `:` |
+| **Encoding** | Try common encodings | utf-8, utf-8-sig, cp1252, latin-1 |
+
+```bash
+# Auto-detection example - no format or delimiter needed
+python3 -m validation_framework.cli profile data.tsv
+# Output: "Auto-detected delimiter: '\t'"
+
+# Override auto-detection if needed
+python3 -m validation_framework.cli profile data.csv --delimiter ";"
 ```
 
 **Database Profiling:**
