@@ -271,6 +271,19 @@ class TemporalAnalyzer(BackendAwareProfiler):
             x = (dt_series - dt_series.min()).dt.total_seconds().values
             y = np.arange(len(dt_series))  # Index as y-value for trend
 
+            # Check if all x values are identical (can't calculate regression)
+            if np.all(x == x[0]):
+                return {
+                    "available": True,
+                    "direction": "constant",
+                    "slope": 0.0,
+                    "r_squared": 0.0,
+                    "p_value": 1.0,
+                    "is_significant": False,
+                    "strength": "none",
+                    "note": "All timestamp values are identical"
+                }
+
             # Linear regression
             slope, intercept, r_value, p_value, std_err = linregress(x, y)
 

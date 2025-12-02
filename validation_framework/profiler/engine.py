@@ -1464,7 +1464,13 @@ class DataProfiler:
                         logger.debug(f"💾 ML sampling: loaded {len(ml_df):,} rows from {groups_to_read if total_rows > ml_sample_size else num_row_groups} row groups (vs {total_rows:,} total)")
                     else:
                         # CSV/other: read with nrows limit
-                        ml_df = pd.read_csv(file_path, nrows=ml_sample_size)
+                        # Use delimiter from loader_kwargs if provided (for pipe-delimited, tab-delimited, etc.)
+                        csv_kwargs = {'nrows': ml_sample_size}
+                        if 'delimiter' in loader_kwargs:
+                            csv_kwargs['delimiter'] = loader_kwargs['delimiter']
+                        if 'encoding' in loader_kwargs:
+                            csv_kwargs['encoding'] = loader_kwargs['encoding']
+                        ml_df = pd.read_csv(file_path, **csv_kwargs)
 
                     # Build semantic info from columns for intelligent analysis
                     column_semantic_info = {}
