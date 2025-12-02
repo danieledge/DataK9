@@ -609,7 +609,7 @@ def profile(file_path, format, delimiter, database, table, query, html_output, j
             html_output = expander.expand(html_output, context)
             config_output = expander.expand(config_output, context)
 
-            click.echo(f"🔍 Profiling database: {table if table else 'query'}...")
+            po.task_start(f"Profiling database: {table if table else 'query'}")
 
             # Create database loader
             loader = LoaderFactory.create_database_loader(
@@ -683,9 +683,9 @@ def profile(file_path, format, delimiter, database, table, query, html_output, j
 
             # Create profiler and run analysis
             if sample:
-                click.echo(f"🔍 Profiling {file_path} (first {sample:,} rows)...")
+                po.task_start(f"Profiling {file_path} (first {sample:,} rows)")
             else:
-                click.echo(f"🔍 Profiling {file_path}...")
+                po.task_start(f"Profiling {file_path}")
             # Build loader kwargs
             loader_kwargs = {}
             if delimiter:
@@ -697,7 +697,7 @@ def profile(file_path, format, delimiter, database, table, query, html_output, j
                 if detected_delimiter and detected_delimiter != ',':
                     loader_kwargs['delimiter'] = detected_delimiter
                     delim_display = repr(detected_delimiter).strip("'")
-                    click.echo(f"📋 Auto-detected delimiter: {delim_display}")
+                    po.info(f"Auto-detected delimiter: {delim_display}")
 
             profile_result = profiler.profile_file(
                 file_path=file_path,
@@ -717,8 +717,14 @@ def profile(file_path, format, delimiter, database, table, query, html_output, j
         else:
             size_str = f"{size_bytes / (1024 * 1024 * 1024):.2f} GB"
 
-        # Compact summary
-        click.echo(f"\n✓ Profile complete: {profile_result.row_count:,} rows × {profile_result.column_count} cols | Quality: {profile_result.overall_quality_score:.0f}% | {profile_result.processing_time_seconds:.1f}s")
+        # Visual profile summary
+        po.profile_summary(
+            rows=profile_result.row_count,
+            cols=profile_result.column_count,
+            quality=profile_result.overall_quality_score,
+            duration=profile_result.processing_time_seconds,
+            size_str=size_str
+        )
 
         # Run ML analysis by default (unless --no-ml flag is set)
         # NOTE: The profiler engine already runs ML analysis during profiling (50K sample)
@@ -726,23 +732,18 @@ def profile(file_path, format, delimiter, database, table, query, html_output, j
         if not no_ml:
             if profile_result.ml_findings:
                 # ML analysis already completed during profiling - display results
-                click.echo("\n🧠 ML-based anomaly detection (from profiler):")
                 ml_findings = profile_result.ml_findings
                 summary = ml_findings.get("summary", {})
                 total_issues = summary.get("total_issues", 0)
                 severity = summary.get("severity", "none")
                 key_findings = summary.get("key_findings", [])
+                analyzed_rows = ml_findings.get('sample_info', {}).get('analyzed_rows',
+                               ml_findings.get('sample_info', {}).get('sample_size', 0))
 
-                severity_icons = {"high": "🔴", "medium": "🟡", "low": "🟢", "none": "✓"}
-                icon = severity_icons.get(severity, "•")
-
-                click.echo(f"  {icon} ML Analysis: {total_issues:,} potential issues ({severity} severity)")
-                for finding in key_findings[:3]:
-                    click.echo(f"    • {finding}")
-                click.echo(f"  → Analyzed {ml_findings.get('sample_info', {}).get('analyzed_rows', ml_findings.get('sample_info', {}).get('sample_size', 0)):,} rows")
+                po.ml_summary(total_issues, severity, key_findings, analyzed_rows)
             else:
                 # No ML findings from profiler - run separate analysis
-                click.echo("\n🧠 Running ML-based anomaly detection (beta)...")
+                po.task_start("Running ML-based anomaly detection", icon=po.BRAIN)
                 try:
                     from validation_framework.profiler.ml_analyzer import run_ml_analysis
 
@@ -774,27 +775,20 @@ def profile(file_path, format, delimiter, database, table, query, html_output, j
                                     column_semantic_info[col_profile.name] = col_profile.semantic_info
 
                             # Run ML analysis with semantic context
-                            # Note: sampling is done before calling - sample_df is already the right size
                             ml_findings = run_ml_analysis(
                                 sample_df,
                                 column_semantic_info=column_semantic_info
                             )
                             profile_result.ml_findings = ml_findings
 
-                            # Display summary
+                            # Display summary using PrettyOutput
                             summary = ml_findings.get("summary", {})
                             total_issues = summary.get("total_issues", 0)
                             severity = summary.get("severity", "none")
                             key_findings = summary.get("key_findings", [])
+                            analyzed_rows = ml_findings.get('sample_info', {}).get('analyzed_rows', 0)
 
-                            severity_icons = {"high": "🔴", "medium": "🟡", "low": "🟢", "none": "✓"}
-                            icon = severity_icons.get(severity, "•")
-
-                            click.echo(f"  {icon} ML Analysis: {total_issues:,} potential issues ({severity} severity)")
-                            for finding in key_findings[:3]:
-                                click.echo(f"    • {finding}")
-
-                            click.echo(f"  → Analyzed {ml_findings.get('sample_info', {}).get('analyzed_rows', 0):,} rows in {ml_findings.get('analysis_time_seconds', 0):.1f}s")
+                            po.ml_summary(total_issues, severity, key_findings, analyzed_rows)
 
                             # Clean up
                             del sample_df
@@ -802,9 +796,9 @@ def profile(file_path, format, delimiter, database, table, query, html_output, j
                             gc.collect()
 
                 except ImportError as e:
-                    click.echo(f"  ⚠ ML analysis requires scikit-learn: {e}")
+                    po.warning(f"ML analysis requires scikit-learn: {e}")
                 except Exception as e:
-                    click.echo(f"  ⚠ ML analysis failed: {e}")
+                    po.warning(f"ML analysis failed: {e}")
                     logger.debug(f"ML analysis error: {e}", exc_info=True)
 
         # Generate HTML report (choose reporter based on style)
@@ -813,7 +807,11 @@ def profile(file_path, format, delimiter, database, table, query, html_output, j
         else:
             reporter = ExecutiveHTMLReporter(enable_llm=beta_llm)
         reporter.generate_report(profile_result, html_output)
-        click.echo(f"  → HTML: {html_output} ({report_style or 'executive'} style)")
+
+        # Output files section
+        po.blank_line()
+        po.subsection("Output Files")
+        po.output_file(f"HTML ({report_style or 'executive'})", html_output)
 
         # Generate JSON output if requested
         if json_output:
@@ -824,37 +822,43 @@ def profile(file_path, format, delimiter, database, table, query, html_output, j
 
             with open(json_output, 'w') as f:
                 json.dump(profile_result.to_dict(), f, indent=2)
-            click.echo(f"  → JSON: {json_output}")
+            po.output_file("JSON", json_output)
 
         # Save generated validation config
         if profile_result.generated_config_yaml:
             with open(config_output, 'w') as f:
                 f.write(profile_result.generated_config_yaml)
-            click.echo(f"  → Config: {config_output}")
+            po.output_file("Config", config_output)
 
+        po.blank_line()
         sys.exit(0)
 
     except FileNotFoundError as e:
-        click.echo(f"❌ File not found: {str(e)}", err=True)
+        po.blank_line()
+        po.error(f"File not found: {str(e)}")
         sys.exit(1)
 
     except RuntimeError as e:
         # Graceful error from loaders (CSV parsing, encoding issues)
         error_msg = str(e)
-        click.echo(f"\n❌ Error processing file:", err=True)
+        po.blank_line()
+        po.error("Error processing file:")
         click.echo(f"   {error_msg}", err=True)
         if "delimiter" in error_msg.lower():
-            click.echo(f"\n💡 Tip: Try specifying the delimiter with -d option:", err=True)
-            click.echo(f"   python -m validation_framework.cli profile {file_path} -d \"|\"", err=True)
-            click.echo(f"   python -m validation_framework.cli profile {file_path} -d \"\\t\"  # for tabs", err=True)
+            po.blank_line()
+            po.info("Tip: Try specifying the delimiter with -d option:")
+            click.echo(f"   python -m validation_framework.cli profile {file_path} -d \"|\"")
+            click.echo(f"   python -m validation_framework.cli profile {file_path} -d \"\\t\"  # for tabs")
         sys.exit(1)
 
     except Exception as e:
-        click.echo(f"\n❌ Unexpected error: {str(e)}", err=True)
-        click.echo(f"\n💡 If this is a CSV parsing issue, try:", err=True)
-        click.echo(f"   - Check the file encoding (UTF-8, CP1252, etc.)", err=True)
-        click.echo(f"   - Verify the delimiter is correct (-d option)", err=True)
-        click.echo(f"   - Check for malformed rows (unquoted delimiters in data)", err=True)
+        po.blank_line()
+        po.error(f"Unexpected error: {str(e)}")
+        po.blank_line()
+        po.info("If this is a CSV parsing issue, try:")
+        click.echo("   - Check the file encoding (UTF-8, CP1252, etc.)")
+        click.echo("   - Verify the delimiter is correct (-d option)")
+        click.echo("   - Check for malformed rows (unquoted delimiters in data)")
         import traceback
         traceback.print_exc()
         sys.exit(1)

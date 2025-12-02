@@ -5046,7 +5046,7 @@ class ExecutiveHTMLReporter:
             }}
         }});
 
-        // Bubble Chart
+        // Bubble Chart - with padding to prevent overflow
         new Chart(document.getElementById('bubbleChart'), {{
             type: 'bubble',
             data: {{
@@ -5059,6 +5059,11 @@ class ExecutiveHTMLReporter:
                         if (y >= 95) return 'rgba(16, 185, 129, 0.6)';
                         if (y >= 90) return 'rgba(59, 130, 246, 0.6)';
                         return 'rgba(245, 158, 11, 0.6)';
+                    }},
+                    // Limit bubble radius to prevent overflow
+                    radius: function(context) {{
+                        const r = context.raw?.r;
+                        return Math.min(r || 5, 25);  // Cap at 25px radius
                     }}
                 }}]
             }},
@@ -5066,6 +5071,9 @@ class ExecutiveHTMLReporter:
                 ...chartDefaults,
                 responsive: true,
                 maintainAspectRatio: true,
+                layout: {{
+                    padding: {{ top: 20, right: 20, bottom: 10, left: 10 }}  // Padding for bubbles
+                }},
                 plugins: {{
                     legend: {{ display: false }},
                     tooltip: {{
@@ -5079,15 +5087,15 @@ class ExecutiveHTMLReporter:
                 scales: {{
                     x: {{
                         title: {{ display: true, text: '{x_axis_label}', color: '#64748b' }},
-                        min: Math.max(0, Math.min(...{json.dumps([b['x'] for b in bubble_data])}) - 5),
-                        max: 101,
+                        min: Math.max(0, Math.min(...{json.dumps([b['x'] for b in bubble_data])}) - 10),
+                        max: 105,
                         grid: {{ color: 'rgba(148, 163, 184, 0.1)' }},
                         ticks: {{ color: '#64748b' }}
                     }},
                     y: {{
                         title: {{ display: true, text: 'Validity %', color: '#64748b' }},
-                        min: Math.max(0, Math.min(...{json.dumps([col.quality.validity for col in profile.columns])}) - 5),
-                        max: 101,
+                        min: Math.max(0, Math.min(...{json.dumps([col.quality.validity for col in profile.columns])}) - 10),
+                        max: 105,
                         grid: {{ color: 'rgba(148, 163, 184, 0.1)' }},
                         ticks: {{ color: '#64748b' }}
                     }}
@@ -5132,15 +5140,26 @@ class ExecutiveHTMLReporter:
 
             const wordCloudData = {json.dumps(word_cloud_data)};
             if (wordCloudData.length > 0) {{
+                // Get container dimensions for better sizing
+                const containerWidth = wordCloudContainer.offsetWidth || 400;
+                const containerHeight = wordCloudContainer.offsetHeight || 250;
+
                 // Normalize weights to a reasonable range for display
                 const maxWeight = Math.max(...wordCloudData.map(w => w[1]));
-                const normalizedData = wordCloudData.map(w => [w[0], (w[1] / maxWeight) * 100]);
+                const minWeight = Math.min(...wordCloudData.map(w => w[1]));
+                const range = maxWeight - minWeight || 1;
+                const normalizedData = wordCloudData.map(w => [
+                    w[0],
+                    ((w[1] - minWeight) / range) * 100 + 10  // Scale 10-110 for better distribution
+                ]);
 
                 WordCloud(wordCloudContainer, {{
                     list: normalizedData,
-                    gridSize: 4,
+                    gridSize: Math.max(2, Math.floor(containerWidth / 100)),  // Dynamic grid based on width
                     weightFactor: function(size) {{
-                        return Math.max(14, size * 0.5);
+                        // Dynamic sizing based on container, better space utilization
+                        const baseSize = Math.min(containerWidth, containerHeight) / 12;
+                        return Math.max(12, (size / 100) * baseSize);
                     }},
                     fontFamily: 'system-ui, -apple-system, sans-serif',
                     color: function(word, weight) {{
@@ -5150,11 +5169,13 @@ class ExecutiveHTMLReporter:
                         return '#94a3b8';
                     }},
                     backgroundColor: 'transparent',
-                    rotateRatio: 0.2,
-                    rotationSteps: 2,
+                    rotateRatio: 0.3,  // Slightly more rotation for better packing
+                    rotationSteps: 3,
                     shuffle: true,
                     drawOutOfBound: false,
-                    shrinkToFit: true
+                    shrinkToFit: true,
+                    minSize: 10,  // Minimum font size
+                    ellipticity: 0.8  // Slightly elliptical for better horizontal fit
                 }});
             }}
         }}

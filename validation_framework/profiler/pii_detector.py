@@ -224,7 +224,7 @@ class PIIDetector:
                 if m.get("pii_type") != "credit_card"
             ]
             if len(pattern_matches) < original_count:
-                self.logger.debug(
+                logger.debug(
                     f"Credit card detection blocked for '{column_name}': "
                     f"Column semantically identified as {semantic_match.get('pii_type')}"
                 )
@@ -381,7 +381,7 @@ class PIIDetector:
                     # This prevents random numeric IDs (~10% Luhn pass rate) from being flagged
                     if luhn_ratio < 0.80:
                         # Not a true credit card column - skip this detection
-                        self.logger.debug(
+                        logger.debug(
                             f"Credit card detection rejected for pattern match: "
                             f"Luhn pass rate {luhn_ratio:.1%} below 80% threshold "
                             f"({luhn_valid_count}/{len(luhn_sample)} samples)"

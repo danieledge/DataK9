@@ -40,22 +40,8 @@ import validation_framework.validations.builtin.registry  # noqa
 
 logger = get_logger(__name__)
 
-# Optional imports for colored output
-try:
-    import colorama
-    from colorama import Fore, Style
-    from validation_framework.core.pretty_output import PrettyOutput as po
-    colorama.init(autoreset=True)
-    HAS_COLOR = True
-except ImportError:
-    HAS_COLOR = False
-    class Fore:
-        CYAN = ''
-        YELLOW = ''
-        GREEN = ''
-        RED = ''
-    class Style:
-        RESET_ALL = ''
+# Import for terminal output
+from validation_framework.core.pretty_output import PrettyOutput as po
 
 
 class ReservoirSampler:
