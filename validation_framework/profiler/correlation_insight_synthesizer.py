@@ -84,16 +84,25 @@ class CorrelationInsightSynthesizer:
             subgroups: List of categorical grouping patterns from context_discovery
 
         Returns:
-            Prioritized list of InsightResult objects
+            Prioritized list of InsightResult objects (deduplicated)
         """
         self.insights = []
+        seen_pairs = set()  # Track column pairs to avoid duplicates
 
         # Process numeric correlations
         for corr in correlation_results:
             try:
+                col1 = corr.get('column1', '')
+                col2 = corr.get('column2', '')
+                pair_key = tuple(sorted([col1, col2]))
+
+                if pair_key in seen_pairs:
+                    continue
+
                 insight = self._synthesize_numeric_correlation(corr)
                 if insight:
                     self.insights.append(insight)
+                    seen_pairs.add(pair_key)
             except Exception as e:
                 logger.warning(f"Failed to synthesize correlation {corr}: {e}")
 
@@ -101,9 +110,17 @@ class CorrelationInsightSynthesizer:
         if subgroups:
             for sg in subgroups:
                 try:
+                    seg_col = sg.get('segment_col', '')
+                    val_col = sg.get('value_col', '')
+                    pair_key = tuple(sorted([seg_col, val_col]))
+
+                    if pair_key in seen_pairs:
+                        continue
+
                     insight = self._synthesize_categorical_grouping(sg)
                     if insight:
                         self.insights.append(insight)
+                        seen_pairs.add(pair_key)
                 except Exception as e:
                     logger.warning(f"Failed to synthesize subgroup {sg}: {e}")
 
