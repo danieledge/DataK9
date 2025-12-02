@@ -5141,8 +5141,8 @@ class ExecutiveHTMLReporter:
             const wordCloudData = {json.dumps(word_cloud_data)};
             if (wordCloudData.length > 0) {{
                 // Get container dimensions for better sizing
-                const containerWidth = wordCloudContainer.offsetWidth || 400;
-                const containerHeight = wordCloudContainer.offsetHeight || 250;
+                const containerWidth = wordCloudContainer.offsetWidth || 500;
+                const containerHeight = wordCloudContainer.offsetHeight || 350;
 
                 // Normalize weights to a reasonable range for display
                 const maxWeight = Math.max(...wordCloudData.map(w => w[1]));
@@ -9601,9 +9601,9 @@ the largest difference between classes, which could be useful for predictive mod
                         </div>
                     </details>
                 </div>
-                <div class="chart-container">
+                <div class="chart-container" style="max-width: 500px;">
                     <div class="chart-title">Data Type Distribution</div>
-                    <canvas id="typeChart" height="100"></canvas>
+                    <canvas id="typeChart" height="60"></canvas>
                 </div>'''
 
     def _generate_semantic_classification_accordion(self, profile: ProfileResult) -> str:
@@ -10009,9 +10009,9 @@ the largest difference between classes, which could be useful for predictive mod
                         </div>
                     </details>
                 </div>
-                <div class="chart-container">
+                <div class="chart-container" style="max-width: 600px;">
                     <div class="chart-title">Quality Score by Column</div>
-                    <canvas id="qualityChart" height="120"></canvas>
+                    <canvas id="qualityChart" height="80"></canvas>
                 </div>
                 {self._generate_duplicate_analysis_html(profile)}'''
 
@@ -10254,17 +10254,24 @@ the largest difference between classes, which could be useful for predictive mod
                         </div>
                     </details>
                 </div>
-                <div style="display: grid; gap: 20px;">
-                    <div class="chart-container">
+                <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 20px;">
+                    <div class="chart-container" style="min-width: 280px;">
                         <div class="chart-title">Column Quality: {x_axis_metric_name} vs Validity</div>
-                        <canvas id="bubbleChart" height="200"></canvas>
+                        <canvas id="bubbleChart" height="180"></canvas>
                     </div>
                     <div class="chart-container">
                         <div class="chart-title">Categorical Values Word Cloud</div>
                         <div style="color: var(--text-muted); font-size: 0.85em; margin-bottom: 8px;">Showing top values from: {cat_names}</div>
-                        <div id="wordCloudContainer" style="width: 100%; height: 250px; background: var(--bg-elevated); border-radius: var(--radius-md);"></div>
+                        <div id="wordCloudContainer" style="width: 100%; height: 350px; background: var(--bg-elevated); border-radius: var(--radius-md);"></div>
                     </div>
-                </div>'''
+                </div>
+                <style>
+                    @media (max-width: 900px) {{
+                        #section-distributions .section-accordion-content > div:last-child {{
+                            grid-template-columns: 1fr !important;
+                        }}
+                    }}
+                </style>'''
 
     def _generate_column_explorer(self, profile: ProfileResult) -> str:
         """Generate the column explorer accordion."""

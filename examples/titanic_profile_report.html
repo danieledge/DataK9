@@ -603,6 +603,82 @@
             }
         }
 
+        /* CSV Format Warning Banner */
+        .csv-format-warning {
+            background: linear-gradient(135deg, rgba(245, 158, 11, 0.12), rgba(239, 68, 68, 0.08));
+            border: 1px solid rgba(245, 158, 11, 0.4);
+            border-left: 4px solid #f59e0b;
+            border-radius: var(--radius-md);
+            padding: 16px 20px;
+            margin-bottom: 20px;
+            animation: slideIn 0.3s ease-out;
+        }
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .csv-format-warning-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 8px;
+        }
+        .csv-format-warning-header svg {
+            width: 20px;
+            height: 20px;
+            color: #f59e0b;
+            flex-shrink: 0;
+        }
+        .csv-format-warning-title {
+            font-weight: 600;
+            color: #f59e0b;
+            font-size: 1em;
+        }
+        .csv-format-warning-body {
+            color: var(--text-secondary);
+            font-size: 0.9em;
+            line-height: 1.5;
+        }
+        .csv-format-warning-details {
+            margin-top: 12px;
+            padding: 12px;
+            background: rgba(0, 0, 0, 0.15);
+            border-radius: var(--radius-sm);
+            font-family: monospace;
+            font-size: 0.85em;
+        }
+        .csv-format-warning-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 4px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        .csv-format-warning-row:last-child {
+            border-bottom: none;
+        }
+        .csv-format-warning-row-label {
+            color: var(--text-muted);
+        }
+        .csv-format-warning-row-value {
+            color: var(--text-primary);
+        }
+        .csv-format-warning-issues {
+            margin-top: 10px;
+        }
+        .csv-format-warning-issue {
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+            padding: 6px 0;
+            color: var(--text-secondary);
+            font-size: 0.9em;
+        }
+        .csv-format-warning-issue-icon {
+            color: #ef4444;
+            flex-shrink: 0;
+            margin-top: 2px;
+        }
+
         .accordion {
             background: var(--bg-card);
             border: 1px solid var(--border-subtle);
@@ -3529,8 +3605,8 @@
                 <span class="file-name-pill">titanic.csv</span>
                 <span><span class="pill-dot"></span>891 rows</span>
                 <span><span class="pill-dot"></span>58.89 KB</span>
-                <span><span class="pill-dot"></span>4.8s</span>
-                <span><span class="pill-dot"></span>2025-12-01 15:48</span>
+                <span><span class="pill-dot"></span>4.9s</span>
+                <span><span class="pill-dot"></span>2025-12-02 14:34</span>
             </div>
         </div>
     </header>
@@ -3579,6 +3655,9 @@
 
         <!-- Main Content Area -->
         <main class="dq-main page">
+        <!-- CSV Format Warning Banner (if issues detected) -->
+        
+
         <!-- ═══════════════════════════════════════════════════════════════ -->
         <!-- 1. EXECUTIVE SUMMARY WITH DIAL WIDGETS                          -->
         <!-- ═══════════════════════════════════════════════════════════════ -->
@@ -3593,7 +3672,7 @@
                 <details class="exec1-info-line">
                     <summary>
                         <svg style="width: 14px; height: 14px; vertical-align: -2px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
-                        titanic.csv • 01 Dec 2025 • 15:48
+                        titanic.csv • 02 Dec 2025 • 14:34
                     </summary>
                     <div class="exec1-info-detail">
                         <div class="exec1-detail-row">
@@ -3606,7 +3685,7 @@
                         </div>
                         <div class="exec1-detail-row">
                             <span class="exec1-detail-label">Profiled</span>
-                            <span>01 Dec 2025 • 15:48</span>
+                            <span>02 Dec 2025 • 14:34</span>
                         </div>
                         <div class="exec1-detail-row" style="margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.1);">
                             <span class="exec1-detail-label">Hash</span>
@@ -3634,8 +3713,8 @@
                     <svg class="exec1-quality-dial" viewBox="0 0 100 100">
                         <circle class="exec1-quality-dial-bg" cx="50" cy="50" r="42"/>
                         <circle class="exec1-quality-dial-fill" cx="50" cy="50" r="42"
-                            style="stroke-dasharray: 206.15847155733826 264; stroke-dashoffset: 66; stroke: #f59e0b;"/>
-                        <text x="50" y="48" class="exec1-quality-dial-text">78%</text>
+                            style="stroke-dasharray: 207.5816173122732 264; stroke-dashoffset: 66; stroke: #f59e0b;"/>
+                        <text x="50" y="48" class="exec1-quality-dial-text">79%</text>
                         <text x="50" y="62" class="exec1-quality-dial-subtext">QUALITY</text>
                     </svg>
                     <div class="exec1-quality-dial-label">Overall Score</div>
@@ -3652,9 +3731,9 @@
                     <div class="exec1-breakdown-item">
                         <span class="exec1-breakdown-label">Validity</span>
                         <div class="exec1-breakdown-bar-container">
-                            <div class="exec1-breakdown-bar" style="width: 98.20241789196037%; background: #10b981;"></div>
+                            <div class="exec1-breakdown-bar" style="width: 100.0%; background: #10b981;"></div>
                         </div>
-                        <span class="exec1-breakdown-value">98%</span>
+                        <span class="exec1-breakdown-value">100%</span>
                         <span class="exec1-breakdown-weight">30%</span>
                     </div>
                     <div class="exec1-breakdown-item">
@@ -3698,7 +3777,7 @@
                 </div>
                 <!-- Validity -->
                 <div class="exec1-compact-stat">
-                    <div class="exec1-compact-value" style="color: #10b981;">98%</div>
+                    <div class="exec1-compact-value" style="color: #10b981;">100%</div>
                     <div class="exec1-compact-label">Validity</div>
                     <div class="exec1-compact-meta">Type conformance</div>
                 </div>
@@ -3768,9 +3847,9 @@
                         </div>
                     </details>
                 </div>
-                <div class="chart-container">
+                <div class="chart-container" style="max-width: 500px;">
                     <div class="chart-title">Data Type Distribution</div>
-                    <canvas id="typeChart" height="100"></canvas>
+                    <canvas id="typeChart" height="60"></canvas>
                 </div>
 
                 <!-- Semantic Classification Accordion (unified FIBO + Schema.org) -->
@@ -4018,7 +4097,7 @@
                             <div class="dual-layer-technical-grid">
                                 <div class="dual-layer-technical-item">
                                     <span class="dual-layer-technical-item-label">Overall Score</span>
-                                    <span class="dual-layer-technical-item-value">78.1%</span>
+                                    <span class="dual-layer-technical-item-value">78.7%</span>
                                 </div>
                                 <div class="dual-layer-technical-item">
                                     <span class="dual-layer-technical-item-label">Avg Completeness</span>
@@ -4026,7 +4105,7 @@
                                 </div>
                                 <div class="dual-layer-technical-item">
                                     <span class="dual-layer-technical-item-label">Avg Validity</span>
-                                    <span class="dual-layer-technical-item-value">98.2%</span>
+                                    <span class="dual-layer-technical-item-value">100.0%</span>
                                 </div>
                                 <div class="dual-layer-technical-item">
                                     <span class="dual-layer-technical-item-label">Columns Below 90%</span>
@@ -4045,9 +4124,9 @@
                         </div>
                     </details>
                 </div>
-                <div class="chart-container">
+                <div class="chart-container" style="max-width: 600px;">
                     <div class="chart-title">Quality Score by Column</div>
-                    <canvas id="qualityChart" height="120"></canvas>
+                    <canvas id="qualityChart" height="80"></canvas>
                 </div>
                 
                 <div class="accordion" style="margin-top: 16px;">
@@ -4195,17 +4274,24 @@
                         </div>
                     </details>
                 </div>
-                <div style="display: grid; gap: 20px;">
-                    <div class="chart-container">
+                <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 20px;">
+                    <div class="chart-container" style="min-width: 280px;">
                         <div class="chart-title">Column Quality: Completeness vs Validity</div>
-                        <canvas id="bubbleChart" height="200"></canvas>
+                        <canvas id="bubbleChart" height="180"></canvas>
                     </div>
                     <div class="chart-container">
                         <div class="chart-title">Categorical Values Word Cloud</div>
                         <div style="color: var(--text-muted); font-size: 0.85em; margin-bottom: 8px;">Showing top values from: ['Sex', 'Embarked']</div>
-                        <div id="wordCloudContainer" style="width: 100%; height: 250px; background: var(--bg-elevated); border-radius: var(--radius-md);"></div>
+                        <div id="wordCloudContainer" style="width: 100%; height: 350px; background: var(--bg-elevated); border-radius: var(--radius-md);"></div>
                     </div>
                 </div>
+                <style>
+                    @media (max-width: 900px) {
+                        #section-distributions .section-accordion-content > div:last-child {
+                            grid-template-columns: 1fr !important;
+                        }
+                    }
+                </style>
 
                 <!-- Distribution Visualizations (relocated from Advanced Visualizations) -->
                 
@@ -4998,7 +5084,7 @@
             <div class="insights-summary" style="background: rgba(99, 102, 241, 0.08); border: 1px solid rgba(99, 102, 241, 0.2); border-radius: 8px; padding: 12px 16px; margin-bottom: 20px;">
                 <p style="margin: 0; font-size: 0.9em; color: var(--text-secondary);">
                     <svg style="width: 16px; height: 16px; vertical-align: -3px; margin-right: 8px;" viewBox="0 0 24 24" fill="none" stroke="#818cf8" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
-                    Patterns observed from analyzing <strong>891 rows</strong> in 4.3s
+                    Patterns observed from analyzing <strong>891 rows</strong> in 4.4s
                 </p>
             </div>
             
@@ -5763,7 +5849,7 @@ aren't random and could make certain groups under-represented if not handled car
                     <p class="section-accordion-subtitle">How columns relate to each other</p>
                 </div>
                 <div class="section-accordion-meta">
-                    <div class="section-accordion-badge">12 Pairs</div>
+                    <div class="section-accordion-badge">10 Pairs</div>
                     <span class="section-accordion-chevron"><svg style="width: 16px; height: 16px; vertical-align: -2px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;"><use href="#icon-chevron-down"/></svg></span>
                 </div>
             </div>
@@ -6066,11 +6152,11 @@ aren't random and could make certain groups under-represented if not handled car
                                 Survived <span style="color: var(--text-muted); font-weight: 400;">↔</span> Pclass
                             </div>
                             <div style="font-size: 0.85em; color: var(--text-secondary); margin-top: 4px;">
-                                Weak None relationship
+                                Weak negative relationship
                             </div>
                         </div>
                         <div style="text-align: right;">
-                            <div style="font-weight: 800; font-size: 1.4em; color: #6b7280;">-0.34</div>
+                            <div style="font-weight: 800; font-size: 1.4em; color: #6b7280;">-0.32</div>
                             <div style="font-size: 0.75em; color: var(--text-muted);">correlation</div>
                         </div>
                     </div>
@@ -6101,15 +6187,15 @@ aren't random and could make certain groups under-represented if not handled car
                                 <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;">
                                     <div style="background: var(--bg-primary); padding: 12px; border-radius: 8px; border: 1px solid var(--border-subtle);">
                                         <div style="font-size: 0.75em; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">Coefficient</div>
-                                        <div style="font-size: 1.2em; font-weight: 700; color: var(--text-primary);">-0.3385</div>
+                                        <div style="font-size: 1.2em; font-weight: 700; color: var(--text-primary);">-0.3215</div>
                                     </div>
                                     <div style="background: var(--bg-primary); padding: 12px; border-radius: 8px; border: 1px solid var(--border-subtle);">
                                         <div style="font-size: 0.75em; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">R² (Variance Explained)</div>
-                                        <div style="font-size: 1.2em; font-weight: 700; color: var(--text-primary);">11.5%</div>
+                                        <div style="font-size: 1.2em; font-weight: 700; color: var(--text-primary);">10.3%</div>
                                     </div>
                                     <div style="background: var(--bg-primary); padding: 12px; border-radius: 8px; border: 1px solid var(--border-subtle);">
                                         <div style="font-size: 0.75em; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">Method</div>
-                                        <div style="font-size: 1.2em; font-weight: 700; color: var(--text-primary);">Pearson</div>
+                                        <div style="font-size: 1.2em; font-weight: 700; color: var(--text-primary);">Spearman</div>
                                     </div>
                                     <div style="background: var(--bg-primary); padding: 12px; border-radius: 8px; border: 1px solid var(--border-subtle);">
                                         <div style="font-size: 0.75em; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">Strength</div>
@@ -6117,7 +6203,7 @@ aren't random and could make certain groups under-represented if not handled car
                                     </div>
                                 </div>
                                 <div style="margin-top: 12px; padding: 10px 12px; background: var(--bg-primary); border-radius: 6px; border: 1px solid var(--border-subtle);">
-                                    <code style="font-size: 0.8em; color: var(--text-secondary);">corr(Survived, Pclass) = -0.3385</code>
+                                    <code style="font-size: 0.8em; color: var(--text-secondary);">corr(Survived, Pclass) = -0.3215</code>
                                 </div>
                             </div>
                         </div>
@@ -6255,9 +6341,9 @@ aren't random and could make certain groups under-represented if not handled car
                 <span class="heatmap-name">Sex</span>
                 <span class="heatmap-score">72</span>
             </div>
-            <div class="heatmap-cell heatmap-ok" title="Age: 73%">
+            <div class="heatmap-cell heatmap-ok" title="Age: 75%">
                 <span class="heatmap-name">Age</span>
-                <span class="heatmap-score">73</span>
+                <span class="heatmap-score">75</span>
             </div>
             <div class="heatmap-cell heatmap-ok" title="SibSp: 80%">
                 <span class="heatmap-name">SibSp</span>
@@ -6271,9 +6357,9 @@ aren't random and could make certain groups under-represented if not handled car
                 <span class="heatmap-name">Ticket</span>
                 <span class="heatmap-score">85</span>
             </div>
-            <div class="heatmap-cell heatmap-warning" title="Fare: 66%">
+            <div class="heatmap-cell heatmap-ok" title="Fare: 71%">
                 <span class="heatmap-name">Fare</span>
-                <span class="heatmap-score">66</span>
+                <span class="heatmap-score">71</span>
             </div>
             <div class="heatmap-cell heatmap-warning" title="Cabin: 62%">
                 <span class="heatmap-name">Cabin</span>
@@ -6305,7 +6391,7 @@ aren't random and could make certain groups under-represented if not handled car
                             <div class="dual-layer-explanation">
                                 <div class="dual-layer-summary">
                                     <div class="dual-layer-summary-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7V17a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-2.3A7 7 0 0 0 12 2z"/></svg> What this means</div>
-                                    <div class="dual-layer-summary-text">Your dataset has 12 columns. 1 column(s) appear to contain sensitive personal information that may need protection. 2 column(s) have quality concerns (below 70% score) that may need attention. Click any column in the list below for detailed statistics and patterns.</div>
+                                    <div class="dual-layer-summary-text">Your dataset has 12 columns. 1 column(s) appear to contain sensitive personal information that may need protection. 1 column(s) have quality concerns (below 70% score) that may need attention. Click any column in the list below for detailed statistics and patterns.</div>
                                 </div>
                                 <details class="dual-layer-technical">
                                     <summary><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg> Technical Details</summary>
@@ -6325,7 +6411,7 @@ aren't random and could make certain groups under-represented if not handled car
                                             </div>
                                             <div class="dual-layer-technical-item">
                                                 <span class="dual-layer-technical-item-label">Quality Concerns</span>
-                                                <span class="dual-layer-technical-item-value">2</span>
+                                                <span class="dual-layer-technical-item-value">1</span>
                                             </div>
                                         </div>
                                         <div class="dual-layer-technical-context">
@@ -6465,7 +6551,7 @@ aren't random and could make certain groups under-represented if not handled car
                                         </div>
                                     </div>
                                 </div>
-                                <div class="column-row" onclick="toggleColumnRow(this)" data-name="Survived" data-type="integer" data-quality="80.0" data-completeness="100.0" data-issues="true">
+                                <div class="column-row" onclick="toggleColumnRow(this)" data-name="Survived" data-type="integer" data-quality="80.0" data-completeness="100.0" data-issues="false">
                                     <div class="column-row-header">
                                         <span class="column-expand-icon">▶</span>
                                         <div class="column-type-icon number">✓</div>
@@ -6554,7 +6640,7 @@ aren't random and could make certain groups under-represented if not handled car
                                         </div>
                                     </div>
                                 </div>
-                                <div class="column-row" onclick="toggleColumnRow(this)" data-name="Pclass" data-type="integer" data-quality="80.1" data-completeness="100.0" data-issues="true">
+                                <div class="column-row" onclick="toggleColumnRow(this)" data-name="Pclass" data-type="integer" data-quality="80.1" data-completeness="100.0" data-issues="false">
                                     <div class="column-row-header">
                                         <span class="column-expand-icon">▶</span>
                                         <div class="column-type-icon number">🏷️</div>
@@ -6736,7 +6822,7 @@ aren't random and could make certain groups under-represented if not handled car
                                         </div>
                                     </div>
                                 </div>
-                                <div class="column-row" onclick="toggleColumnRow(this)" data-name="Sex" data-type="string" data-quality="72.2" data-completeness="100.0" data-issues="true">
+                                <div class="column-row" onclick="toggleColumnRow(this)" data-name="Sex" data-type="string" data-quality="72.2" data-completeness="100.0" data-issues="false">
                                     <div class="column-row-header">
                                         <span class="column-expand-icon">▶</span>
                                         <div class="column-type-icon string">⚧</div>
@@ -6817,7 +6903,7 @@ aren't random and could make certain groups under-represented if not handled car
                                         </div>
                                     </div>
                                 </div>
-                                <div class="column-row" onclick="toggleColumnRow(this)" data-name="Age" data-type="integer" data-quality="73.5" data-completeness="80.1" data-issues="true">
+                                <div class="column-row" onclick="toggleColumnRow(this)" data-name="Age" data-type="integer" data-quality="74.5" data-completeness="80.1" data-issues="true">
                                     <div class="column-row-header">
                                         <span class="column-expand-icon">▶</span>
                                         <div class="column-type-icon number">🔢</div>
@@ -6835,7 +6921,7 @@ aren't random and could make certain groups under-represented if not handled car
                                         <div class="column-tags">
                                             <span class="column-tag semantic" title="🌐 Semantic type from Schema.org">Quantity (schema:QuantitativeValue)</span>
                                         </div>
-                                        <span class="column-quality-score warning" title="Overall Quality Score: Combines completeness, validity, consistency, and uniqueness metrics">Quality 73%</span>
+                                        <span class="column-quality-score warning" title="Overall Quality Score: Combines completeness, validity, consistency, and uniqueness metrics">Quality 75%</span>
                                     </div>
                                     <div class="column-details">
                                         <div class="column-details-content">
@@ -6922,7 +7008,7 @@ aren't random and could make certain groups under-represented if not handled car
                                         </div>
                                     </div>
                                 </div>
-                                <div class="column-row" onclick="toggleColumnRow(this)" data-name="SibSp" data-type="integer" data-quality="80.2" data-completeness="100.0" data-issues="true">
+                                <div class="column-row" onclick="toggleColumnRow(this)" data-name="SibSp" data-type="integer" data-quality="80.2" data-completeness="100.0" data-issues="false">
                                     <div class="column-row-header">
                                         <span class="column-expand-icon">▶</span>
                                         <div class="column-type-icon number">🔢</div>
@@ -7023,7 +7109,7 @@ aren't random and could make certain groups under-represented if not handled car
                                         </div>
                                     </div>
                                 </div>
-                                <div class="column-row" onclick="toggleColumnRow(this)" data-name="Parch" data-type="integer" data-quality="80.2" data-completeness="100.0" data-issues="true">
+                                <div class="column-row" onclick="toggleColumnRow(this)" data-name="Parch" data-type="integer" data-quality="80.2" data-completeness="100.0" data-issues="false">
                                     <div class="column-row-header">
                                         <span class="column-expand-icon">▶</span>
                                         <div class="column-type-icon number">🔢</div>
@@ -7217,7 +7303,7 @@ aren't random and could make certain groups under-represented if not handled car
                                         </div>
                                     </div>
                                 </div>
-                                <div class="column-row" onclick="toggleColumnRow(this)" data-name="Fare" data-type="float" data-quality="65.9" data-completeness="100.0" data-issues="true">
+                                <div class="column-row" onclick="toggleColumnRow(this)" data-name="Fare" data-type="float" data-quality="71.4" data-completeness="100.0" data-issues="false">
                                     <div class="column-row-header">
                                         <span class="column-expand-icon">▶</span>
                                         <div class="column-type-icon number">💰</div>
@@ -7235,7 +7321,7 @@ aren't random and could make certain groups under-represented if not handled car
                                         <div class="column-tags">
                                             <span class="column-tag semantic" title="🌐 Semantic type from Schema.org">Monetary amount (schema:MonetaryAmount)</span>
                                         </div>
-                                        <span class="column-quality-score warning" title="Overall Quality Score: Combines completeness, validity, consistency, and uniqueness metrics">Quality 66%</span>
+                                        <span class="column-quality-score warning" title="Overall Quality Score: Combines completeness, validity, consistency, and uniqueness metrics">Quality 71%</span>
                                     </div>
                                     <div class="column-details">
                                         <div class="column-details-content">
@@ -7411,7 +7497,7 @@ aren't random and could make certain groups under-represented if not handled car
                                         </div>
                                     </div>
                                 </div>
-                                <div class="column-row" onclick="toggleColumnRow(this)" data-name="Embarked" data-type="string" data-quality="80.0" data-completeness="99.8" data-issues="true">
+                                <div class="column-row" onclick="toggleColumnRow(this)" data-name="Embarked" data-type="string" data-quality="80.0" data-completeness="99.8" data-issues="false">
                                     <div class="column-row-header">
                                         <span class="column-expand-icon">▶</span>
                                         <div class="column-type-icon string">🏷️</div>
@@ -7529,11 +7615,11 @@ aren't random and could make certain groups under-represented if not handled car
                             <div class="accordion-icon quality"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;color:white"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></div>
                             <div>
                                 <div class="accordion-title">Validation Suggestions</div>
-                                <div class="accordion-subtitle">15 suggested checks</div>
+                                <div class="accordion-subtitle">25 suggested checks</div>
                             </div>
                         </div>
                         <div class="accordion-meta">
-                            <span class="accordion-badge info">15 suggestions</span>
+                            <span class="accordion-badge info">25 suggestions</span>
                             <span class="accordion-chevron"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><polyline points="6 9 12 15 18 9"/></svg></span>
                         </div>
                     </div>
@@ -7572,38 +7658,29 @@ aren't random and could make certain groups under-represented if not handled car
         severity: "ERROR"`)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;vertical-align:-1px;margin-right:3px"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy</button>
                                 </div>
                             </div>
-                            <div class="suggestion-card high-priority">
+                            <div class="suggestion-card ">
                                 <div class="suggestion-header">
-                                    <div class="suggestion-type">MandatoryFieldCheck</div>
-                                    <div class="suggestion-confidence">95% confidence</div>
+                                    <div class="suggestion-type">RowCountRangeCheck</div>
+                                    <div class="suggestion-confidence">80% confidence</div>
                                 </div>
-                                <div class="suggestion-field">Field: <strong>Embarked</strong></div>
-                                <div class="suggestion-reason">10 fields have >95% completeness</div>
+                                
+                                <div class="suggestion-reason">Expect approximately 891 rows based on profile</div>
                                 <div class="suggestion-yaml-container">
-                                    <pre class="suggestion-yaml">      - type: "MandatoryFieldCheck"
-        severity: "WARNING"
-          fields:
-            - "Embarked"
-            - "Fare"
-            - "Name"
-            - "Parch"
-            - "PassengerId"
-            - "Pclass"
-            - "Sex"
-            - "SibSp"
-            - "Survived"
-            - "Ticket"</pre>
-                                    <button class="copy-yaml-btn" onclick="copyYaml(`      - type: "MandatoryFieldCheck"
-        severity: "WARNING"\n          fields:\n            - "Embarked"\n            - "Fare"\n            - "Name"\n            - "Parch"\n            - "PassengerId"\n            - "Pclass"\n            - "Sex"\n            - "SibSp"\n            - "Survived"\n            - "Ticket"`)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;vertical-align:-1px;margin-right:3px"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy</button>
+                                    <pre class="suggestion-yaml">      - type: "RowCountRangeCheck"
+        severity: "ERROR"
+          min_rows: 445
+          max_rows: 1782</pre>
+                                    <button class="copy-yaml-btn" onclick="copyYaml(`      - type: "RowCountRangeCheck"
+        severity: "ERROR"\n          min_rows: 445\n          max_rows: 1782`)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;vertical-align:-1px;margin-right:3px"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy</button>
                                 </div>
                             </div>
-                            <div class="suggestion-card high-priority">
+                            <div class="suggestion-card ">
                                 <div class="suggestion-header">
                                     <div class="suggestion-type">UniqueKeyCheck</div>
-                                    <div class="suggestion-confidence">95% confidence</div>
+                                    <div class="suggestion-confidence">80% confidence</div>
                                 </div>
                                 <div class="suggestion-field">Field: <strong>PassengerId</strong></div>
-                                <div class="suggestion-reason">Field classified as identifier type</div>
+                                <div class="suggestion-reason">High cardinality suggests unique identifier</div>
                                 <div class="suggestion-yaml-container">
                                     <pre class="suggestion-yaml">      - type: "UniqueKeyCheck"
         severity: "WARNING"
@@ -7615,19 +7692,19 @@ aren't random and could make certain groups under-represented if not handled car
                             </div>
                             <div class="suggestion-card high-priority">
                                 <div class="suggestion-header">
-                                    <div class="suggestion-type">StringLengthCheck</div>
-                                    <div class="suggestion-confidence">95% confidence</div>
+                                    <div class="suggestion-type">RangeCheck</div>
+                                    <div class="suggestion-confidence">90% confidence</div>
                                 </div>
                                 
-                                <div class="suggestion-reason">All values have consistent length (1 characters)</div>
+                                <div class="suggestion-reason">Based on observed range 0.00 to 1.00 (+20% buffer)</div>
                                 <div class="suggestion-yaml-container">
-                                    <pre class="suggestion-yaml">      - type: "StringLengthCheck"
+                                    <pre class="suggestion-yaml">      - type: "RangeCheck"
         severity: "WARNING"
-          field: "Embarked"
-          min_length: 1
-          max_length: 1</pre>
-                                    <button class="copy-yaml-btn" onclick="copyYaml(`      - type: "StringLengthCheck"
-        severity: "WARNING"\n          field: "Embarked"\n          min_length: 1\n          max_length: 1`)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;vertical-align:-1px;margin-right:3px"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy</button>
+          field: "Survived"
+          min_value: -0.2
+          max_value: 1.2</pre>
+                                    <button class="copy-yaml-btn" onclick="copyYaml(`      - type: "RangeCheck"
+        severity: "WARNING"\n          field: "Survived"\n          min_value: -0.2\n          max_value: 1.2`)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;vertical-align:-1px;margin-right:3px"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy</button>
                                 </div>
                             </div>
                             <div class="suggestion-card high-priority">
@@ -7669,32 +7746,15 @@ aren't random and could make certain groups under-represented if not handled car
                                     <div class="suggestion-confidence">90% confidence</div>
                                 </div>
                                 
-                                <div class="suggestion-reason">Age field with human-sensible bounds (0-120 years)</div>
+                                <div class="suggestion-reason">Based on observed range 1.00 to 3.00 (+20% buffer)</div>
                                 <div class="suggestion-yaml-container">
                                     <pre class="suggestion-yaml">      - type: "RangeCheck"
         severity: "WARNING"
-          field: "Age"
-          min_value: 0
-          max_value: 120</pre>
+          field: "Pclass"
+          min_value: 0.6
+          max_value: 3.4</pre>
                                     <button class="copy-yaml-btn" onclick="copyYaml(`      - type: "RangeCheck"
-        severity: "WARNING"\n          field: "Age"\n          min_value: 0\n          max_value: 120`)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;vertical-align:-1px;margin-right:3px"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy</button>
-                                </div>
-                            </div>
-                            <div class="suggestion-card high-priority">
-                                <div class="suggestion-header">
-                                    <div class="suggestion-type">RangeCheck</div>
-                                    <div class="suggestion-confidence">90% confidence</div>
-                                </div>
-                                
-                                <div class="suggestion-reason">Monetary field (must be non-negative)</div>
-                                <div class="suggestion-yaml-container">
-                                    <pre class="suggestion-yaml">      - type: "RangeCheck"
-        severity: "WARNING"
-          field: "Fare"
-          min_value: 0
-          max_value: null</pre>
-                                    <button class="copy-yaml-btn" onclick="copyYaml(`      - type: "RangeCheck"
-        severity: "WARNING"\n          field: "Fare"\n          min_value: 0\n          max_value: null`)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;vertical-align:-1px;margin-right:3px"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy</button>
+        severity: "WARNING"\n          field: "Pclass"\n          min_value: 0.6\n          max_value: 3.4`)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;vertical-align:-1px;margin-right:3px"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy</button>
                                 </div>
                             </div>
                             <div class="suggestion-card high-priority">
@@ -7703,7 +7763,7 @@ aren't random and could make certain groups under-represented if not handled car
                                     <div class="suggestion-confidence">85% confidence</div>
                                 </div>
                                 
-                                <div class="suggestion-reason">Low cardinality field with 3 unique values</div>
+                                <div class="suggestion-reason">Low cardinality (3 unique values)</div>
                                 <div class="suggestion-yaml-container">
                                     <pre class="suggestion-yaml">      - type: "ValidValuesCheck"
         severity: "WARNING"
@@ -7716,13 +7776,46 @@ aren't random and could make certain groups under-represented if not handled car
         severity: "WARNING"\n          field: "Pclass"\n          valid_values:\n            - "3"\n            - "1"\n            - "2"`)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;vertical-align:-1px;margin-right:3px"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy</button>
                                 </div>
                             </div>
+                            <div class="suggestion-card ">
+                                <div class="suggestion-header">
+                                    <div class="suggestion-type">UniqueKeyCheck</div>
+                                    <div class="suggestion-confidence">80% confidence</div>
+                                </div>
+                                <div class="suggestion-field">Field: <strong>Name</strong></div>
+                                <div class="suggestion-reason">High cardinality suggests unique identifier</div>
+                                <div class="suggestion-yaml-container">
+                                    <pre class="suggestion-yaml">      - type: "UniqueKeyCheck"
+        severity: "WARNING"
+          fields:
+            - "Name"</pre>
+                                    <button class="copy-yaml-btn" onclick="copyYaml(`      - type: "UniqueKeyCheck"
+        severity: "WARNING"\n          fields:\n            - "Name"`)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;vertical-align:-1px;margin-right:3px"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy</button>
+                                </div>
+                            </div>
+                            <div class="suggestion-card ">
+                                <div class="suggestion-header">
+                                    <div class="suggestion-type">StringLengthCheck</div>
+                                    <div class="suggestion-confidence">75% confidence</div>
+                                </div>
+                                
+                                <div class="suggestion-reason">String length range: 12-82 chars</div>
+                                <div class="suggestion-yaml-container">
+                                    <pre class="suggestion-yaml">      - type: "StringLengthCheck"
+        severity: "WARNING"
+          field: "Name"
+          min_length: 11
+          max_length: 92</pre>
+                                    <button class="copy-yaml-btn" onclick="copyYaml(`      - type: "StringLengthCheck"
+        severity: "WARNING"\n          field: "Name"\n          min_length: 11\n          max_length: 92`)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;vertical-align:-1px;margin-right:3px"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy</button>
+                                </div>
+                            </div>
                             <div class="suggestion-card high-priority">
                                 <div class="suggestion-header">
                                     <div class="suggestion-type">ValidValuesCheck</div>
                                     <div class="suggestion-confidence">85% confidence</div>
                                 </div>
                                 
-                                <div class="suggestion-reason">Low cardinality field with 2 unique values</div>
+                                <div class="suggestion-reason">Low cardinality (2 unique values)</div>
                                 <div class="suggestion-yaml-container">
                                     <pre class="suggestion-yaml">      - type: "ValidValuesCheck"
         severity: "WARNING"
@@ -7734,13 +7827,64 @@ aren't random and could make certain groups under-represented if not handled car
         severity: "WARNING"\n          field: "Sex"\n          valid_values:\n            - "male"\n            - "female"`)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;vertical-align:-1px;margin-right:3px"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy</button>
                                 </div>
                             </div>
+                            <div class="suggestion-card ">
+                                <div class="suggestion-header">
+                                    <div class="suggestion-type">StringLengthCheck</div>
+                                    <div class="suggestion-confidence">75% confidence</div>
+                                </div>
+                                
+                                <div class="suggestion-reason">String length range: 4-6 chars</div>
+                                <div class="suggestion-yaml-container">
+                                    <pre class="suggestion-yaml">      - type: "StringLengthCheck"
+        severity: "WARNING"
+          field: "Sex"
+          min_length: 3
+          max_length: 16</pre>
+                                    <button class="copy-yaml-btn" onclick="copyYaml(`      - type: "StringLengthCheck"
+        severity: "WARNING"\n          field: "Sex"\n          min_length: 3\n          max_length: 16`)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;vertical-align:-1px;margin-right:3px"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy</button>
+                                </div>
+                            </div>
+                            <div class="suggestion-card high-priority">
+                                <div class="suggestion-header">
+                                    <div class="suggestion-type">RangeCheck</div>
+                                    <div class="suggestion-confidence">90% confidence</div>
+                                </div>
+                                
+                                <div class="suggestion-reason">Based on observed range 0.42 to 80.00 (+20% buffer)</div>
+                                <div class="suggestion-yaml-container">
+                                    <pre class="suggestion-yaml">      - type: "RangeCheck"
+        severity: "WARNING"
+          field: "Age"
+          min_value: 0
+          max_value: 95.916</pre>
+                                    <button class="copy-yaml-btn" onclick="copyYaml(`      - type: "RangeCheck"
+        severity: "WARNING"\n          field: "Age"\n          min_value: 0\n          max_value: 95.916`)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;vertical-align:-1px;margin-right:3px"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy</button>
+                                </div>
+                            </div>
+                            <div class="suggestion-card high-priority">
+                                <div class="suggestion-header">
+                                    <div class="suggestion-type">RangeCheck</div>
+                                    <div class="suggestion-confidence">90% confidence</div>
+                                </div>
+                                
+                                <div class="suggestion-reason">Based on observed range 0.00 to 8.00 (+20% buffer)</div>
+                                <div class="suggestion-yaml-container">
+                                    <pre class="suggestion-yaml">      - type: "RangeCheck"
+        severity: "WARNING"
+          field: "SibSp"
+          min_value: -1.6
+          max_value: 9.6</pre>
+                                    <button class="copy-yaml-btn" onclick="copyYaml(`      - type: "RangeCheck"
+        severity: "WARNING"\n          field: "SibSp"\n          min_value: -1.6\n          max_value: 9.6`)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;vertical-align:-1px;margin-right:3px"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy</button>
+                                </div>
+                            </div>
                             <div class="suggestion-card high-priority">
                                 <div class="suggestion-header">
                                     <div class="suggestion-type">ValidValuesCheck</div>
                                     <div class="suggestion-confidence">85% confidence</div>
                                 </div>
                                 
-                                <div class="suggestion-reason">Low cardinality field with 7 unique values</div>
+                                <div class="suggestion-reason">Low cardinality (7 unique values)</div>
                                 <div class="suggestion-yaml-container">
                                     <pre class="suggestion-yaml">      - type: "ValidValuesCheck"
         severity: "WARNING"
@@ -7757,13 +7901,47 @@ aren't random and could make certain groups under-represented if not handled car
         severity: "WARNING"\n          field: "SibSp"\n          valid_values:\n            - "0"\n            - "1"\n            - "2"\n            - "4"\n            - "3"\n            - "8"\n            - "5"`)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;vertical-align:-1px;margin-right:3px"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy</button>
                                 </div>
                             </div>
+                            <div class="suggestion-card ">
+                                <div class="suggestion-header">
+                                    <div class="suggestion-type">StatisticalOutlierCheck</div>
+                                    <div class="suggestion-confidence">70% confidence</div>
+                                </div>
+                                
+                                <div class="suggestion-reason">High variance detected (CV=2.11), outlier check recommended</div>
+                                <div class="suggestion-yaml-container">
+                                    <pre class="suggestion-yaml">      - type: "StatisticalOutlierCheck"
+        severity: "INFO"
+          field: "SibSp"
+          method: "zscore"
+          threshold: 3.0</pre>
+                                    <button class="copy-yaml-btn" onclick="copyYaml(`      - type: "StatisticalOutlierCheck"
+        severity: "INFO"\n          field: "SibSp"\n          method: "zscore"\n          threshold: 3.0`)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;vertical-align:-1px;margin-right:3px"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy</button>
+                                </div>
+                            </div>
+                            <div class="suggestion-card high-priority">
+                                <div class="suggestion-header">
+                                    <div class="suggestion-type">RangeCheck</div>
+                                    <div class="suggestion-confidence">90% confidence</div>
+                                </div>
+                                
+                                <div class="suggestion-reason">Based on observed range 0.00 to 6.00 (+20% buffer)</div>
+                                <div class="suggestion-yaml-container">
+                                    <pre class="suggestion-yaml">      - type: "RangeCheck"
+        severity: "WARNING"
+          field: "Parch"
+          min_value: -1.2000000000000002
+          max_value: 7.2</pre>
+                                    <button class="copy-yaml-btn" onclick="copyYaml(`      - type: "RangeCheck"
+        severity: "WARNING"\n          field: "Parch"\n          min_value: -1.2000000000000002\n          max_value: 7.2`)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;vertical-align:-1px;margin-right:3px"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy</button>
+                                </div>
+                            </div>
                             <div class="suggestion-card high-priority">
                                 <div class="suggestion-header">
                                     <div class="suggestion-type">ValidValuesCheck</div>
                                     <div class="suggestion-confidence">85% confidence</div>
                                 </div>
                                 
-                                <div class="suggestion-reason">Low cardinality field with 7 unique values</div>
+                                <div class="suggestion-reason">Low cardinality (7 unique values)</div>
                                 <div class="suggestion-yaml-container">
                                     <pre class="suggestion-yaml">      - type: "ValidValuesCheck"
         severity: "WARNING"
@@ -7780,13 +7958,98 @@ aren't random and could make certain groups under-represented if not handled car
         severity: "WARNING"\n          field: "Parch"\n          valid_values:\n            - "0"\n            - "1"\n            - "2"\n            - "5"\n            - "3"\n            - "4"\n            - "6"`)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;vertical-align:-1px;margin-right:3px"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy</button>
                                 </div>
                             </div>
+                            <div class="suggestion-card ">
+                                <div class="suggestion-header">
+                                    <div class="suggestion-type">StatisticalOutlierCheck</div>
+                                    <div class="suggestion-confidence">70% confidence</div>
+                                </div>
+                                
+                                <div class="suggestion-reason">High variance detected (CV=2.11), outlier check recommended</div>
+                                <div class="suggestion-yaml-container">
+                                    <pre class="suggestion-yaml">      - type: "StatisticalOutlierCheck"
+        severity: "INFO"
+          field: "Parch"
+          method: "zscore"
+          threshold: 3.0</pre>
+                                    <button class="copy-yaml-btn" onclick="copyYaml(`      - type: "StatisticalOutlierCheck"
+        severity: "INFO"\n          field: "Parch"\n          method: "zscore"\n          threshold: 3.0`)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;vertical-align:-1px;margin-right:3px"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy</button>
+                                </div>
+                            </div>
+                            <div class="suggestion-card ">
+                                <div class="suggestion-header">
+                                    <div class="suggestion-type">StringLengthCheck</div>
+                                    <div class="suggestion-confidence">75% confidence</div>
+                                </div>
+                                
+                                <div class="suggestion-reason">String length range: 3-18 chars</div>
+                                <div class="suggestion-yaml-container">
+                                    <pre class="suggestion-yaml">      - type: "StringLengthCheck"
+        severity: "WARNING"
+          field: "Ticket"
+          min_length: 2
+          max_length: 28</pre>
+                                    <button class="copy-yaml-btn" onclick="copyYaml(`      - type: "StringLengthCheck"
+        severity: "WARNING"\n          field: "Ticket"\n          min_length: 2\n          max_length: 28`)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;vertical-align:-1px;margin-right:3px"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy</button>
+                                </div>
+                            </div>
+                            <div class="suggestion-card high-priority">
+                                <div class="suggestion-header">
+                                    <div class="suggestion-type">RangeCheck</div>
+                                    <div class="suggestion-confidence">90% confidence</div>
+                                </div>
+                                
+                                <div class="suggestion-reason">Price/amount field: must be non-negative</div>
+                                <div class="suggestion-yaml-container">
+                                    <pre class="suggestion-yaml">      - type: "RangeCheck"
+        severity: "WARNING"
+          field: "Fare"
+          min_value: 0
+          max_value: null</pre>
+                                    <button class="copy-yaml-btn" onclick="copyYaml(`      - type: "RangeCheck"
+        severity: "WARNING"\n          field: "Fare"\n          min_value: 0\n          max_value: null`)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;vertical-align:-1px;margin-right:3px"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy</button>
+                                </div>
+                            </div>
+                            <div class="suggestion-card ">
+                                <div class="suggestion-header">
+                                    <div class="suggestion-type">StatisticalOutlierCheck</div>
+                                    <div class="suggestion-confidence">70% confidence</div>
+                                </div>
+                                
+                                <div class="suggestion-reason">High variance detected (CV=1.54), outlier check recommended</div>
+                                <div class="suggestion-yaml-container">
+                                    <pre class="suggestion-yaml">      - type: "StatisticalOutlierCheck"
+        severity: "INFO"
+          field: "Fare"
+          method: "zscore"
+          threshold: 3.0</pre>
+                                    <button class="copy-yaml-btn" onclick="copyYaml(`      - type: "StatisticalOutlierCheck"
+        severity: "INFO"\n          field: "Fare"\n          method: "zscore"\n          threshold: 3.0`)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;vertical-align:-1px;margin-right:3px"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy</button>
+                                </div>
+                            </div>
+                            <div class="suggestion-card ">
+                                <div class="suggestion-header">
+                                    <div class="suggestion-type">StringLengthCheck</div>
+                                    <div class="suggestion-confidence">75% confidence</div>
+                                </div>
+                                
+                                <div class="suggestion-reason">String length range: 1-15 chars</div>
+                                <div class="suggestion-yaml-container">
+                                    <pre class="suggestion-yaml">      - type: "StringLengthCheck"
+        severity: "WARNING"
+          field: "Cabin"
+          min_length: 1
+          max_length: 25</pre>
+                                    <button class="copy-yaml-btn" onclick="copyYaml(`      - type: "StringLengthCheck"
+        severity: "WARNING"\n          field: "Cabin"\n          min_length: 1\n          max_length: 25`)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;vertical-align:-1px;margin-right:3px"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy</button>
+                                </div>
+                            </div>
                             <div class="suggestion-card high-priority">
                                 <div class="suggestion-header">
                                     <div class="suggestion-type">ValidValuesCheck</div>
                                     <div class="suggestion-confidence">85% confidence</div>
                                 </div>
                                 
-                                <div class="suggestion-reason">Low cardinality field with 3 unique values</div>
+                                <div class="suggestion-reason">Low cardinality (3 unique values)</div>
                                 <div class="suggestion-yaml-container">
                                     <pre class="suggestion-yaml">      - type: "ValidValuesCheck"
         severity: "WARNING"
@@ -7801,52 +8064,44 @@ aren't random and could make certain groups under-represented if not handled car
                             </div>
                             <div class="suggestion-card ">
                                 <div class="suggestion-header">
-                                    <div class="suggestion-type">RowCountRangeCheck</div>
-                                    <div class="suggestion-confidence">80% confidence</div>
-                                </div>
-                                
-                                <div class="suggestion-reason">Expect approximately 891 rows based on profile</div>
-                                <div class="suggestion-yaml-container">
-                                    <pre class="suggestion-yaml">      - type: "RowCountRangeCheck"
-        severity: "ERROR"
-          min_rows: 445
-          max_rows: 1782</pre>
-                                    <button class="copy-yaml-btn" onclick="copyYaml(`      - type: "RowCountRangeCheck"
-        severity: "ERROR"\n          min_rows: 445\n          max_rows: 1782`)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;vertical-align:-1px;margin-right:3px"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy</button>
-                                </div>
-                            </div>
-                            <div class="suggestion-card ">
-                                <div class="suggestion-header">
                                     <div class="suggestion-type">StringLengthCheck</div>
-                                    <div class="suggestion-confidence">80% confidence</div>
-                                </div>
-                                
-                                <div class="suggestion-reason">Length varies within small range (4-6 characters)</div>
-                                <div class="suggestion-yaml-container">
-                                    <pre class="suggestion-yaml">      - type: "StringLengthCheck"
-        severity: "WARNING"
-          field: "Sex"
-          min_length: 4
-          max_length: 6</pre>
-                                    <button class="copy-yaml-btn" onclick="copyYaml(`      - type: "StringLengthCheck"
-        severity: "WARNING"\n          field: "Sex"\n          min_length: 4\n          max_length: 6`)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;vertical-align:-1px;margin-right:3px"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy</button>
-                                </div>
-                            </div>
-                            <div class="suggestion-card ">
-                                <div class="suggestion-header">
-                                    <div class="suggestion-type">StatisticalOutlierCheck</div>
                                     <div class="suggestion-confidence">75% confidence</div>
                                 </div>
                                 
-                                <div class="suggestion-reason">High variability detected (CV=154.2%)</div>
+                                <div class="suggestion-reason">String length range: 1-1 chars</div>
                                 <div class="suggestion-yaml-container">
-                                    <pre class="suggestion-yaml">      - type: "StatisticalOutlierCheck"
+                                    <pre class="suggestion-yaml">      - type: "StringLengthCheck"
         severity: "WARNING"
-          field: "Fare"
-          method: "zscore"
-          threshold: 3.0</pre>
-                                    <button class="copy-yaml-btn" onclick="copyYaml(`      - type: "StatisticalOutlierCheck"
-        severity: "WARNING"\n          field: "Fare"\n          method: "zscore"\n          threshold: 3.0`)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;vertical-align:-1px;margin-right:3px"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy</button>
+          field: "Embarked"
+          min_length: 1
+          max_length: 11</pre>
+                                    <button class="copy-yaml-btn" onclick="copyYaml(`      - type: "StringLengthCheck"
+        severity: "WARNING"\n          field: "Embarked"\n          min_length: 1\n          max_length: 11`)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;vertical-align:-1px;margin-right:3px"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy</button>
+                                </div>
+                            </div>
+                            <div class="suggestion-card high-priority">
+                                <div class="suggestion-header">
+                                    <div class="suggestion-type">MandatoryFieldCheck</div>
+                                    <div class="suggestion-confidence">95% confidence</div>
+                                </div>
+                                <div class="suggestion-field">Field: <strong>PassengerId</strong></div>
+                                <div class="suggestion-reason">Fields with >95% completeness: PassengerId, Survived, Pclass, Name, Sex...</div>
+                                <div class="suggestion-yaml-container">
+                                    <pre class="suggestion-yaml">      - type: "MandatoryFieldCheck"
+        severity: "ERROR"
+          fields:
+            - "PassengerId"
+            - "Survived"
+            - "Pclass"
+            - "Name"
+            - "Sex"
+            - "SibSp"
+            - "Parch"
+            - "Ticket"
+            - "Fare"
+            - "Embarked"</pre>
+                                    <button class="copy-yaml-btn" onclick="copyYaml(`      - type: "MandatoryFieldCheck"
+        severity: "ERROR"\n          fields:\n            - "PassengerId"\n            - "Survived"\n            - "Pclass"\n            - "Name"\n            - "Sex"\n            - "SibSp"\n            - "Parch"\n            - "Ticket"\n            - "Fare"\n            - "Embarked"`)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;vertical-align:-1px;margin-right:3px"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy</button>
                                 </div>
                             </div>
                         </div>
@@ -7895,7 +8150,7 @@ aren't random and could make certain groups under-represented if not handled car
                                 </div>
                                 <pre class="full-config-yaml" id="fullConfigYaml"># Auto-generated validation configuration
 # Generated from profile of: titanic.csv
-# Generated at: 2025-12-01 15:48:04
+# Generated at: 2025-12-02 14:34:24
 # File size: 0.1 MB, Rows: 891
 # Recommended chunk size: 2,000,000 rows (Using maximum chunk size (2,000,000). Sufficient memory available.)
 
@@ -7909,7 +8164,7 @@ settings:
 
 files:
   - name: "titanic"
-    path: "/home/daniel/www/test-data/titanic.csv"
+    path: "test-data/titanic.csv"
     format: "csv"
 
     validations:
@@ -7917,36 +8172,27 @@ files:
         severity: "ERROR"
         # Prevent empty file loads
 
-      - type: "MandatoryFieldCheck"
-        severity: "WARNING"
+      - type: "RowCountRangeCheck"
+        severity: "ERROR"
         params:
-          fields:
-            - "Embarked"
-            - "Fare"
-            - "Name"
-            - "Parch"
-            - "PassengerId"
-            - "Pclass"
-            - "Sex"
-            - "SibSp"
-            - "Survived"
-            - "Ticket"
-        # 10 fields have &gt;95% completeness
+          min_rows: 445
+          max_rows: 1782
+        # Expect approximately 891 rows based on profile
 
       - type: "UniqueKeyCheck"
         severity: "WARNING"
         params:
           fields:
             - "PassengerId"
-        # Field classified as identifier type
+        # High cardinality suggests unique identifier
 
-      - type: "StringLengthCheck"
+      - type: "RangeCheck"
         severity: "WARNING"
         params:
-          field: "Embarked"
-          min_length: 1
-          max_length: 1
-        # All values have consistent length (1 characters)
+          field: "Survived"
+          min_value: -0.2
+          max_value: 1.2
+        # Based on observed range 0.00 to 1.00 (+20% buffer)
 
       - type: "BooleanCheck"
         severity: "WARNING"
@@ -7975,18 +8221,10 @@ files:
       - type: "RangeCheck"
         severity: "WARNING"
         params:
-          field: "Age"
-          min_value: 0
-          max_value: 120
-        # Age field with human-sensible bounds (0-120 years)
-
-      - type: "RangeCheck"
-        severity: "WARNING"
-        params:
-          field: "Fare"
-          min_value: 0
-          max_value: None
-        # Monetary field (must be non-negative)
+          field: "Pclass"
+          min_value: 0.6
+          max_value: 3.4
+        # Based on observed range 1.00 to 3.00 (+20% buffer)
 
       - type: "ValidValuesCheck"
         severity: "WARNING"
@@ -7996,7 +8234,22 @@ files:
             - "3"
             - "1"
             - "2"
-        # Low cardinality field with 3 unique values
+        # Low cardinality (3 unique values)
+
+      - type: "UniqueKeyCheck"
+        severity: "WARNING"
+        params:
+          fields:
+            - "Name"
+        # High cardinality suggests unique identifier
+
+      - type: "StringLengthCheck"
+        severity: "WARNING"
+        params:
+          field: "Name"
+          min_length: 11
+          max_length: 92
+        # String length range: 12-82 chars
 
       - type: "ValidValuesCheck"
         severity: "WARNING"
@@ -8005,7 +8258,31 @@ files:
           valid_values:
             - "male"
             - "female"
-        # Low cardinality field with 2 unique values
+        # Low cardinality (2 unique values)
+
+      - type: "StringLengthCheck"
+        severity: "WARNING"
+        params:
+          field: "Sex"
+          min_length: 3
+          max_length: 16
+        # String length range: 4-6 chars
+
+      - type: "RangeCheck"
+        severity: "WARNING"
+        params:
+          field: "Age"
+          min_value: 0
+          max_value: 95.916
+        # Based on observed range 0.42 to 80.00 (+20% buffer)
+
+      - type: "RangeCheck"
+        severity: "WARNING"
+        params:
+          field: "SibSp"
+          min_value: -1.6
+          max_value: 9.6
+        # Based on observed range 0.00 to 8.00 (+20% buffer)
 
       - type: "ValidValuesCheck"
         severity: "WARNING"
@@ -8019,54 +8296,15 @@ files:
             - "3"
             - "8"
             - "5"
-        # Low cardinality field with 7 unique values
-
-      - type: "ValidValuesCheck"
-        severity: "WARNING"
-        params:
-          field: "Parch"
-          valid_values:
-            - "0"
-            - "1"
-            - "2"
-            - "5"
-            - "3"
-            - "4"
-            - "6"
-        # Low cardinality field with 7 unique values
-
-      - type: "ValidValuesCheck"
-        severity: "WARNING"
-        params:
-          field: "Embarked"
-          valid_values:
-            - "S"
-            - "C"
-            - "Q"
-        # Low cardinality field with 3 unique values
-
-      - type: "RowCountRangeCheck"
-        severity: "ERROR"
-        params:
-          min_rows: 445
-          max_rows: 1782
-        # Expect approximately 891 rows based on profile
-
-      - type: "StringLengthCheck"
-        severity: "WARNING"
-        params:
-          field: "Sex"
-          min_length: 4
-          max_length: 6
-        # Length varies within small range (4-6 characters)
+        # Low cardinality (7 unique values)
 
       - type: "StatisticalOutlierCheck"
-        severity: "WARNING"
+        severity: "INFO"
         params:
-          field: "Fare"
+          field: "SibSp"
           method: "zscore"
           threshold: 3.0
-        # High variability detected (CV=154.2%)
+        # High variance detected (CV=2.11), outlier check recommended
 </pre>
                             </div>
                         </div>
@@ -8104,7 +8342,7 @@ files:
                         <div style="font-size: 0.8em; line-height: 1.8;">
                             <div style="display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid var(--border-color);">
                                 <span style="color: var(--text-muted);">Path</span>
-                                <span style="color: var(--text-primary); font-family: monospace; font-size: 0.85em; max-width: 200px; overflow: hidden; text-overflow: ellipsis;" title="/home/daniel/www/test-data/titanic.csv">titanic.csv</span>
+                                <span style="color: var(--text-primary); font-family: monospace; font-size: 0.85em; max-width: 200px; overflow: hidden; text-overflow: ellipsis;" title="/home/daniel/www/dqa/data-validation-tool/test-data/titanic.csv">titanic.csv</span>
                             </div>
                             <div style="display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid var(--border-color);">
                                 <span style="color: var(--text-muted);">Size</span>
@@ -8112,7 +8350,7 @@ files:
                             </div>
                             <div style="display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid var(--border-color);">
                                 <span style="color: var(--text-muted);">Modified</span>
-                                <span style="color: var(--text-primary);">2025-11-29T12:15:36.826880</span>
+                                <span style="color: var(--text-primary);">2025-11-26T21:51:20.304269</span>
                             </div>
                             <div style="display: flex; justify-content: space-between; padding: 4px 0;">
                                 <span style="color: var(--text-muted);">Type</span>
@@ -8144,7 +8382,7 @@ files:
                         <div style="font-size: 0.8em; line-height: 1.8;">
                             <div style="display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid var(--border-color);">
                                 <span style="color: var(--text-muted);">Profiled At</span>
-                                <span style="color: var(--text-primary);">2025-12-01T15:48:08.530499</span>
+                                <span style="color: var(--text-primary);">2025-12-02T14:34:28.813447</span>
                             </div>
                             <div style="display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid var(--border-color);">
                                 <span style="color: var(--text-muted);">Profiler Version</span>
@@ -8815,7 +9053,7 @@ files:
                 labels: ["PassengerI", "Survived", "Pclass", "Name", "Sex", "Age", "SibSp", "Parch", "Ticket", "Fare", "Cabin", "Embarked"],
                 datasets: [{
                     label: 'Quality Score',
-                    data: [98.0, 80.0448933782267, 80.06734006734007, 80.4, 72.2448933782267, 73.45496986673457, 80.15712682379349, 80.15712682379349, 84.88619528619529, 65.94590347923682, 62.080451574569224, 80.00015149621449],
+                    data: [98.0, 80.0448933782267, 80.06734006734007, 80.4, 72.2448933782267, 74.50539003480179, 80.15712682379349, 80.15712682379349, 84.88619528619529, 71.36677890011224, 62.080451574569224, 80.00015149621449],
                     backgroundColor: function(context) {
                         const value = context.raw;
                         if (value >= 80) return 'rgba(16, 185, 129, 0.8)';
@@ -8851,19 +9089,24 @@ files:
             }
         });
 
-        // Bubble Chart
+        // Bubble Chart - with padding to prevent overflow
         new Chart(document.getElementById('bubbleChart'), {
             type: 'bubble',
             data: {
                 datasets: [{
                     label: 'Columns',
-                    data: [{"x": 100.0, "y": 100.0, "r": 5, "label": "PassengerId"}, {"x": 100.0, "y": 100.0, "r": 5, "label": "Survived"}, {"x": 100.0, "y": 100.0, "r": 5, "label": "Pclass"}, {"x": 100.0, "y": 100.0, "r": 5, "label": "Name"}, {"x": 100.0, "y": 100.0, "r": 5, "label": "Sex"}, {"x": 80.13468013468014, "y": 96.49859943977592, "r": 5, "label": "Age"}, {"x": 100.0, "y": 100.0, "r": 5, "label": "SibSp"}, {"x": 100.0, "y": 100.0, "r": 5, "label": "Parch"}, {"x": 100.0, "y": 100.0, "r": 5, "label": "Ticket"}, {"x": 100.0, "y": 81.9304152637486, "r": 5, "label": "Fare"}, {"x": 22.895622895622893, "y": 100.0, "r": 5, "label": "Cabin"}, {"x": 99.77553310886644, "y": 100.0, "r": 5, "label": "Embarked"}],
+                    data: [{"x": 100.0, "y": 100.0, "r": 5, "label": "PassengerId"}, {"x": 100.0, "y": 100.0, "r": 5, "label": "Survived"}, {"x": 100.0, "y": 100.0, "r": 5, "label": "Pclass"}, {"x": 100.0, "y": 100.0, "r": 5, "label": "Name"}, {"x": 100.0, "y": 100.0, "r": 5, "label": "Sex"}, {"x": 80.13468013468014, "y": 100.0, "r": 5, "label": "Age"}, {"x": 100.0, "y": 100.0, "r": 5, "label": "SibSp"}, {"x": 100.0, "y": 100.0, "r": 5, "label": "Parch"}, {"x": 100.0, "y": 100.0, "r": 5, "label": "Ticket"}, {"x": 100.0, "y": 100.0, "r": 5, "label": "Fare"}, {"x": 22.895622895622893, "y": 100.0, "r": 5, "label": "Cabin"}, {"x": 99.77553310886644, "y": 100.0, "r": 5, "label": "Embarked"}],
                     backgroundColor: function(context) {
                         const y = context.raw?.y;
                         if (!y) return 'rgba(148, 163, 184, 0.5)';
                         if (y >= 95) return 'rgba(16, 185, 129, 0.6)';
                         if (y >= 90) return 'rgba(59, 130, 246, 0.6)';
                         return 'rgba(245, 158, 11, 0.6)';
+                    },
+                    // Limit bubble radius to prevent overflow
+                    radius: function(context) {
+                        const r = context.raw?.r;
+                        return Math.min(r || 5, 25);  // Cap at 25px radius
                     }
                 }]
             },
@@ -8871,6 +9114,9 @@ files:
                 ...chartDefaults,
                 responsive: true,
                 maintainAspectRatio: true,
+                layout: {
+                    padding: { top: 20, right: 20, bottom: 10, left: 10 }  // Padding for bubbles
+                },
                 plugins: {
                     legend: { display: false },
                     tooltip: {
@@ -8884,15 +9130,15 @@ files:
                 scales: {
                     x: {
                         title: { display: true, text: 'Completeness %', color: '#64748b' },
-                        min: Math.max(0, Math.min(...[100.0, 100.0, 100.0, 100.0, 100.0, 80.13468013468014, 100.0, 100.0, 100.0, 100.0, 22.895622895622893, 99.77553310886644]) - 5),
-                        max: 101,
+                        min: Math.max(0, Math.min(...[100.0, 100.0, 100.0, 100.0, 100.0, 80.13468013468014, 100.0, 100.0, 100.0, 100.0, 22.895622895622893, 99.77553310886644]) - 10),
+                        max: 105,
                         grid: { color: 'rgba(148, 163, 184, 0.1)' },
                         ticks: { color: '#64748b' }
                     },
                     y: {
                         title: { display: true, text: 'Validity %', color: '#64748b' },
-                        min: Math.max(0, Math.min(...[100.0, 100.0, 100.0, 100.0, 100.0, 96.49859943977592, 100.0, 100.0, 100.0, 81.9304152637486, 100.0, 100.0]) - 5),
-                        max: 101,
+                        min: Math.max(0, Math.min(...[100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0]) - 10),
+                        max: 105,
                         grid: { color: 'rgba(148, 163, 184, 0.1)' },
                         ticks: { color: '#64748b' }
                     }
@@ -8937,15 +9183,26 @@ files:
 
             const wordCloudData = [["male", 577], ["female", 314], ["S", 644], ["C", 168], ["Q", 77]];
             if (wordCloudData.length > 0) {
+                // Get container dimensions for better sizing
+                const containerWidth = wordCloudContainer.offsetWidth || 500;
+                const containerHeight = wordCloudContainer.offsetHeight || 350;
+
                 // Normalize weights to a reasonable range for display
                 const maxWeight = Math.max(...wordCloudData.map(w => w[1]));
-                const normalizedData = wordCloudData.map(w => [w[0], (w[1] / maxWeight) * 100]);
+                const minWeight = Math.min(...wordCloudData.map(w => w[1]));
+                const range = maxWeight - minWeight || 1;
+                const normalizedData = wordCloudData.map(w => [
+                    w[0],
+                    ((w[1] - minWeight) / range) * 100 + 10  // Scale 10-110 for better distribution
+                ]);
 
                 WordCloud(wordCloudContainer, {
                     list: normalizedData,
-                    gridSize: 4,
+                    gridSize: Math.max(2, Math.floor(containerWidth / 100)),  // Dynamic grid based on width
                     weightFactor: function(size) {
-                        return Math.max(14, size * 0.5);
+                        // Dynamic sizing based on container, better space utilization
+                        const baseSize = Math.min(containerWidth, containerHeight) / 12;
+                        return Math.max(12, (size / 100) * baseSize);
                     },
                     fontFamily: 'system-ui, -apple-system, sans-serif',
                     color: function(word, weight) {
@@ -8955,11 +9212,13 @@ files:
                         return '#94a3b8';
                     },
                     backgroundColor: 'transparent',
-                    rotateRatio: 0.2,
-                    rotationSteps: 2,
+                    rotateRatio: 0.3,  // Slightly more rotation for better packing
+                    rotationSteps: 3,
                     shuffle: true,
                     drawOutOfBound: false,
-                    shrinkToFit: true
+                    shrinkToFit: true,
+                    minSize: 10,  // Minimum font size
+                    ellipticity: 0.8  // Slightly elliptical for better horizontal fit
                 });
             }
         }

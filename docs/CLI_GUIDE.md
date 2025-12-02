@@ -50,9 +50,6 @@ python3 -m validation_framework.cli profile --help
 cd data-validation-tool
 pip install -r requirements.txt
 
-# Optional: Install Polars for high performance (recommended)
-pip install polars
-
 # Optional: Install database support
 pip install sqlalchemy psycopg2-binary pymysql
 
@@ -879,14 +876,11 @@ python3 -m validation_framework.cli profile sales_data.xlsx --backend pandas
 
 ## Performance Tips
 
-### 1. Use Polars Backend
+### 1. Use Polars Backend (Default)
 
 ```bash
-# Install Polars
-pip install polars
-
-# Use for large files
-python3 -m validation_framework.cli validate config.yaml --backend polars
+# Polars is included in requirements.txt and used by default
+python3 -m validation_framework.cli validate config.yaml
 ```
 
 **Benefit:** 5-10x faster, 50% less memory
@@ -973,13 +967,10 @@ python3 -m validation_framework.cli validate config.yaml --chunk-size 25000
 **4. Slow Performance**
 
 ```bash
-# Solution 1: Install Polars
-pip install polars
-
-# Solution 2: Convert CSV to Parquet
+# Solution 1: Convert CSV to Parquet (10x faster reads)
 python3 -c "import polars as pl; pl.read_csv('data.csv').write_parquet('data.parquet')"
 
-# Solution 3: Increase chunk size
+# Solution 2: Increase chunk size
 python3 -m validation_framework.cli validate config.yaml --chunk-size 200000
 ```
 

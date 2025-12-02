@@ -1,4 +1,5 @@
 # Core dependencies
+polars>=0.20.0
 pandas>=2.0.0
 pyarrow>=12.0.0
 openpyxl>=3.1.0
