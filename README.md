@@ -10,7 +10,7 @@
   [![Version 0.2.0-beta](https://img.shields.io/badge/version-0.2.0--beta-orange.svg)](#changelog)
   [![Status: Beta](https://img.shields.io/badge/status-Beta%20%7C%20WIP-orange.svg)](#️-beta-software---testing-required)
   [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
-  [![Tests: 115+ passing](https://img.shields.io/badge/tests-115%2B%20passing-brightgreen.svg)](tests/)
+  [![Tests: 900+ passing](https://img.shields.io/badge/tests-900%2B%20passing-brightgreen.svg)](tests/)
   [![Coverage: 48%](https://img.shields.io/badge/coverage-48%25-yellow.svg)](htmlcov/)
   [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
   [![Commercial Use: ✓](https://img.shields.io/badge/Commercial%20Use-✓%20Unrestricted-brightgreen.svg)](#commercial-use)
@@ -295,28 +295,28 @@ DataK9 was built for a different philosophy:
 DataK9 includes 35 built-in validation types across 10 categories:
 
 ### File-Level Validations
-- FileSizeCheck, RowCountCheck, FileExistsCheck, EncodingCheck
+- EmptyFileCheck, FileSizeCheck, RowCountRangeCheck, CSVFormatCheck
 
 ### Schema Validations
-- SchemaMatchCheck, ColumnPresenceCheck, DataTypeCheck, ColumnOrderCheck
+- SchemaMatchCheck, ColumnPresenceCheck
 
 ### Field-Level Validations
-- MandatoryFieldCheck, RegexCheck, ValidValuesCheck, RangeCheck, DateFormatCheck, StringLengthCheck, NumericPrecisionCheck
+- MandatoryFieldCheck, RegexCheck, ValidValuesCheck, RangeCheck, DateFormatCheck, StringLengthCheck, NumericPrecisionCheck, CompletenessCheck
 
 ### Record-Level Validations
-- UniqueKeyCheck, DuplicateRowCheck, CrossFieldComparisonCheck, RecordCompletenessCheck
+- UniqueKeyCheck, DuplicateRowCheck, CrossFieldComparisonCheck, BlankRecordCheck
 
 ### Advanced Validations
-- InlineBusinessRuleCheck, InlineLookupCheck, ConditionalValidation
+- InlineBusinessRuleCheck, InlineLookupCheck, InlineRegexCheck, AdvancedAnomalyDetectionCheck
 
 ### Cross-File Validations
-- ReferentialIntegrityCheck, CrossFileAggregateCheck
+- ReferentialIntegrityCheck, CrossFileComparisonCheck, CrossFileDuplicateCheck, CrossFileKeyCheck
 
 ### Database Validations
-- TableExistsCheck, RecordCountComparisonCheck, DatabaseSchemaCheck
+- SQLCustomCheck, DatabaseConstraintCheck, DatabaseReferentialIntegrityCheck
 
 ### Temporal Validations
-- FreshnessCheck, TemporalConsistencyCheck
+- FreshnessCheck, BaselineComparisonCheck, TrendDetectionCheck
 
 ### Statistical Validations
 - StatisticalOutlierCheck, CorrelationCheck, DistributionCheck
@@ -412,7 +412,7 @@ files:
 </details>
 
 <details>
-<parameter name="summary"><b>📅 Date/Time Pattern Support</b> ▸ <i>Click to expand</i></summary>
+<summary><b>📅 Date/Time Pattern Support</b> ▸ <i>Click to expand</i></summary>
 
 Prevent file overwrites and improve audit trails with automatic date/time pattern substitution:
 
@@ -752,7 +752,7 @@ MIT License - see [LICENSE](LICENSE) file for details
 
 - **Version:** 0.2.0
 - **Status:** Active development
-- **Tests:** 115+ passing (48% coverage, growing)
+- **Tests:** 900+ passing (48% coverage, growing)
 - **Python:** 3.8+
 - **Production Tested:** 357M row dataset on Raspberry Pi 4
 
