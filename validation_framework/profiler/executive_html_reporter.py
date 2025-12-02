@@ -4431,9 +4431,10 @@ class ExecutiveHTMLReporter:
     def _get_javascript(self, profile: ProfileResult, type_counts: Dict[str, int], categorical_columns: List[Dict]) -> str:
         """Generate the JavaScript for charts and interactions."""
 
-        # Prepare chart data
-        column_names = [col.name[:10] for col in profile.columns]  # Truncate long names
-        quality_scores = [col.quality.overall_score for col in profile.columns]
+        # Prepare chart data - sort by quality score (ascending - worst first)
+        sorted_cols = sorted(profile.columns, key=lambda c: c.quality.overall_score)
+        column_names = [col.name[:12] for col in sorted_cols]  # Truncate long names
+        quality_scores = [col.quality.overall_score for col in sorted_cols]
 
         # Type distribution data
         type_labels = [f"{t} ({c})" for t, c in type_counts.items()]
@@ -5003,7 +5004,7 @@ class ExecutiveHTMLReporter:
             }}
         }});
 
-        // Quality by Column Chart
+        // Quality by Column Chart - sorted by quality (worst first)
         new Chart(document.getElementById('qualityChart'), {{
             type: 'bar',
             data: {{
@@ -5013,19 +5014,44 @@ class ExecutiveHTMLReporter:
                     data: {json.dumps(quality_scores)},
                     backgroundColor: function(context) {{
                         const value = context.raw;
-                        if (value >= 80) return 'rgba(16, 185, 129, 0.8)';
-                        if (value >= 70) return 'rgba(59, 130, 246, 0.8)';
-                        if (value >= 60) return 'rgba(245, 158, 11, 0.8)';
-                        return 'rgba(239, 68, 68, 0.8)';
+                        // Gradient from red (0%) through amber/yellow to green (100%)
+                        if (value >= 90) return 'rgba(16, 185, 129, 0.85)';  // Bright green
+                        if (value >= 80) return 'rgba(34, 197, 94, 0.85)';   // Green
+                        if (value >= 70) return 'rgba(132, 204, 22, 0.85)';  // Lime
+                        if (value >= 60) return 'rgba(234, 179, 8, 0.85)';   // Yellow
+                        if (value >= 50) return 'rgba(245, 158, 11, 0.85)';  // Amber
+                        if (value >= 40) return 'rgba(249, 115, 22, 0.85)';  // Orange
+                        return 'rgba(239, 68, 68, 0.85)';                     // Red
                     }},
-                    borderRadius: 4
+                    borderRadius: 4,
+                    borderWidth: 1,
+                    borderColor: function(context) {{
+                        const value = context.raw;
+                        if (value >= 90) return 'rgba(16, 185, 129, 1)';
+                        if (value >= 80) return 'rgba(34, 197, 94, 1)';
+                        if (value >= 70) return 'rgba(132, 204, 22, 1)';
+                        if (value >= 60) return 'rgba(234, 179, 8, 1)';
+                        if (value >= 50) return 'rgba(245, 158, 11, 1)';
+                        if (value >= 40) return 'rgba(249, 115, 22, 1)';
+                        return 'rgba(239, 68, 68, 1)';
+                    }}
                 }}]
             }},
             options: {{
                 ...chartDefaults,
-                plugins: {{ legend: {{ display: false }} }},
+                indexAxis: 'y',  // Horizontal bars for better column name readability
+                plugins: {{
+                    legend: {{ display: false }},
+                    tooltip: {{
+                        callbacks: {{
+                            label: function(context) {{
+                                return `Quality: ${{context.raw.toFixed(1)}}%`;
+                            }}
+                        }}
+                    }}
+                }},
                 scales: {{
-                    y: {{
+                    x: {{
                         beginAtZero: true,
                         max: 100,
                         grid: {{ color: 'rgba(148, 163, 184, 0.1)' }},
@@ -5034,12 +5060,11 @@ class ExecutiveHTMLReporter:
                             callback: value => value + '%'
                         }}
                     }},
-                    x: {{
+                    y: {{
                         grid: {{ display: false }},
                         ticks: {{
-                            color: '#64748b',
-                            maxRotation: 45,
-                            font: {{ size: 9 }}
+                            color: '#94a3b8',
+                            font: {{ size: 10 }}
                         }}
                     }}
                 }}
@@ -5155,27 +5180,29 @@ class ExecutiveHTMLReporter:
 
                 WordCloud(wordCloudContainer, {{
                     list: normalizedData,
-                    gridSize: Math.max(2, Math.floor(containerWidth / 100)),  // Dynamic grid based on width
+                    gridSize: Math.max(4, Math.floor(containerWidth / 80)),  // Slightly larger grid
                     weightFactor: function(size) {{
-                        // Dynamic sizing based on container, better space utilization
-                        const baseSize = Math.min(containerWidth, containerHeight) / 12;
-                        return Math.max(12, (size / 100) * baseSize);
+                        // Larger font sizes to fill container better
+                        const baseSize = Math.min(containerWidth, containerHeight) / 6;  // Larger base
+                        return Math.max(16, (size / 100) * baseSize);  // Min 16px
                     }},
                     fontFamily: 'system-ui, -apple-system, sans-serif',
+                    fontWeight: 600,  // Bolder fonts for better visibility
                     color: function(word, weight) {{
-                        if (weight > 80) return '#8b5cf6';
-                        if (weight > 50) return '#60a5fa';
-                        if (weight > 25) return '#10b981';
-                        return '#94a3b8';
+                        if (weight > 80) return '#a78bfa';  // Purple
+                        if (weight > 60) return '#60a5fa';  // Blue
+                        if (weight > 40) return '#34d399';  // Green
+                        if (weight > 20) return '#fbbf24';  // Yellow
+                        return '#94a3b8';                   // Gray
                     }},
                     backgroundColor: 'transparent',
-                    rotateRatio: 0.3,  // Slightly more rotation for better packing
-                    rotationSteps: 3,
+                    rotateRatio: 0.2,  // Less rotation for readability
+                    rotationSteps: 2,
                     shuffle: true,
                     drawOutOfBound: false,
                     shrinkToFit: true,
-                    minSize: 10,  // Minimum font size
-                    ellipticity: 0.8  // Slightly elliptical for better horizontal fit
+                    minSize: 14,  // Larger minimum font size
+                    ellipticity: 0.65  // More rectangular to fill horizontal space
                 }});
             }}
         }}
@@ -10009,9 +10036,9 @@ the largest difference between classes, which could be useful for predictive mod
                         </div>
                     </details>
                 </div>
-                <div class="chart-container" style="max-width: 600px;">
-                    <div class="chart-title">Quality Score by Column</div>
-                    <canvas id="qualityChart" height="80"></canvas>
+                <div class="chart-container" style="max-width: 500px;">
+                    <div class="chart-title">Quality Score by Column (sorted worst to best)</div>
+                    <canvas id="qualityChart" height="{min(max(len(profile.columns) * 20, 100), 300)}"></canvas>
                 </div>
                 {self._generate_duplicate_analysis_html(profile)}'''
 
@@ -10066,10 +10093,12 @@ the largest difference between classes, which could be useful for predictive mod
             sections.append(f'''
                 <div class="accordion" style="margin-top: 16px;">
                     <div class="accordion-header" onclick="this.parentElement.classList.toggle('expanded')">
-                        <div class="accordion-icon" style="color: {status_color};">{status_icon}</div>
-                        <div>
-                            <div class="accordion-title">Duplicate Analysis</div>
-                            <div class="accordion-subtitle">Exact and fuzzy duplicate detection</div>
+                        <div class="accordion-title-group">
+                            <div class="accordion-icon" style="color: {status_color};">{status_icon}</div>
+                            <div>
+                                <div class="accordion-title">Duplicate Analysis</div>
+                                <div class="accordion-subtitle">Exact and fuzzy duplicate detection</div>
+                            </div>
                         </div>
                         <div class="accordion-meta">
                             <span class="accordion-badge" style="background: {status_color}22; color: {status_color};">{status_text}</span>
@@ -10118,13 +10147,36 @@ the largest difference between classes, which could be useful for predictive mod
 
             # Only show if there's meaningful content
             if fk_cols or orphan_analysis or interpretation:
+                # Build FK columns list HTML
+                fk_cols_html = ''
+                if fk_cols:
+                    fk_items = []
+                    for fk in fk_cols:
+                        if isinstance(fk, dict):
+                            col_name = fk.get('column', fk.get('name', str(fk)))
+                            confidence = fk.get('confidence', 0)
+                            ref_table = fk.get('reference_table', fk.get('inferred_reference', ''))
+                            if ref_table:
+                                fk_items.append(f'<span style="background: rgba(139, 92, 246, 0.15); color: #a78bfa; padding: 4px 10px; border-radius: 6px; font-size: 0.8em; font-weight: 500;">{col_name} → {ref_table} ({confidence:.0%})</span>')
+                            else:
+                                fk_items.append(f'<span style="background: rgba(139, 92, 246, 0.15); color: #a78bfa; padding: 4px 10px; border-radius: 6px; font-size: 0.8em; font-weight: 500;">{col_name}</span>')
+                        else:
+                            fk_items.append(f'<span style="background: rgba(139, 92, 246, 0.15); color: #a78bfa; padding: 4px 10px; border-radius: 6px; font-size: 0.8em; font-weight: 500;">{fk}</span>')
+                    fk_cols_html = f'''
+                                    <div style="margin-top: 12px;">
+                                        <div style="font-size: 0.75em; color: var(--text-muted); margin-bottom: 6px;">Potential Foreign Key Columns:</div>
+                                        <div style="display: flex; flex-wrap: wrap; gap: 6px;">{"".join(fk_items)}</div>
+                                    </div>'''
+
                 sections.append(f'''
                 <div class="accordion" style="margin-top: 16px;">
                     <div class="accordion-header" onclick="this.parentElement.classList.toggle('expanded')">
-                        <div class="accordion-icon" style="color: #8b5cf6;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></div>
-                        <div>
-                            <div class="accordion-title">Referential Integrity</div>
-                            <div class="accordion-subtitle">Foreign key and relationship analysis</div>
+                        <div class="accordion-title-group">
+                            <div class="accordion-icon" style="color: #8b5cf6;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></div>
+                            <div>
+                                <div class="accordion-title">Referential Integrity</div>
+                                <div class="accordion-subtitle">Foreign key and relationship analysis</div>
+                            </div>
                         </div>
                         <div class="accordion-meta">
                             <span class="accordion-badge">{len(fk_cols)} potential FKs</span>
@@ -10145,7 +10197,7 @@ the largest difference between classes, which could be useful for predictive mod
                                 <div class="dual-layer-technical-content">
                                     <div class="dual-layer-technical-context">
                                         <p style="margin: 0 0 12px 0; font-size: 0.85em; color: var(--text-muted);">{plain_english}</p>
-                                    </div>
+                                    </div>{fk_cols_html}
                                 </div>
                             </details>
                         </div>
