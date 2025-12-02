@@ -1,5 +1,5 @@
 // Auto-generated from validation_definitions.json
-// Total validations: 35
+// Total validations: 36
 // Generated: 2025-11-15
 
 const validationLibrary = {
@@ -91,6 +91,44 @@ const validationLibrary = {
         params: [],
         examples: 'Detect and flag empty rows in data files',
         tips: 'Useful for catching malformed CSV exports with trailing blank rows'
+    },
+    'CSVFormatCheck': {
+        icon: '📋',
+        name: 'CSVFormat Check',
+        type: 'CSVFormatCheck',
+        category: 'File-Level',
+        description: 'Validates CSV file format integrity before processing',
+        params: [
+            {
+                name: 'delimiter',
+                label: 'Delimiter',
+                type: 'text',
+                required: false,
+                help: 'Expected delimiter character (auto-detected if not specified)',
+                placeholder: ',',
+                default: ''
+            },
+            {
+                name: 'sample_rows',
+                label: 'Sample Rows',
+                type: 'number',
+                required: false,
+                help: 'Number of rows to check for consistency',
+                default: 1000,
+                min: 100
+            },
+            {
+                name: 'max_errors',
+                label: 'Max Errors',
+                type: 'number',
+                required: false,
+                help: 'Maximum errors before failing validation',
+                default: 10,
+                min: 1
+            }
+        ],
+        examples: 'Detect malformed CSV files with inconsistent column counts',
+        tips: 'Run this check first to catch delimiter mismatches and quoting issues before other validations'
     },
     'ColumnPresenceCheck': {
         icon: '📋',
@@ -497,6 +535,14 @@ const validationLibrary = {
                 help: 'Expected date format (Python strftime)',
                 placeholder: '%Y-%m-%d',
                 default: '%Y-%m-%d'
+            },
+            {
+                name: 'allow_null',
+                label: 'Allow Null',
+                type: 'checkbox',
+                required: false,
+                help: 'Allow null/empty values',
+                default: true
             }
         ],
         examples: 'ISO format: format: \'%Y-%m-%d\' or US format: \'%m/%d/%Y\'',

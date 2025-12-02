@@ -10,7 +10,7 @@ Complete reference for all 35 validation types in DataK9 Data Quality Framework.
 - [Category Matrix](#category-matrix) - Quick visual overview
 - [Quick Reference Table](#quick-reference-table) - All 35 validations at a glance
 - [Detailed Validation Catalog](#detailed-validation-catalog) - Complete docs with examples
-  - [File-Level Validations (3)](#file-level-validations)
+  - [File-Level Validations (4)](#file-level-validations)
   - [Schema Validations (2)](#schema-validations)
   - [Field-Level Validations (6)](#field-level-validations)
   - [Record-Level Validations (3)](#record-level-validations)
@@ -25,7 +25,7 @@ Complete reference for all 35 validation types in DataK9 Data Quality Framework.
 
 ## Overview
 
-DataK9 provides **35 validation types** organized into **10 categories**. Each validation can be configured with:
+DataK9 provides **36 validation types** organized into **10 categories**. Each validation can be configured with:
 
 - **Severity levels**: `ERROR` (fails validation) or `WARNING` (flags for review)
 - **Parameters**: Customize validation behavior
@@ -76,38 +76,39 @@ All 35 validations at a glance - click validation name to jump to detailed docum
 | [EmptyFileCheck](#1-emptyfilecheck) | File | ✅ | ❌ | Prevent empty files | check_data_rows |
 | [RowCountRangeCheck](#2-rowcountrangecheck) | File | ✅ | ❌ | Validate row volumes | min_rows, max_rows |
 | [FileSizeCheck](#3-filesizecheck) | File | ✅ | ❌ | Check file size limits | min_size_mb, max_size_gb |
-| [SchemaMatchCheck](#4-schemamatchcheck) | Schema | ✅ | ✅ | Enforce schema contracts | expected_columns, allow_extra |
-| [ColumnPresenceCheck](#5-columnpresencecheck) | Schema | ✅ | ✅ | Required columns exist | required_columns |
-| [MandatoryFieldCheck](#6-mandatoryfieldcheck) | Field | ✅ | ✅ | Required fields not null | fields |
-| [RegexCheck](#7-regexcheck) | Field | ✅ | ✅ | Pattern matching validation | field, pattern |
-| [ValidValuesCheck](#8-validvaluescheck) | Field | ✅ | ✅ | Whitelist/blacklist values | field, valid_values |
-| [RangeCheck](#9-rangecheck) | Field | ✅ | ✅ | Numeric/date ranges | field, min_value, max_value |
-| [DateFormatCheck](#10-dateformatcheck) | Field | ✅ | ✅ | Date format validation | field, format |
-| [InlineRegexCheck](#11-inlineregexcheck) | Field | ✅ | ✅ | Quick inline regex | field, pattern |
-| [DuplicateRowCheck](#12-duplicaterowcheck) | Record | ✅ | ✅ | Find duplicate records | key_fields |
-| [BlankRecordCheck](#13-blankrecordcheck) | Record | ✅ | ✅ | Detect empty rows | None |
-| [UniqueKeyCheck](#14-uniquekeycheck) | Record | ✅ | ✅ | Primary key uniqueness | key_fields |
-| [CompletenessCheck](#15-completenesscheck) | Advanced | ✅ | ✅ | Field completeness % | field, min_completeness |
-| [StatisticalOutlierCheck](#16-statisticaloutliercheck) | Advanced | ✅ | ✅ | Detect anomalies | field, method, threshold |
-| [CrossFieldComparisonCheck](#17-crossfieldcomparisoncheck) | Advanced | ✅ | ✅ | Field relationships | field_a, operator, field_b |
-| [FreshnessCheck](#18-freshnesscheck) | Advanced | ✅ | ✅ | Data recency validation | timestamp_field, max_age_hours |
-| [StringLengthCheck](#19-stringlengthcheck) | Advanced | ✅ | ✅ | String length constraints | field, min_length, max_length |
-| [NumericPrecisionCheck](#20-numericprecisioncheck) | Advanced | ✅ | ✅ | Decimal precision | field, max_decimals |
-| [InlineBusinessRuleCheck](#21-inlinebusinessrulecheck) | Advanced | ✅ | ✅ | Custom business rules | expression, message |
-| [InlineLookupCheck](#22-inlinelookupcheck) | Advanced | ✅ | ✅ | Inline reference data | field, lookup_values |
-| [ReferentialIntegrityCheck](#23-referentialintegritycheck) | Cross-File | ✅ | ❌ | Foreign key validation | local_field, reference_file |
-| [CrossFileComparisonCheck](#24-crossfilecomparisoncheck) | Cross-File | ✅ | ❌ | Compare metrics | metric, field, reference_file |
-| [CrossFileDuplicateCheck](#25-crossfileduplicatecheck) | Cross-File | ✅ | ❌ | Cross-file duplicates | key_fields, reference_files |
-| [CrossFileKeyCheck](#26-crossfilekeycheck) | Cross-File | ✅ | ❌ | Cross-file key analysis | foreign_key, reference_file |
-| [ConditionalValidation](#27-conditionalvalidation) | Conditional | ✅ | ✅ | If-then-else logic | condition, validations |
-| [DatabaseConstraintCheck](#28-databaseconstraintcheck) | Database | ❌ | ✅ | DB constraint validation | connection_string, constraints |
-| [DatabaseReferentialIntegrityCheck](#29-databasereferentialintegritycheck) | Database | ❌ | ✅ | DB foreign keys | connection_string, reference_table |
-| [SQLCustomCheck](#30-sqlcustomcheck) | Database | ❌ | ✅ | Custom SQL queries | connection_string, query |
-| [BaselineComparisonCheck](#31-baselinecomparisoncheck) | Temporal | ✅ | ❌ | Historical comparison | metric, baseline_file |
-| [TrendDetectionCheck](#32-trenddetectioncheck) | Temporal | ✅ | ❌ | Detect unusual trends | timestamp_field, value_field |
-| [DistributionCheck](#33-distributioncheck) | Statistical | ✅ | ✅ | Statistical distributions | field, distribution_type |
-| [CorrelationCheck](#34-correlationcheck) | Statistical | ✅ | ✅ | Field correlations | field_a, field_b, method |
-| [AdvancedAnomalyDetectionCheck](#35-advancedanomalydetectioncheck) | Statistical | ✅ | ✅ | ML-based anomaly detection | fields, method, contamination |
+| [CSVFormatCheck](#4-csvformatcheck) | File | ✅ | ❌ | Detect malformed CSV files | delimiter, sample_rows |
+| [SchemaMatchCheck](#5-schemamatchcheck) | Schema | ✅ | ✅ | Enforce schema contracts | expected_columns, allow_extra |
+| [ColumnPresenceCheck](#6-columnpresencecheck) | Schema | ✅ | ✅ | Required columns exist | required_columns |
+| [MandatoryFieldCheck](#7-mandatoryfieldcheck) | Field | ✅ | ✅ | Required fields not null | fields |
+| [RegexCheck](#8-regexcheck) | Field | ✅ | ✅ | Pattern matching validation | field, pattern |
+| [ValidValuesCheck](#9-validvaluescheck) | Field | ✅ | ✅ | Whitelist/blacklist values | field, valid_values |
+| [RangeCheck](#10-rangecheck) | Field | ✅ | ✅ | Numeric/date ranges | field, min_value, max_value |
+| [DateFormatCheck](#11-dateformatcheck) | Field | ✅ | ✅ | Date format validation | field, format |
+| [InlineRegexCheck](#12-inlineregexcheck) | Field | ✅ | ✅ | Quick inline regex | field, pattern |
+| [DuplicateRowCheck](#13-duplicaterowcheck) | Record | ✅ | ✅ | Find duplicate records | key_fields |
+| [BlankRecordCheck](#14-blankrecordcheck) | Record | ✅ | ✅ | Detect empty rows | None |
+| [UniqueKeyCheck](#15-uniquekeycheck) | Record | ✅ | ✅ | Primary key uniqueness | key_fields |
+| [CompletenessCheck](#16-completenesscheck) | Advanced | ✅ | ✅ | Field completeness % | field, min_completeness |
+| [StatisticalOutlierCheck](#17-statisticaloutliercheck) | Advanced | ✅ | ✅ | Detect anomalies | field, method, threshold |
+| [CrossFieldComparisonCheck](#18-crossfieldcomparisoncheck) | Advanced | ✅ | ✅ | Field relationships | field_a, operator, field_b |
+| [FreshnessCheck](#19-freshnesscheck) | Advanced | ✅ | ✅ | Data recency validation | timestamp_field, max_age_hours |
+| [StringLengthCheck](#20-stringlengthcheck) | Advanced | ✅ | ✅ | String length constraints | field, min_length, max_length |
+| [NumericPrecisionCheck](#21-numericprecisioncheck) | Advanced | ✅ | ✅ | Decimal precision | field, max_decimals |
+| [InlineBusinessRuleCheck](#22-inlinebusinessrulecheck) | Advanced | ✅ | ✅ | Custom business rules | expression, message |
+| [InlineLookupCheck](#23-inlinelookupcheck) | Advanced | ✅ | ✅ | Inline reference data | field, lookup_values |
+| [ReferentialIntegrityCheck](#24-referentialintegritycheck) | Cross-File | ✅ | ❌ | Foreign key validation | local_field, reference_file |
+| [CrossFileComparisonCheck](#25-crossfilecomparisoncheck) | Cross-File | ✅ | ❌ | Compare metrics | metric, field, reference_file |
+| [CrossFileDuplicateCheck](#26-crossfileduplicatecheck) | Cross-File | ✅ | ❌ | Cross-file duplicates | key_fields, reference_files |
+| [CrossFileKeyCheck](#27-crossfilekeycheck) | Cross-File | ✅ | ❌ | Cross-file key analysis | foreign_key, reference_file |
+| [ConditionalValidation](#28-conditionalvalidation) | Conditional | ✅ | ✅ | If-then-else logic | condition, validations |
+| [DatabaseConstraintCheck](#29-databaseconstraintcheck) | Database | ❌ | ✅ | DB constraint validation | connection_string, constraints |
+| [DatabaseReferentialIntegrityCheck](#30-databasereferentialintegritycheck) | Database | ❌ | ✅ | DB foreign keys | connection_string, reference_table |
+| [SQLCustomCheck](#31-sqlcustomcheck) | Database | ❌ | ✅ | Custom SQL queries | connection_string, query |
+| [BaselineComparisonCheck](#32-baselinecomparisoncheck) | Temporal | ✅ | ❌ | Historical comparison | metric, baseline_file |
+| [TrendDetectionCheck](#33-trenddetectioncheck) | Temporal | ✅ | ❌ | Detect unusual trends | timestamp_field, value_field |
+| [DistributionCheck](#34-distributioncheck) | Statistical | ✅ | ✅ | Statistical distributions | field, distribution_type |
+| [CorrelationCheck](#35-correlationcheck) | Statistical | ✅ | ✅ | Field correlations | field_a, field_b, method |
+| [AdvancedAnomalyDetectionCheck](#36-advancedanomalydetectioncheck) | Statistical | ✅ | ✅ | ML-based anomaly detection | fields, method, contamination |
 
 ---
 
@@ -210,6 +211,42 @@ Validate file-level properties like existence, size, and row counts.
 - Use to catch malformed files early in processing
 - Set max size to prevent memory issues with very large files
 - Combine with RowCountRangeCheck for comprehensive volume validation
+
+---
+
+#### 4. CSVFormatCheck
+
+**Description:** Validates CSV file format integrity before processing. Detects malformed files with inconsistent column counts, delimiter issues, and encoding problems.
+
+**Source Compatibility:** 📁 CSV files only
+
+**Parameters:**
+- `delimiter` (string, optional) - Expected delimiter character. Auto-detected if not specified.
+- `sample_rows` (number, optional, default: `1000`) - Number of rows to check for consistency
+- `max_errors` (number, optional, default: `10`) - Maximum formatting errors before failing
+
+**YAML Example:**
+
+```yaml
+- type: "CSVFormatCheck"
+  severity: "ERROR"
+  params:
+    delimiter: ","
+    sample_rows: 5000
+    max_errors: 5
+```
+
+**Use Cases:**
+- Detect malformed CSV files before processing
+- Catch delimiter mismatches (e.g., pipe-delimited file parsed as comma-delimited)
+- Identify quoting issues and unescaped delimiters in fields
+- Validate encoding compatibility
+
+**Tips:**
+- Run this check first before other validations to catch format issues early
+- Auto-detection works for common delimiters (comma, tab, pipe, semicolon)
+- If you know the delimiter, specify it explicitly for faster validation
+- High error rates (>10%) indicate fundamental format problems
 
 ---
 
