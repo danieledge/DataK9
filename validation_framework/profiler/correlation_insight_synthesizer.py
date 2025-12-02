@@ -59,6 +59,18 @@ class CorrelationInsightSynthesizer:
             return self.field_descriptions[col].get('friendly_name', col)
         return col
 
+    def get_value_label(self, col: str, value) -> str:
+        """Get friendly label for a column value, if configured."""
+        if col in self.field_descriptions:
+            value_labels = self.field_descriptions[col].get('value_labels', {})
+            # Try exact match first, then string conversion
+            if value in value_labels:
+                return value_labels[value]
+            str_val = str(value)
+            if str_val in value_labels:
+                return value_labels[str_val]
+        return str(value)
+
     def synthesize_all(
         self,
         correlation_results: List[Dict],
@@ -258,14 +270,9 @@ class CorrelationInsightSynthesizer:
         # Calculate ratio
         ratio = highest_val / lowest_val if lowest_val > 0 else None
 
-        # Format group labels - use friendly segment name with value
-        def format_group_label(group_val, col_name):
-            """Format as 'ColumnName: value' for clarity."""
-            friendly_col = self.get_friendly_name(col_name)
-            return f"{friendly_col} = {group_val}"
-
-        highest_label = format_group_label(highest_group, seg_col)
-        lowest_label = format_group_label(lowest_group, seg_col)
+        # Format group labels - use value_labels if configured, otherwise generic
+        highest_label = self.get_value_label(seg_col, highest_group)
+        lowest_label = self.get_value_label(seg_col, lowest_group)
 
         # Generate headline
         if ratio and ratio > 1.5:
@@ -273,12 +280,12 @@ class CorrelationInsightSynthesizer:
         else:
             headline = f"{friendly_val} varies significantly by {friendly_seg}"
 
-        # Build comparison data for all groups - just use raw value for bar labels
+        # Build comparison data for all groups - use value_labels if configured
         comparison_data = []
         max_val = group_stats['median'].max()
         for group_name, row in group_stats.iterrows():
             comparison_data.append({
-                'label': str(group_name),
+                'label': self.get_value_label(seg_col, group_name),
                 'value': row['median'],
                 'percentage': (row['median'] / max_val * 100) if max_val > 0 else 0,
                 'formatted': self._format_value(row['median'], val_col),
