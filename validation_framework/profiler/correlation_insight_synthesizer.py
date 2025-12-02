@@ -146,26 +146,53 @@ class CorrelationInsightSynthesizer:
         low_median = col2_when_low.median()
         high_median = col2_when_high.median()
 
-        # Calculate ratio - always compare high to low for simplicity
+        # Calculate ratio and determine which group has higher col2 values
         if low_median > 0 and high_median > 0:
-            if high_median > low_median:
+            if high_median >= low_median:
                 ratio = high_median / low_median
+                top_label = f"{friendly1} (top 25%)"
+                top_val = high_median
+                bottom_label = f"{friendly1} (bottom 25%)"
+                bottom_val = low_median
             else:
                 ratio = low_median / high_median
+                top_label = f"{friendly1} (bottom 25%)"
+                top_val = low_median
+                bottom_label = f"{friendly1} (top 25%)"
+                bottom_val = high_median
         else:
             ratio = None
+            top_label = bottom_label = ""
+            top_val = bottom_val = 0
 
-        # Generate headline - simple correlation statement
+        # Generate headline
         r_squared = r ** 2
         direction = "increases" if r > 0 else "decreases"
         headline = f"As {friendly1} increases, {friendly2} {direction}"
 
-        # No comparison bars for numeric correlations - they're continuous, not categorical
+        # Build comparison bars showing quartile differences
         comparison_data = []
+        if ratio and ratio > 1:
+            comparison_data = [
+                {
+                    'label': top_label,
+                    'value': top_val,
+                    'percentage': 100,
+                    'formatted': self._format_value(top_val, col2)
+                },
+                {
+                    'label': bottom_label,
+                    'value': bottom_val,
+                    'percentage': (bottom_val / top_val * 100) if top_val > 0 else 0,
+                    'formatted': self._format_value(bottom_val, col2)
+                }
+            ]
 
         # Calculate metrics
+        pct_diff = ((top_val - bottom_val) / bottom_val * 100) if bottom_val > 0 else 0
         metrics = {
             'ratio': ratio,
+            'percentage_difference': pct_diff,
             'r_squared': r_squared,
             'n_observations': n_obs
         }
