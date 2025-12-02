@@ -111,6 +111,8 @@ validation_summary.json
 *.json
 # Exception: validation definitions needed for Studio
 !validation_definitions.json
+# Exception: taxonomy files needed for profiler
+!validation_framework/profiler/taxonomies/*.json
 # Exception: sample reports for GitHub Pages viewing
 !examples/sample_reports/*.html
 

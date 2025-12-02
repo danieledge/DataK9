@@ -1,0 +1,463 @@
+{
+  "metadata": {
+    "version": "1.0.0",
+    "description": "Schema.org general semantic taxonomy for DataK9 profiler",
+    "source": "Derived from Schema.org vocabulary",
+    "schema_org_version": "26.0",
+    "schema_org_url": "https://schema.org/",
+    "license": "Creative Commons Attribution-ShareAlike 3.0",
+    "created": "2025-11-29",
+    "note": "This taxonomy provides general-purpose semantic types applicable to any domain. FIBO financial semantics take priority when both match with high confidence."
+  },
+  "taxonomy": {
+    "identifier": {
+      "description": "Unique identifiers, codes, and references",
+      "tags": {
+        "schema:identifier": {
+          "schema_class": "schema:identifier",
+          "definition": "A unique identifier for a thing",
+          "display_label": "Identifier",
+          "patterns": [
+            "(?i)^.*(_id|id_|_key|key_).*$",
+            "(?i)^(id|key|ref|reference|code|number|num|no)$",
+            "(?i)^.*_(id|key|ref|code|num|no|number)$",
+            "(?i)^(passenger|customer|user|order|ticket|invoice|product|item|employee|account|transaction|record).*id$"
+          ],
+          "data_properties": {
+            "cardinality_min": 0.5
+          },
+          "priority": 90
+        },
+        "schema:PropertyValue": {
+          "schema_class": "schema:PropertyValue",
+          "definition": "A property-value pair representing a feature of a product or place",
+          "display_label": "Property value",
+          "patterns": [
+            "(?i)^.*_(code|type|class|category|level|grade|tier|rank)$",
+            "(?i)^(class|type|category|level|grade|tier|rank)$"
+          ],
+          "data_properties": {
+            "cardinality_max": 0.3
+          },
+          "priority": 70
+        },
+        "schema:URL": {
+          "schema_class": "schema:URL",
+          "definition": "A URL (Uniform Resource Locator)",
+          "display_label": "URL",
+          "patterns": [
+            "(?i)^.*(url|uri|link|href|website|webpage|site).*$"
+          ],
+          "value_patterns": ["^https?://"],
+          "priority": 95
+        }
+      }
+    },
+    "person": {
+      "description": "Person-related attributes",
+      "tags": {
+        "schema:Person": {
+          "schema_class": "schema:Person",
+          "definition": "A person (alive, dead, undead, or fictional)",
+          "display_label": "Person",
+          "patterns": [
+            "(?i)^.*(person|individual|customer|client|user|member|employee|passenger|patient|student|applicant).*$"
+          ],
+          "data_properties": {
+            "type": ["string"]
+          },
+          "priority": 60
+        },
+        "schema:name": {
+          "schema_class": "schema:name",
+          "definition": "The name of the item",
+          "display_label": "Name",
+          "patterns": [
+            "(?i)^(name|full_?name|display_?name|title)$",
+            "(?i)^.*(person|customer|user|passenger|patient|employee|client)_?name$"
+          ],
+          "data_properties": {
+            "type": ["string"],
+            "cardinality_min": 0.3
+          },
+          "priority": 85
+        },
+        "schema:givenName": {
+          "schema_class": "schema:givenName",
+          "definition": "Given name (first name)",
+          "display_label": "First name",
+          "patterns": [
+            "(?i)^(first_?name|given_?name|forename|fname)$"
+          ],
+          "data_properties": {
+            "type": ["string"]
+          },
+          "priority": 88
+        },
+        "schema:familyName": {
+          "schema_class": "schema:familyName",
+          "definition": "Family name (last name)",
+          "display_label": "Last name",
+          "patterns": [
+            "(?i)^(last_?name|family_?name|surname|lname)$"
+          ],
+          "data_properties": {
+            "type": ["string"]
+          },
+          "priority": 88
+        },
+        "schema:GenderType": {
+          "schema_class": "schema:GenderType",
+          "definition": "An enumeration of genders",
+          "display_label": "Gender",
+          "patterns": [
+            "(?i)^(gender|sex)$"
+          ],
+          "data_properties": {
+            "type": ["string", "integer"],
+            "cardinality_max": 0.01
+          },
+          "priority": 92
+        },
+        "schema:birthDate": {
+          "schema_class": "schema:birthDate",
+          "definition": "Date of birth",
+          "display_label": "Birth date",
+          "patterns": [
+            "(?i)^(birth_?date|dob|date_?of_?birth|birthday)$"
+          ],
+          "data_properties": {
+            "type": ["datetime", "date", "string"]
+          },
+          "priority": 90
+        }
+      }
+    },
+    "numeric": {
+      "description": "Numeric values and quantities",
+      "tags": {
+        "schema:MonetaryAmount": {
+          "schema_class": "schema:MonetaryAmount",
+          "definition": "A monetary value or range",
+          "display_label": "Monetary amount",
+          "patterns": [
+            "(?i)^.*(amount|price|cost|fee|charge|payment|balance|total|sum|revenue|income|expense|salary|wage|fare|rate|premium|value).*$",
+            "(?i)^.*(usd|eur|gbp|jpy|cny|inr|aud|cad|chf).*$"
+          ],
+          "data_properties": {
+            "type": ["float", "decimal", "integer"],
+            "min_value": 0
+          },
+          "priority": 85
+        },
+        "schema:QuantitativeValue": {
+          "schema_class": "schema:QuantitativeValue",
+          "definition": "A point value or interval for product characteristics",
+          "display_label": "Quantity",
+          "patterns": [
+            "(?i)^.*(count|qty|quantity|num|number|total|size|length|width|height|weight|age|score|rating|rank|level|points|units|items).*$",
+            "(?i)^(sib|par|child|spouse|depend|member|parch|sibsp).*$"
+          ],
+          "data_properties": {
+            "type": ["integer", "float"]
+          },
+          "priority": 70
+        },
+        "schema:Number": {
+          "schema_class": "schema:Number",
+          "definition": "A number (integer or float)",
+          "display_label": "Numeric value",
+          "patterns": [],
+          "data_properties": {
+            "type": ["integer", "float", "decimal"]
+          },
+          "priority": 20
+        },
+        "schema:Integer": {
+          "schema_class": "schema:Integer",
+          "definition": "An integer value",
+          "display_label": "Integer",
+          "patterns": [],
+          "data_properties": {
+            "type": ["integer"]
+          },
+          "priority": 15
+        }
+      }
+    },
+    "categorical": {
+      "description": "Categorical and enumerated values",
+      "tags": {
+        "schema:CategoryCode": {
+          "schema_class": "schema:CategoryCode",
+          "definition": "A category code",
+          "display_label": "Category",
+          "patterns": [
+            "(?i)^.*(category|type|class|group|segment|tier|level|grade|status|state|flag|mode|kind|style|format).*$"
+          ],
+          "data_properties": {
+            "cardinality_max": 0.1
+          },
+          "priority": 75
+        },
+        "schema:Enumeration": {
+          "schema_class": "schema:Enumeration",
+          "definition": "An enumeration type",
+          "display_label": "Enumeration",
+          "patterns": [
+            "(?i)^.*(enum|choice|option|selection).*$"
+          ],
+          "data_properties": {
+            "cardinality_max": 0.05
+          },
+          "priority": 65
+        },
+        "schema:Boolean": {
+          "schema_class": "schema:Boolean",
+          "definition": "Boolean: True or False",
+          "display_label": "Boolean",
+          "patterns": [
+            "(?i)^(is_|has_|can_|should_|was_|will_|did_|does_|allow|enable|active|valid|visible|public|private|deleted|archived|approved|confirmed|verified|completed|processed|paid|shipped|delivered|cancelled|refunded|returned).*$",
+            "(?i)^.*(flag|indicator|yn|yes_no|true_false|boolean|bool).*$"
+          ],
+          "data_properties": {
+            "unique_count_max": 3
+          },
+          "priority": 88
+        }
+      }
+    },
+    "temporal": {
+      "description": "Date, time, and duration values",
+      "tags": {
+        "schema:Date": {
+          "schema_class": "schema:Date",
+          "definition": "A date value in ISO 8601 date format",
+          "display_label": "Date",
+          "patterns": [
+            "(?i)^.*(date|day|month|year).*$",
+            "(?i)^.*(_on|_at)$"
+          ],
+          "data_properties": {
+            "type": ["date", "datetime", "string"]
+          },
+          "priority": 80
+        },
+        "schema:DateTime": {
+          "schema_class": "schema:DateTime",
+          "definition": "A combination of date and time of day",
+          "display_label": "Date/Time",
+          "patterns": [
+            "(?i)^.*(datetime|timestamp|time_stamp|created|updated|modified|logged|recorded).*$",
+            "(?i)^.*(_at|_ts|_time)$"
+          ],
+          "data_properties": {
+            "type": ["datetime", "string"]
+          },
+          "priority": 85
+        },
+        "schema:Time": {
+          "schema_class": "schema:Time",
+          "definition": "A point in time recurring on multiple days",
+          "display_label": "Time",
+          "patterns": [
+            "(?i)^(time|hour|minute|second)$",
+            "(?i)^.*(start_time|end_time|arrival_time|departure_time).*$"
+          ],
+          "data_properties": {
+            "type": ["time", "string"]
+          },
+          "priority": 82
+        },
+        "schema:Duration": {
+          "schema_class": "schema:Duration",
+          "definition": "Quantity of time or a particular time interval",
+          "display_label": "Duration",
+          "patterns": [
+            "(?i)^.*(duration|elapsed|period|span|length|interval).*$",
+            "(?i)^.*(hours|minutes|seconds|days|weeks|months|years)$"
+          ],
+          "data_properties": {
+            "type": ["integer", "float", "string"]
+          },
+          "priority": 78
+        }
+      }
+    },
+    "location": {
+      "description": "Geographic and location data",
+      "tags": {
+        "schema:Place": {
+          "schema_class": "schema:Place",
+          "definition": "Entities that have a somewhat fixed, physical extension",
+          "display_label": "Place",
+          "patterns": [
+            "(?i)^.*(location|place|site|venue|destination|origin|port|station|terminal|airport|city|town|region|area|zone).*$"
+          ],
+          "data_properties": {
+            "type": ["string"]
+          },
+          "priority": 72
+        },
+        "schema:PostalAddress": {
+          "schema_class": "schema:PostalAddress",
+          "definition": "A mailing address",
+          "display_label": "Address",
+          "patterns": [
+            "(?i)^.*(address|street|road|avenue|blvd|lane|drive|apt|suite|unit|floor|building).*$"
+          ],
+          "data_properties": {
+            "type": ["string"]
+          },
+          "priority": 80
+        },
+        "schema:addressLocality": {
+          "schema_class": "schema:addressLocality",
+          "definition": "The locality (city)",
+          "display_label": "City",
+          "patterns": [
+            "(?i)^(city|town|locality|municipality|village)$"
+          ],
+          "data_properties": {
+            "type": ["string"]
+          },
+          "priority": 85
+        },
+        "schema:addressRegion": {
+          "schema_class": "schema:addressRegion",
+          "definition": "The region (state or province)",
+          "display_label": "State/Region",
+          "patterns": [
+            "(?i)^(state|province|region|county|district|territory)$"
+          ],
+          "data_properties": {
+            "type": ["string"]
+          },
+          "priority": 85
+        },
+        "schema:addressCountry": {
+          "schema_class": "schema:addressCountry",
+          "definition": "The country",
+          "display_label": "Country",
+          "patterns": [
+            "(?i)^(country|nation|country_code|country_name)$"
+          ],
+          "data_properties": {
+            "type": ["string"]
+          },
+          "priority": 88
+        },
+        "schema:postalCode": {
+          "schema_class": "schema:postalCode",
+          "definition": "The postal code",
+          "display_label": "Postal code",
+          "patterns": [
+            "(?i)^(zip|zip_?code|postal|postal_?code|postcode)$"
+          ],
+          "data_properties": {
+            "type": ["string", "integer"]
+          },
+          "priority": 90
+        },
+        "schema:GeoCoordinates": {
+          "schema_class": "schema:GeoCoordinates",
+          "definition": "Geographic coordinates of a place or event",
+          "display_label": "Coordinates",
+          "patterns": [
+            "(?i)^(lat|latitude|lon|long|longitude|coords|coordinates|geo).*$"
+          ],
+          "data_properties": {
+            "type": ["float", "decimal"]
+          },
+          "priority": 88
+        }
+      }
+    },
+    "text": {
+      "description": "Free-form text and descriptions",
+      "tags": {
+        "schema:description": {
+          "schema_class": "schema:description",
+          "definition": "A description of the item",
+          "display_label": "Description",
+          "patterns": [
+            "(?i)^.*(description|desc|details|notes|comments|remarks|summary|abstract|overview|bio|about).*$"
+          ],
+          "data_properties": {
+            "type": ["string"],
+            "avg_length_min": 50
+          },
+          "priority": 75
+        },
+        "schema:Text": {
+          "schema_class": "schema:Text",
+          "definition": "Data type for text",
+          "display_label": "Text",
+          "patterns": [],
+          "data_properties": {
+            "type": ["string"]
+          },
+          "priority": 10
+        }
+      }
+    },
+    "contact": {
+      "description": "Contact information",
+      "tags": {
+        "schema:email": {
+          "schema_class": "schema:email",
+          "definition": "Email address",
+          "display_label": "Email",
+          "patterns": [
+            "(?i)^.*(email|e_mail|mail|email_address).*$"
+          ],
+          "value_patterns": ["@"],
+          "priority": 92
+        },
+        "schema:telephone": {
+          "schema_class": "schema:telephone",
+          "definition": "The telephone number",
+          "display_label": "Phone",
+          "patterns": [
+            "(?i)^.*(phone|telephone|tel|mobile|cell|fax|contact_number).*$"
+          ],
+          "priority": 90
+        }
+      }
+    },
+    "event": {
+      "description": "Events and occurrences",
+      "tags": {
+        "schema:Event": {
+          "schema_class": "schema:Event",
+          "definition": "An event happening at a certain time and location",
+          "display_label": "Event",
+          "patterns": [
+            "(?i)^.*(event|occurrence|incident|activity|action|operation).*$"
+          ],
+          "data_properties": {
+            "type": ["string"]
+          },
+          "priority": 60
+        }
+      }
+    },
+    "organization": {
+      "description": "Organizations and companies",
+      "tags": {
+        "schema:Organization": {
+          "schema_class": "schema:Organization",
+          "definition": "An organization such as a company",
+          "display_label": "Organization",
+          "patterns": [
+            "(?i)^.*(company|organization|org|corporation|firm|agency|institution|entity|business|employer|vendor|supplier|merchant).*$"
+          ],
+          "data_properties": {
+            "type": ["string"]
+          },
+          "priority": 70
+        }
+      }
+    }
+  }
+}
