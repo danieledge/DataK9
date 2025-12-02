@@ -1,11 +1,15 @@
 """
-Integration test for Phase 2 profiler enhancements.
+Integration tests for profiler enhancements.
 
 Tests that temporal analysis, PII detection, and enhanced correlation
-work correctly when enabled via DataProfiler flags.
+features work correctly when enabled via DataProfiler flags.
 
-Author: Daniel Edge
-Date: 2025-11-22
+These tests verify:
+- Temporal analysis detects date patterns, gaps, and frequencies
+- PII detection identifies email, phone, and name patterns
+- Enhanced correlation finds relationships between columns
+- Features can be individually enabled/disabled
+- JSON serialization works with all features
 """
 
 import pytest
@@ -21,8 +25,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from validation_framework.profiler.engine import DataProfiler
 
 
-class TestPhase2Integration:
-    """Integration tests for Phase 2 profiler enhancements."""
+class TestProfilerEnhancements:
+    """Integration tests for profiler enhancement features."""
 
     @pytest.fixture
     def sample_data_with_datetime(self):

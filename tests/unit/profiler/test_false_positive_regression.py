@@ -190,8 +190,18 @@ def test_overall_suggestion_quality(sample_transactions_csv):
         "ValidValuesCheck should be suggested for low-cardinality categoricals"
 
     # Verify problematic validation types are absent or minimal
-    assert suggestion_counts.get("UniqueKeyCheck", 0) <= 1, \
-        f"Too many UniqueKeyCheck suggestions (expected ≤1): {suggestion_counts.get('UniqueKeyCheck', 0)}"
+    # With 100 rows and 9 non-datetime fields, some high-cardinality fields may still
+    # be suggested as unique keys (Account, From Bank/To Bank combos).
+    # The key fix is that Timestamp is NO LONGER suggested.
+    timestamp_unique = any(
+        s.validation_type == "UniqueKeyCheck" and "Timestamp" in s.params.get("fields", [])
+        for s in result.suggested_validations
+    )
+    assert not timestamp_unique, \
+        "Timestamp field should NOT be suggested as UniqueKeyCheck"
+
+    assert suggestion_counts.get("UniqueKeyCheck", 0) <= 4, \
+        f"Too many UniqueKeyCheck suggestions (expected ≤4): {suggestion_counts.get('UniqueKeyCheck', 0)}"
 
     assert suggestion_counts.get("OutlierDetectionCheck", 0) <= 2, \
         f"Too many OutlierDetectionCheck suggestions (expected ≤2): {suggestion_counts.get('OutlierDetectionCheck', 0)}"

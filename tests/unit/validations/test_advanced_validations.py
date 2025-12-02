@@ -78,8 +78,12 @@ class TestStatisticalOutlierCheck:
         # Should detect outliers beyond IQR boundaries
         assert result.failed_count >= 0  # May or may not detect depending on distribution
 
-    def test_outlier_with_no_outliers(self, clean_dataframe):
+    def test_outlier_with_no_outliers(self, clean_dataframe, tmp_path):
         """Test outlier detection on clean data."""
+        # Z-score method requires two passes, so write to file for proper testing
+        csv_path = tmp_path / "clean_data.csv"
+        clean_dataframe.to_csv(csv_path, index=False)
+
         validation = StatisticalOutlierCheck(
             name="NoOutliers",
             severity=Severity.WARNING,
@@ -90,7 +94,9 @@ class TestStatisticalOutlierCheck:
             }
         )
 
-        result = validation.validate(create_data_iterator(clean_dataframe), {})
+        # Provide file_config for two-pass algorithm
+        context = {'file_config': {'path': str(csv_path)}}
+        result = validation.validate(create_data_iterator(clean_dataframe), context)
 
         # Clean data should have no outliers
         assert result.passed is True or result.failed_count == 0

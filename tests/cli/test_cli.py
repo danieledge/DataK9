@@ -249,9 +249,10 @@ class TestValidateCommand:
         with tempfile.TemporaryDirectory() as temp_dir:
             log_path = Path(temp_dir) / "validation.log"
 
+            # Use INFO log level to ensure log content is generated
             result = cli_runner.invoke(
                 cli,
-                ['validate', sample_cli_config, '--log-file', str(log_path)]
+                ['validate', sample_cli_config, '--log-file', str(log_path), '--log-level', 'INFO']
             )
 
             assert result.exit_code == 0
