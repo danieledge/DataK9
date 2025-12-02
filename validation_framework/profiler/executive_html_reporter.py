@@ -694,7 +694,7 @@ class ExecutiveHTMLReporter:
             </div>
             <div class="section-accordion-content">
                 <!-- Column Relationships / Correlations -->
-                {self._generate_correlations_section(profile.correlations, field_descriptions, context_store) if profile.correlations else '<p style="color: var(--text-muted);">No significant correlations detected.</p>'}
+                {self._generate_correlations_section(profile.correlations, field_descriptions, context_store, profile.ml_findings) if profile.correlations else '<p style="color: var(--text-muted);">No significant correlations detected.</p>'}
 
                 <!-- Correlation Visualizations (relocated from Advanced Visualizations) -->
                 {correlation_charts}
@@ -5443,8 +5443,8 @@ class ExecutiveHTMLReporter:
             </div>
         </section>'''
 
-    def _generate_correlations_section(self, correlations: List, field_descriptions: Dict = None, context_store: Dict = None) -> str:
-        """Generate column correlations/associations section with dual-view."""
+    def _generate_correlations_section(self, correlations: List, field_descriptions: Dict = None, context_store: Dict = None, ml_findings: Dict = None) -> str:
+        """Generate column correlations/associations section with insight-driven cards."""
         if not correlations:
             return ''
 
@@ -5454,6 +5454,16 @@ class ExecutiveHTMLReporter:
                 return field_descriptions[col].get('friendly_name', col)
             return col
 
+        # Check if we have synthesized insights from CorrelationInsightSynthesizer
+        correlation_insights = None
+        if ml_findings and 'correlation_insights' in ml_findings:
+            correlation_insights = ml_findings['correlation_insights']
+
+        # If we have synthesized insights, use the new card layout
+        if correlation_insights and len(correlation_insights) > 0:
+            return self._generate_insight_cards_section(correlation_insights, field_descriptions, context_store)
+
+        # Fallback to original implementation if no insights available
         # Get correlations used for context-aware validation
         context_correlations = set()
         if context_store:
@@ -5466,7 +5476,6 @@ class ExecutiveHTMLReporter:
         seen = {}
         for c in correlations:
             if not isinstance(c, dict):
-                # Handle CorrelationResult objects
                 c = {
                     'column1': getattr(c, 'column1', ''),
                     'column2': getattr(c, 'column2', ''),
@@ -5480,152 +5489,15 @@ class ExecutiveHTMLReporter:
             if key not in seen or corr_val > abs(seen[key].get('correlation', 0)):
                 seen[key] = c
 
-        # Sort by absolute correlation strength
         unique_correlations = sorted(seen.values(), key=lambda x: abs(x.get('correlation', 0)), reverse=True)
-
         if not unique_correlations:
             return ''
 
-        # Build correlation items with plain English and technical views
-        items_html = []
-        for rank, c in enumerate(unique_correlations, 1):  # Show all correlations with rank
-            col1_raw = c.get('column1', '')
-            col2_raw = c.get('column2', '')
-            col1 = get_friendly(col1_raw)
-            col2 = get_friendly(col2_raw)
-            corr = c.get('correlation', 0)
-            strength = c.get('strength', 'moderate') or 'moderate'
-            direction = c.get('direction', 'positive' if corr > 0 else 'negative')
-            method = c.get('type', 'pearson')
-
-            # Color based on strength
-            if abs(corr) >= 0.7:
-                color = '#dc2626' if corr < 0 else '#059669'
-                bg = 'rgba(220, 38, 38, 0.08)' if corr < 0 else 'rgba(5, 150, 105, 0.08)'
-                strength_label = 'Strong'
-            elif abs(corr) >= 0.5:
-                color = '#ea580c' if corr < 0 else '#0284c7'
-                bg = 'rgba(234, 88, 12, 0.08)' if corr < 0 else 'rgba(2, 132, 199, 0.08)'
-                strength_label = 'Moderate'
-            else:
-                color = '#6b7280'
-                bg = 'rgba(107, 114, 128, 0.08)'
-                strength_label = 'Weak'
-
-            arrow = '↓' if corr < 0 else '↑'
-
-            # Check if this correlation was used in context-aware anomaly filtering
-            pair_key = tuple(sorted([col1_raw, col2_raw]))
-            used_for_context = pair_key in context_correlations
-
-            # Plain English explanation
-            if corr < 0:
-                plain_english = f"When <strong>{col1}</strong> increases, <strong>{col2}</strong> tends to decrease (and vice versa)."
-                if used_for_context:
-                    business_insight = "This inverse relationship was used to filter false-positive anomalies — values that seemed unusual in isolation but are normal given this correlation."
-                else:
-                    business_insight = "These columns move in opposite directions - this inverse relationship may indicate a trade-off or constraint in your data."
-            else:
-                plain_english = f"When <strong>{col1}</strong> increases, <strong>{col2}</strong> also tends to increase."
-                if used_for_context:
-                    business_insight = "This relationship was used to filter false-positive anomalies — values that seemed unusual in isolation but are normal given this correlation."
-                else:
-                    business_insight = "These columns move together - they may be derived from the same source, or one may influence the other."
-
-            # Context-aware badge
-            context_badge = ''
-            if used_for_context:
-                context_badge = '''<div style="position: absolute; top: 12px; left: 12px; background: linear-gradient(135deg, #10b981, #059669); color: white; padding: 4px 10px; border-radius: 12px; font-size: 0.7em; font-weight: 600; display: flex; align-items: center; gap: 4px;">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:12px;height:12px"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-                    Used in Anomaly Filtering
-                </div>'''
-
-            # Technical details
-            r_squared = corr ** 2
-            variance_explained = f"{r_squared * 100:.1f}%"
-
-            items_html.append(f'''
-                <div class="correlation-card" style="background: var(--bg-card); border-radius: 12px; border-left: 4px solid {color}; margin-bottom: 16px; overflow: hidden; position: relative; border: 1px solid var(--border-subtle);">
-                    <!-- Context Badge (if used for anomaly filtering) -->
-                    {context_badge}
-                    <!-- Rank Badge -->
-                    <div style="position: absolute; top: 12px; right: 12px; background: {color}; color: white; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.85em;">#{rank}</div>
-                    <!-- Header -->
-                    <div style="padding: 16px 20px; display: flex; align-items: center; gap: 14px;">
-                        <div style="font-size: 1.8em; color: {color};">{arrow}</div>
-                        <div style="flex: 1;">
-                            <div style="font-weight: 700; color: var(--text-primary); font-size: 1.1em;">
-                                {col1} <span style="color: var(--text-muted); font-weight: 400;">↔</span> {col2}
-                            </div>
-                            <div style="font-size: 0.85em; color: var(--text-secondary); margin-top: 4px;">
-                                {strength_label} {direction} relationship
-                            </div>
-                        </div>
-                        <div style="text-align: right;">
-                            <div style="font-weight: 800; font-size: 1.4em; color: {color};">{corr:+.2f}</div>
-                            <div style="font-size: 0.75em; color: var(--text-muted);">correlation</div>
-                        </div>
-                    </div>
-
-                    <!-- Dual View Tabs -->
-                    <div style="border-top: 1px solid var(--border-subtle);">
-                        <div class="dual-view-tabs" style="display: flex; border-bottom: 1px solid var(--border-subtle);">
-                            <button class="tab-btn active" onclick="this.parentElement.nextElementSibling.querySelector('.plain-view').style.display='block'; this.parentElement.nextElementSibling.querySelector('.tech-view').style.display='none'; this.classList.add('active'); this.nextElementSibling.classList.remove('active');"
-                                style="flex: 1; padding: 10px; border: none; background: var(--bg-card); cursor: pointer; font-size: 0.85em; font-weight: 600; color: #818cf8; border-bottom: 2px solid #818cf8;">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;vertical-align:-2px;margin-right:4px"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg> Plain English
-                            </button>
-                            <button class="tab-btn" onclick="this.parentElement.nextElementSibling.querySelector('.plain-view').style.display='none'; this.parentElement.nextElementSibling.querySelector('.tech-view').style.display='block'; this.classList.add('active'); this.previousElementSibling.classList.remove('active');"
-                                style="flex: 1; padding: 10px; border: none; background: var(--bg-primary); cursor: pointer; font-size: 0.85em; font-weight: 500; color: var(--text-secondary); border-bottom: 2px solid transparent;">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;vertical-align:-2px;margin-right:4px"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg> Technical Details
-                            </button>
-                        </div>
-                        <div class="tab-content" style="padding: 16px 20px; background: var(--bg-card);">
-                            <!-- Plain English View -->
-                            <div class="plain-view">
-                                <p style="margin: 0 0 10px 0; color: var(--text-primary); line-height: 1.6;">{plain_english}</p>
-                                <div style="background: rgba(245, 158, 11, 0.15); padding: 12px; border-radius: 8px; border-left: 3px solid #f59e0b;">
-                                    <div style="font-size: 0.8em; color: #fbbf24; font-weight: 600; margin-bottom: 4px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;vertical-align:-1px;margin-right:3px"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> What This Means</div>
-                                    <p style="margin: 0; font-size: 0.9em; color: var(--text-secondary);">{business_insight}</p>
-                                </div>
-                            </div>
-                            <!-- Technical View -->
-                            <div class="tech-view" style="display: none;">
-                                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;">
-                                    <div style="background: var(--bg-primary); padding: 12px; border-radius: 8px; border: 1px solid var(--border-subtle);">
-                                        <div style="font-size: 0.75em; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">Coefficient</div>
-                                        <div style="font-size: 1.2em; font-weight: 700; color: var(--text-primary);">{corr:+.4f}</div>
-                                    </div>
-                                    <div style="background: var(--bg-primary); padding: 12px; border-radius: 8px; border: 1px solid var(--border-subtle);">
-                                        <div style="font-size: 0.75em; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">R² (Variance Explained)</div>
-                                        <div style="font-size: 1.2em; font-weight: 700; color: var(--text-primary);">{variance_explained}</div>
-                                    </div>
-                                    <div style="background: var(--bg-primary); padding: 12px; border-radius: 8px; border: 1px solid var(--border-subtle);">
-                                        <div style="font-size: 0.75em; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">Method</div>
-                                        <div style="font-size: 1.2em; font-weight: 700; color: var(--text-primary);">{method.title()}</div>
-                                    </div>
-                                    <div style="background: var(--bg-primary); padding: 12px; border-radius: 8px; border: 1px solid var(--border-subtle);">
-                                        <div style="font-size: 0.75em; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">Strength</div>
-                                        <div style="font-size: 1.2em; font-weight: 700; color: {color};">{strength_label}</div>
-                                    </div>
-                                </div>
-                                <div style="margin-top: 12px; padding: 10px 12px; background: var(--bg-primary); border-radius: 6px; border: 1px solid var(--border-subtle);">
-                                    <code style="font-size: 0.8em; color: var(--text-secondary);">corr({col1}, {col2}) = {corr:+.4f}</code>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            ''')
-
-        # Build unified list of all relationships (both categorical groupings and numeric correlations)
-        # sorted by strength (variance explained for subgroups, r² for correlations)
+        # Build unified list of all relationships
         subgroups = context_store.get('subgroups', []) if context_store else []
         has_context_patterns = context_correlations or subgroups
-
-        # Create unified relationship items
         all_relationships = []
 
-        # Add subgroups (categorical groupings)
         for sg in subgroups:
             seg_col = sg.get('segment_col', '')
             val_col = sg.get('value_col', '')
@@ -5641,7 +5513,6 @@ class ExecutiveHTMLReporter:
                 'variance_explained': var_explained
             })
 
-        # Add numeric correlations
         for c in unique_correlations:
             col1_raw = c.get('column1', '')
             col2_raw = c.get('column2', '')
@@ -5660,10 +5531,8 @@ class ExecutiveHTMLReporter:
                 'method': c.get('type', 'pearson')
             })
 
-        # Sort by strength (highest first)
         all_relationships.sort(key=lambda x: x['strength'], reverse=True)
 
-        # Helper to get strength tier
         def get_strength_tier(pct):
             if pct >= 0.50:
                 return ('Very Strong', '#dc2626', '🔥')
@@ -5676,7 +5545,6 @@ class ExecutiveHTMLReporter:
             else:
                 return ('Minimal', '#9ca3af', '○')
 
-        # Count relationships by strength for summary
         very_strong = sum(1 for r in all_relationships if r['strength'] >= 0.50)
         strong = sum(1 for r in all_relationships if 0.30 <= r['strength'] < 0.50)
         moderate = sum(1 for r in all_relationships if 0.15 <= r['strength'] < 0.30)
@@ -5842,6 +5710,231 @@ class ExecutiveHTMLReporter:
             {context_notice}
             <div style="display: flex; flex-direction: column; gap: 0;">
                 {''.join(relationship_cards)}
+            </div>
+        '''
+
+    def _generate_insight_cards_section(self, insights: List[Dict], field_descriptions: Dict = None, context_store: Dict = None) -> str:
+        """Generate new insight-driven correlation cards with comparison bars and metric pills."""
+        if not insights:
+            return ''
+
+        def get_friendly(col):
+            if field_descriptions and col in field_descriptions:
+                return field_descriptions[col].get('friendly_name', col)
+            return col
+
+        # Get context correlations for badge display
+        context_correlations = set()
+        if context_store:
+            for corr in context_store.get('correlations', []):
+                col1 = corr.get('col1', '')
+                col2 = corr.get('col2', '')
+                context_correlations.add(tuple(sorted([col1, col2])))
+
+        # Sort insights by priority score
+        sorted_insights = sorted(insights, key=lambda x: x.get('priority_score', 0), reverse=True)
+
+        # Summary stats
+        high_priority = sum(1 for i in sorted_insights if i.get('priority_score', 0) >= 70)
+        medium_priority = sum(1 for i in sorted_insights if 40 <= i.get('priority_score', 0) < 70)
+        total = len(sorted_insights)
+
+        # Build insight cards
+        cards_html = []
+        for rank, insight in enumerate(sorted_insights, 1):
+            col1 = insight.get('column1', '')
+            col2 = insight.get('column2', '')
+            friendly1 = get_friendly(col1)
+            friendly2 = get_friendly(col2)
+            rel_type = insight.get('relationship_type', '')
+            headline = insight.get('headline', '')
+            comparison_data = insight.get('comparison_data', [])
+            metrics = insight.get('metrics', {})
+            confidence = insight.get('confidence', 'medium')
+            edge_cases = insight.get('edge_cases', [])
+            priority = insight.get('priority_score', 0)
+            stat_details = insight.get('statistical_details', {})
+
+            # Determine card color based on priority (muted palette)
+            if priority >= 70:
+                accent_color = '#8b5cf6'  # Purple for high priority
+                priority_label = 'Strong Signal'
+            elif priority >= 40:
+                accent_color = '#0ea5e9'  # Sky blue for medium
+                priority_label = 'Notable'
+            else:
+                accent_color = '#6b7280'  # Gray for low
+                priority_label = 'Weak'
+
+            # Check if used in context filtering
+            pair_key = tuple(sorted([col1, col2]))
+            used_for_context = pair_key in context_correlations
+
+            # Context badge
+            context_badge_html = ''
+            if used_for_context:
+                context_badge_html = '''<span style="background: linear-gradient(135deg, #10b981, #059669); color: white; padding: 3px 8px; border-radius: 10px; font-size: 0.7em; font-weight: 600; display: inline-flex; align-items: center; gap: 3px; margin-left: 8px;">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:10px;height:10px"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                    Anomaly Filter
+                </span>'''
+
+            # Confidence indicator (dots)
+            confidence_dots = {
+                'high': '<span style="color: #10b981;">●●●</span>',
+                'medium': '<span style="color: #f59e0b;">●●</span><span style="color: #374151;">●</span>',
+                'low': '<span style="color: #ef4444;">●</span><span style="color: #374151;">●●</span>'
+            }
+            confidence_html = confidence_dots.get(confidence, confidence_dots['medium'])
+
+            # Build comparison bars
+            comparison_bars_html = ''
+            if comparison_data:
+                bars = []
+                for item in comparison_data[:4]:  # Max 4 bars
+                    label = item.get('label', '')
+                    value = item.get('value', 0)
+                    pct = item.get('percentage', 0)
+                    formatted = item.get('formatted', str(value))
+                    count = item.get('count', '')
+
+                    count_badge = f'<span style="font-size: 0.7em; color: var(--text-muted); margin-left: 4px;">(n={count})</span>' if count else ''
+
+                    bars.append(f'''
+                        <div style="margin-bottom: 8px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                                <span style="font-size: 0.85em; color: var(--text-primary); font-weight: 500;">{label}{count_badge}</span>
+                                <span style="font-size: 0.9em; font-weight: 600; color: {accent_color};">{formatted}</span>
+                            </div>
+                            <div style="height: 8px; background: var(--bg-primary); border-radius: 4px; overflow: hidden;">
+                                <div style="height: 100%; width: {min(pct, 100):.1f}%; background: linear-gradient(90deg, {accent_color}, {accent_color}99); border-radius: 4px;"></div>
+                            </div>
+                        </div>
+                    ''')
+                comparison_bars_html = f'''
+                    <div style="margin-top: 12px;">
+                        {''.join(bars)}
+                    </div>
+                '''
+
+            # Build metric pills (muted colors)
+            metric_pills = []
+            ratio = metrics.get('ratio')
+            if ratio and ratio > 1:
+                metric_pills.append(f'<span style="background: rgba(139, 92, 246, 0.15); color: #8b5cf6; padding: 4px 10px; border-radius: 12px; font-size: 0.75em; font-weight: 600;">{ratio:.1f}x</span>')
+
+            pct_diff = metrics.get('percentage_difference', 0)
+            if pct_diff > 10:
+                metric_pills.append(f'<span style="background: rgba(14, 165, 233, 0.15); color: #0ea5e9; padding: 4px 10px; border-radius: 12px; font-size: 0.75em; font-weight: 600;">+{pct_diff:.0f}%</span>')
+
+            n_obs = metrics.get('n_observations', 0)
+            if n_obs > 0:
+                metric_pills.append(f'<span style="background: var(--bg-primary); color: var(--text-secondary); padding: 4px 10px; border-radius: 12px; font-size: 0.75em;">n={n_obs:,}</span>')
+
+            metrics_html = f'<div style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px;">{" ".join(metric_pills)}</div>' if metric_pills else ''
+
+            # Edge case warnings
+            edge_case_html = ''
+            if edge_cases:
+                warnings = []
+                for ec in edge_cases[:2]:  # Max 2 warnings
+                    warnings.append(f'''<div style="display: flex; align-items: flex-start; gap: 6px; font-size: 0.8em; color: #f59e0b;">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 14px; height: 14px; flex-shrink: 0; margin-top: 2px;"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                        <span>{ec}</span>
+                    </div>''')
+                edge_case_html = f'''
+                    <div style="margin-top: 12px; padding: 10px; background: rgba(245, 158, 11, 0.1); border-radius: 8px; border-left: 3px solid #f59e0b;">
+                        {''.join(warnings)}
+                    </div>
+                '''
+
+            # Build technical details (collapsible)
+            tech_items = []
+            if stat_details.get('correlation'):
+                tech_items.append(f"Correlation (r): {stat_details['correlation']:+.3f}")
+            if stat_details.get('r_squared'):
+                tech_items.append(f"R² (Variance Explained): {stat_details['r_squared']*100:.1f}%")
+            if stat_details.get('variance_explained'):
+                tech_items.append(f"Variance Explained: {stat_details['variance_explained']*100:.1f}%")
+            if stat_details.get('method'):
+                tech_items.append(f"Method: {stat_details['method'].title()}")
+            if stat_details.get('n_observations'):
+                tech_items.append(f"Sample Size: {stat_details['n_observations']:,}")
+            if stat_details.get('p_value') is not None:
+                tech_items.append(f"p-value: {stat_details['p_value']:.4f}" if stat_details['p_value'] >= 0.0001 else "p-value: < 0.0001")
+
+            tech_details_html = f'''
+                <div class="tech-details-toggle" style="margin-top: 12px;">
+                    <button onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'none' ? 'block' : 'none'; this.querySelector('svg').style.transform = this.nextElementSibling.style.display === 'none' ? 'rotate(0deg)' : 'rotate(180deg)';"
+                        style="background: none; border: none; cursor: pointer; padding: 0; display: flex; align-items: center; gap: 4px; font-size: 0.8em; color: var(--text-muted);">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 12px; height: 12px; transition: transform 0.2s;"><polyline points="6 9 12 15 18 9"/></svg>
+                        Technical Details
+                    </button>
+                    <div style="display: none; margin-top: 8px; padding: 12px; background: var(--bg-primary); border-radius: 8px; border: 1px solid var(--border-subtle);">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 0.8em; color: var(--text-secondary);">
+                            {''.join(f'<div>{item}</div>' for item in tech_items)}
+                        </div>
+                    </div>
+                </div>
+            '''
+
+            # Build the card
+            cards_html.append(f'''
+                <div class="insight-card" style="background: var(--bg-card); border-radius: 12px; border-left: 4px solid {accent_color}; margin-bottom: 16px; overflow: hidden; border: 1px solid var(--border-subtle);">
+                    <!-- Header -->
+                    <div style="padding: 16px 20px; border-bottom: 1px solid var(--border-subtle);">
+                        <div style="display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 8px;">
+                            <div style="display: flex; align-items: center; flex-wrap: wrap;">
+                                <span style="font-size: 0.75em; color: {accent_color}; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">{priority_label}</span>
+                                {context_badge_html}
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <span style="font-size: 0.75em; color: var(--text-muted);">Confidence:</span>
+                                {confidence_html}
+                            </div>
+                        </div>
+                        <!-- Headline -->
+                        <div style="font-size: 1.1em; font-weight: 600; color: var(--text-primary); line-height: 1.4;">
+                            {headline}
+                        </div>
+                        <!-- Column pair subtitle -->
+                        <div style="font-size: 0.85em; color: var(--text-muted); margin-top: 4px;">
+                            {friendly1} ↔ {friendly2}
+                        </div>
+                    </div>
+
+                    <!-- Body -->
+                    <div style="padding: 16px 20px;">
+                        {comparison_bars_html}
+                        {metrics_html}
+                        {edge_case_html}
+                        {tech_details_html}
+                    </div>
+                </div>
+            ''')
+
+        # Build summary header
+        summary_html = f'''
+            <div class="insight-summary" style="background: var(--bg-card); border-radius: 12px; padding: 20px; margin-bottom: 20px; border: 1px solid var(--border-subtle);">
+                <div style="display: flex; align-items: flex-start; gap: 16px;">
+                    <div style="background: linear-gradient(135deg, #8b5cf6, #6366f1); width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" style="width: 24px; height: 24px;"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
+                    </div>
+                    <div>
+                        <h3 style="margin: 0 0 8px 0; font-size: 1.1em; color: var(--text-primary);">Data Relationships</h3>
+                        <p style="margin: 0; font-size: 0.9em; color: var(--text-secondary); line-height: 1.6;">
+                            Found <strong>{total} relationship{'s' if total != 1 else ''}</strong> in your data
+                            {f' — <strong style="color: #8b5cf6;">{high_priority} strong</strong>' if high_priority > 0 else ''}
+                            {f', <strong style="color: #0ea5e9;">{medium_priority} notable</strong>' if medium_priority > 0 else ''}.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        '''
+
+        return f'''
+            {summary_html}
+            <div style="display: flex; flex-direction: column; gap: 0;">
+                {''.join(cards_html)}
             </div>
         '''
 

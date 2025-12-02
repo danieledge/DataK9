@@ -88,6 +88,14 @@ from validation_framework.profiler.type_inferrer import TypeInferrer
 # Statistics Calculator (extracted from god class)
 from validation_framework.profiler.statistics_calculator import StatisticsCalculator
 
+# Correlation Insight Synthesizer
+try:
+    from validation_framework.profiler.correlation_insight_synthesizer import CorrelationInsightSynthesizer
+    CORRELATION_INSIGHT_AVAILABLE = True
+except ImportError:
+    CORRELATION_INSIGHT_AVAILABLE = False
+    logger.debug("Correlation insight synthesizer not available")
+
 try:
     from visions.functional import detect_type
     from visions.types import Float, Integer, String, Boolean, Object
@@ -1527,6 +1535,47 @@ class DataProfiler:
                             phase_timings['context_validation'] = time.time() - context_start
                         except Exception as e:
                             logger.debug(f"Context validation failed: {e}")
+
+                    # Synthesize correlation insights (while ml_df is still available)
+                    if CORRELATION_INSIGHT_AVAILABLE and correlations:
+                        try:
+                            insight_start = time.time()
+                            synthesizer = CorrelationInsightSynthesizer(
+                                ml_df,
+                                field_descriptions=self.field_descriptions
+                            )
+
+                            # Convert CorrelationResult objects to dicts
+                            corr_dicts = []
+                            for c in correlations:
+                                if isinstance(c, CorrelationResult):
+                                    corr_dicts.append({
+                                        'column1': c.column1,
+                                        'column2': c.column2,
+                                        'correlation': c.correlation,
+                                        'type': c.type,
+                                        'p_value': c.p_value,
+                                        'strength': c.strength,
+                                        'direction': c.direction
+                                    })
+                                else:
+                                    corr_dicts.append(c)
+
+                            # Get subgroups from context_store if available
+                            subgroups = []
+                            if ml_findings and 'context_store' in ml_findings:
+                                subgroups = ml_findings['context_store'].get('subgroups', [])
+
+                            # Synthesize insights
+                            insights = synthesizer.synthesize_all(corr_dicts, subgroups)
+
+                            # Store in ml_findings for the reporter
+                            ml_findings['correlation_insights'] = synthesizer.to_dict_list()
+                            logger.debug(f"💡 Synthesized {len(insights)} correlation insights")
+
+                            phase_timings['correlation_insights'] = time.time() - insight_start
+                        except Exception as e:
+                            logger.debug(f"Correlation insight synthesis failed: {e}")
 
                     # Clean up ml_df after context validation
                     del ml_df
