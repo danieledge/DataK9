@@ -114,14 +114,21 @@ class EnhancedCorrelationAnalyzer(BackendAwareProfiler):
 
         df = pd.DataFrame(df_dict)
 
-        # Remove rows with any NaN values for correlation calculation
-        df_clean = df.dropna()
+        # Use pairwise deletion instead of listwise deletion
+        # This allows correlations to be calculated for columns with missing values
+        # (e.g., Age with 20% missing can still correlate with Survived)
+        # pandas corr() already uses pairwise deletion by default
 
-        if len(df_clean) < 3:
+        # Check that we have at least some valid data
+        valid_counts = df.notna().sum()
+        if (valid_counts < 3).all():
             return {
                 "available": False,
-                "reason": "Insufficient non-null overlapping data points"
+                "reason": "Insufficient non-null data points"
             }
+
+        # Keep original df for pairwise correlation (don't use dropna)
+        df_clean = df
 
         result = {
             "available": True,
@@ -198,8 +205,16 @@ class EnhancedCorrelationAnalyzer(BackendAwareProfiler):
                     corr_value = corr_matrix.loc[col1, col2]
 
                     if abs(corr_value) >= self.min_correlation_threshold and not np.isnan(corr_value):
-                        # Calculate p-value
-                        _, p_value = pearsonr(df[col1], df[col2])
+                        # Calculate p-value using pairwise complete observations
+                        # Mask rows where either column has NaN
+                        mask = df[col1].notna() & df[col2].notna()
+                        col1_clean = df.loc[mask, col1].values
+                        col2_clean = df.loc[mask, col2].values
+
+                        if len(col1_clean) >= 3:  # Need at least 3 observations for p-value
+                            _, p_value = pearsonr(col1_clean, col2_clean)
+                        else:
+                            p_value = 1.0  # Not significant if insufficient data
 
                         pairs.append({
                             "column1": col1,
@@ -209,7 +224,8 @@ class EnhancedCorrelationAnalyzer(BackendAwareProfiler):
                             "p_value": float(p_value),
                             "is_significant": p_value < self.significance_level,
                             "strength": self._classify_strength(abs(corr_value)),
-                            "direction": "positive" if corr_value > 0 else "negative"
+                            "direction": "positive" if corr_value > 0 else "negative",
+                            "n_observations": int(mask.sum())  # Track sample size
                         })
 
         return matrix_data, pairs
@@ -242,8 +258,16 @@ class EnhancedCorrelationAnalyzer(BackendAwareProfiler):
                     corr_value = corr_matrix.loc[col1, col2]
 
                     if abs(corr_value) >= self.min_correlation_threshold and not np.isnan(corr_value):
-                        # Calculate p-value
-                        _, p_value = spearmanr(df[col1], df[col2])
+                        # Calculate p-value using pairwise complete observations
+                        # Mask rows where either column has NaN
+                        mask = df[col1].notna() & df[col2].notna()
+                        col1_clean = df.loc[mask, col1].values
+                        col2_clean = df.loc[mask, col2].values
+
+                        if len(col1_clean) >= 3:  # Need at least 3 observations for p-value
+                            _, p_value = spearmanr(col1_clean, col2_clean)
+                        else:
+                            p_value = 1.0  # Not significant if insufficient data
 
                         pairs.append({
                             "column1": col1,
@@ -252,6 +276,7 @@ class EnhancedCorrelationAnalyzer(BackendAwareProfiler):
                             "correlation": float(corr_value),
                             "p_value": float(p_value),
                             "is_significant": p_value < self.significance_level,
+                            "n_observations": int(mask.sum()),  # Track sample size
                             "strength": self._classify_strength(abs(corr_value)),
                             "direction": "positive" if corr_value > 0 else "negative"
                         })
@@ -290,8 +315,16 @@ class EnhancedCorrelationAnalyzer(BackendAwareProfiler):
                     corr_value = corr_matrix.loc[col1, col2]
 
                     if abs(corr_value) >= self.min_correlation_threshold and not np.isnan(corr_value):
-                        # Calculate p-value
-                        _, p_value = kendalltau(df[col1], df[col2])
+                        # Calculate p-value using pairwise complete observations
+                        # Mask rows where either column has NaN
+                        mask = df[col1].notna() & df[col2].notna()
+                        col1_clean = df.loc[mask, col1].values
+                        col2_clean = df.loc[mask, col2].values
+
+                        if len(col1_clean) >= 3:  # Need at least 3 observations for p-value
+                            _, p_value = kendalltau(col1_clean, col2_clean)
+                        else:
+                            p_value = 1.0  # Not significant if insufficient data
 
                         pairs.append({
                             "column1": col1,
@@ -301,7 +334,8 @@ class EnhancedCorrelationAnalyzer(BackendAwareProfiler):
                             "p_value": float(p_value),
                             "is_significant": p_value < self.significance_level,
                             "strength": self._classify_strength(abs(corr_value)),
-                            "direction": "positive" if corr_value > 0 else "negative"
+                            "direction": "positive" if corr_value > 0 else "negative",
+                            "n_observations": int(mask.sum())  # Track sample size
                         })
 
         return matrix_data, pairs
@@ -340,16 +374,23 @@ class EnhancedCorrelationAnalyzer(BackendAwareProfiler):
                 if i == j:
                     mi_matrix[col1][col2] = 1.0  # Self-information
                 elif i < j:
-                    # Calculate mutual information
-                    X = df[col1].values.reshape(-1, 1)
-                    y = df[col2].values
+                    # Use pairwise complete observations for mutual info
+                    mask = df[col1].notna() & df[col2].notna()
+                    n_obs = mask.sum()
 
-                    # Mutual information
-                    mi_score = mutual_info_regression(X, y, random_state=42)[0]
+                    if n_obs >= 3:
+                        X = df.loc[mask, col1].values.reshape(-1, 1)
+                        y = df.loc[mask, col2].values
 
-                    # Normalize to [0, 1] range (approximate)
-                    # MI is unbounded, so we use a heuristic normalization
-                    mi_normalized = min(mi_score / 2.0, 1.0)
+                        # Mutual information
+                        mi_score = mutual_info_regression(X, y, random_state=42)[0]
+
+                        # Normalize to [0, 1] range (approximate)
+                        # MI is unbounded, so we use a heuristic normalization
+                        mi_normalized = min(mi_score / 2.0, 1.0)
+                    else:
+                        mi_normalized = 0.0
+                        n_obs = 0
 
                     mi_matrix[col1][col2] = float(mi_normalized)
                     mi_matrix[col2] = mi_matrix.get(col2, {})
@@ -364,7 +405,8 @@ class EnhancedCorrelationAnalyzer(BackendAwareProfiler):
                             "p_value": None,  # MI doesn't have p-values
                             "is_significant": True,  # Assume significant if above threshold
                             "strength": self._classify_strength(mi_normalized),
-                            "direction": "non-linear"
+                            "direction": "non-linear",
+                            "n_observations": int(n_obs)
                         })
 
         return mi_matrix, pairs
