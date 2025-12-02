@@ -2,15 +2,11 @@
 
 ## Overview
 
-DataK9 statistical validations support both pandas and Polars backends. Polars provides 3-10x better memory efficiency and 1.5-2x faster performance for large datasets.
+DataK9 uses Polars as its primary processing engine. Polars provides 3-10x better memory efficiency and 1.5-2x faster performance compared to pandas.
+
+> **Note:** Polars is included in `requirements.txt` and installed automatically with DataK9.
 
 ## Quick Start
-
-### Installation
-
-```bash
-pip install polars
-```
 
 ### Using Polars with DataK9
 
@@ -173,9 +169,9 @@ print(f"Memory usage: {process.memory_info().rss / 1024 / 1024:.2f} MB")
 
 ### Issue: "No module named 'polars'"
 
-**Solution**: Install Polars
+**Solution**: Reinstall DataK9 dependencies (Polars is included):
 ```bash
-pip install polars
+pip install -r requirements.txt
 ```
 
 ### Issue: Still using too much memory

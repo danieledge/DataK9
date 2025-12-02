@@ -7,7 +7,7 @@ This guide will walk you through creating your first data validation from scratc
 
 ## Prerequisites
 
-- Python 3.8 or higher
+- Python 3.9 or higher
 - pip (Python package manager)
 
 ---
@@ -21,14 +21,14 @@ Clone the repository and install dependencies:
 git clone https://github.com/danieledge/data-validation-tool.git
 cd data-validation-tool
 
-# Install dependencies
+# Install dependencies (includes Polars for high performance)
 pip install -r requirements.txt
 
 # Install DataK9
 pip install -e .
 ```
 
-**That's it!** No complex setup required.
+**That's it!** All dependencies including the Polars backend are installed automatically.
 
 ---
 
