@@ -29,78 +29,82 @@ from validation_framework.profiler.html_reporter import ProfileHTMLReporter
 
 
 class TestTypeDetection:
-    """Test type detection functionality."""
+    """Test type detection functionality via the extracted TypeInferrer class."""
 
     def setup_method(self):
         """Setup test fixtures."""
         self.profiler = DataProfiler()
+        # Use the extracted type inferrer
+        self.type_inferrer = self.profiler.type_inferrer
 
     def test_detect_integer(self):
         """Test integer type detection."""
-        assert self.profiler._detect_type(42) == "integer"
-        assert self.profiler._detect_type("42") == "integer"
-        assert self.profiler._detect_type(100) == "integer"
+        assert self.type_inferrer.detect_type(42) == "integer"
+        assert self.type_inferrer.detect_type("42") == "integer"
+        assert self.type_inferrer.detect_type(100) == "integer"
 
     def test_detect_float(self):
         """Test float type detection."""
-        assert self.profiler._detect_type(3.14) == "float"
-        assert self.profiler._detect_type("3.14") == "float"
-        assert self.profiler._detect_type(0.5) == "float"
+        assert self.type_inferrer.detect_type(3.14) == "float"
+        assert self.type_inferrer.detect_type("3.14") == "float"
+        assert self.type_inferrer.detect_type(0.5) == "float"
 
     def test_detect_boolean(self):
         """Test boolean type detection."""
-        assert self.profiler._detect_type(True) == "boolean"
-        assert self.profiler._detect_type(False) == "boolean"
-        assert self.profiler._detect_type("true") == "boolean"
-        assert self.profiler._detect_type("yes") == "boolean"
-        assert self.profiler._detect_type("no") == "boolean"
+        assert self.type_inferrer.detect_type(True) == "boolean"
+        assert self.type_inferrer.detect_type(False) == "boolean"
+        assert self.type_inferrer.detect_type("true") == "boolean"
+        assert self.type_inferrer.detect_type("yes") == "boolean"
+        assert self.type_inferrer.detect_type("no") == "boolean"
 
     def test_detect_date(self):
         """Test date type detection."""
-        assert self.profiler._detect_type("2025-01-13") == "date"
-        assert self.profiler._detect_type("13/01/2025") == "date"
-        assert self.profiler._detect_type("01-13-2025") == "date"
-        assert self.profiler._detect_type("2025/01/13") == "date"
+        assert self.type_inferrer.detect_type("2025-01-13") == "date"
+        assert self.type_inferrer.detect_type("13/01/2025") == "date"
+        assert self.type_inferrer.detect_type("01-13-2025") == "date"
+        assert self.type_inferrer.detect_type("2025/01/13") == "date"
 
     def test_detect_string(self):
         """Test string type detection."""
-        assert self.profiler._detect_type("hello world") == "string"
-        assert self.profiler._detect_type("abc123xyz") == "string"
-        assert self.profiler._detect_type("test@example.com") == "string"
+        assert self.type_inferrer.detect_type("hello world") == "string"
+        assert self.type_inferrer.detect_type("abc123xyz") == "string"
+        assert self.type_inferrer.detect_type("test@example.com") == "string"
 
     def test_detect_null(self):
         """Test null type detection."""
-        assert self.profiler._detect_type(None) == "null"
-        assert self.profiler._detect_type(np.nan) == "null"
-        assert self.profiler._detect_type(pd.NA) == "null"
+        assert self.type_inferrer.detect_type(None) == "null"
+        assert self.type_inferrer.detect_type(np.nan) == "null"
+        assert self.type_inferrer.detect_type(pd.NA) == "null"
 
 
 class TestPatternExtraction:
-    """Test pattern extraction functionality."""
+    """Test pattern extraction functionality via the extracted TypeInferrer class."""
 
     def setup_method(self):
         """Setup test fixtures."""
         self.profiler = DataProfiler()
+        # Use the extracted type inferrer
+        self.type_inferrer = self.profiler.type_inferrer
 
     def test_pattern_with_numbers(self):
         """Test pattern extraction with numbers."""
-        assert self.profiler._extract_pattern("ABC-123") == "AAA-999"
-        assert self.profiler._extract_pattern("ID-001") == "AA-999"
+        assert self.type_inferrer.extract_pattern("ABC-123") == "AAA-999"
+        assert self.type_inferrer.extract_pattern("ID-001") == "AA-999"
 
     def test_pattern_with_letters(self):
         """Test pattern extraction with letters."""
-        assert self.profiler._extract_pattern("HELLO") == "AAAAA"
-        assert self.profiler._extract_pattern("Test") == "AAAA"  # All letters become 'A'
+        assert self.type_inferrer.extract_pattern("HELLO") == "AAAAA"
+        assert self.type_inferrer.extract_pattern("Test") == "AAAA"  # All letters become 'A'
 
     def test_pattern_with_special_chars(self):
         """Test pattern extraction with special characters."""
-        assert self.profiler._extract_pattern("email@domain.com") == "AAAAA@AAAAAA.AAA"  # All letters become 'A'
-        assert self.profiler._extract_pattern("$100.50") == "$999.99"
+        assert self.type_inferrer.extract_pattern("email@domain.com") == "AAAAA@AAAAAA.AAA"  # All letters become 'A'
+        assert self.type_inferrer.extract_pattern("$100.50") == "$999.99"
 
     def test_pattern_length_limit(self):
         """Test pattern extraction length limit."""
         long_string = "A" * 100
-        pattern = self.profiler._extract_pattern(long_string)
+        pattern = self.type_inferrer.extract_pattern(long_string)
         assert len(pattern) == 50  # Should be truncated to 50 chars
 
 
@@ -156,7 +160,7 @@ class TestStatisticsCalculation:
             "total_processed": 5
         }
 
-        stats = self.profiler._calculate_statistics(profile_data, total_rows=5)
+        stats = self.profiler.stats_calculator.calculate_statistics(profile_data, total_rows=5)
 
         assert stats.count == 5
         assert stats.null_count == 0
@@ -183,7 +187,7 @@ class TestStatisticsCalculation:
             "total_processed": 5
         }
 
-        stats = self.profiler._calculate_statistics(profile_data, total_rows=10)
+        stats = self.profiler.stats_calculator.calculate_statistics(profile_data, total_rows=10)
 
         assert stats.count == 10
         assert stats.null_count == 5
@@ -205,7 +209,7 @@ class TestStatisticsCalculation:
             "total_processed": 10
         }
 
-        stats = self.profiler._calculate_statistics(profile_data, total_rows=10)
+        stats = self.profiler.stats_calculator.calculate_statistics(profile_data, total_rows=10)
 
         assert stats.unique_count == 2
         assert stats.cardinality == 0.2  # 2/10
@@ -226,7 +230,7 @@ class TestStatisticsCalculation:
             "total_processed": 10
         }
 
-        stats = self.profiler._calculate_statistics(profile_data, total_rows=10)
+        stats = self.profiler.stats_calculator.calculate_statistics(profile_data, total_rows=10)
 
         assert len(stats.top_values) == 3
         assert stats.top_values[0]["value"] == "A"
@@ -258,7 +262,7 @@ class TestQualityMetrics:
         )
         profile_data = {"type_counts": {}}
 
-        quality = self.profiler._calculate_quality_metrics(
+        quality = self.profiler.stats_calculator.calculate_quality_metrics(
             profile_data, type_info, stats, total_rows=100
         )
 
@@ -280,7 +284,7 @@ class TestQualityMetrics:
         )
         profile_data = {"type_counts": {}}
 
-        quality = self.profiler._calculate_quality_metrics(
+        quality = self.profiler.stats_calculator.calculate_quality_metrics(
             profile_data, type_info, stats, total_rows=100
         )
 
@@ -288,19 +292,44 @@ class TestQualityMetrics:
         assert any("Low completeness" in issue for issue in quality.issues)
 
     def test_validity_score(self):
-        """Test validity score calculation."""
+        """Test validity score calculation.
+
+        For numeric types (integer/float), validity is always 100% because
+        integer and float are considered compatible types. Use string type
+        to test confidence-based validity.
+        """
         stats = ColumnStatistics(count=100, null_count=0, cardinality=0.5)
         type_info = TypeInference(
-            inferred_type="integer",
+            inferred_type="string",  # Use string to test confidence-based validity
             confidence=0.85  # 85% of values match type
         )
         profile_data = {"type_counts": {}}
 
-        quality = self.profiler._calculate_quality_metrics(
+        quality = self.profiler.stats_calculator.calculate_quality_metrics(
             profile_data, type_info, stats, total_rows=100
         )
 
         assert quality.validity == 85.0
+
+    def test_validity_score_numeric_types(self):
+        """Test that numeric types (integer/float) always have 100% validity.
+
+        Integer and float are considered compatible types - values like 13.0
+        detected as integer are still valid floats.
+        """
+        stats = ColumnStatistics(count=100, null_count=0, cardinality=0.5)
+        type_info = TypeInference(
+            inferred_type="integer",
+            confidence=0.85  # Even with 85% confidence, numeric types get 100% validity
+        )
+        profile_data = {"type_counts": {}}
+
+        quality = self.profiler.stats_calculator.calculate_quality_metrics(
+            profile_data, type_info, stats, total_rows=100
+        )
+
+        # Numeric types always have 100% validity (integer/float compatibility)
+        assert quality.validity == 100.0
 
     def test_uniqueness_all_unique(self):
         """Test uniqueness when all values are unique."""
@@ -313,12 +342,13 @@ class TestQualityMetrics:
         type_info = TypeInference(inferred_type="integer", confidence=1.0)
         profile_data = {"type_counts": {}}
 
-        quality = self.profiler._calculate_quality_metrics(
+        quality = self.profiler.stats_calculator.calculate_quality_metrics(
             profile_data, type_info, stats, total_rows=100
         )
 
         assert quality.uniqueness == 100.0
-        assert any("All values are unique" in issue for issue in quality.issues)
+        # "All values are unique" is an observation, not an issue (potential key field)
+        assert any("All values are unique" in obs for obs in quality.observations)
 
     def test_overall_quality_score(self):
         """Test overall quality score calculation."""
@@ -332,14 +362,15 @@ class TestQualityMetrics:
         type_info = TypeInference(inferred_type="integer", confidence=0.95)
         profile_data = {"type_counts": {}}
 
-        quality = self.profiler._calculate_quality_metrics(
+        quality = self.profiler.stats_calculator.calculate_quality_metrics(
             profile_data, type_info, stats, total_rows=100
         )
 
         # Overall = 0.3*completeness + 0.3*validity + 0.2*uniqueness + 0.2*consistency
-        # = 0.3*90 + 0.3*95 + 0.2*50 + 0.2*100
-        # = 27 + 28.5 + 10 + 20 = 85.5
-        assert 85.0 <= quality.overall_score <= 86.0
+        # For numeric types, validity is always 100% (integer/float compatibility)
+        # = 0.3*90 + 0.3*100 + 0.2*50 + 0.2*100
+        # = 27 + 30 + 10 + 20 = 87.0
+        assert 86.0 <= quality.overall_score <= 88.0
 
 
 class TestTypeInference:
@@ -358,7 +389,7 @@ class TestTypeInference:
             "sample_values": [1, 2, 3]
         }
 
-        type_info = self.profiler._infer_type(profile_data, total_rows=100)
+        type_info = self.profiler.type_inferrer.infer_column_type(profile_data, total_rows=100)
 
         assert type_info.inferred_type == "integer"
         assert type_info.is_known is True
@@ -367,6 +398,8 @@ class TestTypeInference:
 
     def test_infer_type_without_schema(self):
         """Test type inference without declared schema."""
+        # Mixed integer/string columns (5% string) now default to string
+        # This is correct behavior for mixed alphanumeric columns like ticket IDs
         profile_data = {
             "declared_type": None,
             "type_counts": {"integer": 95, "string": 5},
@@ -374,14 +407,17 @@ class TestTypeInference:
             "sample_values": [1, 2, 3]
         }
 
-        type_info = self.profiler._infer_type(profile_data, total_rows=100)
+        type_info = self.profiler.type_inferrer.infer_column_type(profile_data, total_rows=100)
 
-        assert type_info.inferred_type == "integer"
+        # With 5% string values, column is treated as string (mixed alphanumeric)
+        assert type_info.inferred_type == "string"
         assert type_info.is_known is False
-        assert type_info.confidence == 0.95  # 95/100
+        assert type_info.confidence == 1.0  # (95 + 5) / 100 = 100%
 
     def test_infer_type_with_conflicts(self):
         """Test type inference with type conflicts."""
+        # Mixed integer/string columns (15% string) now default to string
+        # This correctly handles mixed alphanumeric data like ticket IDs
         profile_data = {
             "declared_type": None,
             "type_counts": {"integer": 80, "string": 15, "float": 5},
@@ -389,12 +425,16 @@ class TestTypeInference:
             "sample_values": [1, 2, "abc", 3.14]
         }
 
-        type_info = self.profiler._infer_type(profile_data, total_rows=100)
+        type_info = self.profiler.type_inferrer.infer_column_type(profile_data, total_rows=100)
 
-        assert type_info.inferred_type == "integer"
-        assert type_info.confidence == 0.80
-        assert len(type_info.type_conflicts) > 0
-        assert type_info.type_conflicts[0]["type"] == "string"
+        # With 15% string values, column is treated as string (mixed alphanumeric)
+        assert type_info.inferred_type == "string"
+        # Confidence is (integer + string) / total = (80 + 15) / 100 = 95%
+        assert type_info.confidence == 0.95
+        # Conflicts detected before type conversion: sorted by count (string=15, float=5)
+        assert len(type_info.type_conflicts) >= 2
+        assert type_info.type_conflicts[0]["type"] == "string"  # Largest non-primary
+        assert type_info.type_conflicts[1]["type"] == "float"
 
     def test_infer_empty_column(self):
         """Test type inference for empty column."""
@@ -405,7 +445,7 @@ class TestTypeInference:
             "sample_values": []
         }
 
-        type_info = self.profiler._infer_type(profile_data, total_rows=100)
+        type_info = self.profiler.type_inferrer.infer_column_type(profile_data, total_rows=100)
 
         assert type_info.inferred_type == "empty"
         assert type_info.confidence == 0.0
@@ -426,7 +466,7 @@ class TestCorrelationCalculation:
             "col2": [2.0, 4.0, 6.0, 8.0, 10.0]  # col2 = 2 * col1
         }
 
-        correlations = self.profiler._calculate_correlations(numeric_data, row_count=5)
+        correlations = self.profiler.stats_calculator.calculate_correlations(numeric_data, row_count=5)
 
         assert len(correlations) == 1
         assert correlations[0].column1 == "col1"
@@ -440,7 +480,7 @@ class TestCorrelationCalculation:
             "col2": [10.0, 8.0, 6.0, 4.0, 2.0]  # col2 decreases as col1 increases
         }
 
-        correlations = self.profiler._calculate_correlations(numeric_data, row_count=5)
+        correlations = self.profiler.stats_calculator.calculate_correlations(numeric_data, row_count=5)
 
         assert len(correlations) == 1
         assert correlations[0].correlation < -0.99  # Strong negative correlation
@@ -452,7 +492,7 @@ class TestCorrelationCalculation:
             "col2": [1.0, 1.0, 1.0, 1.0, 1.0]  # Constant, no correlation
         }
 
-        correlations = self.profiler._calculate_correlations(numeric_data, row_count=5)
+        correlations = self.profiler.stats_calculator.calculate_correlations(numeric_data, row_count=5)
 
         assert len(correlations) == 0  # No significant correlations (threshold is 0.5)
 
@@ -462,7 +502,7 @@ class TestCorrelationCalculation:
             "col1": [1.0, 2.0, 3.0, 4.0, 5.0]
         }
 
-        correlations = self.profiler._calculate_correlations(numeric_data, row_count=5)
+        correlations = self.profiler.stats_calculator.calculate_correlations(numeric_data, row_count=5)
 
         assert len(correlations) == 0  # Need at least 2 columns
 
@@ -485,7 +525,7 @@ class TestValidationSuggestions:
             )
         ]
 
-        suggestions = self.profiler._generate_validation_suggestions(columns, row_count=100)
+        suggestions = self.profiler.validation_suggester.generate_suggestions(columns, row_count=100)
 
         # Should suggest MandatoryFieldCheck for field with >95% completeness
         mandatory_suggestions = [s for s in suggestions if s.validation_type == "MandatoryFieldCheck"]
@@ -508,7 +548,7 @@ class TestValidationSuggestions:
             )
         ]
 
-        suggestions = self.profiler._generate_validation_suggestions(columns, row_count=101)
+        suggestions = self.profiler.validation_suggester.generate_suggestions(columns, row_count=101)
 
         # Should suggest UniqueKeyCheck for field with cardinality > 0.99 and row_count > 100
         unique_suggestions = [s for s in suggestions if s.validation_type == "UniqueKeyCheck"]
@@ -531,14 +571,17 @@ class TestValidationSuggestions:
             )
         ]
 
-        suggestions = self.profiler._generate_validation_suggestions(columns, row_count=100)
+        suggestions = self.profiler.validation_suggester.generate_suggestions(columns, row_count=100)
 
         # Should suggest RangeCheck for numeric field
         range_suggestions = [s for s in suggestions if s.validation_type == "RangeCheck"]
         assert len(range_suggestions) > 0
         assert range_suggestions[0].params["field"] == "age"
-        assert range_suggestions[0].params["min_value"] == 18
-        assert range_suggestions[0].params["max_value"] == 65
+        # Smart range adds 20% buffer: range=47, buffer=9.4
+        # "age" field is likely-positive so min is clamped to 0 or above
+        # min = max(0, 18 - 9.4) = 8.6, max = 65 + 9.4 = 74.4
+        assert range_suggestions[0].params["min_value"] == 8.6
+        assert range_suggestions[0].params["max_value"] == 74.4
 
     def test_suggest_valid_values_check(self):
         """Test suggestion for valid values check."""
@@ -561,7 +604,7 @@ class TestValidationSuggestions:
             )
         ]
 
-        suggestions = self.profiler._generate_validation_suggestions(columns, row_count=100)
+        suggestions = self.profiler.validation_suggester.generate_suggestions(columns, row_count=100)
 
         # Should suggest ValidValuesCheck for low cardinality field
         valid_values_suggestions = [s for s in suggestions if s.validation_type == "ValidValuesCheck"]
@@ -572,7 +615,7 @@ class TestValidationSuggestions:
     def test_suggest_file_level_checks(self):
         """Test file-level validation suggestions."""
         columns = []
-        suggestions = self.profiler._generate_validation_suggestions(columns, row_count=1000)
+        suggestions = self.profiler.validation_suggester.generate_suggestions(columns, row_count=1000)
 
         # Should always suggest EmptyFileCheck
         empty_file_suggestions = [s for s in suggestions if s.validation_type == "EmptyFileCheck"]

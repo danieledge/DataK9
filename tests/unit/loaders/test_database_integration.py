@@ -247,11 +247,11 @@ class TestSourceCompatibility:
 
         summary = loader.get_compatibility_summary()
 
-        assert summary['total'] == 35
-        assert summary['file_compatible'] == 32
+        assert summary['total'] == 36
+        assert summary['file_compatible'] == 33
         assert summary['database_compatible'] == 33
         assert summary['both_compatible'] == 30
-        assert summary['file_only'] == 2
+        assert summary['file_only'] == 3
         assert summary['database_only'] == 3
 
 

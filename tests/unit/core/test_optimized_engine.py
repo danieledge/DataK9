@@ -268,7 +268,7 @@ class TestSinglePassValidationState:
         assert isinstance(state.sampler, ReservoirSampler)
 
     def test_process_chunk_without_sampling(self):
-        """Test processing chunk without sampling (stores chunk)."""
+        """Test processing chunk without sampling (incremental aggregation)."""
         validation = self.create_mock_validation()
         validation_config = {'type': 'Test', 'severity': 'ERROR'}
         context = {'max_sample_failures': 100}
@@ -279,8 +279,9 @@ class TestSinglePassValidationState:
         state.process_chunk(chunk, chunk_idx=0)
 
         assert state.total_rows == 3
-        assert 'chunks' in state.state
-        assert len(state.state['chunks']) == 1
+        # New optimized behavior: aggregate results instead of storing chunks
+        assert 'aggregate' in state.state
+        assert state.state['aggregate']['passed'] is True
 
     def test_process_chunk_with_sampling(self):
         """Test processing chunk with sampling enabled."""
@@ -314,7 +315,9 @@ class TestSinglePassValidationState:
             state.process_chunk(chunk, chunk_idx=i)
 
         assert state.total_rows == 30
-        assert len(state.state['chunks']) == 3
+        # New optimized behavior: aggregate results instead of storing chunks
+        assert 'aggregate' in state.state
+        assert state.state['aggregate']['total_count'] == 0  # Mock validation returns 0
 
     def test_finalize_without_sampling(self):
         """Test finalization without sampling."""

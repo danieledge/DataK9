@@ -1,118 +1,85 @@
 #!/bin/bash
 
 ################################################################################
-# Test Runner for Data Validation Framework
 #
-# Interactive test runner with colored output, coverage reporting, and
-# multiple test selection options. Designed for both developer use and
-# CI/CD integration.
+#    ____        _        _  ______     _____         _     ____
+#   |  _ \  __ _| |_ __ _| |/ / __ )   |_   _|__  ___| |_  |  _ \ _   _ _ __  _ __   ___ _ __
+#   | | | |/ _` | __/ _` | ' /|  _ \ ____| |/ _ \/ __| __| | |_) | | | | '_ \| '_ \ / _ \ '__|
+#   | |_| | (_| | || (_| | . \| |_) |____| |  __/\__ \ |_  |  _ <| |_| | | | | | | |  __/ |
+#   |____/ \__,_|\__\__,_|_|\_\____/     |_|\___||___/\__| |_| \_\\__,_|_| |_|_| |_|\___|_|
 #
-# Usage:
-#   ./run_tests.sh                 # Interactive menu
-#   ./run_tests.sh --all           # Run all tests
-#   ./run_tests.sh --unit          # Run unit tests only
-#   ./run_tests.sh --integration   # Run integration tests only
-#   ./run_tests.sh --security      # Run security tests only
-#   ./run_tests.sh --cli           # Run CLI tests only
-#   ./run_tests.sh --coverage      # Run with coverage report
-#   ./run_tests.sh --fast          # Skip slow tests
-#   ./run_tests.sh --file <path>   # Run specific test file
-#   ./run_tests.sh --help          # Show help
+#   DataK9 Unified Test Runner - Your K9 guardian for test quality
+#
+################################################################################
+#
+# USAGE:
+#   ./run_tests.sh                 Interactive menu
+#   ./run_tests.sh --quick         Fast tests only (skip slow)
+#   ./run_tests.sh --datasets      Test against Titanic & Transactions datasets
+#   ./run_tests.sh --profiler      Profiler tests only
+#   ./run_tests.sh --coverage      Full coverage report
+#   ./run_tests.sh --help          Show all options
+#
 ################################################################################
 
-# Color codes for output
+# Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
-MAGENTA='\033[0;35m'
 CYAN='\033[0;36m'
 WHITE='\033[1;37m'
-NC='\033[0m' # No Color
+DIM='\033[2m'
+NC='\033[0m'
 
-# Test configuration
-MIN_COVERAGE=48  # Minimum coverage percentage required (matches pytest.ini)
-TEST_DIR="tests"
-COVERAGE_DIR="htmlcov"
-COVERAGE_REPORT="coverage_report.txt"
+# Configuration
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+TEST_DIR="$PROJECT_ROOT/tests"
+REPORTS_DIR="$PROJECT_ROOT/test-reports"
+COVERAGE_DIR="$REPORTS_DIR/coverage"
+
+# Load coverage threshold from pytest.ini
+MIN_COVERAGE=$(grep -oP 'fail_under\s*=\s*\K\d+' "$PROJECT_ROOT/pytest.ini" 2>/dev/null || echo "48")
 
 ################################################################################
-# Helper Functions
+# Output Functions
 ################################################################################
 
-print_header() {
-    # Display DataK9 ASCII logo if available
-    if [ -f "resources/images/ascii-art.txt" ]; then
-        cat resources/images/ascii-art.txt
-        echo ""
-        echo -e "${CYAN}                          TEST RUNNER${NC}"
-        echo ""
+print_logo() {
+    echo -e "${CYAN}"
+    if [ -f "$PROJECT_ROOT/resources/images/ascii-art.txt" ]; then
+        cat "$PROJECT_ROOT/resources/images/ascii-art.txt"
     else
-        # Fallback to simple header if logo file not found
-        echo -e "${CYAN}"
-        echo "╔══════════════════════════════════════════════════════════════════╗"
-        echo "║                                                                  ║"
-        echo "║          DATA VALIDATION FRAMEWORK - TEST RUNNER                ║"
-        echo "║                                                                  ║"
-        echo "╚══════════════════════════════════════════════════════════════════╝"
-        echo -e "${NC}"
+        echo "   ____        _        _  __ ___  "
+        echo "  |  _ \\  __ _| |_ __ _| |/ // _ \\ "
+        echo "  | | | |/ _\` | __/ _\` | ' /| (_) |"
+        echo "  | |_| | (_| | || (_| | . \\ \\__, |"
+        echo "  |____/ \\__,_|\\__\\__,_|_|\\_\\  /_/ "
     fi
+    echo -e "${NC}"
+    echo -e "${WHITE}═══════════════════════════════════════════════════════════════${NC}"
+    echo -e "${CYAN}                    T E S T   R U N N E R${NC}"
+    echo -e "${WHITE}═══════════════════════════════════════════════════════════════${NC}"
+    echo ""
 }
 
 print_section() {
-    echo -e "\n${WHITE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "${WHITE}  $1${NC}"
-    echo -e "${WHITE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}\n"
-}
-
-print_success() {
-    echo -e "${GREEN}✓${NC} $1"
-}
-
-print_error() {
-    echo -e "${RED}✗${NC} $1"
-}
-
-print_warning() {
-    echo -e "${YELLOW}⚠${NC} $1"
-}
-
-print_info() {
-    echo -e "${BLUE}ℹ${NC} $1"
-}
-
-show_help() {
-    echo "Test Runner for DataK9 Validation Framework"
     echo ""
-    echo "Usage: $0 [OPTIONS]"
+    echo -e "${WHITE}───────────────────────────────────────────────────────────────${NC}"
+    echo -e "  ${CYAN}$1${NC}"
+    echo -e "${WHITE}───────────────────────────────────────────────────────────────${NC}"
     echo ""
-    echo "Options:"
-    echo "  --all                Run all tests"
-    echo "  --unit               Run unit tests only"
-    echo "  --integration        Run integration tests only"
-    echo "  --security           Run security tests only"
-    echo "  --validations        Run all validation rule tests (34+ types)"
-    echo "  --regression         Run comprehensive regression tests (all 35 types + pos/neg cases)"
-    echo "  --database           Run database tests (integration, validation, profiling)"
-    echo "  --profiler           Run profiler tests (files and databases)"
-    echo "  --cli                Run CLI tests only"
-    echo "  --performance        Run performance tests only"
-    echo "  --coverage           Run with coverage report"
-    echo "  --fast               Skip slow tests"
-    echo "  --file <path>        Run specific test file"
-    echo "  --verbose            Verbose output"
-    echo "  --quiet              Minimal output"
-    echo "  --parallel           Run tests in parallel"
-    echo "  --help               Show this help message"
-    echo ""
-    echo "Interactive Mode:"
-    echo "  Run without arguments for an interactive menu"
-    echo ""
-    exit 0
 }
+
+ok()   { echo -e "  ${GREEN}✓${NC} $1"; }
+fail() { echo -e "  ${RED}✗${NC} $1"; }
+warn() { echo -e "  ${YELLOW}⚠${NC} $1"; }
+info() { echo -e "  ${BLUE}ℹ${NC} $1"; }
+dim()  { echo -e "  ${DIM}$1${NC}"; }
 
 ################################################################################
-# Test Execution Functions
+# Test Functions
 ################################################################################
 
 run_tests() {
@@ -121,9 +88,11 @@ run_tests() {
     local start_time=$(date +%s)
 
     print_section "$description"
+    mkdir -p "$REPORTS_DIR"
+    cd "$PROJECT_ROOT"
 
-    # Run pytest with arguments
-    python3 -m pytest $test_args
+    # Use eval to properly handle quoted arguments like -m 'not slow'
+    eval "python3 -m pytest $test_args"
 
     local exit_code=$?
     local end_time=$(date +%s)
@@ -131,163 +100,182 @@ run_tests() {
 
     echo ""
     if [ $exit_code -eq 0 ]; then
-        print_success "Tests completed successfully in ${duration}s"
+        ok "Completed in ${duration}s"
     else
-        print_error "Tests failed with exit code $exit_code (${duration}s)"
+        fail "Failed (exit code $exit_code) after ${duration}s"
     fi
 
     return $exit_code
 }
 
-run_all_tests() {
-    run_tests "$TEST_DIR/ -v" "Running All Tests"
+################################################################################
+# Test Suites
+################################################################################
+
+run_quick() {
+    run_tests "$TEST_DIR -v -m 'not slow' --tb=short" \
+        "Quick Tests - Fast feedback for development (excludes slow tests)"
 }
 
-run_unit_tests() {
-    run_tests "$TEST_DIR/ -v -m unit" "Running Unit Tests"
+run_profiler() {
+    run_tests "$TEST_DIR/unit/profiler/ -v --tb=short" \
+        "Profiler Tests - Type inference, statistics, quality metrics, ML analysis"
 }
 
-run_integration_tests() {
-    run_tests "$TEST_DIR/ -v -m integration" "Running Integration Tests"
+run_datasets() {
+    run_tests "$TEST_DIR/datasets/ -v --tb=short" \
+        "Dataset Tests - Titanic & Transactions (CSV + Parquet) format verification"
 }
 
-run_security_tests() {
-    run_tests "$TEST_DIR/ -v -m security" "Running Security Tests"
+run_validations() {
+    run_tests "$TEST_DIR/unit/validations/ -v --tb=short" \
+        "Validation Rule Tests - All 36 validation types (mandatory, range, regex, etc.)"
 }
 
-run_validation_tests() {
-    # Run all validation rule tests (34+ validation types)
-    local validation_test_files=(
-        "test_file_validations.py"
-        "test_schema_validations.py"
-        "test_field_validations.py"
-        "test_record_validations.py"
-        "test_advanced_validations.py"
-        "test_conditional_validations.py"
-        "test_cross_file_validations.py"
-        "test_inline_validations.py"
-        "test_database_validations.py"
-        "test_missing_statistical_temporal.py"
-    )
-
-    local test_paths=""
-    for file in "${validation_test_files[@]}"; do
-        test_paths="$test_paths $TEST_DIR/$file"
-    done
-
-    run_tests "$test_paths -v" "Running All Validation Rule Tests (34+ validation types)"
+run_integration() {
+    run_tests "$TEST_DIR/integration/ -v --tb=short" \
+        "Integration Tests - End-to-end profiler workflows and feature interactions"
 }
 
-run_comprehensive_regression() {
-    # Run comprehensive regression test suite (all 35 validation types)
-    run_tests "$TEST_DIR/test_comprehensive_regression.py -v" \
-        "Running Comprehensive Regression Tests (All 35 Validation Types + Positive/Negative Cases)"
+run_cli() {
+    run_tests "$TEST_DIR/cli/ -v --tb=short" \
+        "CLI Tests - Command-line interface, argument parsing, output formats"
 }
 
-run_database_tests() {
-    # Run all database-related tests
-    local database_test_files=(
-        "test_database_integration.py"
-        "test_database_validations.py"
-        "test_database_profiling_json.py"
-    )
-
-    local test_paths=""
-    for file in "${database_test_files[@]}"; do
-        test_paths="$test_paths $TEST_DIR/$file"
-    done
-
-    run_tests "$test_paths -v" "Running Database Tests (Integration, Validation, Profiling)"
+run_core() {
+    run_tests "$TEST_DIR/unit/core/ -v --tb=short" \
+        "Core Tests - Engine, config, registry, results, and core framework components"
 }
 
-run_profiler_tests() {
-    # Run all profiler-related tests
-    local profiler_test_files=(
-        "test_profiler.py"
-        "test_polars_profiler.py"
-        "test_database_profiling_json.py"
-    )
-
-    local test_paths=""
-    for file in "${profiler_test_files[@]}"; do
-        test_paths="$test_paths $TEST_DIR/$file"
-    done
-
-    run_tests "$test_paths -v" "Running Profiler Tests (Files + Databases)"
+run_loaders() {
+    run_tests "$TEST_DIR/unit/loaders/ -v --tb=short" \
+        "Loader Tests - CSV, Excel, JSON, Parquet, and database loaders"
 }
 
-run_cli_tests() {
-    run_tests "$TEST_DIR/ -v -m cli" "Running CLI Tests"
+run_all() {
+    run_tests "$TEST_DIR -v --tb=short" \
+        "All Tests - Complete test suite including slow tests"
 }
 
-run_performance_tests() {
-    run_tests "$TEST_DIR/ -v -m performance" "Running Performance Tests"
-}
+run_coverage() {
+    print_section "Coverage Analysis - All tests with coverage threshold enforcement"
+    mkdir -p "$COVERAGE_DIR"
+    cd "$PROJECT_ROOT"
 
-run_fast_tests() {
-    run_tests "$TEST_DIR/ -v -m 'not slow'" "Running Fast Tests (Excluding Slow)"
-}
+    info "Coverage threshold: ${MIN_COVERAGE}%"
+    echo ""
 
-run_with_coverage() {
-    print_section "Running Tests with Coverage Analysis"
-
-    python3 -m pytest $TEST_DIR/ \
+    python3 -m pytest "$TEST_DIR/" \
         --cov=validation_framework \
-        --cov-report=html \
+        --cov-report=html:"$COVERAGE_DIR" \
         --cov-report=term-missing \
-        --cov-report=term:skip-covered \
-        --cov-fail-under=$MIN_COVERAGE \
-        -v
+        --cov-fail-under="$MIN_COVERAGE" \
+        -v --tb=short
 
     local exit_code=$?
 
+    echo ""
     if [ $exit_code -eq 0 ]; then
-        print_success "Coverage requirements met (>= ${MIN_COVERAGE}%)"
-
-        if [ -d "$COVERAGE_DIR" ]; then
-            print_info "HTML coverage report: ${COVERAGE_DIR}/index.html"
-
-            # Try to open coverage report in browser
-            if command -v xdg-open &> /dev/null; then
-                read -p "Open coverage report in browser? (y/n): " -n 1 -r
-                echo
-                if [[ $REPLY =~ ^[Yy]$ ]]; then
-                    xdg-open "${COVERAGE_DIR}/index.html" 2>/dev/null &
-                fi
-            fi
-        fi
+        ok "Coverage threshold met (≥${MIN_COVERAGE}%)"
+        info "HTML report: $COVERAGE_DIR/index.html"
     else
-        print_error "Coverage below minimum threshold or tests failed"
+        fail "Coverage below ${MIN_COVERAGE}% or tests failed"
     fi
 
     return $exit_code
 }
 
-run_specific_file() {
-    local file_path="$1"
-
-    if [ ! -f "$file_path" ]; then
-        print_error "Test file not found: $file_path"
+run_file() {
+    local file="$1"
+    if [ ! -f "$file" ]; then
+        fail "File not found: $file"
         return 1
     fi
-
-    run_tests "$file_path -v" "Running Specific Test File: $file_path"
+    run_tests "$file -v --tb=short" "Running: $file"
 }
 
-run_parallel_tests() {
-    print_section "Running Tests in Parallel"
+################################################################################
+# Utilities
+################################################################################
 
-    python3 -m pytest $TEST_DIR/ -v -n auto
+check_environment() {
+    print_section "Environment Check"
 
-    local exit_code=$?
+    local all_ok=true
 
-    if [ $exit_code -eq 0 ]; then
-        print_success "Parallel tests completed successfully"
+    if command -v python3 &> /dev/null; then
+        ok "Python $(python3 --version 2>&1 | awk '{print $2}')"
     else
-        print_error "Parallel tests failed"
+        fail "Python 3 not found"
+        all_ok=false
     fi
 
-    return $exit_code
+    if python3 -m pytest --version &> /dev/null; then
+        ok "pytest $(python3 -m pytest --version 2>&1 | head -1 | awk '{print $2}')"
+    else
+        fail "pytest not installed"
+        all_ok=false
+    fi
+
+    if [ -d "$TEST_DIR" ]; then
+        local count=$(find "$TEST_DIR" -name "test_*.py" | wc -l)
+        ok "$count test files found"
+    else
+        fail "Test directory not found"
+        all_ok=false
+    fi
+
+    # Check test data
+    if [ -d "$TEST_DIR/data" ]; then
+        local csv_count=$(ls "$TEST_DIR/data/"*.csv 2>/dev/null | wc -l)
+        local pq_count=$(ls "$TEST_DIR/data/"*.parquet 2>/dev/null | wc -l)
+        ok "Test data: $csv_count CSV, $pq_count Parquet files"
+    else
+        warn "Test data directory not found (tests/data/)"
+    fi
+
+    echo ""
+    if [ "$all_ok" = true ]; then
+        ok "Environment ready"
+    else
+        fail "Please resolve issues above"
+    fi
+}
+
+clean_artifacts() {
+    print_section "Cleaning Artifacts"
+
+    [ -d "$REPORTS_DIR" ] && rm -rf "$REPORTS_DIR" && ok "Removed test reports"
+    [ -d "$PROJECT_ROOT/.pytest_cache" ] && rm -rf "$PROJECT_ROOT/.pytest_cache" && ok "Removed pytest cache"
+    find "$PROJECT_ROOT" -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null && ok "Removed __pycache__"
+
+    local tmp_count=$(ls "$PROJECT_ROOT"/tmp* 2>/dev/null | wc -l)
+    if [ $tmp_count -gt 0 ]; then
+        rm -f "$PROJECT_ROOT"/tmp*
+        ok "Removed $tmp_count temporary files"
+    fi
+
+    echo ""
+    ok "Cleanup complete"
+}
+
+show_stats() {
+    print_section "Test Statistics"
+    cd "$PROJECT_ROOT"
+
+    info "Collecting statistics..."
+    echo ""
+
+    local total=$(python3 -m pytest --collect-only -q "$TEST_DIR/" 2>/dev/null | tail -1 | grep -oP '\d+(?= test)')
+    echo -e "  ${WHITE}Total tests:${NC}     ${CYAN}${total:-N/A}${NC}"
+
+    local files=$(find "$TEST_DIR" -name "test_*.py" | wc -l)
+    echo -e "  ${WHITE}Test files:${NC}      ${CYAN}$files${NC}"
+    echo -e "  ${WHITE}Coverage min:${NC}    ${CYAN}${MIN_COVERAGE}%${NC}"
+    echo ""
+
+    info "Test categories:"
+    find "$TEST_DIR" -name "test_*.py" -exec basename {} \; | sort | sed 's/^/    /'
 }
 
 ################################################################################
@@ -296,268 +284,195 @@ run_parallel_tests() {
 
 show_menu() {
     clear
-    print_header
+    print_logo
 
-    echo "Select test suite to run:"
+    echo -e "${YELLOW}QUICK OPTIONS${NC} ${DIM}(for development - fast feedback)${NC}"
+    echo "  1) Quick Tests          All tests except slow (~5 min)"
+    echo "                          ${DIM}Synthetic fixtures + in-memory tests${NC}"
+    echo ""
+    echo "  2) Profiler Tests       Type inference, statistics, ML analysis (~3 min)"
+    echo "                          ${DIM}Tests profiler engine, calculators, analyzers${NC}"
+    echo ""
+    echo "  3) Dataset Tests        Titanic & Transactions datasets (~3 min)"
+    echo "                          ${DIM}Tests CSV/Parquet format consistency, real data${NC}"
+    echo ""
+    echo "  4) Validation Tests     All 36 validation rule types (~2 min)"
+    echo "                          ${DIM}Mandatory, range, regex, cross-file, etc.${NC}"
     echo ""
 
-    echo "  1) Run All Tests"
-    echo "     → Complete test suite (389+ tests, ~12 minutes)"
+    echo -e "${YELLOW}COMPREHENSIVE${NC} ${DIM}(for pre-commit/CI - thorough)${NC}"
+    echo "  5) All Tests            Complete test suite (~15 min)"
+    echo "                          ${DIM}Includes slow tests and large dataset tests${NC}"
     echo ""
-    echo "  2) Run Unit Tests Only"
-    echo "     → Test individual components in isolation"
+    echo "  6) Coverage Report      All tests + ${MIN_COVERAGE}% threshold (~15 min)"
+    echo "                          ${DIM}Generates HTML report in test-reports/coverage/${NC}"
     echo ""
-    echo "  3) Run Integration Tests Only"
-    echo "     → Test components working together"
+
+    echo -e "${YELLOW}SPECIALIZED${NC} ${DIM}(targeted testing)${NC}"
+    echo "  7) Integration Tests    End-to-end workflow tests"
+    echo "  8) CLI Tests            Command-line interface tests"
+    echo "  9) Core Tests           Engine, config, registry, results"
+    echo "  l) Loader Tests         CSV, Excel, JSON, Parquet, database loaders"
     echo ""
-    echo "  4) Run Security Tests Only"
-    echo "     → Test security features and input validation"
+
+    echo -e "${YELLOW}UTILITIES${NC}"
+    echo "  f) Run Specific File    Enter path to a test file"
+    echo "  e) Environment Check    Verify Python, pytest, test data"
+    echo "  s) View Statistics      Test counts and categories"
+    echo "  c) Clean Artifacts      Remove cache, reports, temp files"
     echo ""
-    echo "  5) Run All Validation Rule Tests"
-    echo "     → Test all 34+ validation types (~1-2 minutes)"
-    echo ""
-    echo "  6) Run Comprehensive Regression Tests ⭐ NEW"
-    echo "     → All 35 validation types + positive/negative cases (~30 seconds)"
-    echo ""
-    echo "  7) Run Database Tests"
-    echo "     → Database integration, validation, and profiling tests"
-    echo ""
-    echo "  8) Run Profiler Tests"
-    echo "     → File and database profiling tests"
-    echo ""
-    echo "  9) Run CLI Tests Only"
-    echo "     → Test command-line interface"
-    echo ""
-    echo "  10) Run Performance Tests Only"
-    echo "     → Test performance benchmarks"
-    echo ""
-    echo "  11) Run Fast Tests (Skip Slow)"
-    echo "     → Quick validation (skips performance tests)"
-    echo ""
-    echo "  12) Run with Coverage Report"
-    echo "     → All tests + detailed coverage analysis (requires ≥48%)"
-    echo ""
-    echo "  13) Run Specific Test File"
-    echo "     → Run a single test file by path"
-    echo ""
-    echo "  14) Run Tests in Parallel"
-    echo "     → Faster execution using multiple cores"
-    echo ""
-    echo "  15) View Test Statistics"
-    echo "     → Show test counts and file listing"
-    echo ""
-    echo "  16) Clean Test Artifacts"
-    echo "     → Remove coverage reports and cache files"
-    echo ""
+
     echo "  0) Exit"
     echo ""
-    echo -n "Enter choice [0-16]: "
+    echo -e "${WHITE}─────────────────────────────────────────────────────────────${NC}"
+    echo -n "  Select: "
 }
 
-view_test_statistics() {
-    print_section "Test Suite Statistics"
+interactive_menu() {
+    while true; do
+        show_menu
+        read choice
 
-    print_info "Collecting test information..."
-
-    # Count tests by type
-    local total_tests=$(python3 -m pytest --collect-only -q $TEST_DIR/ 2>/dev/null | grep "test session" -A 1 | tail -1 | awk '{print $1}')
-    local unit_tests=$(python3 -m pytest --collect-only -q -m unit $TEST_DIR/ 2>/dev/null | grep "test session" -A 1 | tail -1 | awk '{print $1}')
-    local integration_tests=$(python3 -m pytest --collect-only -q -m integration $TEST_DIR/ 2>/dev/null | grep "test session" -A 1 | tail -1 | awk '{print $1}')
-    local security_tests=$(python3 -m pytest --collect-only -q -m security $TEST_DIR/ 2>/dev/null | grep "test session" -A 1 | tail -1 | awk '{print $1}')
-
-    echo ""
-    echo -e "${WHITE}Test Counts:${NC}"
-    echo "  Total Tests:       ${total_tests:-N/A}"
-    echo "  Unit Tests:        ${unit_tests:-N/A}"
-    echo "  Integration Tests: ${integration_tests:-N/A}"
-    echo "  Security Tests:    ${security_tests:-N/A}"
-
-    # Count test files
-    local test_files=$(find $TEST_DIR -name "test_*.py" | wc -l)
-    echo ""
-    echo -e "${WHITE}Test Files:${NC}"
-    echo "  Total Test Files:  $test_files"
-
-    # List test files
-    echo ""
-    echo -e "${WHITE}Test Files:${NC}"
-    find $TEST_DIR -name "test_*.py" -exec basename {} \; | sort | sed 's/^/  - /'
-
-    echo ""
-    read -p "Press Enter to continue..."
-}
-
-clean_test_artifacts() {
-    print_section "Cleaning Test Artifacts"
-
-    local removed_count=0
-
-    # Remove coverage files
-    if [ -d "$COVERAGE_DIR" ]; then
-        rm -rf "$COVERAGE_DIR"
-        print_success "Removed coverage HTML directory"
-        ((removed_count++))
-    fi
-
-    if [ -f ".coverage" ]; then
-        rm -f ".coverage"
-        print_success "Removed .coverage file"
-        ((removed_count++))
-    fi
-
-    # Remove pytest cache
-    if [ -d ".pytest_cache" ]; then
-        rm -rf ".pytest_cache"
-        print_success "Removed pytest cache"
-        ((removed_count++))
-    fi
-
-    # Remove Python cache
-    find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null
-    if [ $? -eq 0 ]; then
-        print_success "Removed Python cache files"
-        ((removed_count++))
-    fi
-
-    # Remove temporary test files from project root
-    local temp_files=$(ls tmp*_profile_report.html tmp*_validation.yaml tmp*.csv tmp*.json tmp*.xlsx tmp*.parquet tmp*.db 2>/dev/null | wc -l)
-    if [ $temp_files -gt 0 ]; then
-        rm -f tmp*_profile_report.html tmp*_validation.yaml tmp*.csv tmp*.json tmp*.xlsx tmp*.parquet tmp*.db 2>/dev/null
-        print_success "Removed $temp_files temporary test file(s) from project root"
-        ((removed_count++))
-    fi
-
-    # Remove temporary test files from tests directory
-    find $TEST_DIR -name "*.pyc" -delete 2>/dev/null
-    find $TEST_DIR -name ".DS_Store" -delete 2>/dev/null
-    find $TEST_DIR -name "tmp*" -delete 2>/dev/null
-
-    echo ""
-    if [ $removed_count -gt 0 ]; then
-        print_success "Cleaned $removed_count artifact type(s)"
-    else
-        print_info "No artifacts to clean"
-    fi
-
-    echo ""
-    read -p "Press Enter to continue..."
-}
-
-################################################################################
-# Main Logic
-################################################################################
-
-main() {
-    # Check if pytest is installed
-    if ! python3 -m pytest --version &> /dev/null; then
-        print_error "pytest is not installed. Install with: pip install pytest pytest-cov"
-        exit 1
-    fi
-
-    # Parse command line arguments
-    if [ $# -eq 0 ]; then
-        # Interactive mode
-        while true; do
-            show_menu
-            read choice
-
-            case $choice in
-                1) run_all_tests ;;
-                2) run_unit_tests ;;
-                3) run_integration_tests ;;
-                4) run_security_tests ;;
-                5) run_validation_tests ;;
-                6) run_comprehensive_regression ;;
-                7) run_database_tests ;;
-                8) run_profiler_tests ;;
-                9) run_cli_tests ;;
-                10) run_performance_tests ;;
-                11) run_fast_tests ;;
-                12) run_with_coverage ;;
-                13)
-                    echo ""
-                    echo -n "Enter test file path: "
-                    read file_path
-                    run_specific_file "$file_path"
-                    ;;
-                14) run_parallel_tests ;;
-                15) view_test_statistics ;;
-                16) clean_test_artifacts ;;
-                0)
-                    echo ""
-                    print_info "Exiting test runner. Goodbye!"
-                    exit 0
-                    ;;
-                *)
-                    print_error "Invalid choice. Please try again."
-                    ;;
-            esac
-
-            echo ""
-            read -p "Press Enter to continue..."
-        done
-    else
-        # Command line mode
-        case "$1" in
-            --all)
-                run_all_tests
+        case $choice in
+            1) run_quick ;;
+            2) run_profiler ;;
+            3) run_datasets ;;
+            4) run_validations ;;
+            5) run_all ;;
+            6) run_coverage ;;
+            7) run_integration ;;
+            8) run_cli ;;
+            9) run_core ;;
+            l|L) run_loaders ;;
+            f|F)
+                echo ""
+                echo -n "  Enter test file path: "
+                read file
+                run_file "$file"
                 ;;
-            --unit)
-                run_unit_tests
-                ;;
-            --integration)
-                run_integration_tests
-                ;;
-            --security)
-                run_security_tests
-                ;;
-            --validations)
-                run_validation_tests
-                ;;
-            --regression)
-                run_comprehensive_regression
-                ;;
-            --database)
-                run_database_tests
-                ;;
-            --profiler)
-                run_profiler_tests
-                ;;
-            --cli)
-                run_cli_tests
-                ;;
-            --performance)
-                run_performance_tests
-                ;;
-            --fast)
-                run_fast_tests
-                ;;
-            --coverage)
-                run_with_coverage
-                ;;
-            --parallel)
-                run_parallel_tests
-                ;;
-            --file)
-                if [ -z "$2" ]; then
-                    print_error "Please specify a test file path"
-                    exit 1
-                fi
-                run_specific_file "$2"
-                ;;
-            --help|-h)
-                show_help
+            e|E) check_environment ;;
+            s|S) show_stats ;;
+            c|C) clean_artifacts ;;
+            0)
+                echo ""
+                info "Goodbye!"
+                exit 0
                 ;;
             *)
-                print_error "Unknown option: $1"
-                show_help
-                exit 1
+                warn "Invalid choice"
+                sleep 1
                 ;;
         esac
 
-        exit $?
-    fi
+        echo ""
+        read -p "  Press Enter to continue..."
+    done
 }
 
-# Run main function
+################################################################################
+# Help
+################################################################################
+
+show_help() {
+    echo "DataK9 Test Runner"
+    echo ""
+    echo "Usage: $0 [OPTIONS]"
+    echo ""
+    echo "QUICK OPTIONS (fast feedback for development):"
+    echo "  --quick, -q          All tests except slow ones (~5 min)"
+    echo "                       Uses generated fixtures, in-memory tests"
+    echo ""
+    echo "  --profiler, -p       Profiler component tests (~3 min)"
+    echo "                       Type inference, statistics, quality metrics, ML analysis"
+    echo ""
+    echo "  --datasets, -d       Dataset profiling tests (~3 min)"
+    echo "                       Titanic & Transactions in CSV and Parquet formats"
+    echo "                       Verifies format consistency and real data handling"
+    echo ""
+    echo "  --validations, -v    Validation rule tests (~2 min)"
+    echo "                       Tests all 36 validation types (mandatory, range, etc.)"
+    echo ""
+    echo "COMPREHENSIVE OPTIONS (thorough testing for CI/pre-commit):"
+    echo "  --all, -a            Complete test suite (~15 min)"
+    echo "                       Includes slow tests and large dataset tests"
+    echo ""
+    echo "  --coverage, -c       Coverage report with threshold (~15 min)"
+    echo "                       Enforces minimum ${MIN_COVERAGE}% coverage"
+    echo "                       Generates HTML report in test-reports/coverage/"
+    echo ""
+    echo "SPECIALIZED OPTIONS:"
+    echo "  --integration, -i    Integration tests only"
+    echo "                       End-to-end profiler workflows"
+    echo ""
+    echo "  --cli                CLI tests only"
+    echo "                       Command-line interface, arguments, outputs"
+    echo ""
+    echo "  --core               Core framework tests only"
+    echo "                       Engine, config, registry, results"
+    echo ""
+    echo "  --loaders            Loader tests only"
+    echo "                       CSV, Excel, JSON, Parquet, database loaders"
+    echo ""
+    echo "UTILITIES:"
+    echo "  --file <path>        Run specific test file"
+    echo "  --check              Check environment (Python, pytest, data)"
+    echo "  --stats              Show test counts and categories"
+    echo "  --clean              Remove cache, reports, temp files"
+    echo "  --help, -h           Show this help"
+    echo ""
+    echo "TEST DATA (in tests/data/samples/):"
+    echo "  csv/titanic.csv          Passenger survival data (891 rows, 12 columns)"
+    echo "  parquet/titanic.parquet  Same data in Parquet format"
+    echo "  csv/transactions.csv     E-commerce transactions (1000 rows, 4 columns)"
+    echo "  parquet/transactions.parquet  Same data in Parquet format"
+    echo ""
+    echo "EXAMPLES:"
+    echo "  $0 --quick           Quick development feedback"
+    echo "  $0 --datasets        Test real dataset profiling"
+    echo "  $0 --coverage        Pre-commit/CI validation"
+    echo "  $0                   Interactive menu (recommended)"
+    echo ""
+}
+
+################################################################################
+# Main
+################################################################################
+
+main() {
+    if ! python3 -m pytest --version &> /dev/null; then
+        fail "pytest not installed. Run: pip install pytest pytest-cov"
+        exit 1
+    fi
+
+    case "${1:-}" in
+        --quick|-q)        run_quick ;;
+        --profiler|-p)     run_profiler ;;
+        --datasets|-d)     run_datasets ;;
+        --validations|-v)  run_validations ;;
+        --integration|-i)  run_integration ;;
+        --cli)             run_cli ;;
+        --core)            run_core ;;
+        --loaders)         run_loaders ;;
+        --all|-a)          run_all ;;
+        --coverage|-c)     run_coverage ;;
+        --file)
+            shift
+            run_file "$1"
+            ;;
+        --check)           check_environment ;;
+        --stats)           show_stats ;;
+        --clean)           clean_artifacts ;;
+        --help|-h)         show_help ;;
+        "")                interactive_menu ;;
+        *)
+            fail "Unknown option: $1"
+            echo ""
+            show_help
+            exit 1
+            ;;
+    esac
+
+    exit $?
+}
+
 main "$@"

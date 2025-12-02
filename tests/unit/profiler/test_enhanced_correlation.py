@@ -84,7 +84,7 @@ class TestEnhancedCorrelationAnalyzer:
         pair = pairs[0]
         assert pair["method"] == "pearson"
         assert abs(pair["correlation"]) > 0.9  # Strong linear correlation
-        assert pair["is_significant"] is True
+        assert pair["is_significant"] == True  # Use == for numpy bool comparison
 
     def test_calculate_pearson_significance(self, analyzer, linear_data):
         """Test Pearson correlation significance testing."""
@@ -95,7 +95,7 @@ class TestEnhancedCorrelationAnalyzer:
             assert "p_value" in pair
             assert "is_significant" in pair
             if abs(pair["correlation"]) > 0.8:
-                assert pair["is_significant"] is True
+                assert pair["is_significant"] == True  # Use == for numpy bool comparison
 
     def test_calculate_pearson_matrix_structure(self, analyzer, linear_data):
         """Test Pearson correlation matrix structure."""

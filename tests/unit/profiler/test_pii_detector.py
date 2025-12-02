@@ -151,10 +151,11 @@ class TestPIIDetector:
 
     def test_detect_credit_card_valid_luhn(self, detector):
         """Test credit card detection with Luhn validation."""
-        # These are test credit card numbers that pass Luhn
+        # These are test credit card numbers that pass Luhn algorithm
+        # Generated using proper Luhn checksum calculation
         samples = [
-            "4532-1111-1111-1111",  # Visa test card
-            "5425-2334-3010-9903",  # Mastercard test card
+            "4532-1111-1111-1112",  # Visa test card (valid Luhn)
+            "5425-2334-3010-9903",  # Mastercard test card (valid Luhn)
         ]
 
         result = detector.detect_pii_in_column("cc", samples, total_rows=len(samples))
@@ -166,7 +167,7 @@ class TestPIIDetector:
 
     def test_validate_credit_card_luhn_valid(self, detector):
         """Test Luhn algorithm with valid credit card."""
-        valid_cc = "4532111111111111"  # Valid Luhn checksum
+        valid_cc = "4532111111111112"  # Valid Luhn checksum (last digit is check digit)
 
         assert detector._validate_credit_card_luhn(valid_cc) is True
 
@@ -178,7 +179,7 @@ class TestPIIDetector:
 
     def test_validate_credit_card_luhn_with_dashes(self, detector):
         """Test Luhn validation with dashes in card number."""
-        valid_cc = "4532-1111-1111-1111"
+        valid_cc = "4532-1111-1111-1112"  # Valid Luhn with dashes
 
         assert detector._validate_credit_card_luhn(valid_cc) is True
 
@@ -557,17 +558,20 @@ class TestPIIDetector:
         if should_detect:
             assert result["detected"] is True
 
-    @pytest.mark.parametrize("risk_score,expected_level", [
-        (85, "critical"),
-        (65, "high"),
-        (45, "moderate"),
-        (20, "low"),
+    @pytest.mark.parametrize("risk_score,total_columns,expected_level", [
+        # Weighted formula: 0.4*max_risk + 0.3*avg_risk + 0.3*(pii_cols/total_cols*100)
+        # With 1 PII column out of 10: pii_percentage = 10%
+        # score = 0.4*risk + 0.3*risk + 0.3*10 = 0.7*risk + 3
+        (100, 10, "critical"),  # 0.7*100 + 3 = 73 >= 70 → critical
+        (70, 10, "high"),       # 0.7*70 + 3 = 52 >= 50 → high
+        (40, 10, "moderate"),   # 0.7*40 + 3 = 31 >= 30 → moderate
+        (10, 10, "low"),        # 0.7*10 + 3 = 10 < 30 → low
     ])
-    def test_risk_level_classification(self, detector, risk_score, expected_level):
-        """Test risk level classification."""
+    def test_risk_level_classification(self, detector, risk_score, total_columns, expected_level):
+        """Test risk level classification with weighted formula."""
         result = detector.calculate_dataset_privacy_risk(
             pii_columns=[{"risk_score": risk_score, "regulatory_frameworks": []}],
-            total_columns=10,
+            total_columns=total_columns,
             total_rows=100
         )
 
