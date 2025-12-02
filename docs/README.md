@@ -36,6 +36,7 @@ Welcome to **DataK9** - a data quality framework that guards your data pipelines
 
 **Data Analysis & Validation:**
 - [Data Profiling](using-datak9/data-profiling.md) - Analyze data quality
+- [Data Validation](using-datak9/validator.md) - Execute validation rules
 - [Validation Catalog](using-datak9/validation-catalog.md) - All 35 validation types
 - [Reading Reports](using-datak9/reading-reports.md) - Understand validation results
 

@@ -39,7 +39,7 @@ DataK9 is a modular, extensible Python-based system for validating data quality 
 - **Python 3.8+**: Core language
 - **Polars / pandas**: Dual backend for data processing (Polars default, high performance)
 - **PyYAML**: Configuration parsing
-- **pytest**: Testing framework (115+ tests, 48% coverage)
+- **pytest**: Testing framework (900+ tests, 48% coverage)
 - **Jinja2**: HTML report generation
 - **Optional**: PyArrow (Parquet support), openpyxl (Excel), scikit-learn (ML anomaly detection)
 
