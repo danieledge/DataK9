@@ -395,7 +395,7 @@ class PrettyOutput:
 
         color, icon = severity_styles.get(severity, (Fore.WHITE, "•"))
 
-        print(f"\n{PrettyOutput.BRAIN} {PrettyOutput.HEADER}ML Analysis{PrettyOutput.RESET}")
+        print(f"\n{PrettyOutput.BRAIN} {PrettyOutput.HEADER}Anomalies{PrettyOutput.RESET}")
         print(f"  {color}{icon}{PrettyOutput.RESET} {total_issues:,} potential issues ({severity} severity)")
 
         if key_findings:
@@ -404,6 +404,94 @@ class PrettyOutput:
 
         if analyzed_rows:
             print(f"  {PrettyOutput.DIM}{PrettyOutput.ARROW} Analyzed {analyzed_rows:,} rows{PrettyOutput.RESET}")
+
+    @staticmethod
+    def structure_summary(column_count, type_breakdown=None):
+        """
+        Print structure section summary.
+
+        Args:
+            column_count: Number of columns
+            type_breakdown: Dict of type counts (e.g., {"string": 5, "numeric": 3})
+        """
+        print(f"\n📋 {PrettyOutput.HEADER}Structure{PrettyOutput.RESET}")
+        print(f"  {PrettyOutput.SUCCESS}{PrettyOutput.CHECK}{PrettyOutput.RESET} {column_count} fields analyzed")
+
+        if type_breakdown:
+            types_str = ", ".join(f"{count} {t}" for t, count in type_breakdown.items() if count > 0)
+            if types_str:
+                print(f"  {PrettyOutput.DIM}{PrettyOutput.ARROW} {types_str}{PrettyOutput.RESET}")
+
+    @staticmethod
+    def quality_summary(overall_score, issues_count=0):
+        """
+        Print quality section summary.
+
+        Args:
+            overall_score: Overall quality score (0-100)
+            issues_count: Number of quality issues detected
+        """
+        if overall_score >= 90:
+            color = Fore.GREEN
+            status = "Excellent"
+        elif overall_score >= 70:
+            color = Fore.YELLOW
+            status = "Good"
+        elif overall_score >= 50:
+            color = Fore.YELLOW
+            status = "Fair"
+        else:
+            color = Fore.RED
+            status = "Needs Attention"
+
+        print(f"\n✅ {PrettyOutput.HEADER}Quality{PrettyOutput.RESET}")
+        print(f"  {color}●{PrettyOutput.RESET} {overall_score:.0f}% overall score ({status})")
+
+        if issues_count > 0:
+            print(f"  {PrettyOutput.DIM}{PrettyOutput.ARROW} {issues_count} issues detected{PrettyOutput.RESET}")
+
+    @staticmethod
+    def correlations_summary(correlation_count, strong_count=0):
+        """
+        Print correlations section summary.
+
+        Args:
+            correlation_count: Total correlation pairs analyzed
+            strong_count: Number of strong correlations found
+        """
+        print(f"\n🔗 {PrettyOutput.HEADER}Correlations{PrettyOutput.RESET}")
+        if correlation_count > 0:
+            print(f"  {PrettyOutput.SUCCESS}{PrettyOutput.CHECK}{PrettyOutput.RESET} {correlation_count} pairs analyzed")
+            if strong_count > 0:
+                print(f"  {PrettyOutput.DIM}{PrettyOutput.ARROW} {strong_count} strong correlations found{PrettyOutput.RESET}")
+        else:
+            print(f"  {PrettyOutput.DIM}•{PrettyOutput.RESET} No numeric columns for correlation analysis")
+
+    @staticmethod
+    def temporal_summary(temporal_count):
+        """
+        Print time series section summary.
+
+        Args:
+            temporal_count: Number of datetime fields with temporal analysis
+        """
+        if temporal_count > 0:
+            print(f"\n🕐 {PrettyOutput.HEADER}Time Series{PrettyOutput.RESET}")
+            print(f"  {PrettyOutput.SUCCESS}{PrettyOutput.CHECK}{PrettyOutput.RESET} {temporal_count} datetime fields analyzed")
+
+    @staticmethod
+    def validations_summary(validation_count):
+        """
+        Print suggested validations section summary.
+
+        Args:
+            validation_count: Number of suggested validations
+        """
+        print(f"\n✔️  {PrettyOutput.HEADER}Suggested Validations{PrettyOutput.RESET}")
+        if validation_count > 0:
+            print(f"  {PrettyOutput.SUCCESS}{PrettyOutput.CHECK}{PrettyOutput.RESET} {validation_count} validation rules suggested")
+        else:
+            print(f"  {PrettyOutput.DIM}•{PrettyOutput.RESET} No validations suggested")
 
     @staticmethod
     def validation_result(passed, errors=0, warnings=0, duration=None):

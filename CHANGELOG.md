@@ -38,7 +38,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Automatic directory creation for nested paths
   - Filename sanitization for cross-platform compatibility
   - Consistent timestamps across all outputs in a single run
-  - See [CLI_GUIDE.md](CLI_GUIDE.md) for complete documentation
+  - See [CLI_GUIDE.md](docs/CLI_GUIDE.md) for complete documentation
 - **New utility module**: `validation_framework.utils.path_patterns.PathPatternExpander`
 - **Example config**: `examples/configs/validation_with_datetime_patterns.yaml`
 - **Comprehensive tests**: 40+ unit tests and integration tests for pattern expansion

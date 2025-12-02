@@ -726,6 +726,40 @@ def profile(file_path, format, delimiter, database, table, query, html_output, j
             size_str=size_str
         )
 
+        # Calculate type breakdown for structure summary
+        type_breakdown = {}
+        for col in profile_result.columns:
+            inferred = col.type_info.inferred_type if col.type_info else "unknown"
+            # Group types
+            if inferred in ("int64", "float64", "integer", "float", "numeric"):
+                type_breakdown["numeric"] = type_breakdown.get("numeric", 0) + 1
+            elif inferred in ("string", "object", "str"):
+                type_breakdown["string"] = type_breakdown.get("string", 0) + 1
+            elif inferred in ("datetime64", "datetime", "date", "timestamp"):
+                type_breakdown["datetime"] = type_breakdown.get("datetime", 0) + 1
+            elif inferred in ("bool", "boolean"):
+                type_breakdown["boolean"] = type_breakdown.get("boolean", 0) + 1
+            else:
+                type_breakdown["other"] = type_breakdown.get("other", 0) + 1
+
+        # Structure summary
+        po.structure_summary(profile_result.column_count, type_breakdown)
+
+        # Quality summary
+        quality_issues = sum(len(col.quality.issues) for col in profile_result.columns if col.quality)
+        po.quality_summary(profile_result.overall_quality_score, quality_issues)
+
+        # Correlations summary
+        correlation_count = len(profile_result.correlations) if profile_result.correlations else 0
+        strong_correlations = sum(1 for c in (profile_result.correlations or [])
+                                  if abs(c.correlation) >= 0.7)
+        po.correlations_summary(correlation_count, strong_correlations)
+
+        # Temporal summary (count datetime fields with temporal analysis)
+        temporal_count = sum(1 for col in profile_result.columns
+                            if col.temporal_analysis and col.temporal_analysis.get("available"))
+        po.temporal_summary(temporal_count)
+
         # Run ML analysis by default (unless --no-ml flag is set)
         # NOTE: The profiler engine already runs ML analysis during profiling (50K sample)
         # Only run additional analysis here if ml_findings is not already populated
@@ -801,6 +835,10 @@ def profile(file_path, format, delimiter, database, table, query, html_output, j
                     po.warning(f"ML analysis failed: {e}")
                     logger.debug(f"ML analysis error: {e}", exc_info=True)
 
+        # Suggested validations summary
+        validation_count = len(profile_result.suggested_validations) if profile_result.suggested_validations else 0
+        po.validations_summary(validation_count)
+
         # Generate HTML report (choose reporter based on style)
         if report_style and report_style.lower() == 'classic':
             reporter = ProfileHTMLReporter()
@@ -811,7 +849,7 @@ def profile(file_path, format, delimiter, database, table, query, html_output, j
         # Output files section
         po.blank_line()
         po.subsection("Output Files")
-        po.output_file(f"HTML ({report_style or 'executive'})", html_output)
+        po.output_file(f"HTML Report ({report_style or 'executive'})", html_output)
 
         # Generate JSON output if requested
         if json_output:
@@ -822,13 +860,13 @@ def profile(file_path, format, delimiter, database, table, query, html_output, j
 
             with open(json_output, 'w') as f:
                 json.dump(profile_result.to_dict(), f, indent=2)
-            po.output_file("JSON", json_output)
+            po.output_file("JSON Profile", json_output)
 
         # Save generated validation config
         if profile_result.generated_config_yaml:
             with open(config_output, 'w') as f:
                 f.write(profile_result.generated_config_yaml)
-            po.output_file("Config", config_output)
+            po.output_file(f"Suggested Config ({validation_count} rules)", config_output)
 
         po.blank_line()
         sys.exit(0)

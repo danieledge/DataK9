@@ -15,7 +15,7 @@
   [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
   [![Commercial Use: ✓](https://img.shields.io/badge/Commercial%20Use-✓%20Unrestricted-brightgreen.svg)](#commercial-use)
 
-  **[Quick Start](#-quick-start-3-minutes)** • **[Documentation](docs/)** • **[Examples](examples/)** • **[CLI Guide](CLI_GUIDE.md)**
+  **[Quick Start](#-quick-start-3-minutes)** • **[Documentation](docs/)** • **[Examples](examples/)** • **[CLI Guide](docs/CLI_GUIDE.md)**
 </div>
 
 ---
@@ -230,8 +230,8 @@ DataK9 was built for a different philosophy:
 - **[Database Quick Start](docs/guides/database/DATABASE_QUICKSTART.md)** - PostgreSQL, MySQL, SQL Server 🗄️
 
 ### 📖 Quick References
-- **[CLI Reference](CLI_GUIDE.md)** - All command-line options
-- **[Validation Reference](VALIDATION_REFERENCE.md)** - All 35 validation types
+- **[CLI Reference](docs/CLI_GUIDE.md)** - All command-line options
+- **[Validation Reference](docs/VALIDATION_REFERENCE.md)** - All 35 validation types
 - **[YAML Reference](docs/reference/yaml-reference.md)** - Config file syntax
 - **[Validation Compatibility](docs/reference/VALIDATION_COMPATIBILITY.md)** - Files vs databases
 
@@ -324,7 +324,7 @@ DataK9 includes 35 built-in validation types across 10 categories:
 ### Custom Validations
 - Easy plugin architecture for custom validation logic
 
-**→ [Complete Validation Reference](VALIDATION_REFERENCE.md)**
+**→ [Complete Validation Reference](docs/VALIDATION_REFERENCE.md)**
 
 </details>
 
@@ -446,7 +446,7 @@ output:
 - ✅ Organized outputs (automatic directory structures)
 - ✅ Fully backward compatible (existing configs work unchanged)
 
-**→ [CLI Guide - Pattern Documentation](CLI_GUIDE.md#date-time-patterns)**
+**→ [CLI Guide - Pattern Documentation](docs/CLI_GUIDE.md#date-time-patterns)**
 
 </details>
 
@@ -704,7 +704,7 @@ python3 -m validation_framework.cli list-validations
 python3 -m validation_framework.cli init-config
 ```
 
-**→ [Complete CLI Reference](CLI_GUIDE.md)**
+**→ [Complete CLI Reference](docs/CLI_GUIDE.md)**
 
 </details>
 
@@ -764,7 +764,7 @@ MIT License - see [LICENSE](LICENSE) file for details
 
 **Your K9 guardian for data quality**
 
-[Documentation](docs/) • [Quick Start](docs/getting-started/quickstart-5min.md) • [CLI Guide](CLI_GUIDE.md) • [Examples](examples/)
+[Documentation](docs/) • [Quick Start](docs/getting-started/quickstart-5min.md) • [CLI Guide](docs/CLI_GUIDE.md) • [Examples](examples/)
 
 ---
 

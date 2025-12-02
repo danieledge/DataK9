@@ -148,10 +148,15 @@ docs/archive/
 # OS
 Thumbs.db
 
+# Images - exclude all PNGs except logo folder
+*.png
+!resources/images/*.png
+
 # Development/Internal docs (not for public repo)
 wip/
 CLAUDE.md
 playground/
+go.sh
 
 # Benchmark data and outputs (downloaded datasets and profiler results)
 # The benchmark.sh script itself IS tracked; only data/outputs are ignored
