@@ -146,59 +146,26 @@ class CorrelationInsightSynthesizer:
         low_median = col2_when_low.median()
         high_median = col2_when_high.median()
 
-        # Calculate ratio and difference
+        # Calculate ratio - always compare high to low for simplicity
         if low_median > 0 and high_median > 0:
-            if r < 0:
-                # Negative correlation: low col1 -> high col2
-                ratio = low_median / high_median
-                higher_group = f"Lower {friendly1}"
-                lower_group = f"Higher {friendly1}"
-                higher_val = low_median
-                lower_val = high_median
-            else:
-                # Positive correlation: high col1 -> high col2
+            if high_median > low_median:
                 ratio = high_median / low_median
-                higher_group = f"Higher {friendly1}"
-                lower_group = f"Lower {friendly1}"
-                higher_val = high_median
-                lower_val = low_median
+            else:
+                ratio = low_median / high_median
         else:
             ratio = None
-            higher_group = lower_group = ""
-            higher_val = lower_val = 0
 
-        # Generate headline with clearer phrasing
+        # Generate headline - simple correlation statement
         r_squared = r ** 2
-        if ratio and ratio > 1.2:
-            # Use more natural phrasing
-            headline = f"Records with {higher_group.lower()} have <span class=\"highlight-value\">{ratio:.1f}x</span> the {friendly2}"
-        else:
-            direction = "increases" if r > 0 else "decreases"
-            headline = f"As {friendly1} increases, {friendly2} tends to {direction}"
+        direction = "increases" if r > 0 else "decreases"
+        headline = f"As {friendly1} increases, {friendly2} {direction}"
 
-        # Build comparison data for bars
+        # No comparison bars for numeric correlations - they're continuous, not categorical
         comparison_data = []
-        if ratio:
-            comparison_data = [
-                {
-                    'label': higher_group,
-                    'value': higher_val,
-                    'percentage': 100,
-                    'formatted': self._format_value(higher_val, col2)
-                },
-                {
-                    'label': lower_group,
-                    'value': lower_val,
-                    'percentage': (lower_val / higher_val * 100) if higher_val > 0 else 0,
-                    'formatted': self._format_value(lower_val, col2)
-                }
-            ]
 
         # Calculate metrics
-        pct_diff = ((higher_val - lower_val) / lower_val * 100) if lower_val > 0 else 0
         metrics = {
             'ratio': ratio,
-            'percentage_difference': pct_diff,
             'r_squared': r_squared,
             'n_observations': n_obs
         }
