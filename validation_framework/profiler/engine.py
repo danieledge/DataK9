@@ -79,6 +79,15 @@ except ImportError:
     ML_ANALYSIS_AVAILABLE = False
     # ML analysis is optional
 
+# Validation Suggestion Generator (extracted from god class)
+from validation_framework.profiler.validation_suggester import ValidationSuggestionGenerator
+
+# Type Inferrer (extracted from god class)
+from validation_framework.profiler.type_inferrer import TypeInferrer
+
+# Statistics Calculator (extracted from god class)
+from validation_framework.profiler.statistics_calculator import StatisticsCalculator
+
 try:
     from visions.functional import detect_type
     from visions.types import Float, Integer, String, Boolean, Object
@@ -245,6 +254,15 @@ class DataProfiler:
         # Initialize Phase 3: ML analyzer (Beta)
         self.enable_ml_analysis = enable_ml_analysis and ML_ANALYSIS_AVAILABLE
         self.ml_analyzer = MLAnalyzer() if self.enable_ml_analysis else None
+
+        # Initialize validation suggestion generator (extracted from god class)
+        self.validation_suggester = ValidationSuggestionGenerator()
+
+        # Initialize type inferrer (extracted from god class)
+        self.type_inferrer = TypeInferrer()
+
+        # Initialize statistics calculator (extracted from god class)
+        self.stats_calculator = StatisticsCalculator(max_correlation_columns=max_correlation_columns)
 
         # Memory safety configuration
         self.disable_memory_safety = disable_memory_safety  # WARNING: Only for development/testing
@@ -433,6 +451,9 @@ class DataProfiler:
 
         row_count = len(df)
 
+        # Track phase timings for performance analysis
+        phase_timings = {}
+
         # Initialize column profiles
         column_profiles: Dict[str, Dict[str, Any]] = {}
         numeric_data: Dict[str, List[float]] = {}
@@ -459,13 +480,17 @@ class DataProfiler:
             columns.append(column_profile)
 
         # Collect numeric and datetime data AFTER type finalization (Phase 1)
+        # Bound all collections to prevent memory leaks on large dataframes
+        MAX_CORRELATION_SAMPLES = 50000  # Sufficient for statistical correlation analysis
         for column in columns:
             # Collect numeric data for correlations
             if column.type_info.inferred_type in ["integer", "float"]:
                 try:
                     numeric_values = pd.to_numeric(df[column.name], errors='coerce').dropna()
-                    numeric_data[column.name] = numeric_values.tolist()
-                    logger.debug(f"Collected {len(numeric_values)} numeric values for {column.name}")
+                    # Bound to MAX_CORRELATION_SAMPLES to prevent memory leaks
+                    bounded_values = numeric_values.head(MAX_CORRELATION_SAMPLES)
+                    numeric_data[column.name] = bounded_values.tolist()
+                    logger.debug(f"Collected {len(bounded_values)} numeric values for {column.name}")
                 except Exception as e:
                     logger.warning(f"Failed to collect numeric data for {column.name}: {e}")
 
@@ -473,8 +498,10 @@ class DataProfiler:
             if self.enable_temporal_analysis and column.type_info.inferred_type in ["datetime", "date"]:
                 try:
                     dt_values = pd.to_datetime(df[column.name], errors='coerce').dropna()
-                    datetime_data[column.name] = dt_values.tolist()
-                    logger.debug(f"Collected {len(dt_values)} datetime values for {column.name}")
+                    # Bound to MAX_CORRELATION_SAMPLES to prevent memory leaks
+                    bounded_dt_values = dt_values.head(MAX_CORRELATION_SAMPLES)
+                    datetime_data[column.name] = bounded_dt_values.tolist()
+                    logger.debug(f"Collected {len(bounded_dt_values)} datetime values for {column.name}")
                 except Exception as e:
                     logger.warning(f"Failed to collect datetime data for {column.name}: {e}")
 
@@ -495,6 +522,7 @@ class DataProfiler:
 
         # Phase 1: Apply PII detection to all columns
         pii_columns = []
+        pii_start = time.time()
         if self.enable_pii_detection:
             logger.debug("Running PII detection on all columns...")
             for column in columns:
@@ -597,9 +625,9 @@ class DataProfiler:
         phase_timings['semantic_tagging'] = time.time() - semantic_start
         logger.debug(f"⏱  Semantic tagging completed in {phase_timings['semantic_tagging']:.2f}s")
 
-        # Calculate correlations
+        # Calculate correlations (using extracted StatisticsCalculator)
         correlation_start = time.time()
-        correlations = self._calculate_correlations(numeric_data, row_count)
+        correlations = self.stats_calculator.calculate_correlations(numeric_data, row_count)
         phase_timings['basic_correlation'] = time.time() - correlation_start
 
         # Phase 1: Calculate enhanced correlations
@@ -643,8 +671,12 @@ class DataProfiler:
             except Exception as e:
                 logger.warning(f"Dataset privacy risk calculation failed: {e}")
 
-        # Generate validation suggestions
-        suggested_validations = self._generate_validation_suggestions(columns, row_count)
+        # Generate validation suggestions (using extracted ValidationSuggestionGenerator)
+        suggested_validations = self.validation_suggester.generate_suggestions(
+            columns, row_count,
+            enable_ml_suggestions=self.enable_ml_analysis,
+            ml_analyzer=self.ml_analyzer
+        )
 
         # Calculate overall quality score
         overall_quality = self._calculate_overall_quality(columns)
@@ -839,7 +871,7 @@ class DataProfiler:
     def profile_file(
         self,
         file_path: str,
-        file_format: str = "csv",
+        file_format: Optional[str] = None,
         declared_schema: Optional[Dict[str, str]] = None,
         sample_rows: Optional[int] = None,
         **loader_kwargs
@@ -849,7 +881,7 @@ class DataProfiler:
 
         Args:
             file_path: Path to file to profile
-            file_format: Format (csv, excel, json, parquet)
+            file_format: Format (csv, excel, json, parquet). Auto-detected from extension if not specified.
             declared_schema: Optional declared schema {column: type}
             sample_rows: Optional limit - profile only the first N rows (useful for large files)
             **loader_kwargs: Additional arguments for data loader
@@ -859,6 +891,22 @@ class DataProfiler:
         """
         start_time = time.time()
         logger.debug(f"Starting profile of {file_path}")
+
+        # Auto-detect format from file extension if not specified
+        if file_format is None:
+            suffix = Path(file_path).suffix.lower()
+            format_map = {
+                '.csv': 'csv',
+                '.tsv': 'csv',
+                '.parquet': 'parquet',
+                '.pq': 'parquet',
+                '.xlsx': 'excel',
+                '.xls': 'excel',
+                '.json': 'json',
+                '.jsonl': 'json',
+            }
+            file_format = format_map.get(suffix, 'csv')
+            logger.debug(f"Auto-detected format '{file_format}' from extension '{suffix}'")
 
         # Track timing for each phase
         phase_timings = {}
@@ -1051,8 +1099,9 @@ class DataProfiler:
                                 sampling_triggered[col] = row_count
                                 logger.debug(f"💾 Memory optimization: Column '{col}' sampling limit reached at {row_count:,} rows (using {MAX_CORRELATION_SAMPLES:,} samples for correlation)")
                         else:
-                            # Only convert to list when size is small (under limit)
-                            numeric_data[col].extend(numeric_values.tolist())
+                            # Size is under limit, but still bound to samples_needed to prevent unbounded growth
+                            bounded_values = numeric_values.head(samples_needed)
+                            numeric_data[col].extend(bounded_values.tolist())
 
                 # Collect datetime data for temporal analysis with memory-efficient sampling
                 # CRITICAL: Only attempt datetime conversion on likely datetime columns to avoid memory bloat
@@ -1095,7 +1144,9 @@ class DataProfiler:
                                                 sampling_triggered[col] = row_count
                                                 logger.debug(f"💾 Memory optimization: Column '{col}' temporal sampling limit reached at {row_count:,} rows (using {MAX_TEMPORAL_SAMPLES:,} samples)")
                                         else:
-                                            datetime_data[col].extend(dt_series.tolist())
+                                            # Size is under limit - use head() to bound
+                                            bounded_dt = dt_series.head(samples_needed)
+                                            datetime_data[col].extend(bounded_dt.tolist())
                         except (ValueError, TypeError) as e:
                             logger.debug(f"Could not convert column '{col}' to datetime: {e}")
 
@@ -1260,9 +1311,9 @@ class DataProfiler:
         phase_timings['semantic_tagging'] = time.time() - semantic_start
         logger.debug(f"⏱  Semantic tagging completed in {phase_timings['semantic_tagging']:.2f}s")
 
-        # Calculate correlations
+        # Calculate correlations (using extracted StatisticsCalculator)
         correlation_start = time.time()
-        correlations = self._calculate_correlations(numeric_data, row_count)
+        correlations = self.stats_calculator.calculate_correlations(numeric_data, row_count)
         phase_timings['basic_correlation'] = time.time() - correlation_start
 
         # Phase 1: Calculate enhanced correlations
@@ -1306,11 +1357,15 @@ class DataProfiler:
             except Exception as e:
                 logger.warning(f"Dataset privacy risk calculation failed: {e}")
 
-        # Generate validation suggestions
+        # Generate validation suggestions (using extracted ValidationSuggestionGenerator)
         # Use actual_total_rows for suggestions to get correct row count range (not sampled count)
         suggestions_start = time.time()
         actual_rows_for_suggestions = actual_total_rows if actual_total_rows else row_count
-        suggested_validations = self._generate_validation_suggestions(columns, actual_rows_for_suggestions)
+        suggested_validations = self.validation_suggester.generate_suggestions(
+            columns, actual_rows_for_suggestions,
+            enable_ml_suggestions=self.enable_ml_analysis,
+            ml_analyzer=self.ml_analyzer
+        )
         phase_timings['generate_suggestions'] = time.time() - suggestions_start
 
         # Calculate overall quality score
@@ -1704,7 +1759,7 @@ class DataProfiler:
             # Track unexpected types for debugging (limit to first 10 occurrences)
             unexpected_types_logged = 0
             for value in type_sample:
-                detected_type = self._detect_type(value)
+                detected_type = self.type_inferrer.detect_type(value)
                 profile["type_counts"][detected_type] = profile["type_counts"].get(detected_type, 0) + 1
 
                 # Debug logging for type mismatches (first chunk only, limit output)
@@ -1714,7 +1769,7 @@ class DataProfiler:
                     col_lower = profile["column_name"].lower()
                     is_account_like = any(keyword in col_lower for keyword in ['account', 'id', 'code', 'reference', 'number'])
                     if is_account_like and detected_type in ['integer', 'float', 'boolean', 'date']:
-                        logger.debug(f"🔍 Type mismatch in '{profile['column_name']}': value='{value}' → detected as '{detected_type}' (expected string)")
+                        logger.debug(f"Type mismatch in '{profile['column_name']}': value='{value}' -> detected as '{detected_type}' (expected string)")
                         unexpected_types_logged += 1
 
             profile["type_sampled_count"] += len(type_sample)
@@ -1728,7 +1783,7 @@ class DataProfiler:
                 sampled_series = non_null_series
 
             for value in sampled_series:
-                detected_type = self._detect_type(value)
+                detected_type = self.type_inferrer.detect_type(value)
                 profile["type_counts"][detected_type] = profile["type_counts"].get(detected_type, 0) + 1
             profile["type_sampled_count"] += len(sampled_series)
 
@@ -1793,86 +1848,15 @@ class DataProfiler:
         # Pattern detection (sample only)
         if chunk_idx == 0:
             for val in non_null_series.head(100):
-                pattern = self._extract_pattern(str(val))
+                pattern = self.type_inferrer.extract_pattern(str(val))
                 profile["patterns"][pattern] = profile["patterns"].get(pattern, 0) + 1
 
-    def _detect_type(self, value: Any) -> str:
-        """
-        Detect the type of a value.
-
-        Returns:
-            Type string: 'integer', 'float', 'boolean', 'date', 'string', 'array'
-        """
-        # Check if value is array-like (list, numpy array, etc.)
-        # This must be checked BEFORE pd.isna() to avoid "ambiguous truth value" error
-        if isinstance(value, (list, np.ndarray)) or hasattr(value, '__array__'):
-            return 'array'
-
-        # Check for null
-        if pd.isna(value):
-            return 'null'
-
-        # Boolean
-        if isinstance(value, bool) or str(value).lower() in ['true', 'false', 'yes', 'no']:
-            return 'boolean'
-
-        # Try numeric
-        try:
-            float_val = float(value)
-            if float_val.is_integer():
-                return 'integer'
-            return 'float'
-        except (ValueError, TypeError):
-            pass
-
-        # Try date
-        value_str = str(value)
-        if self._is_date_like(value_str):
-            return 'date'
-
-        # Default to string
-        return 'string'
-
-    def _is_date_like(self, value: str) -> bool:
-        """Check if string looks like a date."""
-        # Common date patterns
-        date_patterns = [
-            r'^\d{4}-\d{2}-\d{2}',  # ISO date
-            r'^\d{2}/\d{2}/\d{4}',  # US date
-            r'^\d{2}-\d{2}-\d{4}',  # EU date
-            r'^\d{4}/\d{2}/\d{2}',  # Alternative ISO
-        ]
-
-        for pattern in date_patterns:
-            if re.match(pattern, value):
-                return True
-
-        return False
-
-    def _extract_pattern(self, value: str) -> str:
-        """
-        Extract pattern from string value.
-
-        Replaces:
-        - Digits with '9'
-        - Letters with 'A'
-        - Special chars remain as-is
-
-        Example: "ABC-123" -> "AAA-999"
-        """
-        if len(value) > 50:
-            value = value[:50]  # Limit length
-
-        pattern = []
-        for char in value:
-            if char.isdigit():
-                pattern.append('9')
-            elif char.isalpha():
-                pattern.append('A')
-            else:
-                pattern.append(char)
-
-        return ''.join(pattern)
+    # =========================================================================
+    # COLUMN PROFILE FINALIZATION
+    # Note: Type inference, statistics, and quality metrics are now delegated
+    # to extracted classes (TypeInferrer, StatisticsCalculator) for better
+    # maintainability and testability.
+    # =========================================================================
 
     def _finalize_column_profile(
         self,
@@ -1882,14 +1866,14 @@ class DataProfiler:
     ) -> ColumnProfile:
         """Finalize column profile after processing all chunks."""
 
-        # Determine inferred type and confidence
-        type_info = self._infer_type(profile_data, total_rows)
+        # Determine inferred type and confidence (using extracted TypeInferrer)
+        type_info = self.type_inferrer.infer_column_type(profile_data, total_rows)
 
-        # Calculate statistics
-        statistics = self._calculate_statistics(profile_data, total_rows)
+        # Calculate statistics (using extracted StatisticsCalculator)
+        statistics = self.stats_calculator.calculate_statistics(profile_data, total_rows)
 
-        # Calculate quality metrics
-        quality = self._calculate_quality_metrics(profile_data, type_info, statistics, total_rows)
+        # Calculate quality metrics (using extracted StatisticsCalculator)
+        quality = self.stats_calculator.calculate_quality_metrics(profile_data, type_info, statistics, total_rows)
 
         return ColumnProfile(
             name=col_name,
@@ -1898,378 +1882,11 @@ class DataProfiler:
             quality=quality
         )
 
-    def _infer_type(
-        self,
-        profile_data: Dict[str, Any],
-        total_rows: int
-    ) -> TypeInference:
-        """
-        Infer type with confidence level.
-
-        Confidence based on:
-        - Consistency of detected types
-        - Presence of declared schema
-        - Percentage of values matching inferred type
-        """
-        declared_type = profile_data["declared_type"]
-        type_counts = profile_data["type_counts"]
-        null_count = profile_data["null_count"]
-
-        # Handle empty column
-        if not type_counts:
-            return TypeInference(
-                declared_type=declared_type,
-                inferred_type="empty",
-                confidence=1.0 if declared_type else 0.0,
-                is_known=declared_type is not None,
-                sample_values=[]
-            )
-
-        # Get most common type
-        non_null_count = total_rows - null_count
-        sorted_types = sorted(type_counts.items(), key=lambda x: x[1], reverse=True)
-        primary_type, primary_count = sorted_types[0]
-
-        # Calculate confidence
-        if declared_type:
-            # If schema declares type, it's known
-            confidence = 1.0
-            is_known = True
-            inferred = declared_type
-        else:
-            # Confidence = percentage of SAMPLED values matching primary type
-            # Use type_sampled_count instead of total rows for accurate confidence with sampling
-            type_sampled_count = profile_data.get("type_sampled_count", non_null_count)
-            confidence = primary_count / type_sampled_count if type_sampled_count > 0 else 0.0
-            is_known = False
-            inferred = primary_type
-
-        # Detect type conflicts
-        conflicts = []
-        type_sampled_count_for_conflicts = profile_data.get("type_sampled_count", non_null_count)
-        for typ, count in sorted_types[1:4]:  # Top 3 conflicts
-            if count > type_sampled_count_for_conflicts * 0.01:  # At least 1% of sampled data
-                conflicts.append({
-                    "type": typ,
-                    "count": count,
-                    "percentage": round(100 * count / type_sampled_count_for_conflicts, 2)
-                })
-
-        # Handle mixed types: if numeric is primary but there's significant string content,
-        # treat as string (e.g., Ticket column with "A/5 21171" and "21171" mixed)
-        if inferred in ['integer', 'float'] and not is_known:
-            string_count = type_counts.get('string', 0)
-            string_pct = (string_count / type_sampled_count_for_conflicts * 100) if type_sampled_count_for_conflicts > 0 else 0
-            # If at least 5% of values are strings, treat as string (mixed alphanumeric)
-            if string_pct >= 5:
-                inferred = 'string'
-                confidence = (string_count + primary_count) / type_sampled_count_for_conflicts if type_sampled_count_for_conflicts > 0 else 0.0
-
-        # Log type inference summary with conflicts (DEBUG level)
-        col_name = profile_data.get("column_name", "unknown")
-        if conflicts and confidence < 0.95:
-            # Log when confidence is low due to type conflicts
-            conflict_summary = ", ".join([f"{c['type']} ({c['percentage']}%)" for c in conflicts])
-            logger.debug(
-                f"🔍 Type inference for '{col_name}': "
-                f"primary={inferred} ({confidence*100:.1f}% confidence), "
-                f"conflicts=[{conflict_summary}], "
-                f"sampled={type_sampled_count_for_conflicts:,} values"
-            )
-
-        return TypeInference(
-            declared_type=declared_type,
-            inferred_type=inferred,
-            confidence=confidence,
-            is_known=is_known,
-            type_conflicts=conflicts,
-            sample_values=profile_data["sample_values"][:10]
-        )
-
-    def _detect_semantic_type_with_visions(self, sample_values: List[Any]) -> Optional[str]:
-        """
-        Use visions library to detect semantic type from sample values.
-        Returns semantic type string like 'email', 'url', 'uuid', 'integer', 'float', etc.
-        """
-        if not VISIONS_AVAILABLE or not sample_values:
-            return None
-
-        try:
-            import pandas as pd
-            # Use first 100 samples for visions detection (memory efficient)
-            sample = pd.Series(sample_values[:100])
-            detected_type = detect_type(sample)
-            type_name = detected_type.__name__ if hasattr(detected_type, '__name__') else str(detected_type)
-
-            # Map visions types to our semantic types
-            type_mapping = {
-                'EmailAddress': 'email',
-                'URL': 'url',
-                'UUID': 'uuid',
-                'IPAddress': 'ip_address',
-                'PhoneNumber': 'phone_number',
-                'Integer': 'integer',
-                'Float': 'float',
-                'Boolean': 'boolean',
-                'Categorical': 'category',
-                'String': 'string',
-                'Object': 'object'
-            }
-
-            # Return mapped type or original type_name in lowercase
-            if type_name is None:
-                return None
-            return type_mapping.get(type_name, type_name.lower())
-
-        except Exception as e:
-            logger.debug(f"Visions semantic type detection failed: {e}")
-            return None
-
-    def _calculate_statistics(
-        self,
-        profile_data: Dict[str, Any],
-        total_rows: int
-    ) -> ColumnStatistics:
-        """Calculate comprehensive column statistics."""
-        null_count = profile_data["null_count"]
-        value_counts = profile_data["value_counts"]
-        numeric_values = profile_data["numeric_values"]
-        string_lengths = profile_data["string_lengths"]
-        patterns = profile_data["patterns"]
-
-        # Use intelligent sampling to determine optimal sample size
-        column_name = profile_data["column_name"]
-        intelligence = SmartColumnAnalyzer.analyze_column(column_name)
-
-        stats = ColumnStatistics()
-        stats.count = total_rows
-        stats.null_count = null_count
-        stats.null_percentage = 100 * null_count / total_rows if total_rows > 0 else 0
-        stats.whitespace_null_count = profile_data.get("whitespace_null_count", 0)
-        stats.placeholder_null_count = profile_data.get("placeholder_null_count", 0)
-        stats.placeholder_values_found = profile_data.get("placeholder_values_found", {})
-
-        # Enhanced semantic type detection using visions (if available)
-        visions_semantic_type = self._detect_semantic_type_with_visions(profile_data["sample_values"])
-
-        # Prefer visions detection over name-based detection for higher accuracy
-        if visions_semantic_type and visions_semantic_type not in ['integer', 'float', 'string', 'object']:
-            # Visions detected a specific semantic type (email, url, uuid, etc.)
-            stats.semantic_type = visions_semantic_type
-            logger.debug(f"Visions detected semantic type for '{column_name}': {visions_semantic_type}")
-        else:
-            # Fallback to name-based detection from SmartColumnAnalyzer
-            stats.semantic_type = intelligence.semantic_type
-
-        # Add intelligent sampling metadata for transparency
-        stats.sample_size = min(len(numeric_values) if numeric_values else len(value_counts), intelligence.recommended_sample_size)
-        stats.sampling_strategy = SmartColumnAnalyzer.get_sampling_summary(
-            column_name, total_rows, intelligence
-        )
-
-        # Unique counts
-        stats.unique_count = len(value_counts)
-        non_null_count = total_rows - null_count
-        stats.unique_percentage = 100 * stats.unique_count / non_null_count if non_null_count > 0 else 0
-        stats.cardinality = stats.unique_count / non_null_count if non_null_count > 0 else 0
-
-        # Numeric statistics
-        if numeric_values is not None and len(numeric_values) > 0:
-            try:
-                # Convert to float array explicitly to avoid type issues
-                numeric_array = np.array(numeric_values, dtype=np.float64)
-
-                # Filter out extreme values that indicate parsing errors (e.g., hex strings parsed as floats)
-                # Values beyond 1e100 are almost certainly data corruption or parsing artifacts
-                reasonable_mask = np.abs(numeric_array) < 1e100
-                if np.any(~np.isfinite(numeric_array)):
-                    reasonable_mask &= np.isfinite(numeric_array)
-
-                filtered_array = numeric_array[reasonable_mask]
-
-                # Only calculate stats if we have reasonable values left
-                # and if the majority of values are reasonable (not just a few)
-                if len(filtered_array) > 0 and len(filtered_array) >= len(numeric_array) * 0.5:
-                    stats.min_value = float(np.min(filtered_array))
-                    stats.max_value = float(np.max(filtered_array))
-                    stats.mean = float(np.mean(filtered_array))
-                    stats.median = float(np.median(filtered_array))
-                    stats.std_dev = float(np.std(filtered_array))
-
-                    # Quartiles
-                    q1, q2, q3 = np.percentile(filtered_array, [25, 50, 75])
-                    stats.quartiles = {
-                        "Q1": round(float(q1), 3),
-                        "Q2": round(float(q2), 3),
-                        "Q3": round(float(q3), 3)
-                    }
-                else:
-                    # Too many extreme values - likely string column with some numeric-like values
-                    logger.debug(f"Skipping numeric stats: {len(numeric_array) - len(filtered_array)} extreme values filtered")
-            except (TypeError, ValueError) as e:
-                logger.warning(f"Could not calculate numeric statistics: {e}")
-                # Skip numeric stats if conversion fails
-                pass
-
-        # Frequency statistics
-        if value_counts:
-            sorted_values = sorted(value_counts.items(), key=lambda x: x[1], reverse=True)
-            stats.mode = sorted_values[0][0]
-            stats.mode_frequency = sorted_values[0][1]
-
-            # Top values (top 10)
-            stats.top_values = [
-                {
-                    "value": str(val),
-                    "count": count,
-                    "percentage": round(100 * count / non_null_count, 2) if non_null_count > 0 else 0
-                }
-                for val, count in sorted_values[:10]
-            ]
-
-        # String length statistics
-        if string_lengths:
-            stats.min_length = int(np.min(string_lengths))
-            stats.max_length = int(np.max(string_lengths))
-            stats.avg_length = float(np.mean(string_lengths))
-
-        # Pattern samples
-        if patterns:
-            sorted_patterns = sorted(patterns.items(), key=lambda x: x[1], reverse=True)
-            stats.pattern_samples = [
-                {
-                    "pattern": pattern,
-                    "count": count,
-                    "percentage": round(100 * count / len(profile_data["sample_values"]), 2) if profile_data["sample_values"] else 0
-                }
-                for pattern, count in sorted_patterns[:10]
-            ]
-
-        return stats
-
-    def _calculate_quality_metrics(
-        self,
-        profile_data: Dict[str, Any],
-        type_info: TypeInference,
-        statistics: ColumnStatistics,
-        total_rows: int
-    ) -> QualityMetrics:
-        """Calculate data quality metrics."""
-        quality = QualityMetrics()
-        issues = []
-        observations = []  # General informational insights
-
-        # Completeness: % of non-null values
-        quality.completeness = 100 - statistics.null_percentage
-        completeness_note = None
-        if quality.completeness < 50:
-            completeness_note = f"Low completeness: {quality.completeness:.1f}% non-null"
-            issues.append(completeness_note)
-        elif quality.completeness < 90:
-            completeness_note = f"Moderate completeness: {quality.completeness:.1f}% non-null"
-            issues.append(completeness_note)
-
-        # Validity: % matching inferred type
-        quality.validity = type_info.confidence * 100
-        validity_note = None
-        if quality.validity < 95:
-            validity_note = f"Type inconsistency: {quality.validity:.1f}% match inferred type"
-            issues.append(validity_note)
-
-        # Uniqueness: cardinality
-        quality.uniqueness = statistics.cardinality * 100
-        uniqueness_note = None
-        if statistics.cardinality == 1.0 and total_rows > 1:
-            # This is an observation about uniqueness - informational
-            uniqueness_note = "All values are unique (potential key field)"
-            observations.append(uniqueness_note)
-        elif statistics.cardinality < 0.01 and statistics.unique_count < 100 and total_rows > 100:
-            # Very low cardinality is only an issue when there are actually few unique values
-            # Example: 100 rows with 5 unique values = problem
-            # NOT a problem: 1M rows with 5K unique values (0.5% cardinality but not "very low")
-            uniqueness_note = f"Very low cardinality: {statistics.unique_count} unique values"
-            issues.append(uniqueness_note)
-
-        # Consistency: pattern matching
-        consistency_note = None
-        if statistics.pattern_samples:
-            # If top pattern covers >80% of data, high consistency
-            top_pattern_pct = statistics.pattern_samples[0]["percentage"]
-            quality.consistency = top_pattern_pct
-
-            if quality.consistency < 50:
-                # Pattern diversity is informational
-                consistency_note = f"{len(statistics.pattern_samples)} different patterns detected"
-                observations.append(consistency_note)
-        else:
-            quality.consistency = 100.0
-
-        # Overall score (weighted average)
-        quality.overall_score = (
-            0.3 * quality.completeness +
-            0.3 * quality.validity +
-            0.2 * quality.uniqueness +
-            0.2 * quality.consistency
-        )
-
-        quality.issues = issues
-        quality.observations = observations
-
-        return quality
-
-    def _calculate_correlations(
-        self,
-        numeric_data: Dict[str, List[float]],
-        row_count: int
-    ) -> List[CorrelationResult]:
-        """Calculate correlations between numeric columns."""
-        correlations = []
-
-        # Limit columns for performance
-        numeric_columns = list(numeric_data.keys())[:self.max_correlation_columns]
-
-        if len(numeric_columns) < 2:
-            return correlations
-
-        try:
-            # Create DataFrame for correlation using sampled data (NOT full row_count!)
-            # Find the maximum sample length across all columns
-            max_sample_length = max(len(numeric_data[col]) for col in numeric_columns) if numeric_columns else 0
-
-            df_dict = {}
-            for col in numeric_columns:
-                # Ensure same length by padding/truncating to max_sample_length (NOT row_count!)
-                values = numeric_data[col][:max_sample_length]
-                if len(values) < max_sample_length:
-                    # Pad with NaN to match longest sample (typically 100K, not 179M!)
-                    values = values + [np.nan] * (max_sample_length - len(values))
-                df_dict[col] = values
-
-            df = pd.DataFrame(df_dict)
-
-            # Calculate correlation matrix
-            corr_matrix = df.corr()
-
-            # Extract significant correlations
-            for i, col1 in enumerate(numeric_columns):
-                for j, col2 in enumerate(numeric_columns):
-                    if i < j:  # Upper triangle only
-                        corr_value = corr_matrix.loc[col1, col2]
-                        # Include if correlation is significant (>0.3 or <-0.3)
-                        if abs(corr_value) > 0.3 and not np.isnan(corr_value):
-                            correlations.append(
-                                CorrelationResult(
-                                    column1=col1,
-                                    column2=col2,
-                                    correlation=float(corr_value),
-                                    type="pearson"
-                                )
-                            )
-
-        except Exception as e:
-            logger.warning(f"Correlation calculation failed: {e}")
-
-        return sorted(correlations, key=lambda x: abs(x.correlation), reverse=True)
+    # =========================================================================
+    # VALIDATION SUGGESTION HELPERS
+    # These methods support ML-based validation suggestions and are still
+    # actively used by the profiling workflow.
+    # =========================================================================
 
     def _should_suggest_range_check(self, col: ColumnProfile, row_count: int) -> bool:
         """

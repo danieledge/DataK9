@@ -30,23 +30,8 @@ import validation_framework.validations.builtin.registry  # noqa
 
 logger = get_logger(__name__)
 
-# Optional imports for colored output
-try:
-    import colorama
-    from colorama import Fore, Style
-    from validation_framework.core.pretty_output import PrettyOutput as po
-    colorama.init(autoreset=True)
-    HAS_COLOR = True
-except ImportError:
-    HAS_COLOR = False
-    # Create dummy color classes
-    class Fore:
-        CYAN = ''
-        YELLOW = ''
-        GREEN = ''
-        RED = ''
-    class Style:
-        RESET_ALL = ''
+# Import for terminal output
+from validation_framework.core.pretty_output import PrettyOutput as po
 
 
 class ValidationEngine:
@@ -215,15 +200,6 @@ class ValidationEngine:
 
             # Notify observers that file validation is complete
             self._notify_file_complete(file_report)
-
-            # Legacy verbose output (will be removed once observers fully integrated)
-            if verbose and not self.observers:
-                error_color = po.ERROR if file_report.error_count > 0 else po.DIM
-                warning_color = po.WARNING if file_report.warning_count > 0 else po.DIM
-                po.key_value("Errors", file_report.error_count, indent=2, value_color=error_color)
-                po.key_value("Warnings", file_report.warning_count, indent=2, value_color=warning_color)
-                po.key_value("Duration", f"{file_report.execution_time:.2f}s", indent=2, value_color=po.DIM)
-                po.blank_line()
 
         # Update overall status and duration
         report.update_overall_status()
@@ -408,43 +384,6 @@ class ValidationEngine:
         file_report.execution_time = time.time() - start_time
 
         return file_report
-
-    def _print_summary(self, report: ValidationReport) -> None:
-        """
-        Print a summary of the validation results.
-
-        Args:
-            report: ValidationReport to summarize
-        """
-        po.header("VALIDATION SUMMARY")
-
-        # Overall status
-        status_color = po.SUCCESS if report.overall_status == Status.PASSED else po.ERROR
-        error_color = po.ERROR if report.total_errors > 0 else po.DIM
-        warning_color = po.WARNING if report.total_warnings > 0 else po.DIM
-
-        # Summary box with key metrics
-        po.summary_box(
-            title="Overall Results",
-            items=[
-                ("Status", report.overall_status.value, status_color),
-                ("Total Errors", report.total_errors, error_color),
-                ("Total Warnings", report.total_warnings, warning_color),
-                ("Total Validations", report.total_validations, po.INFO),
-                ("Files Processed", len(report.file_reports), po.PRIMARY),
-                ("Duration", f"{report.duration_seconds:.2f}s", po.DIM),
-            ]
-        )
-
-        # Per-file summary
-        if len(report.file_reports) > 1:
-            po.subsection("File Results")
-            for file_report in report.file_reports:
-                if file_report.status == Status.PASSED:
-                    po.success(f"{file_report.file_name}: {file_report.error_count} errors, {file_report.warning_count} warnings", indent=2)
-                else:
-                    po.error(f"{file_report.file_name}: {file_report.error_count} errors, {file_report.warning_count} warnings", indent=2)
-            po.blank_line()
 
     def generate_html_report(self, report: ValidationReport, output_path: str) -> None:
         """

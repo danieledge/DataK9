@@ -1,8 +1,45 @@
 """
-Backend-aware base class for profiler components.
+Backend-Aware Base Class - Unified DataFrame Operations for Pandas and Polars.
 
-Provides helper methods for working with both pandas and Polars DataFrames,
-enabling profiler components to work seamlessly with either backend.
+This module provides a consistent API for DataFrame operations regardless of
+whether the underlying data is stored in pandas or Polars. This abstraction
+enables the profiler to leverage Polars' performance benefits when available
+while maintaining pandas compatibility.
+
+Architecture:
+    BackendAwareProfiler serves as a mixin/base class providing:
+    1. Backend detection (is_polars, is_pandas, get_backend_name)
+    2. Column operations (get_columns, has_column, get_column_dtype)
+    3. Null handling (get_null_mask, get_null_count, drop_nulls)
+    4. Type checking (is_numeric_column, is_string_column)
+    5. Value operations (get_value_counts, series_to_list)
+    6. Statistical methods (min, max, mean, std, median, percentile)
+    7. String operations (string_length, string_contains, string_match)
+
+Design Decisions:
+    - Polars is optional: Falls back gracefully to pandas if not installed
+    - Memory safety: series_to_list() has a default_limit=100000 to prevent
+      unbounded memory allocation (a common source of memory leaks)
+    - Type consistency: All methods return Python native types where possible
+    - Vectorized operations: Leverages each backend's vectorization for 5-100x
+      performance over row-by-row iteration
+
+Performance Notes:
+    Polars provides significant advantages for:
+    - Large datasets (>100K rows): 2-10x faster than pandas
+    - String operations: Optimized UTF-8 handling
+    - Memory usage: Column-oriented storage is more cache-friendly
+
+Usage:
+    class MyProfilerComponent(BackendAwareProfiler):
+        def analyze(self, df):
+            if self.is_polars(df):
+                # Use Polars-specific optimizations
+                pass
+
+            # Or use backend-agnostic methods:
+            null_count = self.get_null_count(df[column])
+            values = self.series_to_list(df[column], limit=1000)
 """
 
 import pandas as pd
@@ -24,10 +61,25 @@ Series = Union[pd.Series, 'pl.Series'] if HAS_POLARS else pd.Series
 
 class BackendAwareProfiler:
     """
-    Base class providing backend-agnostic operations for profiler components.
+    Backend-agnostic base class for profiler components.
 
-    Supports both pandas and Polars DataFrames with consistent API.
-    Vectorized operations provide 5-100x performance improvement over row iteration.
+    Provides a unified API for DataFrame operations that works seamlessly with
+    both pandas and Polars backends. Inherit from this class to write profiler
+    components that automatically benefit from Polars' performance when available.
+
+    All methods detect the backend at runtime and dispatch to the appropriate
+    implementation. This design allows gradual migration to Polars without
+    breaking existing pandas-based code.
+
+    Example:
+        >>> class MyAnalyzer(BackendAwareProfiler):
+        ...     def analyze_column(self, df, column):
+        ...         series = self.get_column_series(df, column)
+        ...         return {
+        ...             'null_count': self.get_null_count(series),
+        ...             'unique_count': self.get_unique_count(series),
+        ...             'values': self.series_to_list(series, limit=100)
+        ...         }
     """
 
     def is_polars(self, df: Any) -> bool:
@@ -141,15 +193,25 @@ class BackendAwareProfiler:
                 vc = vc.head(limit)
             return vc.to_dict()
 
-    def series_to_list(self, series: Series, limit: Optional[int] = None) -> List[Any]:
-        """Convert Series to list (backend-agnostic)."""
+    def series_to_list(self, series: Series, limit: Optional[int] = None, default_limit: int = 100000) -> List[Any]:
+        """Convert Series to list (backend-agnostic).
+
+        Args:
+            series: The series to convert
+            limit: Optional explicit limit on items to return
+            default_limit: Safety limit if no limit specified (prevents memory leaks).
+                          Set to None to disable safety limit (use with caution).
+        """
+        # Apply safety limit if no explicit limit provided
+        effective_limit = limit if limit is not None else default_limit
+
         if self.is_polars(series):
-            if limit:
-                return series.head(limit).to_list()
+            if effective_limit:
+                return series.head(effective_limit).to_list()
             return series.to_list()
         else:
-            if limit:
-                return series.head(limit).tolist()
+            if effective_limit:
+                return series.head(effective_limit).tolist()
             return series.tolist()
 
     def get_column_min(self, series: Series):
