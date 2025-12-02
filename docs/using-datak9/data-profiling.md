@@ -1009,6 +1009,7 @@ python3 -m validation_framework.cli profile <file_path>
 | `-o`, `--output` | HTML report path | `-o profile.html` |
 | `-c`, `--config` | YAML config path | `-c validation.yaml` |
 | `-j`, `--json` | JSON export path | `-j profile.json` |
+| `--field-descriptions` | YAML file with friendly names and value labels | `--field-descriptions fields.yaml` |
 | `--beta-ml` | Enable ML anomaly detection | `--beta-ml` |
 | `--full-analysis` | Disable internal sampling for ML (slower, more accurate) | `--full-analysis` |
 | `--no-memory-check` | Disable memory safety termination (use with caution) | `--no-memory-check` |
@@ -1022,6 +1023,46 @@ python3 -m validation_framework.cli profile <file_path>
 | `--disable-all-enhancements` | Minimal profiling (fastest) | `--disable-all-enhancements` |
 
 **Note:** Semantic tagging, PII detection, temporal analysis, and correlation are all enabled by default since v1.54.
+
+### Field Descriptions File
+
+Use `--field-descriptions` to provide friendly names and value labels for better report readability:
+
+```yaml
+# field_descriptions.yaml
+field_descriptions:
+  Pclass:
+    friendly_name: "Passenger Class"
+    value_labels:
+      "1": "1st Class"
+      "2": "2nd Class"
+      "3": "3rd Class"
+  Survived:
+    friendly_name: "Survival Status"
+    value_labels:
+      "0": "Did Not Survive"
+      "1": "Survived"
+  Sex:
+    friendly_name: "Gender"
+    value_labels:
+      "male": "Male"
+      "female": "Female"
+  Embarked:
+    friendly_name: "Port of Embarkation"
+    value_labels:
+      "S": "Southampton"
+      "C": "Cherbourg"
+      "Q": "Queenstown"
+```
+
+**Usage:**
+```bash
+python3 -m validation_framework.cli profile data.csv \
+  --field-descriptions field_descriptions.yaml \
+  -o profile.html
+```
+
+**Result:** Instead of "Pclass = 1 shows 7.5x higher Fare than Pclass = 3", the report shows "1st Class shows 7.5x higher Fare than 3rd Class".
 
 ### Common Examples
 
