@@ -21,6 +21,7 @@ from collections import Counter
 import re
 import logging
 import time
+import warnings
 
 # Import visualization fallback utilities for robust numeric detection
 from validation_framework.profiler.visualization_fallbacks import (
@@ -4561,7 +4562,16 @@ class MLAnalyzer:
                 verbose=False
             )
 
-            autoencoder.fit(X_scaled, X_scaled)
+            # Suppress ConvergenceWarning unless DEBUG logging is enabled
+            # The autoencoder still produces valid results without full convergence
+            if logger.isEnabledFor(logging.DEBUG):
+                autoencoder.fit(X_scaled, X_scaled)
+            else:
+                with warnings.catch_warnings():
+                    warnings.filterwarnings('ignore', category=UserWarning, module='sklearn')
+                    from sklearn.exceptions import ConvergenceWarning
+                    warnings.filterwarnings('ignore', category=ConvergenceWarning)
+                    autoencoder.fit(X_scaled, X_scaled)
 
             # Get reconstructions
             X_reconstructed = autoencoder.predict(X_scaled)

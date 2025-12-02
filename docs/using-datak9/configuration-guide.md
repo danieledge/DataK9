@@ -555,7 +555,7 @@ output:
   fail_on_warning: false
 ```
 
-**See:** [CLI Guide](../../CLI_GUIDE.md#datetimepatterns) for using patterns in CLI arguments.
+**See:** [CLI Guide](../CLI_GUIDE.md#datetimepatterns) for using patterns in CLI arguments.
 
 ---
 
