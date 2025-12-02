@@ -146,50 +146,67 @@ class CorrelationInsightSynthesizer:
         low_median = col2_when_low.median()
         high_median = col2_when_high.median()
 
-        # Calculate ratio and determine which group has higher col2 values
+        # Calculate ratio - which group has higher col2 (e.g., Fare)?
+        # high_median = col2 value when col1 is high (top 25%)
+        # low_median = col2 value when col1 is low (bottom 25%)
+        r_squared = r ** 2
+
         if low_median > 0 and high_median > 0:
             if high_median >= low_median:
+                # High col1 -> High col2 (positive correlation)
                 ratio = high_median / low_median
-                top_label = f"{friendly1} (top 25%)"
-                top_val = high_median
-                bottom_label = f"{friendly1} (bottom 25%)"
-                bottom_val = low_median
+                higher_col2_label = f"High {friendly1}"
+                higher_col2_val = high_median
+                lower_col2_label = f"Low {friendly1}"
+                lower_col2_val = low_median
             else:
+                # Low col1 -> High col2 (negative correlation)
                 ratio = low_median / high_median
-                top_label = f"{friendly1} (bottom 25%)"
-                top_val = low_median
-                bottom_label = f"{friendly1} (top 25%)"
-                bottom_val = high_median
+                higher_col2_label = f"Low {friendly1}"
+                higher_col2_val = low_median
+                lower_col2_label = f"High {friendly1}"
+                lower_col2_val = high_median
         else:
             ratio = None
-            top_label = bottom_label = ""
-            top_val = bottom_val = 0
+            higher_col2_label = lower_col2_label = ""
+            higher_col2_val = lower_col2_val = 0
 
-        # Generate headline
-        r_squared = r ** 2
+        # Generate headline - simple correlation direction
         direction = "increases" if r > 0 else "decreases"
         headline = f"As {friendly1} increases, {friendly2} {direction}"
 
-        # Build comparison bars showing quartile differences
+        # Build comparison bars with actual quartile values
         comparison_data = []
         if ratio and ratio > 1:
+            # Get actual quartile boundary values for clearer labels
+            q1_val = clean_df[col1].quantile(0.25)
+            q3_val = clean_df[col1].quantile(0.75)
+
+            # Format quartile values
+            q1_fmt = f"{q1_val:.0f}" if q1_val == int(q1_val) else f"{q1_val:.1f}"
+            q3_fmt = f"{q3_val:.0f}" if q3_val == int(q3_val) else f"{q3_val:.1f}"
+
             comparison_data = [
                 {
-                    'label': top_label,
-                    'value': top_val,
-                    'percentage': 100,
-                    'formatted': self._format_value(top_val, col2)
+                    'label': f"{friendly1} ≤ {q1_fmt}",
+                    'value': low_median,
+                    'percentage': (low_median / max(low_median, high_median) * 100),
+                    'formatted': self._format_value(low_median, col2)
                 },
                 {
-                    'label': bottom_label,
-                    'value': bottom_val,
-                    'percentage': (bottom_val / top_val * 100) if top_val > 0 else 0,
-                    'formatted': self._format_value(bottom_val, col2)
+                    'label': f"{friendly1} ≥ {q3_fmt}",
+                    'value': high_median,
+                    'percentage': (high_median / max(low_median, high_median) * 100),
+                    'formatted': self._format_value(high_median, col2)
                 }
             ]
+            # Sort so higher value is on top
+            comparison_data.sort(key=lambda x: x['value'], reverse=True)
+            comparison_data[0]['percentage'] = 100
+            comparison_data[1]['percentage'] = (comparison_data[1]['value'] / comparison_data[0]['value'] * 100) if comparison_data[0]['value'] > 0 else 0
 
         # Calculate metrics
-        pct_diff = ((top_val - bottom_val) / bottom_val * 100) if bottom_val > 0 else 0
+        pct_diff = ((higher_col2_val - lower_col2_val) / lower_col2_val * 100) if lower_col2_val > 0 else 0
         metrics = {
             'ratio': ratio,
             'percentage_difference': pct_diff,
