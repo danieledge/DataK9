@@ -91,6 +91,45 @@
     "python_module": "validation_framework.validations.file_checks"
   },
 
+  "CSVFormatCheck": {
+    "category": "File-Level",
+    "icon": "📋",
+    "description": "Validates CSV file format integrity before processing",
+    "params": [
+      {
+        "name": "delimiter",
+        "label": "Delimiter",
+        "type": "text",
+        "required": false,
+        "help": "Expected delimiter character (auto-detected if not specified)",
+        "placeholder": ",",
+        "default": ""
+      },
+      {
+        "name": "sample_rows",
+        "label": "Sample Rows",
+        "type": "number",
+        "required": false,
+        "help": "Number of rows to check for consistency",
+        "default": 1000,
+        "min": 100
+      },
+      {
+        "name": "max_errors",
+        "label": "Max Errors",
+        "type": "number",
+        "required": false,
+        "help": "Maximum errors before failing validation",
+        "default": 10,
+        "min": 1
+      }
+    ],
+    "examples": "Detect malformed CSV files with inconsistent column counts",
+    "tips": "Run this check first to catch delimiter mismatches and quoting issues before other validations",
+    "severity_recommendation": "ERROR",
+    "python_module": "validation_framework.validations.file_checks"
+  },
+
   "SchemaMatchCheck": {
     "category": "Schema",
     "icon": "🎨",
