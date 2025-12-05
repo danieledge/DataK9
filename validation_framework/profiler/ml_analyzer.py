@@ -2366,6 +2366,18 @@ class MLAnalyzer:
                 logger.debug(f"Excluded {len(excluded_cols)} binary/near-binary columns: {excluded_cols}")
             findings["numeric_column_detection"] = coerced_info
 
+        # Cache column uniqueness for sequential ID detection
+        # This helps identify columns like PassengerId that are unique identifiers
+        self._column_uniqueness = {}
+        for col in numeric_cols:
+            try:
+                unique_count = df[col].nunique()
+                total_count = len(df[col].dropna())
+                if total_count > 0:
+                    self._column_uniqueness[col] = unique_count / total_count
+            except Exception:
+                pass
+
         # Filter out numeric columns that are semantically categorical (e.g., bank IDs)
         # These shouldn't have Isolation Forest applied - a bank ID of 1099 isn't an "outlier"
         actual_numeric_cols = []
@@ -3056,15 +3068,17 @@ class MLAnalyzer:
             # Sort by z-score difference
             contributing_columns.sort(key=lambda x: x["z_score_diff"], reverse=True)
 
-            # Get sample anomalous rows
+            # Get sample anomalous rows (increased to 20 for better category grouping)
             anomaly_indices = np.where(anomaly_mask)[0]
-            sorted_by_score = np.argsort(scores[anomaly_mask])[:5]
+            sorted_by_score = np.argsort(scores[anomaly_mask])[:20]
             sample_rows = []
             for i in sorted_by_score:
                 if i < len(anomaly_data):
                     row = subset_df.iloc[anomaly_indices[i]]
                     row_dict = {str(k)[:25]: f"{v:.2f}" if isinstance(v, float) else str(v)[:50]
                                for k, v in row.items()}
+                    # Add reconstruction error for sorting/display
+                    row_dict['_reconstruction_error'] = float(scores[anomaly_indices[i]])
                     sample_rows.append(row_dict)
 
             return {
@@ -3493,6 +3507,17 @@ class MLAnalyzer:
         Returns:
             (should_skip, reason)
         """
+        # FIRST: Check for sequential ID patterns based on column name and uniqueness
+        # This catches columns like PassengerId even without semantic tags
+        col_lower = col_name.lower()
+        id_patterns = ['id', 'key', 'index', 'num', 'no', 'number']
+        if any(pat in col_lower for pat in id_patterns):
+            # Check uniqueness from cached column stats
+            if hasattr(self, '_column_uniqueness') and col_name in self._column_uniqueness:
+                uniqueness = self._column_uniqueness[col_name]
+                if uniqueness > 0.95:
+                    return True, f"Sequential identifier ({uniqueness*100:.0f}% unique)"
+
         # Get semantic info for this column
         sem_info = self._column_semantic_info.get(col_name, {})
         primary_tag = sem_info.get('primary_tag', '')
@@ -4593,10 +4618,10 @@ class MLAnalyzer:
 
             anomaly_pct = anomaly_count / len(reconstruction_errors) * 100
 
-            # Get top anomalies by reconstruction error
+            # Get all anomaly indices sorted by reconstruction error
             anomaly_indices = np.where(anomaly_mask)[0]
             sorted_by_error = np.argsort(reconstruction_errors[anomaly_mask])[::-1]
-            top_anomaly_indices = anomaly_indices[sorted_by_error[:10]]
+            all_anomaly_indices_sorted = anomaly_indices[sorted_by_error]
 
             # Calculate which features contribute most to anomalies
             anomaly_data = X_scaled[anomaly_mask]
@@ -4612,14 +4637,88 @@ class MLAnalyzer:
                     })
             contributing_features.sort(key=lambda x: x["error_contribution"], reverse=True)
 
-            # Get sample anomalous rows
+            # ═══════════════════════════════════════════════════════════════
+            # CATEGORY BREAKDOWN: Analyze ALL anomalies by primary driver
+            # ═══════════════════════════════════════════════════════════════
+            # For each anomaly, find which field deviated most from median
+            category_counts = {}
+            col_medians = {col: subset_df[col].median() for col in numeric_cols}
+
+            for idx in all_anomaly_indices_sorted:
+                if idx < len(subset_df):
+                    row = subset_df.iloc[idx]
+                    max_deviation = 0
+                    primary_driver = None
+
+                    for col in numeric_cols:
+                        val = row[col]
+                        median = col_medians.get(col, 0)
+                        if median > 0:
+                            deviation = abs(val - median) / median
+                            if deviation > max_deviation:
+                                max_deviation = deviation
+                                primary_driver = col
+
+                    category = primary_driver if primary_driver else "Multi-field"
+                    category_counts[category] = category_counts.get(category, 0) + 1
+
+            # Get sample anomalous rows using STRATIFIED sampling across categories
+            # Ensures samples cover all detected categories, not just top errors
             sample_rows = []
-            for idx in top_anomaly_indices[:5]:
+            max_samples = 5
+
+            # Build index-to-category mapping for stratified selection
+            idx_to_category = {}
+            for idx in all_anomaly_indices_sorted:
+                if idx < len(subset_df):
+                    row = subset_df.iloc[idx]
+                    max_deviation = 0
+                    primary_driver = None
+                    for col in numeric_cols:
+                        val = row[col]
+                        median = col_medians.get(col, 0)
+                        if median > 0:
+                            deviation = abs(val - median) / median
+                            if deviation > max_deviation:
+                                max_deviation = deviation
+                                primary_driver = col
+                    idx_to_category[idx] = primary_driver if primary_driver else "Multi-field"
+
+            # Stratified selection: one from each category first, then fill with top errors
+            selected_indices = []
+            categories_covered = set()
+
+            # Sort categories by count (largest first) to prioritize common patterns
+            sorted_categories = sorted(category_counts.keys(),
+                                       key=lambda c: category_counts.get(c, 0),
+                                       reverse=True)
+
+            # First pass: get one sample from each category
+            for category in sorted_categories:
+                if len(selected_indices) >= max_samples:
+                    break
+                # Find highest-error anomaly in this category
+                for idx in all_anomaly_indices_sorted:
+                    if idx_to_category.get(idx) == category and idx not in selected_indices:
+                        selected_indices.append(idx)
+                        categories_covered.add(category)
+                        break
+
+            # Second pass: fill remaining slots with highest errors not yet selected
+            for idx in all_anomaly_indices_sorted:
+                if len(selected_indices) >= max_samples:
+                    break
+                if idx not in selected_indices:
+                    selected_indices.append(idx)
+
+            # Build sample rows from selected indices
+            for idx in selected_indices:
                 if idx < len(subset_df):
                     row = subset_df.iloc[idx]
                     row_dict = {str(k)[:25]: f"{v:.2f}" if isinstance(v, (int, float)) else str(v)[:50]
                                for k, v in row.items()}
                     row_dict["_reconstruction_error"] = f"{reconstruction_errors[idx]:.4f}"
+                    row_dict["_primary_driver"] = idx_to_category.get(idx, "Multi-field")
                     sample_rows.append(row_dict)
 
             # Confidence based on anomaly percentage
@@ -4663,7 +4762,8 @@ class MLAnalyzer:
                     "anomaly_min_error": smart_round(reconstruction_errors[anomaly_mask].min())
                 },
                 "contributing_features": contributing_features[:5],
-                "sample_rows": sample_rows,
+                "category_counts": category_counts,  # Full breakdown from ALL anomalies
+                "sample_rows": sample_rows,  # Limited sample for display
                 "interpretation": (
                     f"Found {anomaly_count:,} records ({anomaly_pct:.2f}%) that are difficult to reconstruct. "
                     f"These have unusual combinations of values that don't fit the learned patterns."

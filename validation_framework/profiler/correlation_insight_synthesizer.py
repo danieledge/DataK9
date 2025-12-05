@@ -129,6 +129,47 @@ class CorrelationInsightSynthesizer:
 
         return self.insights
 
+    def _is_binary_column(self, col: str) -> bool:
+        """Check if column is binary (0/1 or two unique values)."""
+        if col not in self.df.columns:
+            return False
+        unique = self.df[col].dropna().unique()
+        if len(unique) == 2:
+            return True
+        if set(unique).issubset({0, 1, 0.0, 1.0}):
+            return True
+        return False
+
+    def _is_tautological_correlation(self, col1: str, col2: str) -> bool:
+        """
+        Check if correlation between columns is tautological (low insight value).
+
+        Examples:
+        - SibSp/Parch: Both count family members, correlation is obvious
+        - Price/Total: If total includes price, correlation is expected
+        - Count/Amount: Often measure same thing
+        """
+        col1_lower = col1.lower()
+        col2_lower = col2.lower()
+
+        # Define groups of semantically related column patterns
+        tautological_groups = [
+            # Family members
+            {'sib', 'spouse', 'parch', 'parent', 'child', 'family', 'relative'},
+            # Financial amounts
+            {'price', 'total', 'amount', 'cost', 'sum', 'value'},
+            # Counts
+            {'count', 'num', 'qty', 'quantity'},
+        ]
+
+        for group in tautological_groups:
+            col1_matches = any(pat in col1_lower for pat in group)
+            col2_matches = any(pat in col2_lower for pat in group)
+            if col1_matches and col2_matches:
+                return True
+
+        return False
+
     def _synthesize_numeric_correlation(self, corr: Dict) -> Optional[InsightResult]:
         """Synthesize insight for numeric-numeric correlation."""
         col1 = corr.get('column1', '')
@@ -136,6 +177,11 @@ class CorrelationInsightSynthesizer:
         r = corr.get('correlation', 0)
 
         if not col1 or not col2 or col1 not in self.df.columns or col2 not in self.df.columns:
+            return None
+
+        # Skip tautological correlations (low insight value)
+        if self._is_tautological_correlation(col1, col2):
+            logger.debug(f"Skipping tautological correlation: {col1} vs {col2}")
             return None
 
         friendly1 = self.get_friendly_name(col1)
@@ -149,87 +195,166 @@ class CorrelationInsightSynthesizer:
         if n_obs < 10:
             return None
 
-        # Calculate quartile statistics
-        col1_q1 = clean_df[col1].quantile(0.25)
-        col1_q3 = clean_df[col1].quantile(0.75)
-
-        # Get col2 values for low vs high col1
-        low_mask = clean_df[col1] <= col1_q1
-        high_mask = clean_df[col1] >= col1_q3
-
-        col2_when_low = clean_df.loc[low_mask, col2]
-        col2_when_high = clean_df.loc[high_mask, col2]
-
-        low_median = col2_when_low.median()
-        high_median = col2_when_high.median()
-
-        # Calculate ratio - which group has higher col2 (e.g., Fare)?
-        # high_median = col2 value when col1 is high (top 25%)
-        # low_median = col2 value when col1 is low (bottom 25%)
         r_squared = r ** 2
 
-        if low_median > 0 and high_median > 0:
-            if high_median >= low_median:
-                # High col1 -> High col2 (positive correlation)
-                ratio = high_median / low_median
-                higher_col2_label = f"High {friendly1}"
-                higher_col2_val = high_median
-                lower_col2_label = f"Low {friendly1}"
-                lower_col2_val = low_median
-            else:
-                # Low col1 -> High col2 (negative correlation)
-                ratio = low_median / high_median
-                higher_col2_label = f"Low {friendly1}"
-                higher_col2_val = low_median
-                lower_col2_label = f"High {friendly1}"
-                lower_col2_val = high_median
-        else:
-            ratio = None
-            higher_col2_label = lower_col2_label = ""
-            higher_col2_val = lower_col2_val = 0
+        # Check if either column is binary - need special handling
+        col1_binary = self._is_binary_column(col1)
+        col2_binary = self._is_binary_column(col2)
 
-        # Generate headline - simple correlation direction
-        direction = "increases" if r > 0 else "decreases"
-        headline = f"As {friendly1} increases, {friendly2} {direction}"
+        # If col1 is binary (like Survived), swap so binary is col2 (outcome)
+        if col1_binary and not col2_binary:
+            col1, col2 = col2, col1
+            friendly1, friendly2 = friendly2, friendly1
+            col1_binary, col2_binary = col2_binary, col1_binary
 
-        # Build comparison bars with actual quartile values
-        comparison_data = []
-        if ratio and ratio > 1:
-            # Get actual quartile boundary values for clearer labels
-            q1_val = clean_df[col1].quantile(0.25)
-            q3_val = clean_df[col1].quantile(0.75)
+        # Handle binary outcome (e.g., Survived)
+        if col2_binary:
+            # Group by col1 quartiles and show rate of col2=1
+            col1_q1 = clean_df[col1].quantile(0.25)
+            col1_q3 = clean_df[col1].quantile(0.75)
+
+            low_group = clean_df[clean_df[col1] <= col1_q1]
+            high_group = clean_df[clean_df[col1] >= col1_q3]
+
+            low_rate = low_group[col2].mean() * 100  # Percentage
+            high_rate = high_group[col2].mean() * 100
 
             # Format quartile values
-            q1_fmt = f"{q1_val:.0f}" if q1_val == int(q1_val) else f"{q1_val:.1f}"
-            q3_fmt = f"{q3_val:.0f}" if q3_val == int(q3_val) else f"{q3_val:.1f}"
+            q1_fmt = f"{col1_q1:.0f}" if col1_q1 == int(col1_q1) else f"{col1_q1:.1f}"
+            q3_fmt = f"{col1_q3:.0f}" if col1_q3 == int(col1_q3) else f"{col1_q3:.1f}"
 
-            comparison_data = [
-                {
-                    'label': f"{friendly1} ≤ {q1_fmt}",
-                    'value': low_median,
-                    'percentage': (low_median / max(low_median, high_median) * 100),
-                    'formatted': self._format_value(low_median, col2)
-                },
-                {
-                    'label': f"{friendly1} ≥ {q3_fmt}",
-                    'value': high_median,
-                    'percentage': (high_median / max(low_median, high_median) * 100),
-                    'formatted': self._format_value(high_median, col2)
-                }
-            ]
-            # Sort so higher value is on top
-            comparison_data.sort(key=lambda x: x['value'], reverse=True)
-            comparison_data[0]['percentage'] = 100
-            comparison_data[1]['percentage'] = (comparison_data[1]['value'] / comparison_data[0]['value'] * 100) if comparison_data[0]['value'] > 0 else 0
+            # Determine which group has higher rate
+            if high_rate >= low_rate and low_rate > 0:
+                ratio = high_rate / low_rate
+                higher_label = f"{friendly1} ≥ {q3_fmt}"
+                higher_rate = high_rate
+                lower_label = f"{friendly1} ≤ {q1_fmt}"
+                lower_rate_val = low_rate
+            elif low_rate > high_rate and high_rate > 0:
+                ratio = low_rate / high_rate
+                higher_label = f"{friendly1} ≤ {q1_fmt}"
+                higher_rate = low_rate
+                lower_label = f"{friendly1} ≥ {q3_fmt}"
+                lower_rate_val = high_rate
+            else:
+                ratio = None
+                higher_label = lower_label = ""
+                higher_rate = lower_rate_val = 0
 
-        # Calculate metrics
-        pct_diff = ((higher_col2_val - lower_col2_val) / lower_col2_val * 100) if lower_col2_val > 0 else 0
-        metrics = {
-            'ratio': ratio,
-            'percentage_difference': pct_diff,
-            'r_squared': r_squared,
-            'n_observations': n_obs
-        }
+            # Generate headline for binary outcome
+            if ratio and ratio > 1.2:
+                headline = f"Passengers with {higher_label} have <span class=\"highlight-value\">{ratio:.1f}x</span> the {friendly2} rate"
+            else:
+                direction = "higher" if r > 0 else "lower"
+                headline = f"Higher {friendly1} associated with {direction} {friendly2} rate"
+
+            # Build comparison bars showing rates
+            comparison_data = []
+            if ratio and ratio > 1:
+                comparison_data = [
+                    {
+                        'label': higher_label,
+                        'value': higher_rate,
+                        'percentage': 100,
+                        'formatted': f"{higher_rate:.0f}%"
+                    },
+                    {
+                        'label': lower_label,
+                        'value': lower_rate_val,
+                        'percentage': (lower_rate_val / higher_rate * 100) if higher_rate > 0 else 0,
+                        'formatted': f"{lower_rate_val:.0f}%"
+                    }
+                ]
+
+            metrics = {
+                'ratio': ratio,
+                'higher_rate': higher_rate,
+                'lower_rate': lower_rate_val,
+                'r_squared': r_squared,
+                'n_observations': n_obs,
+                'is_binary_outcome': True
+            }
+
+        else:
+            # Both columns are continuous - compare medians
+            col1_q1 = clean_df[col1].quantile(0.25)
+            col1_q3 = clean_df[col1].quantile(0.75)
+
+            # Skip if quartiles are the same (no variance)
+            if col1_q1 == col1_q3:
+                return None
+
+            low_mask = clean_df[col1] <= col1_q1
+            high_mask = clean_df[col1] >= col1_q3
+
+            col2_when_low = clean_df.loc[low_mask, col2]
+            col2_when_high = clean_df.loc[high_mask, col2]
+
+            low_median = col2_when_low.median()
+            high_median = col2_when_high.median()
+
+            # Calculate ratio (handle zeros)
+            if low_median > 0 and high_median > 0:
+                ratio = max(high_median, low_median) / min(high_median, low_median)
+            elif high_median > 0 and low_median == 0:
+                ratio = None  # Can't compute ratio with zero, but still show bars
+            elif low_median > 0 and high_median == 0:
+                ratio = None
+            else:
+                ratio = None
+
+            # Format quartile values
+            q1_fmt = f"{col1_q1:.0f}" if col1_q1 == int(col1_q1) else f"{col1_q1:.1f}"
+            q3_fmt = f"{col1_q3:.0f}" if col1_q3 == int(col1_q3) else f"{col1_q3:.1f}"
+
+            # Generate headline - show actual values instead of confusing "higher/lower"
+            # This avoids semantic confusion (e.g., Pclass 1 is "first class" but numerically lower)
+            high_label = f"{friendly1} ≥ {q3_fmt}"
+            low_label = f"{friendly1} ≤ {q1_fmt}"
+            high_val_fmt = self._format_value(high_median, col2)
+            low_val_fmt = self._format_value(low_median, col2)
+
+            if r > 0:
+                # Positive correlation: high col1 → high col2
+                headline = f"{high_label}: {high_val_fmt} {friendly2} vs {low_label}: {low_val_fmt}"
+            else:
+                # Negative correlation: high col1 → low col2
+                headline = f"{low_label}: {high_val_fmt if low_median > high_median else low_val_fmt} {friendly2} vs {high_label}: {low_val_fmt if low_median > high_median else high_val_fmt}"
+
+            # Simplified headline showing the relationship direction
+            if high_median > low_median:
+                headline = f"Passengers with {high_label} have higher {friendly2} ({high_val_fmt} vs {low_val_fmt})"
+            else:
+                headline = f"Passengers with {low_label} have higher {friendly2} ({low_val_fmt} vs {high_val_fmt})"
+
+            # Build comparison bars - show even when ratio can't be computed
+            comparison_data = []
+            max_val = max(high_median, low_median)
+            if max_val > 0 and (high_median != low_median):
+                bars = [
+                    {
+                        'label': low_label,
+                        'value': low_median,
+                        'formatted': self._format_value(low_median, col2)
+                    },
+                    {
+                        'label': high_label,
+                        'value': high_median,
+                        'formatted': self._format_value(high_median, col2)
+                    }
+                ]
+                # Sort by value descending
+                bars.sort(key=lambda x: x['value'], reverse=True)
+                bars[0]['percentage'] = 100
+                bars[1]['percentage'] = (bars[1]['value'] / max_val * 100) if max_val > 0 else 0
+                comparison_data = bars
+
+            metrics = {
+                'ratio': ratio,
+                'r_squared': r_squared,
+                'n_observations': n_obs,
+                'is_binary_outcome': False
+            }
 
         # Determine confidence
         confidence = self._calculate_confidence(n_obs, r_squared)
@@ -277,8 +402,16 @@ class CorrelationInsightSynthesizer:
         if seg_col not in self.df.columns or val_col not in self.df.columns:
             return None
 
+        # Skip tautological correlations (low insight value)
+        if self._is_tautological_correlation(seg_col, val_col):
+            logger.debug(f"Skipping tautological categorical grouping: {seg_col} vs {val_col}")
+            return None
+
         friendly_seg = self.get_friendly_name(seg_col)
         friendly_val = self.get_friendly_name(val_col)
+
+        # Check if value column is binary (like Survived) - use rates instead of medians
+        val_is_binary = self._is_binary_column(val_col)
 
         # Get group statistics
         group_stats = self.df.groupby(seg_col)[val_col].agg(['median', 'mean', 'count', 'std'])
@@ -287,49 +420,79 @@ class CorrelationInsightSynthesizer:
         if len(group_stats) < 2:
             return None
 
-        # Sort by median to find highest/lowest
-        group_stats = group_stats.sort_values('median', ascending=False)
+        # For binary outcomes, use mean (rate) instead of median
+        sort_col = 'mean' if val_is_binary else 'median'
+        group_stats = group_stats.sort_values(sort_col, ascending=False)
 
         highest_group = group_stats.index[0]
         lowest_group = group_stats.index[-1]
-        highest_val = group_stats.loc[highest_group, 'median']
-        lowest_val = group_stats.loc[lowest_group, 'median']
 
-        # Calculate ratio
-        ratio = highest_val / lowest_val if lowest_val > 0 else None
+        if val_is_binary:
+            # Use rates (means) as percentages
+            highest_rate = group_stats.loc[highest_group, 'mean'] * 100
+            lowest_rate = group_stats.loc[lowest_group, 'mean'] * 100
+            ratio = highest_rate / lowest_rate if lowest_rate > 0 else None
+        else:
+            highest_val = group_stats.loc[highest_group, 'median']
+            lowest_val = group_stats.loc[lowest_group, 'median']
+            ratio = highest_val / lowest_val if lowest_val > 0 else None
 
         # Format group labels - use value_labels if configured, otherwise generic
         highest_label = self.get_value_label(seg_col, highest_group)
         lowest_label = self.get_value_label(seg_col, lowest_group)
 
         # Generate headline
-        if ratio and ratio > 1.5:
-            headline = f"{highest_label} shows <span class=\"highlight-value\">{ratio:.1f}x higher</span> {friendly_val} than {lowest_label}"
+        if val_is_binary:
+            # Binary outcome - use rate language
+            if ratio and ratio > 1.5:
+                headline = f"{highest_label} have <span class=\"highlight-value\">{ratio:.1f}x</span> the {friendly_val} rate vs {lowest_label}"
+            else:
+                headline = f"{friendly_val} rate: {highest_label} ({highest_rate:.0f}%) vs {lowest_label} ({lowest_rate:.0f}%)"
         else:
-            headline = f"{friendly_val} varies significantly by {friendly_seg}"
+            if ratio and ratio > 1.5:
+                headline = f"{highest_label} shows <span class=\"highlight-value\">{ratio:.1f}x higher</span> {friendly_val} than {lowest_label}"
+            else:
+                headline = f"{friendly_val} varies significantly by {friendly_seg}"
 
         # Build comparison data for all groups - use value_labels if configured
         comparison_data = []
-        max_val = group_stats['median'].max()
-        for group_name, row in group_stats.iterrows():
-            comparison_data.append({
-                'label': self.get_value_label(seg_col, group_name),
-                'value': row['median'],
-                'percentage': (row['median'] / max_val * 100) if max_val > 0 else 0,
-                'formatted': self._format_value(row['median'], val_col),
-                'count': int(row['count'])
-            })
+        if val_is_binary:
+            # Show rates as percentages
+            max_rate = group_stats['mean'].max() * 100
+            for group_name, row in group_stats.iterrows():
+                rate = row['mean'] * 100
+                comparison_data.append({
+                    'label': self.get_value_label(seg_col, group_name),
+                    'value': rate,
+                    'percentage': (rate / max_rate * 100) if max_rate > 0 else 0,
+                    'formatted': f"{rate:.0f}%",
+                    'count': int(row['count'])
+                })
+        else:
+            max_val = group_stats['median'].max()
+            for group_name, row in group_stats.iterrows():
+                comparison_data.append({
+                    'label': self.get_value_label(seg_col, group_name),
+                    'value': row['median'],
+                    'percentage': (row['median'] / max_val * 100) if max_val > 0 else 0,
+                    'formatted': self._format_value(row['median'], val_col),
+                    'count': int(row['count'])
+                })
 
         # Calculate metrics
-        pct_diff = ((highest_val - lowest_val) / lowest_val * 100) if lowest_val > 0 else 0
         n_obs = int(group_stats['count'].sum())
+        if val_is_binary:
+            pct_diff = highest_rate - lowest_rate  # Percentage point difference
+        else:
+            pct_diff = ((highest_val - lowest_val) / lowest_val * 100) if lowest_val > 0 else 0
 
         metrics = {
             'ratio': ratio,
             'percentage_difference': pct_diff,
             'variance_explained': var_explained,
             'n_groups': len(group_stats),
-            'n_observations': n_obs
+            'n_observations': n_obs,
+            'is_binary_outcome': val_is_binary
         }
 
         # Determine confidence
@@ -384,15 +547,17 @@ class CorrelationInsightSynthesizer:
         if 'age' in col_lower:
             return f"{value:.0f} years"
 
-        # Default formatting
-        if value >= 1000:
+        # Default formatting - prefer whole numbers when value is integer
+        if value == int(value):
+            return f"{int(value):,}"
+        elif value >= 1000:
             return f"{value:,.0f}"
         elif value >= 10:
             return f"{value:.1f}"
         elif value >= 1:
             return f"{value:.2f}"
         else:
-            return f"{value:.3f}"
+            return f"{value:.2f}"
 
     def _calculate_confidence(self, n_obs: int, effect_size: float) -> str:
         """Calculate confidence level based on sample size and effect size."""
@@ -411,33 +576,9 @@ class CorrelationInsightSynthesizer:
         r: float
     ) -> List[str]:
         """Detect edge cases for numeric correlations."""
-        edge_cases = []
-
-        # Check for outlier influence
-        try:
-            q1, q99 = df[col1].quantile([0.01, 0.99])
-            trimmed = df[(df[col1] >= q1) & (df[col1] <= q99)]
-            if len(trimmed) >= 10:
-                trimmed_r = trimmed[[col1, col2]].corr().iloc[0, 1]
-                if abs(r - trimmed_r) > 0.15:
-                    edge_cases.append(
-                        f"Correlation changes from {r:.2f} to {trimmed_r:.2f} when outliers removed"
-                    )
-        except Exception:
-            pass
-
-        # Check for non-linearity (compare Pearson vs Spearman)
-        try:
-            from scipy.stats import spearmanr
-            spearman_r, _ = spearmanr(df[col1], df[col2])
-            if abs(spearman_r) - abs(r) > 0.15:
-                edge_cases.append(
-                    f"Non-linear pattern detected (Spearman ρ={spearman_r:.2f} vs Pearson r={r:.2f})"
-                )
-        except Exception:
-            pass
-
-        return edge_cases
+        # Edge cases are now included in technical details only
+        # Removed from main display as they were too technical
+        return []
 
     def _detect_edge_cases_categorical(
         self,
@@ -448,21 +589,17 @@ class CorrelationInsightSynthesizer:
         """Detect edge cases for categorical groupings."""
         edge_cases = []
 
-        # Check for unbalanced groups
+        # Check for unbalanced groups (only if significantly different)
         counts = group_stats['count']
         if counts.max() / counts.min() > 10:
+            larger_group = self.get_value_label(seg_col, counts.idxmax())
+            smaller_group = self.get_value_label(seg_col, counts.idxmin())
             edge_cases.append(
-                f"Unbalanced groups: {counts.idxmax()} has {counts.max():.0f}x more observations"
+                f"Unbalanced sample: {larger_group} has {int(counts.max() / counts.min())}x more records than {smaller_group}"
             )
 
-        # Check for high variance within groups
-        if 'std' in group_stats.columns:
-            cv = group_stats['std'] / group_stats['mean']
-            high_cv_groups = cv[cv > 1.0]
-            if len(high_cv_groups) > 0:
-                edge_cases.append(
-                    f"High variance within {', '.join(str(g) for g in high_cv_groups.index[:2])}"
-                )
+        # Skip variance check for binary outcomes (doesn't make sense)
+        # High CV for binary outcomes is expected and not meaningful
 
         return edge_cases
 
