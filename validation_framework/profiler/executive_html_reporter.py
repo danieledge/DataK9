@@ -418,7 +418,29 @@ class ExecutiveHTMLReporter:
 
         # Compute badge counts for section headers
         ml_field_count = len(categorical_columns)  # Low-cardinality fields for ML
-        anomaly_count = profile.ml_findings.get('summary', {}).get('total_issues', 0) if profile.ml_findings else 0
+        # Calculate anomaly count consistently with executive summary (using validated counts)
+        if profile.ml_findings:
+            numeric_outliers = profile.ml_findings.get('numeric_outliers', {})
+            autoencoder = profile.ml_findings.get('multivariate_outliers', profile.ml_findings.get('autoencoder_anomalies', {}))
+            cross_issues = profile.ml_findings.get('cross_column_issues', [])
+            rare_categories = profile.ml_findings.get('rare_categories', {})
+            context_validation = profile.ml_findings.get('context_validation', {})
+
+            # Raw counts
+            total_field_outliers_raw = sum(f.get('anomaly_count', 0) for f in numeric_outliers.values()) if numeric_outliers else 0
+            total_combo_anomalies = autoencoder.get('anomaly_count', 0) if autoencoder else 0
+            total_cross_field = sum(i.get('total_issues', 0) for i in cross_issues) if cross_issues else 0
+            total_rare = sum(f.get('total_rare_count', 0) for f in rare_categories.values()) if rare_categories else 0
+
+            # Apply context validation if significant reduction
+            has_context = context_validation and context_validation.get('total_validated', 0) > 0
+            validated_count = context_validation.get('total_validated', total_field_outliers_raw) if has_context else total_field_outliers_raw
+            reduction_pct = context_validation.get('reduction_percentage', 0) if has_context else 0
+            total_field_outliers = validated_count if (has_context and reduction_pct > 10) else total_field_outliers_raw
+
+            anomaly_count = total_field_outliers + total_combo_anomalies + total_cross_field + total_rare
+        else:
+            anomaly_count = 0
         # profile.correlations can be a list or dict depending on version
         if isinstance(profile.correlations, list):
             correlation_count = len(profile.correlations)
@@ -543,6 +565,9 @@ class ExecutiveHTMLReporter:
 
                 <!-- Semantic Classification Accordion (unified FIBO + Schema.org) -->
                 {self._generate_semantic_classification_accordion(profile)}
+
+                <!-- PII Risk Section (if detected) - belongs with structure/metadata -->
+                {self._generate_pii_section(pii_columns) if pii_count > 0 else ''}
             </div>
         </div>
 
@@ -656,18 +681,15 @@ class ExecutiveHTMLReporter:
                     <p class="section-accordion-subtitle">Outliers, unusual patterns, and notable observations</p>
                 </div>
                 <div class="section-accordion-meta">
-                    <div class="section-accordion-badge">{anomaly_count} Issues</div>
+                    <div class="section-accordion-badge">{anomaly_count} Observations</div>
                     <span class="section-accordion-chevron">{icon('chevron-down', 16)}</span>
                 </div>
             </div>
             <div class="section-accordion-content">
-                <!-- PII Risk Section (if detected) - still important to highlight -->
-                {self._generate_pii_section(pii_columns) if pii_count > 0 else ''}
+                <!-- v2 Insight Widgets (Plain English + Examples + Technical + Embedded Charts) -->
+                {self._generate_ml_section_v2(profile.ml_findings, profile.columns, profile.ml_findings.get('visualizations', {})) if profile.ml_findings else ''}
 
-                <!-- v2 Insight Widgets (Plain English + Examples + Technical) -->
-                {self._generate_ml_section_v2(profile.ml_findings, profile.columns) if profile.ml_findings else ''}
-
-                <!-- Anomaly Visualizations (relocated from Advanced Visualizations) -->
+                <!-- Additional Anomaly Visualizations (non-duplicated charts only) -->
                 {anomaly_charts}
 
                 <!-- Missingness Visualizations (relocated from Advanced Visualizations) -->
@@ -720,7 +742,7 @@ class ExecutiveHTMLReporter:
             </div>
             <div class="section-accordion-content">
                 <!-- Column Explorer -->
-                {self._generate_column_explorer(profile)}
+                {self._generate_column_explorer(profile, field_descriptions)}
             </div>
         </div>
 
@@ -1758,39 +1780,188 @@ class ExecutiveHTMLReporter:
         }
 
         @media (max-width: 768px) {
+            /* =============================================
+               FIELD EXPLORER - Mobile Card Layout
+               Clean, compact cards that stack vertically
+               ============================================= */
+            .column-row {
+                position: relative;
+                margin-bottom: 4px;
+            }
+
             .column-row-header {
-                grid-template-columns: auto auto 1fr auto;
-                grid-template-rows: auto auto auto auto;
-                padding: 12px;
+                display: grid;
+                grid-template-columns: 32px 1fr 60px;
+                grid-template-rows: auto auto auto;
+                grid-template-areas:
+                    "icon info quality"
+                    "icon stats stats"
+                    "tags tags tags";
+                gap: 4px 8px;
+                padding: 10px 12px;
+                align-items: start;
             }
-            .column-quick-stats {
-                grid-column: 3 / -1;
-                grid-row: 2;
-                justify-self: start;
+
+            /* Hide expand arrow - mobile uses full tap */
+            .column-row-header > .column-expand-icon {
+                display: none;
             }
-            .column-tags {
-                grid-column: 1 / -1;
-                grid-row: 3;
-                margin-top: 8px;
-                padding-top: 8px;
-                border-top: 1px solid var(--border-subtle);
+
+            /* Type icon - left column */
+            .column-row-header > .column-type-icon {
+                grid-area: icon;
+                width: 28px;
+                height: 28px;
+                font-size: 0.75em;
+                margin-top: 2px;
             }
-            .column-quality-score {
-                grid-column: 1 / -1;
-                grid-row: 4;
+
+            /* Field name and type info */
+            .column-row-header > .column-info {
+                grid-area: info;
+            }
+            .column-name {
+                font-size: 0.9em;
+                font-weight: 600;
+            }
+            .column-type {
+                font-size: 0.7em;
+                opacity: 0.7;
+            }
+            .column-name-row {
+                gap: 6px;
+            }
+
+            /* Quality badge - top right */
+            .column-row-header > .column-quality-score {
+                grid-area: quality;
+                font-size: 0.65em;
+                padding: 3px 6px;
+                text-align: center;
                 justify-self: end;
-                margin-top: 8px;
+            }
+
+            /* Quick stats - row 2 */
+            .column-quick-stats {
+                grid-area: stats;
+                font-size: 0.7em;
+                gap: 6px;
+            }
+            .column-quick-stats span {
+                background: rgba(255,255,255,0.06);
+                padding: 2px 8px;
+                border-radius: 10px;
+                white-space: nowrap;
+            }
+
+            /* Tags - row 3, horizontal scroll */
+            .column-tags {
+                grid-area: tags;
+                gap: 4px;
+                flex-wrap: nowrap;
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+                scrollbar-width: none;
+                padding-top: 6px;
+                border-top: 1px solid rgba(255,255,255,0.05);
+                margin-top: 4px;
+            }
+            .column-tags::-webkit-scrollbar {
+                display: none;
+            }
+            .column-tags:empty {
+                display: none;
             }
             .column-tag {
-                font-size: 0.7em;
-                padding: 4px 10px;
+                font-size: 0.6em;
+                padding: 2px 6px;
+                white-space: nowrap;
+                flex-shrink: 0;
             }
             .column-tag.fibo {
+                font-size: 0.55em;
+            }
+
+            /* Expanded details - compact mobile layout */
+            .column-details-content {
+                padding: 10px 12px;
+            }
+
+            /* Stats in 2-col grid */
+            .column-stats-grid {
+                grid-template-columns: 1fr 1fr;
+                gap: 6px;
+            }
+            .column-stat {
+                padding: 8px;
+            }
+            .column-stat-label {
+                font-size: 0.6em;
+                margin-bottom: 2px;
+            }
+            .column-stat-value {
+                font-size: 0.8em;
+            }
+
+            /* Top values - 2-col compact */
+            .top-values-section {
+                margin-top: 10px;
+                padding-top: 10px;
+            }
+            .top-values-title {
                 font-size: 0.65em;
-                max-width: 100%;
-                white-space: nowrap;
-                overflow: hidden;
-                text-overflow: ellipsis;
+                margin-bottom: 6px;
+            }
+            .top-values-grid {
+                grid-template-columns: 1fr 1fr;
+                gap: 4px;
+            }
+            .top-value-item {
+                padding: 4px 8px;
+                font-size: 0.75em;
+            }
+            .top-value-name {
+                max-width: 60px;
+                font-size: 0.9em;
+            }
+            .top-value-count {
+                font-size: 0.85em;
+            }
+
+            /* Semantic summary compact */
+            .semantic-summary {
+                font-size: 0.8em;
+                padding: 8px 10px;
+                margin-bottom: 10px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            /* Extra small screens - single column for stats */
+            .column-row-header {
+                grid-template-columns: 28px 1fr 55px;
+            }
+            .column-row-header > .column-type-icon {
+                width: 24px;
+                height: 24px;
+                font-size: 0.7em;
+            }
+            .column-name {
+                font-size: 0.85em;
+            }
+            .column-quick-stats {
+                flex-wrap: wrap;
+                gap: 4px;
+            }
+            .column-quick-stats span {
+                padding: 2px 6px;
+                font-size: 0.95em;
+            }
+            .column-stats-grid {
+                grid-template-columns: 1fr 1fr;
+            }
+            .top-values-grid {
+                grid-template-columns: 1fr;
             }
         }
 
@@ -4064,33 +4235,33 @@ class ExecutiveHTMLReporter:
             padding: 0 24px;
         }
 
-        /* Plain English Summary Section */
+        /* Plain English Summary Section - matching dual-layer-summary style */
         .insight-summary {
             margin-bottom: 24px;
+            background: rgba(245, 158, 11, 0.12);
+            border-left: 3px solid #f59e0b;
+            padding: 12px 16px;
+            border-radius: 0 8px 8px 0;
         }
 
         .insight-summary-label {
-            font-size: 0.85em;
+            font-size: 0.8em;
             font-weight: 600;
-            color: var(--text-primary);
-            margin-bottom: 10px;
+            color: #fbbf24;
+            margin-bottom: 6px;
             display: flex;
             align-items: center;
             gap: 6px;
         }
 
         .insight-summary-label svg {
-            color: var(--info-color);
+            color: #f59e0b;
         }
 
         .insight-summary-text {
             font-size: 0.95em;
             line-height: 1.6;
             color: var(--text-secondary);
-            padding: 14px 16px;
-            background: rgba(var(--info-color-rgb), 0.08);
-            border-radius: 0 8px 8px 0;
-            border-left: 3px solid var(--info-color);
         }
 
         /* Example Table Section */
@@ -4159,6 +4330,193 @@ class ExecutiveHTMLReporter:
         .insight-examples-table .row-id {
             color: var(--text-muted);
             font-size: 0.9em;
+            font-family: monospace;
+        }
+
+        /* Mobile-friendly tables - transform to stacked cards on small screens */
+        @media (max-width: 768px) {
+            /* Transform insight tables to mobile-friendly stacked layout */
+            .insight-examples-table {
+                display: block;
+            }
+
+            .insight-examples-table thead {
+                display: none;
+            }
+
+            .insight-examples-table tbody {
+                display: flex;
+                flex-direction: column;
+                gap: 8px;
+            }
+
+            .insight-examples-table tr {
+                display: block;
+                background: rgba(0, 0, 0, 0.25);
+                border-radius: 8px;
+                padding: 10px 12px;
+                border-left: 3px solid var(--accent-color);
+            }
+
+            .insight-examples-table tr:hover {
+                background: rgba(0, 0, 0, 0.3);
+            }
+
+            .insight-examples-table td {
+                display: block;
+                padding: 2px 0;
+                border: none;
+                font-size: 0.85em;
+            }
+
+            /* First cell - make it prominent as the "title" */
+            .insight-examples-table td:first-child {
+                font-weight: 600;
+                color: var(--text-primary);
+                font-size: 0.9em;
+                margin-bottom: 4px;
+            }
+
+            /* Hide row ID column on mobile (usually first column) */
+            .insight-examples-table td.row-id {
+                display: none;
+            }
+
+            /* Value highlights stand out */
+            .insight-examples-table td.value-highlight {
+                color: #f87171;
+                font-weight: 600;
+                font-family: 'SF Mono', Monaco, monospace;
+            }
+
+            /* Normal values are muted */
+            .insight-examples-table td.value-normal {
+                color: var(--text-muted);
+                font-size: 0.8em;
+            }
+
+            /* Severity badges inline */
+            .insight-examples-table .severity-badge {
+                margin-right: 6px;
+            }
+
+            /* Custom outlier cards (enhanced styling) - show on mobile, hide table */
+            .outlier-cards-mobile {
+                display: flex;
+                flex-direction: column;
+                gap: 8px;
+            }
+
+            .insight-examples-table.has-mobile-cards {
+                display: none !important;
+            }
+
+            .outlier-card {
+                background: rgba(0, 0, 0, 0.25);
+                border-radius: 8px;
+                padding: 10px 12px;
+                border-left: 3px solid #f59e0b;
+                display: grid;
+                grid-template-columns: 1fr auto;
+                grid-template-rows: auto auto;
+                gap: 4px 12px;
+                align-items: center;
+            }
+
+            .outlier-card.extreme {
+                border-left-color: #ef4444;
+            }
+
+            .outlier-card.high {
+                border-left-color: #f97316;
+            }
+
+            .outlier-card.moderate {
+                border-left-color: #eab308;
+            }
+
+            .outlier-card-field {
+                font-weight: 600;
+                color: var(--text-primary);
+                font-size: 0.9em;
+                grid-column: 1;
+                grid-row: 1;
+            }
+
+            .outlier-card-severity {
+                grid-column: 2;
+                grid-row: 1 / 3;
+                padding: 3px 6px;
+                border-radius: 4px;
+                font-size: 0.65em;
+                font-weight: 600;
+                text-transform: uppercase;
+                align-self: center;
+            }
+
+            .outlier-card-severity.extreme {
+                background: rgba(239, 68, 68, 0.2);
+                color: #ef4444;
+            }
+
+            .outlier-card-severity.high {
+                background: rgba(249, 115, 22, 0.2);
+                color: #f97316;
+            }
+
+            .outlier-card-severity.moderate {
+                background: rgba(234, 179, 8, 0.2);
+                color: #eab308;
+            }
+
+            .outlier-card-comparison {
+                grid-column: 1;
+                grid-row: 2;
+                display: flex;
+                align-items: center;
+                flex-wrap: wrap;
+                gap: 6px;
+                font-size: 0.8em;
+                color: var(--text-secondary);
+            }
+
+            .outlier-card-val {
+                font-weight: 600;
+                color: #f87171;
+                font-family: 'SF Mono', Monaco, monospace;
+            }
+
+            .outlier-card-vs {
+                color: var(--text-muted);
+            }
+
+            .outlier-card-expected {
+                color: #22c55e;
+            }
+        }
+
+        /* Severity Badges */
+        .severity-badge {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.75em;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.02em;
+            margin-right: 4px;
+        }
+        .severity-badge.extreme {
+            background: rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+        }
+        .severity-badge.high {
+            background: rgba(249, 115, 22, 0.2);
+            color: #f97316;
+        }
+        .severity-badge.moderate {
+            background: rgba(234, 179, 8, 0.2);
+            color: #eab308;
         }
 
         /* Technical Details Collapsible */
@@ -5102,7 +5460,7 @@ class ExecutiveHTMLReporter:
             options: {{
                 ...chartDefaults,
                 responsive: true,
-                maintainAspectRatio: true,
+                maintainAspectRatio: false,  // Allow chart to fill container height
                 layout: {{
                     padding: {{ top: 20, right: 20, bottom: 10, left: 10 }}  // Padding for bubbles
                 }},
@@ -5778,13 +6136,7 @@ class ExecutiveHTMLReporter:
                     Anomaly Filter
                 </span>'''
 
-            # Confidence indicator (dots)
-            confidence_dots = {
-                'high': '<span style="color: #10b981;">●●●</span>',
-                'medium': '<span style="color: #f59e0b;">●●</span><span style="color: #374151;">●</span>',
-                'low': '<span style="color: #ef4444;">●</span><span style="color: #374151;">●●</span>'
-            }
-            confidence_html = confidence_dots.get(confidence, confidence_dots['medium'])
+            # No confidence dots - the headline conveys strength, technical details have the stats
 
             # Build comparison bars
             comparison_bars_html = ''
@@ -5816,21 +6168,8 @@ class ExecutiveHTMLReporter:
                     </div>
                 '''
 
-            # Build metric pills (muted colors)
-            metric_pills = []
-            ratio = metrics.get('ratio')
-            if ratio and ratio > 1:
-                metric_pills.append(f'<span style="background: rgba(139, 92, 246, 0.15); color: #8b5cf6; padding: 4px 10px; border-radius: 12px; font-size: 0.75em; font-weight: 600;">{ratio:.1f}x</span>')
-
-            pct_diff = metrics.get('percentage_difference', 0)
-            if pct_diff > 10:
-                metric_pills.append(f'<span style="background: rgba(14, 165, 233, 0.15); color: #0ea5e9; padding: 4px 10px; border-radius: 12px; font-size: 0.75em; font-weight: 600;">+{pct_diff:.0f}%</span>')
-
-            n_obs = metrics.get('n_observations', 0)
-            if n_obs > 0:
-                metric_pills.append(f'<span style="background: var(--bg-primary); color: var(--text-secondary); padding: 4px 10px; border-radius: 12px; font-size: 0.75em;">n={n_obs:,}</span>')
-
-            metrics_html = f'<div style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px;">{" ".join(metric_pills)}</div>' if metric_pills else ''
+            # No metric pills needed - bars show the data clearly, sample size in technical details
+            metrics_html = ''
 
             # Edge case warnings
             edge_case_html = ''
@@ -5847,20 +6186,48 @@ class ExecutiveHTMLReporter:
                     </div>
                 '''
 
-            # Build technical details (collapsible)
+            # Build technical details (collapsible) - explain what drove this insight
             tech_items = []
+
+            # Add analysis method explanation first
+            is_binary = metrics.get('is_binary_outcome', False)
+            if rel_type == 'numeric_categorical':
+                if is_binary:
+                    tech_items.append(f"<strong>Analysis:</strong> Compared {friendly2} rates across {friendly1} groups")
+                else:
+                    tech_items.append(f"<strong>Analysis:</strong> Compared median {friendly1} across {friendly2} groups (ANOVA)")
+            elif rel_type == 'numeric_numeric':
+                if is_binary:
+                    tech_items.append(f"<strong>Analysis:</strong> Compared {friendly2} rates by {friendly1} quartiles")
+                else:
+                    tech_items.append(f"<strong>Analysis:</strong> Correlation analysis between numeric fields")
+
+            # Key metrics
+            ratio = metrics.get('ratio')
+            if ratio and ratio > 1:
+                tech_items.append(f"Effect Size: {ratio:.1f}x difference between groups")
+
             if stat_details.get('correlation'):
-                tech_items.append(f"Correlation (r): {stat_details['correlation']:+.3f}")
+                r = stat_details['correlation']
+                strength = "strong" if abs(r) >= 0.5 else "moderate" if abs(r) >= 0.3 else "weak"
+                direction = "positive" if r > 0 else "negative"
+                tech_items.append(f"Correlation: r = {r:+.3f} ({strength} {direction})")
+
             if stat_details.get('r_squared'):
-                tech_items.append(f"R² (Variance Explained): {stat_details['r_squared']*100:.1f}%")
-            if stat_details.get('variance_explained'):
-                tech_items.append(f"Variance Explained: {stat_details['variance_explained']*100:.1f}%")
+                tech_items.append(f"Variance Explained: {stat_details['r_squared']*100:.1f}% (R²)")
+            elif stat_details.get('variance_explained'):
+                tech_items.append(f"Variance Explained: {stat_details['variance_explained']*100:.1f}% (η²)")
+
             if stat_details.get('method'):
-                tech_items.append(f"Method: {stat_details['method'].title()}")
+                tech_items.append(f"Statistical Method: {stat_details['method'].title()} correlation")
+
             if stat_details.get('n_observations'):
-                tech_items.append(f"Sample Size: {stat_details['n_observations']:,}")
+                tech_items.append(f"Sample Size: {stat_details['n_observations']:,} records")
+
             if stat_details.get('p_value') is not None:
-                tech_items.append(f"p-value: {stat_details['p_value']:.4f}" if stat_details['p_value'] >= 0.0001 else "p-value: < 0.0001")
+                p = stat_details['p_value']
+                sig = "highly significant" if p < 0.001 else "significant" if p < 0.05 else "not significant"
+                tech_items.append(f"Statistical Significance: p {'< 0.0001' if p < 0.0001 else f'= {p:.4f}'} ({sig})")
 
             tech_details_html = f'''
                 <div class="tech-details-toggle" style="margin-top: 12px;">
@@ -5882,15 +6249,9 @@ class ExecutiveHTMLReporter:
                 <div class="insight-card" style="background: var(--bg-card); border-radius: 12px; border-left: 4px solid {accent_color}; margin-bottom: 16px; overflow: hidden; border: 1px solid var(--border-subtle);">
                     <!-- Header -->
                     <div style="padding: 16px 20px; border-bottom: 1px solid var(--border-subtle);">
-                        <div style="display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 8px;">
-                            <div style="display: flex; align-items: center; flex-wrap: wrap;">
-                                <span style="font-size: 0.75em; color: {accent_color}; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">{priority_label}</span>
-                                {context_badge_html}
-                            </div>
-                            <div style="display: flex; align-items: center; gap: 8px;">
-                                <span style="font-size: 0.75em; color: var(--text-muted);">Confidence:</span>
-                                {confidence_html}
-                            </div>
+                        <div style="display: flex; align-items: center; flex-wrap: wrap; margin-bottom: 8px;">
+                            <span style="font-size: 0.75em; color: {accent_color}; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">{priority_label}</span>
+                            {context_badge_html}
                         </div>
                         <!-- Headline -->
                         <div style="font-size: 1.1em; font-weight: 600; color: var(--text-primary); line-height: 1.4;">
@@ -5931,8 +6292,21 @@ class ExecutiveHTMLReporter:
             </div>
         '''
 
+        # Add "What this means" section with consistent styling
+        what_it_means = '''
+            <div class="dual-layer-explanation" style="margin-bottom: 20px;">
+                <div class="dual-layer-summary">
+                    <div class="dual-layer-summary-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7V17a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-2.3A7 7 0 0 0 12 2z"/></svg> What this means</div>
+                    <div class="dual-layer-summary-text">
+                        Relationships show how columns influence each other. <strong>Strong relationships</strong> indicate columns that change together predictably — useful for validation rules, detecting anomalies, and understanding data dependencies. When one column can predict another, changes to one may need to be reflected in the other.
+                    </div>
+                </div>
+            </div>
+        '''
+
         return f'''
             {summary_html}
+            {what_it_means}
             <div style="display: flex; flex-direction: column; gap: 0;">
                 {''.join(cards_html)}
             </div>
@@ -6233,6 +6607,11 @@ class ExecutiveHTMLReporter:
         if not lineage:
             return ''
 
+        # Get analysis time from ml_findings if available
+        analysis_time = 0
+        if profile.ml_findings:
+            analysis_time = profile.ml_findings.get('analysis_time_seconds', 0)
+
         # Format source info
         source_path = lineage.source_path or 'Unknown'
         source_type = lineage.source_type.upper() if lineage.source_type else 'FILE'
@@ -6356,9 +6735,13 @@ class ExecutiveHTMLReporter:
                                 <span style="color: var(--text-muted);">Profiler Version</span>
                                 <span style="color: var(--text-primary);">DataK9 v{profiler_version}</span>
                             </div>
-                            <div style="display: flex; justify-content: space-between; padding: 4px 0;">
+                            <div style="display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid var(--border-color);">
                                 <span style="color: var(--text-muted);">Host</span>
                                 <span style="color: var(--text-primary);">{hostname}</span>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; padding: 4px 0;">
+                                <span style="color: var(--text-muted);">Analysis Time</span>
+                                <span style="color: var(--text-primary); font-weight: 500;">{analysis_time:.1f}s</span>
                             </div>
                         </div>
                     </div>
@@ -6427,6 +6810,16 @@ class ExecutiveHTMLReporter:
         benford_analysis = ml_findings.get('benford_analysis', {})
         clustering = ml_findings.get('clustering_analysis', {})
 
+        # Extract field descriptions for friendly names
+        context_store = ml_findings.get('context_store', {})
+        field_descs = context_store.get('field_descriptions', {})
+
+        def get_friendly(col):
+            """Get friendly name for a column."""
+            if field_descs and col in field_descs:
+                return field_descs[col].get('friendly_name', col)
+            return col
+
         # Calculate counts for summary
         outlier_count = sum(f.get('anomaly_count', 0) for f in numeric_outliers.values())
         format_count = sum(f.get('anomaly_count', 0) for f in format_anomalies.values())
@@ -6484,6 +6877,7 @@ class ExecutiveHTMLReporter:
             # Numeric outliers with business impact and actions
             if numeric_outliers:
                 for col, data in list(numeric_outliers.items())[:4]:
+                    friendly_col = get_friendly(col)
                     count = data.get('anomaly_count', 0)
                     pct = data.get('anomaly_percentage', (count / analyzed_rows * 100) if analyzed_rows > 0 else 0)
                     max_multiplier = data.get('max_deviation_from_median', 0)
@@ -6502,7 +6896,7 @@ class ExecutiveHTMLReporter:
                     details_html += f'''
                         <div style="background: var(--card-bg); border-radius: 8px; padding: 14px; margin-bottom: 10px; border-left: 4px solid #ef4444;">
                             <div style="display: flex; justify-content: space-between; align-items: start;">
-                                <div style="font-weight: 600; margin-bottom: 6px;">{col}</div>
+                                <div style="font-weight: 600; margin-bottom: 6px;">{friendly_col}</div>
                                 <div style="font-size: 0.8em; color: #ef4444; font-weight: 600;">{pct:.2f}% outliers</div>
                             </div>
                             <div style="font-size: 0.9em; color: var(--text-secondary); margin-bottom: 6px;">{count:,} extreme values detected</div>
@@ -6585,6 +6979,8 @@ class ExecutiveHTMLReporter:
             if cross_issues:
                 for issue in cross_issues[:3]:
                     cols = issue.get('columns', [])
+                    friendly_col1 = get_friendly(cols[0]) if cols else 'Field'
+                    friendly_col2 = get_friendly(cols[1]) if len(cols) > 1 else 'related field'
                     total = issue.get('total_issues', 0)
                     interpretation = issue.get('interpretation', 'Values between these fields show unexpected relationships')
 
@@ -6601,7 +6997,7 @@ class ExecutiveHTMLReporter:
 
                     details_html += f'''
                         <div style="background: var(--card-bg); border-radius: 8px; padding: 14px; margin-bottom: 10px; border-left: 4px solid #06b6d4;">
-                            <div style="font-weight: 600; margin-bottom: 6px;">{cols[0]} ↔ {cols[1] if len(cols) > 1 else "related field"}</div>
+                            <div style="font-weight: 600; margin-bottom: 6px;">{friendly_col1} ↔ {friendly_col2}</div>
                             <div style="font-size: 0.9em; color: var(--text-secondary); margin-bottom: 6px;">{total:,} records with inconsistent values</div>
                             <div style="font-size: 0.85em; color: var(--text-muted); margin-bottom: 6px;">
                                 <strong style="color: var(--text-secondary);">Impact:</strong> {cross_impact}
@@ -6615,6 +7011,8 @@ class ExecutiveHTMLReporter:
             if corr_breaks:
                 for cb in corr_breaks[:2]:
                     cols = cb.get('columns', [])
+                    friendly_col1 = get_friendly(cols[0]) if cols else 'Field'
+                    friendly_col2 = get_friendly(cols[1]) if len(cols) > 1 else 'related'
                     count = cb.get('anomaly_count', 0)
                     interpretation = cb.get('interpretation', 'Records that deviate from the expected correlation pattern')
 
@@ -6628,7 +7026,7 @@ class ExecutiveHTMLReporter:
 
                     details_html += f'''
                         <div style="background: var(--card-bg); border-radius: 8px; padding: 14px; margin-bottom: 10px; border-left: 4px solid #0891b2;">
-                            <div style="font-weight: 600; margin-bottom: 6px;">{cols[0] if cols else "Column"} ↔ {cols[1] if len(cols) > 1 else "related"}: Pattern Break</div>
+                            <div style="font-weight: 600; margin-bottom: 6px;">{friendly_col1} ↔ {friendly_col2}: Pattern Break</div>
                             <div style="font-size: 0.9em; color: var(--text-secondary); margin-bottom: 6px;">{count:,} records deviate from expected relationship</div>
                             <div style="font-size: 0.85em; color: var(--text-muted); margin-bottom: 6px;">
                                 <strong style="color: var(--text-secondary);">Impact:</strong> {corr_impact}
@@ -6658,6 +7056,7 @@ class ExecutiveHTMLReporter:
             # Rare categories
             if rare_categories:
                 for col, data in list(rare_categories.items())[:3]:
+                    friendly_col = get_friendly(col)
                     rare_vals = data.get('rare_values', [])
                     total_rare = data.get('total_rare_count', 0)
                     vals_display = ', '.join([f'"{v["value"]}"' for v in rare_vals[:3]])
@@ -6672,7 +7071,7 @@ class ExecutiveHTMLReporter:
 
                     details_html += f'''
                         <div style="background: var(--card-bg); border-radius: 8px; padding: 14px; margin-bottom: 10px; border-left: 4px solid #f59e0b;">
-                            <div style="font-weight: 600; margin-bottom: 6px;">{col}: {total_rare:,} rare values</div>
+                            <div style="font-weight: 600; margin-bottom: 6px;">{friendly_col}: {total_rare:,} rare values</div>
                             <div style="font-size: 0.9em; color: var(--text-secondary); margin-bottom: 6px;">Examples: {vals_display}</div>
                             <div style="font-size: 0.85em; color: var(--text-muted); margin-bottom: 6px;">
                                 <strong style="color: var(--text-secondary);">Impact:</strong> {rare_impact}
@@ -6685,6 +7084,7 @@ class ExecutiveHTMLReporter:
             # Format anomalies
             if format_anomalies:
                 for col, data in list(format_anomalies.items())[:3]:
+                    friendly_col = get_friendly(col)
                     count = data.get('anomaly_count', 0)
                     pattern_desc = data.get('dominant_pattern_description', data.get('dominant_pattern', 'standard format'))
                     sample_anomalies = data.get('sample_anomalies', [])
@@ -6704,7 +7104,7 @@ class ExecutiveHTMLReporter:
 
                     details_html += f'''
                         <div style="background: var(--card-bg); border-radius: 8px; padding: 14px; margin-bottom: 10px; border-left: 4px solid #dc2626;">
-                            <div style="font-weight: 600; margin-bottom: 6px;">{col}: {count:,} format mismatches</div>
+                            <div style="font-weight: 600; margin-bottom: 6px;">{friendly_col}: {count:,} format mismatches</div>
                             <div style="font-size: 0.9em; color: var(--text-secondary);">Expected pattern: {pattern_desc}</div>
                             <div style="font-size: 0.85em; color: #dc2626; margin-bottom: 6px;">Found: {anomaly_display}</div>
                             <div style="font-size: 0.85em; color: var(--text-muted); margin-bottom: 6px;">
@@ -6731,6 +7131,7 @@ class ExecutiveHTMLReporter:
                 </div>'''
 
             for col, data in list(temporal_warnings.items())[:2]:
+                friendly_col = get_friendly(col)
                 interpretation = data.get('interpretation', 'Unusual timing pattern detected')
                 gap_count = data.get('gap_count', 0)
                 largest_gap = data.get('largest_gap', '')
@@ -6745,7 +7146,7 @@ class ExecutiveHTMLReporter:
 
                 details_html += f'''
                     <div style="background: var(--card-bg); border-radius: 8px; padding: 14px; margin-bottom: 10px; border-left: 4px solid #22c55e;">
-                        <div style="font-weight: 600; margin-bottom: 6px;">{col}: Temporal Irregularity</div>
+                        <div style="font-weight: 600; margin-bottom: 6px;">{friendly_col}: Temporal Irregularity</div>
                         <div style="font-size: 0.9em; color: var(--text-secondary); margin-bottom: 6px;">{interpretation}</div>
                         <div style="font-size: 0.85em; color: var(--text-muted); margin-bottom: 6px;">
                             <strong style="color: var(--text-secondary);">Impact:</strong> {temp_impact}
@@ -6769,26 +7170,43 @@ class ExecutiveHTMLReporter:
                     </div>
                 </div>'''
 
-            # Benford's Law
+            # Benford's Law - use semantic type for context-aware messaging
             if benford_analysis:
                 for col, data in list(benford_analysis.items())[:2]:
+                    friendly_col = get_friendly(col)
                     is_suspicious = data.get('is_suspicious', False)
                     chi_square = data.get('chi_square', 0)
                     p_value = data.get('p_value', 0)
 
+                    # Check semantic type to provide context-aware interpretation
+                    col_semantic = None
+                    if columns:
+                        col_obj = next((c for c in columns if c.name == col), None)
+                        if col_obj and hasattr(col_obj, 'semantic_info') and col_obj.semantic_info:
+                            resolved = col_obj.semantic_info.get('resolved', {})
+                            col_semantic = resolved.get('display_label', '').lower()
+
+                    # Determine if this is a pricing/monetary field
+                    is_pricing = col_semantic and any(term in col_semantic for term in ['monetary', 'price', 'amount', 'cost', 'fee', 'fare', 'tariff'])
+
                     if is_suspicious:
                         interpretation = 'First-digit frequencies deviate from Benford distribution'
-                        benford_impact = 'For naturally occurring transactional datasets this may indicate anomalies, but for pricing or tariff tables it can simply reflect business structure.'
-                        benford_action = 'Consider the nature of this data before investigating further. Pricing, structured rates, or bounded values often deviate naturally.'
+                        if is_pricing:
+                            benford_impact = f'This field is identified as a monetary/pricing value. Deviation from Benford\'s Law is expected for ticket prices, tariffs, or structured pricing as these reflect business decisions rather than natural variation.'
+                            benford_action = 'No concern - pricing structures typically deviate from Benford\'s Law by design.'
+                        else:
+                            benford_impact = 'For naturally occurring transactional datasets this may indicate anomalies, but for structured or bounded data it can simply reflect data characteristics.'
+                            benford_action = 'Consider the nature of this data before investigating further. Pricing, structured rates, or bounded values often deviate naturally.'
                     else:
                         interpretation = 'Digit distribution follows natural patterns (Benford\'s Law) - consistent with organically-generated data'
                         benford_impact = 'Data shows natural patterns consistent with real-world measurements and counts.'
                         benford_action = 'No action needed. This is a positive indicator of data authenticity.'
 
                     status_text = "Benford deviation (p < 0.05)" if is_suspicious else "Follows Benford (p ≥ 0.05)"
+                    semantic_note = f" <span style='color: var(--text-muted);'>(detected as {col_semantic})</span>" if is_pricing and col_semantic else ""
                     details_html += f'''
-                        <div style="background: var(--card-bg); border-radius: 8px; padding: 14px; margin-bottom: 10px; border-left: 4px solid {"#f59e0b" if is_suspicious else "#22c55e"};">
-                            <div style="font-weight: 600; margin-bottom: 6px;">{col}: {"Does not follow Benford" if is_suspicious else "Follows Benford"}</div>
+                        <div style="background: var(--card-bg); border-radius: 8px; padding: 14px; margin-bottom: 10px; border-left: 4px solid {"#6366f1" if is_suspicious and is_pricing else "#f59e0b" if is_suspicious else "#22c55e"};">
+                            <div style="font-weight: 600; margin-bottom: 6px;">{friendly_col}{semantic_note}: {"Does not follow Benford" if is_suspicious else "Follows Benford"}</div>
                             <div style="font-size: 0.9em; color: var(--text-secondary); margin-bottom: 6px;">Benford's Law: {status_text} (χ²={chi_square:.1f})</div>
                             <div style="font-size: 0.85em; color: var(--text-muted); margin-bottom: 6px;">
                                 <strong style="color: var(--text-secondary);">Impact:</strong> {benford_impact}
@@ -6846,7 +7264,7 @@ class ExecutiveHTMLReporter:
             </div>
         </div>'''
 
-    def _generate_ml_section_v2(self, ml_findings: Dict, columns: list = None) -> str:
+    def _generate_ml_section_v2(self, ml_findings: Dict, columns: list = None, viz_data: Dict = None) -> str:
         """
         Generate v2 Data Insights section with masterpiece insight widgets.
 
@@ -6854,13 +7272,15 @@ class ExecutiveHTMLReporter:
         1. Plain English summary (always visible)
         2. Example table with real data (always visible)
         3. Collapsible technical details with data science explanation
-        4. Semantic confidence badges (High confidence / Caution)
+        4. Embedded distribution charts for anomaly sections
+        5. Semantic confidence badges (High confidence / Caution)
 
         Language: Observations, not issues. Awareness, not problems to fix.
 
         Args:
             ml_findings: Dictionary of ML analysis results
             columns: List of ColumnProfile objects for semantic lookup
+            viz_data: Optional visualization data from ml_findings for embedded charts
         """
         if not ml_findings:
             return ''
@@ -6893,18 +7313,18 @@ class ExecutiveHTMLReporter:
         context_store = ml_findings.get('context_store', {})
         has_context_validation = context_validation and context_validation.get('total_original', 0) > 0
 
+        # Extract field descriptions for friendly names (used throughout)
+        field_descs = context_store.get('field_descriptions', {})
+
+        # Helper to get friendly name for a column (used throughout)
+        def get_friendly(col):
+            if field_descs and col in field_descs:
+                return field_descs[col].get('friendly_name', col)
+            return col
+
         if numeric_outliers:
             total_outliers = sum(f.get('anomaly_count', 0) for f in numeric_outliers.values())
             outlier_pct = (total_outliers / analyzed_rows * 100) if analyzed_rows > 0 else 0
-
-            # Extract field descriptions for friendly names
-            field_descs = context_store.get('field_descriptions', {})
-
-            # Helper to get friendly name for a column
-            def get_friendly(col):
-                if field_descs and col in field_descs:
-                    return field_descs[col].get('friendly_name', col)
-                return col
 
             # Check if context validation has reduced outlier count
             validated_count = context_validation.get('total_validated', total_outliers) if has_context_validation else total_outliers
@@ -6912,192 +7332,209 @@ class ExecutiveHTMLReporter:
             reduction_pct = context_validation.get('reduction_percentage', 0) if has_context_validation else 0
             context_patterns = context_validation.get('context_patterns_used', [])
 
-            # Plain English explanation - include context validation insight
-            if has_context_validation and reduction_pct > 10:
-                # Build description of discovered patterns from context_store
-                patterns_description = ""
-                if context_store:
-                    subgroup_items = []
-                    correlation_items = []
-
-                    # Describe subgroup patterns (e.g., "Fare varies by Passenger Class")
-                    subgroups = context_store.get('subgroups', [])
-                    for sg in subgroups[:3]:  # Show top 3 subgroup patterns
-                        seg_col = sg.get('segment_col', '')
-                        val_col = sg.get('value_col', '')
-                        var_explained = sg.get('variance_explained', 0)
-                        seg_name = get_friendly(seg_col)
-                        val_name = get_friendly(val_col)
-                        subgroup_items.append(
-                            f"<strong>{val_name}</strong> varies significantly by <strong>{seg_name}</strong> "
-                            f"<span style='color: var(--text-muted);'>(explains {var_explained*100:.0f}% of variance)</span>"
-                        )
-
-                    # Describe correlation patterns - link to Correlations section
-                    correlations = context_store.get('correlations', [])
-                    for corr in correlations[:2]:  # Show top 2 correlation patterns
-                        col1 = corr.get('col1', '')
-                        col2 = corr.get('col2', '')
-                        r = corr.get('correlation', 0)
-                        col1_name = get_friendly(col1)
-                        col2_name = get_friendly(col2)
-                        direction = "move together" if r > 0 else "move inversely"
-                        correlation_items.append(
-                            f"<strong>{col1_name}</strong> and <strong>{col2_name}</strong> {direction} "
-                            f"<span style='color: var(--text-muted);'>(r={r:.2f})</span>"
-                        )
-
-                    # Build patterns description with better structure
-                    if subgroup_items or correlation_items:
-                        patterns_html = ""
-                        if subgroup_items:
-                            patterns_html += f'''
-<div style="margin-bottom: 12px;">
-<div style="font-weight: 600; color: #a78bfa; margin-bottom: 6px; font-size: 0.9em;">
-<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;vertical-align:-2px;margin-right:4px"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
-Categorical Groupings</div>
-<ul style="margin: 0 0 0 20px; padding: 0; list-style: disc;">{''.join(f"<li style='margin: 4px 0; line-height: 1.4;'>{p}</li>" for p in subgroup_items)}</ul>
-</div>'''
-
-                        if correlation_items:
-                            patterns_html += f'''
-<div>
-<div style="font-weight: 600; color: #34d399; margin-bottom: 6px; font-size: 0.9em;">
-<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;vertical-align:-2px;margin-right:4px"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
-Numeric Correlations <a href="#section-correlations" style="color: #60a5fa; font-weight: 400; font-size: 0.85em;">(see Correlations section)</a></div>
-<ul style="margin: 0 0 0 20px; padding: 0; list-style: disc;">{''.join(f"<li style='margin: 4px 0; line-height: 1.4;'>{p}</li>" for p in correlation_items)}</ul>
-</div>'''
-
-                        patterns_description = f'''
-<div style="margin: 16px 0; padding: 14px; background: linear-gradient(135deg, rgba(59, 130, 246, 0.08), rgba(139, 92, 246, 0.08)); border-radius: 10px; border: 1px solid rgba(139, 92, 246, 0.2);">
-<div style="font-weight: 700; color: #818cf8; margin-bottom: 10px; font-size: 0.95em;">
-<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;vertical-align:-3px;margin-right:6px"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
-Patterns Used for Context-Aware Validation</div>
-{patterns_html}
-</div>'''
-
-                plain_english = f'''<div style="margin-bottom: 8px;">Initially <strong>{total_outliers:,} values ({outlier_pct:.2f}%)</strong> appeared unusual based on statistical isolation.</div>
-<div style="margin-bottom: 8px;">After analyzing relationships in your data, <strong style="color: #34d399;">{explained_count:,} ({reduction_pct:.0f}%)</strong> were found to be <em>normal within their context</em> — these are values that only look unusual when viewed in isolation, but make sense when you consider related columns.</div>
-<div><strong style="color: #f59e0b;">{validated_count:,} values remain as genuine anomalies</strong> worth investigating — these stand out even after accounting for groupings and correlations.</div>
-{patterns_description}'''
-            else:
-                # Standard explanation without context validation
-                plain_english = f'''About {outlier_pct:.2f}% of values ({total_outliers:,} records) stand out as very different
-from most other values in their columns. These might be typos, special cases, or simply
-unusual but valid entries worth reviewing. These anomalies are based on statistical isolation,
-not just being outside the IQR bounds. It is normal for this method to find unusual points
-even when IQR outliers are rare.'''
-
-            # Build example table rows from sample_rows (correct key) - DEDUPLICATED
-            example_rows = ''
-            seen_values = set()  # Track unique (col_name, value) pairs
-
-            for col_name, data in list(numeric_outliers.items())[:3]:
-                # Try sample_rows first, then fallback to other keys
-                samples = data.get('sample_rows', data.get('sample_anomalies', data.get('sample_outliers', [])))
-                top_anomalies = data.get('top_anomalies', [])
+            # Build severity-sorted list of outliers for display
+            outlier_summary = []
+            for col_name, data in numeric_outliers.items():
                 normal_range = data.get('normal_range', {})
-                median = normal_range.get('median', data.get('median', 0))
+                anomaly_range = data.get('anomaly_range', {})
+                median = normal_range.get('median', 0)
+                max_normal = normal_range.get('max', median)
+                top_val = anomaly_range.get('max', data.get('top_anomalies', [0])[0] if data.get('top_anomalies') else 0)
+                count = data.get('anomaly_count', 0)
 
-                # Use sample_rows if available - deduplicated
-                for sample in samples[:4]:  # Check more samples to find unique ones
+                # Calculate deviation for severity
+                if median > 0:
+                    deviation = abs(top_val - median) / median
+                elif max_normal > 0:
+                    deviation = abs(top_val - max_normal) / max_normal
+                else:
+                    deviation = top_val if top_val > 0 else 0
+
+                outlier_summary.append({
+                    'col': col_name,
+                    'friendly': get_friendly(col_name),
+                    'count': count,
+                    'top_val': top_val,
+                    'median': median,
+                    'max_normal': max_normal,
+                    'deviation': deviation,
+                    'data': data
+                })
+
+            # Sort by deviation (most extreme first)
+            outlier_summary.sort(key=lambda x: x['deviation'], reverse=True)
+
+            # Plain English with specific field mentions
+            top_fields = [f"<strong>{o['friendly']}</strong>" for o in outlier_summary[:3]]
+            field_list = ', '.join(top_fields[:-1]) + ' and ' + top_fields[-1] if len(top_fields) > 1 else top_fields[0] if top_fields else ''
+
+            plain_english = f'''<strong>{validated_count if has_context_validation else total_outliers:,} statistical outliers</strong> found in {field_list}.
+These are individual field values that fall outside the typical range for their columns.
+<span style="font-size: 0.85em; color: var(--text-muted); display: block; margin-top: 4px;">
+<em>This differs from Atypical Combinations below, which looks at how multiple fields interact together.</em></span>'''
+
+            # Build NEW standardized table with Row ID, Field, Value, Expected Range, Why Unusual
+            example_rows = ''
+            mobile_cards = ''  # Mobile-friendly card layout
+
+            # Helper to calculate severity badge and class
+            def get_severity(deviation):
+                if deviation >= 10:
+                    return '<span class="severity-badge extreme">Extreme</span>'
+                elif deviation >= 3:
+                    return '<span class="severity-badge high">High</span>'
+                else:
+                    return '<span class="severity-badge moderate">Moderate</span>'
+
+            def get_severity_class(deviation):
+                if deviation >= 10:
+                    return 'extreme'
+                elif deviation >= 3:
+                    return 'high'
+                else:
+                    return 'moderate'
+
+            def get_severity_label(deviation):
+                if deviation >= 10:
+                    return 'Extreme'
+                elif deviation >= 3:
+                    return 'High'
+                else:
+                    return 'Moderate'
+
+            # Process outliers sorted by severity
+            for summary in outlier_summary[:4]:  # Show top 4 columns
+                col_name = summary['col']
+                friendly_name = summary['friendly']
+                data = summary['data']
+                median = summary['median']
+                max_normal = summary['max_normal']
+                deviation = summary['deviation']
+                count = summary['count']
+
+                samples = data.get('sample_rows', [])
+                top_vals = data.get('top_anomalies', [])
+
+                # Get unique sample rows (max 2 per column)
+                shown = 0
+                seen_vals = set()
+
+                for sample in samples[:5]:
+                    if shown >= 2:
+                        break
                     if isinstance(sample, dict):
                         val = sample.get(col_name, 'N/A')
-                        # Create unique key for deduplication
-                        val_key = (col_name, str(val))
-                        if val_key in seen_values:
-                            continue
-                        seen_values.add(val_key)
+                        row_id = sample.get('PassengerId', sample.get('row_index', sample.get('index', '?')))
 
-                        # Try to format numeric values
+                        # Skip duplicates
+                        if str(val) in seen_vals:
+                            continue
+                        seen_vals.add(str(val))
+
+                        # Format value
                         try:
                             val_num = float(str(val).replace(',', ''))
                             val_display = f'{val_num:,.2f}'
+                            # Calculate specific deviation for this value
+                            if median > 0:
+                                val_dev = abs(val_num - median) / median
+                            else:
+                                val_dev = val_num
                         except:
                             val_display = str(val)
-                        median_display = f'{median:,.2f}' if median else 'N/A'
-                        friendly_name = get_friendly(col_name)
+                            val_dev = deviation
+
+                        # Format expected range
+                        if median > 0:
+                            expected = f'{median:,.0f} (typical ≤{max_normal:,.0f})'
+                        else:
+                            expected = f'≤{max_normal:,.0f}'
+
+                        # Why unusual explanation
+                        if val_dev >= 10:
+                            why = f'{val_dev:.0f}× median'
+                        elif val_dev >= 1:
+                            why = f'{val_dev:.1f}× median'
+                        else:
+                            why = f'+{(val_dev*100):.0f}% above'
+
+                        # Desktop table row
                         example_rows += f'''
                         <tr>
+                            <td class="row-id">{row_id}</td>
                             <td>{friendly_name}</td>
                             <td class="value-highlight">{val_display}</td>
-                            <td class="value-normal">{median_display}</td>
+                            <td class="value-normal">{expected}</td>
+                            <td>{get_severity(val_dev)} {why}</td>
                         </tr>'''
-                        # Limit to 2 unique examples per column
-                        col_count = sum(1 for k in seen_values if k[0] == col_name)
-                        if col_count >= 2:
-                            break
 
-                # If no sample_rows, use top_anomalies values - deduplicated
-                if not samples and top_anomalies:
-                    friendly_name = get_friendly(col_name)
-                    for val in top_anomalies[:4]:  # Check more to find unique ones
-                        val_key = (col_name, str(val))
-                        if val_key in seen_values:
+                        # Mobile card (compact 2-row grid layout)
+                        sev_class = get_severity_class(val_dev)
+                        sev_label = get_severity_label(val_dev)
+                        expected_short = f'{median:,.0f}' if median > 0 else f'≤{max_normal:,.0f}'
+                        mobile_cards += f'''
+                        <div class="outlier-card {sev_class}">
+                            <span class="outlier-card-field">{friendly_name}</span>
+                            <span class="outlier-card-severity {sev_class}">{sev_label}</span>
+                            <div class="outlier-card-comparison">
+                                <span class="outlier-card-val">{val_display}</span>
+                                <span class="outlier-card-vs">vs</span>
+                                <span class="outlier-card-expected">{expected_short}</span>
+                                <span class="outlier-card-vs">({why})</span>
+                            </div>
+                        </div>'''
+                        shown += 1
+
+                # Fallback to top_anomalies if no samples
+                if shown == 0 and top_vals:
+                    for val in top_vals[:2]:
+                        if str(val) in seen_vals:
                             continue
-                        seen_values.add(val_key)
+                        seen_vals.add(str(val))
 
                         try:
-                            val_display = f'{float(val):,.2f}'
+                            val_num = float(val)
+                            val_display = f'{val_num:,.2f}'
+                            val_dev = abs(val_num - median) / median if median > 0 else val_num
                         except:
                             val_display = str(val)
-                        median_display = f'{median:,.2f}' if median else 'N/A'
+                            val_dev = deviation
+
+                        expected = f'{median:,.0f} (typical ≤{max_normal:,.0f})' if median > 0 else f'≤{max_normal:,.0f}'
+                        why = f'{val_dev:.0f}× median' if val_dev >= 10 else f'{val_dev:.1f}× median' if val_dev >= 1 else f'+{(val_dev*100):.0f}%'
+
+                        # Desktop table row
                         example_rows += f'''
                         <tr>
+                            <td class="row-id">-</td>
                             <td>{friendly_name}</td>
                             <td class="value-highlight">{val_display}</td>
-                            <td class="value-normal">{median_display}</td>
+                            <td class="value-normal">{expected}</td>
+                            <td>{get_severity(val_dev)} {why}</td>
                         </tr>'''
-                        col_count = sum(1 for k in seen_values if k[0] == col_name)
-                        if col_count >= 2:
+
+                        # Mobile card (compact 2-row grid layout)
+                        sev_class = get_severity_class(val_dev)
+                        sev_label = get_severity_label(val_dev)
+                        expected_short = f'{median:,.0f}' if median > 0 else f'≤{max_normal:,.0f}'
+                        mobile_cards += f'''
+                        <div class="outlier-card {sev_class}">
+                            <span class="outlier-card-field">{friendly_name}</span>
+                            <span class="outlier-card-severity {sev_class}">{sev_label}</span>
+                            <div class="outlier-card-comparison">
+                                <span class="outlier-card-val">{val_display}</span>
+                                <span class="outlier-card-vs">vs</span>
+                                <span class="outlier-card-expected">{expected_short}</span>
+                                <span class="outlier-card-vs">({why})</span>
+                            </div>
+                        </div>'''
+                        shown += 1
+                        if shown >= 2:
                             break
 
-            # If no sample rows found, generate examples from top_anomalies or outlier bounds
             if not example_rows:
-                for col_name, data in list(numeric_outliers.items())[:3]:
-                    friendly_name = get_friendly(col_name)
-                    top_anomalies = data.get('top_anomalies', [])
-                    normal_range = data.get('normal_range', {})
-                    median = normal_range.get('median', data.get('median', 0))
-                    upper_bound = normal_range.get('upper_bound', data.get('upper_bound', 0))
-                    lower_bound = normal_range.get('lower_bound', data.get('lower_bound', 0))
-
-                    # Use top_anomalies if available - deduplicated
-                    if top_anomalies:
-                        for val in top_anomalies[:4]:
-                            val_key = (col_name, str(val))
-                            if val_key in seen_values:
-                                continue
-                            seen_values.add(val_key)
-
-                            try:
-                                val_display = f'{float(val):,.2f}'
-                            except:
-                                val_display = str(val)
-                            median_display = f'{median:,.2f}' if median else 'N/A'
-                            example_rows += f'''
-                        <tr>
-                            <td>{friendly_name}</td>
-                            <td class="value-highlight">{val_display}</td>
-                            <td class="value-normal">{median_display}</td>
-                        </tr>'''
-                            col_count = sum(1 for k in seen_values if k[0] == col_name)
-                            if col_count >= 2:
-                                break
-                    # Otherwise show bounds information
-                    elif upper_bound or lower_bound:
-                        bound_info = f">{upper_bound:,.2f}" if upper_bound else f"<{lower_bound:,.2f}"
-                        median_display = f'{median:,.2f}' if median else 'N/A'
-                        example_rows += f'''
-                        <tr>
-                            <td>{friendly_name}</td>
-                            <td class="value-highlight">{bound_info} (threshold)</td>
-                            <td class="value-normal">{median_display}</td>
-                        </tr>'''
-
-            # Final fallback if still no examples
-            if not example_rows:
-                example_rows = '<tr><td colspan="3" style="text-align: center; color: var(--text-muted);">Outliers detected but sample values not recorded</td></tr>'
+                example_rows = '<tr><td colspan="5" style="text-align: center; color: var(--text-muted);">Outliers detected but sample values not recorded</td></tr>'
+                mobile_cards = '<div style="text-align: center; color: var(--text-muted); padding: 20px;">Outliers detected but sample values not recorded</div>'
 
             # Technical details
             tech_items = []
@@ -7139,39 +7576,54 @@ even when IQR outliers are rare.'''
 
             # Build technical context with context validation info
             tech_context = [
-                f"ML Model: Isolation Forest (unsupervised anomaly detection)",
-                f"Sample Size: {analyzed_rows:,} rows",
-                f"Columns Analyzed: {len(numeric_outliers)}"
+                f"<strong>How it works:</strong> Isolation Forest analyzes each numeric field independently",
+                "Values are scored based on how easily they can be 'isolated' from the rest - rare values isolate quickly",
+                f"<strong>What it considers:</strong> {len(numeric_outliers)} numeric fields, each analyzed separately",
+                f"Sample Size: {analyzed_rows:,} rows"
             ]
 
             # Add context validation info to technical context
             if has_context_validation and reduction_pct > 5:
-                tech_context.append(f"Context Validation: {reduction_pct:.0f}% false positives filtered")
+                tech_context.append(f"<strong>Context Validation:</strong> {reduction_pct:.0f}% of initial flags were explainable and filtered out")
                 if context_patterns:
                     patterns_display = ', '.join(context_patterns[:3])
                     tech_context.append(f"Patterns Used: {patterns_display}")
 
-            # Adjust badge based on validated count
+            # Badge text is just the percentage (count is shown separately via count_badge)
             if has_context_validation and reduction_pct > 10:
                 validated_pct = (validated_count / analyzed_rows * 100) if analyzed_rows > 0 else 0
-                badge_text = f"{validated_count:,} validated ({validated_pct:.2f}%)"
+                badge_text = f"{validated_pct:.2f}%"
                 badge_class = "warning" if validated_pct > 1 else "info"
             else:
-                badge_text = f"{outlier_pct:.2f}% of rows"
+                badge_text = f"{outlier_pct:.2f}%"
                 badge_class = "warning" if outlier_pct > 1 else "info"
 
+            # Build embedded anomaly score chart (if viz_data available)
+            anomaly_chart_html = ''
+            if viz_data:
+                anomaly_scores = viz_data.get('anomaly_scores', {})
+                if anomaly_scores:
+                    anomaly_chart_html = self._build_embedded_anomaly_score_chart(anomaly_scores, "embeddedAnomalyChart")
+
+            # Use validated count if context validation significantly reduced outliers
+            display_count = validated_count if (has_context_validation and reduction_pct > 10) else total_outliers
+
             widgets_html += self._build_insight_widget(
-                icon="🧠",
-                title="Field-Level Outliers" + (" (Context-Aware)" if has_context_validation and reduction_pct > 10 else ""),
+                icon="🎯",
+                title="Individual Field Outliers",
                 badge_text=badge_text,
                 badge_class=badge_class,
                 plain_english=plain_english,
-                table_headers=["Column", "Outlier Value", "Typical (Median)"],
+                table_headers=["Row", "Field", "Value", "Expected", "Why Unusual"],
                 table_rows=example_rows,
                 technical_items=''.join(tech_items),
                 technical_context=tech_context,
-                ml_model="Isolation Forest + Context Discovery" if has_context_validation and reduction_pct > 10 else "Isolation Forest",
-                semantic_confidence=semantic_badge
+                ml_model=None,
+                semantic_confidence=None,  # Removed - too confusing
+                chart_html=anomaly_chart_html,
+                section_id="numeric-outliers-section",
+                count_badge=display_count,
+                mobile_cards=mobile_cards
             )
         else:
             # Show that we checked but found nothing - with meaningful data context
@@ -7225,20 +7677,57 @@ unexpected spikes or dips.''',
                 (ae_q75_err > 0 and ae_median_err < ae_q75_err * 0.1) or
                 (ae_mean_err > 0 and ae_median_err < ae_mean_err * 0.001)
             )
-            # Plain English explanation - no jargon
-            # Add bridge text explaining relationship to IQR
-            plain_english = f'''About {ae_pct:.2f}% of records ({ae_count:,}) have unusual combinations
-of values across multiple fields. These rows look different from typical patterns in your
-data and might be rare cases, data entry issues, or special situations worth reviewing.
-These anomalies reflect rows that are hard for the model to reconstruct, which can capture
-unusual combinations of values even when each individual field looks numerically well-behaved.'''
+            # Plain English explanation - simplified
+            # Get contributing features for explanation
+            contributing_features = autoencoder.get('contributing_features', [])
+            top_contributors = [f.get('column', '') for f in contributing_features[:2]]
+            columns_analyzed = autoencoder.get('columns_analyzed', [])
 
-            # Build example table from sample_rows - DEDUPLICATED and SORTED by reconstruction error descending
+            # Check if we have correlation data to cross-reference
+            corr_anomalies = ml_findings.get('correlation_anomalies', {})
+            corr_breaks = corr_anomalies.get('correlation_breaks', []) if corr_anomalies else []
+            has_corr_context = len(corr_breaks) > 0
+
+            # Build explanation of WHY these are unusual (use friendly names)
+            if top_contributors:
+                contrib_names = ' and '.join([f"<strong>{get_friendly(c)}</strong>" for c in top_contributors])
+                plain_english = f'''<strong>{ae_count:,} records ({ae_pct:.2f}%)</strong> have unusual combinations of values.
+The patterns in {contrib_names} don't match typical relationships learned from the data.
+<span style="font-size: 0.85em; color: var(--text-muted); display: block; margin-top: 4px;">
+<em>These values may look normal individually, but their combination is rare or unexpected based on how these fields typically relate to each other.{' See the Correlations section for field relationships.' if has_corr_context else ''}</em></span>'''
+            else:
+                plain_english = f'''<strong>{ae_count:,} records ({ae_pct:.2f}%)</strong> have unusual combinations of values.
+These rows have field combinations that don't match typical patterns.
+<span style="font-size: 0.85em; color: var(--text-muted); display: block; margin-top: 4px;">
+<em>These values may look normal individually, but their combination is rare or unexpected.{' See the Correlations section for field relationships.' if has_corr_context else ''}</em></span>'''
+
+            # Build example table with Row ID, key values, anomaly score, and explanation
             example_rows = ''
             sample_records = autoencoder.get('sample_rows', autoencoder.get('sample_anomalies', []))
-            contributing_cols = autoencoder.get('contributing_columns', [])
 
-            # Sort by reconstruction error (descending) before deduplication
+            # Get field stats for context
+            field_stats = {}
+            if columns:
+                for col in columns:
+                    if col.name in columns_analyzed and hasattr(col, 'statistics') and col.statistics:
+                        field_stats[col.name] = {
+                            'median': getattr(col.statistics, 'median', 0) or 0,
+                            'mean': getattr(col.statistics, 'mean', 0) or 0
+                        }
+
+            # Use pre-computed category counts from ML analyzer (computed from ALL anomalies)
+            category_counts = autoencoder.get('category_counts', {})
+            if category_counts and len(category_counts) > 1:
+                category_summary_html = self._build_category_summary_from_counts(category_counts, ae_count, get_friendly)
+
+                # Add category breakdown to plain_english
+                plain_english += f'''
+<div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border-subtle);">
+    <span style="font-size: 0.8em; color: var(--text-muted); font-weight: 500;">Grouped by primary driver:</span>
+    {category_summary_html}
+</div>'''
+
+            # Sort by reconstruction error (descending)
             def get_recon_error(record):
                 if isinstance(record, dict):
                     try:
@@ -7249,47 +7738,117 @@ unusual combinations of values even when each individual field looks numerically
 
             sample_records_sorted = sorted(sample_records, key=get_recon_error, reverse=True)
 
-            # Deduplicate sample records by converting to hashable representation
+            # Deduplicate
             seen_records = set()
             unique_records = []
             for record in sample_records_sorted:
                 if isinstance(record, dict):
-                    # Create a hashable key from record values
-                    record_key = tuple(sorted((k, str(v)) for k, v in record.items()))
+                    record_key = tuple(sorted((k, str(v)) for k, v in record.items() if k != '_reconstruction_error'))
                     if record_key not in seen_records:
                         seen_records.add(record_key)
                         unique_records.append(record)
 
-            for i, record in enumerate(unique_records[:5]):
+            for i, record in enumerate(unique_records[:4]):
                 if isinstance(record, dict):
-                    # Format key values for display
-                    key_vals = []
-                    for k, v in list(record.items())[:4]:
-                        try:
-                            val_num = float(str(v).replace(',', ''))
-                            key_vals.append(f"{k}: {val_num:,.2f}")
-                        except:
-                            key_vals.append(f"{k}: {v}")
-                    fields_display = ' | '.join(key_vals)
-                    example_rows += f'''
-                    <tr>
-                        <td style="max-width: 400px; font-size: 0.85em;">{fields_display}</td>
-                    </tr>'''
+                    recon_error = record.get('_reconstruction_error', 0)
+                    try:
+                        error_score = float(recon_error)
+                    except:
+                        error_score = 0
 
-            # Add contributing column info if available
-            if contributing_cols and not example_rows:
-                for col_info in contributing_cols[:3]:
-                    col_name = col_info.get('column', 'Unknown')
-                    z_score = col_info.get('z_score_diff', 0)
-                    normal_mean = col_info.get('normal_mean', 0)
-                    anomaly_mean = col_info.get('anomaly_mean', 0)
+                    # Find the most unusual field in this record
+                    unusual_fields = []
+                    for col in columns_analyzed:
+                        if col in record and col != '_reconstruction_error':
+                            try:
+                                val = float(record[col])
+                                stats = field_stats.get(col, {})
+                                median = stats.get('median', 0) or stats.get('mean', 0)
+                                if median > 0:
+                                    dev = abs(val - median) / median
+                                    if dev > 1:  # More than 2x median
+                                        unusual_fields.append((col, val, median, dev))
+                            except:
+                                pass
+
+                    # Sort by deviation
+                    unusual_fields.sort(key=lambda x: x[3], reverse=True)
+
+                    # Generate human-readable explanation with expected range
+                    def generate_human_explanation(unusual_fields, top_contributors, record, field_stats):
+                        """Generate natural language explanation of why this record is unusual."""
+                        if unusual_fields:
+                            top = unusual_fields[0]
+                            col_name, val, median, dev = top
+                            friendly = get_friendly(col_name)
+
+                            # Get expected range (median ± 50% as rough normal range)
+                            expected_low = median * 0.5
+                            expected_high = median * 1.5
+
+                            # Generate contextual explanation based on the field and deviation
+                            if dev >= 10:
+                                if 'fare' in col_name.lower() or 'price' in col_name.lower() or 'amount' in col_name.lower():
+                                    return f"This {friendly.lower()} (${val:,.0f}) is unusually high - typically ${expected_low:,.0f}–${expected_high:,.0f}"
+                                elif 'age' in col_name.lower():
+                                    return f"At age {val:.0f}, this combination of values is rare in the data"
+                                else:
+                                    return f"{friendly} of {val:,.0f} is far outside typical range ({expected_low:,.0f}–{expected_high:,.0f})"
+                            elif dev >= 3:
+                                if len(unusual_fields) > 1:
+                                    second = unusual_fields[1]
+                                    friendly2 = get_friendly(second[0])
+                                    return f"Unusual pairing: {friendly} ({val:,.0f}) combined with {friendly2.lower()} ({second[1]:,.0f})"
+                                else:
+                                    return f"{friendly} ({val:,.0f}) is higher than expected ({expected_low:,.0f}–{expected_high:,.0f})"
+                            else:
+                                return f"{friendly} value ({val:,.1f}) doesn't fit typical patterns for similar records"
+                        elif top_contributors:
+                            col = top_contributors[0]
+                            friendly = get_friendly(col)
+                            val = record.get(col, 'N/A')
+                            return f"The combination involving {friendly.lower()} ({val}) is uncommon"
+                        else:
+                            return "This combination of values rarely occurs together in the data"
+
+                    why = generate_human_explanation(unusual_fields, top_contributors, record, field_stats)
+
+                    # Format key field values (use friendly names, abbreviated)
+                    field_vals = []
+                    for col in columns_analyzed[:3]:
+                        if col in record:
+                            friendly = get_friendly(col)
+                            # Abbreviate friendly name - use first 15 chars or smart truncation
+                            if len(friendly) > 15:
+                                # Try to break at a word boundary
+                                abbrev = friendly[:15].rsplit(' ', 1)[0] if ' ' in friendly[:15] else friendly[:12] + '...'
+                            else:
+                                abbrev = friendly
+                            try:
+                                v = float(record[col])
+                                field_vals.append(f"{abbrev}={v:,.0f}")
+                            except:
+                                field_vals.append(f"{abbrev}={record[col]}")
+
+                    # Severity based on error score with explanation
+                    # Extreme: top 1% of errors, High: top 5%, Moderate: top 10%
+                    if error_score >= 15:
+                        severity = '<span class="severity-badge extreme" title="Top 1% most unusual - very rare pattern">Extreme</span>'
+                    elif error_score >= 5:
+                        severity = '<span class="severity-badge high" title="Top 5% most unusual - uncommon pattern">High</span>'
+                    else:
+                        severity = '<span class="severity-badge moderate" title="Top 10% most unusual - slightly atypical">Moderate</span>'
+
                     example_rows += f'''
                     <tr>
-                        <td><strong>{col_name}</strong>: Unusual avg {anomaly_mean:,.2f} vs typical {normal_mean:,.2f}</td>
+                        <td class="row-id">{i+1}</td>
+                        <td style="font-size: 0.85em;">{' | '.join(field_vals)}</td>
+                        <td>{severity}</td>
+                        <td style="font-size: 0.85em;">{why}</td>
                     </tr>'''
 
             if not example_rows:
-                example_rows = '<tr><td style="text-align: center; color: var(--text-muted);">Sample records not available</td></tr>'
+                example_rows = '<tr><td colspan="4" style="text-align: center; color: var(--text-muted);">Sample records not available</td></tr>'
 
             # Multivariate analysis is always high confidence - considers all fields holistically
             ae_semantic_badge = self._generate_semantic_confidence_badge(
@@ -7297,41 +7856,42 @@ unusual combinations of values even when each individual field looks numerically
                 "Multi-column pattern analysis considers field interactions holistically."
             ) if columns else ''
 
+            # Build embedded reconstruction error chart (if viz_data available)
+            recon_chart_html = ''
+            if viz_data:
+                recon_errors = viz_data.get('reconstruction_errors', {})
+                if recon_errors:
+                    recon_chart_html = self._build_embedded_recon_error_chart(recon_errors, "embeddedReconChart")
+
             widgets_html += self._build_insight_widget(
-                icon="🧠",
-                title="Row-Level Anomalies",
+                icon="🔍",
+                title="Atypical Combinations",
                 badge_text=f"{ae_pct:.2f}%",
                 badge_class="warning" if ae_pct > 1 else "info",
                 plain_english=plain_english,
-                table_headers=["Sample Records with Unusual Patterns"],
+                table_headers=["#", "Field Values", "Severity", "Why Unusual"],
                 table_rows=example_rows,
-                technical_items=f'''
-                    <div class="insight-technical-item">
-                        <span class="insight-technical-item-label">Method</span>
-                        <span class="insight-technical-item-value">{method}</span>
-                    </div>
-                    <div class="insight-technical-item">
-                        <span class="insight-technical-item-label">Columns Analyzed</span>
-                        <span class="insight-technical-item-value">{autoencoder.get('columns_analyzed', 'All numeric')}</span>
-                    </div>
-                    <div class="insight-technical-item">
-                        <span class="insight-technical-item-label">Contamination</span>
-                        <span class="insight-technical-item-value">{autoencoder.get('contamination_used', 'auto')}</span>
-                    </div>
-                ''',
+                technical_items=self._build_contribution_breakdown(
+                    contributing_features, columns_analyzed, analyzed_rows, method, get_friendly
+                ),
                 technical_context=[
-                    f"ML Model: {method} (multivariate anomaly detection)",
-                    "Analyzes multiple columns together to find unusual combinations",
-                    "Useful for detecting data entry errors, process anomalies, or rare edge cases"
+                    f"<strong>How it works:</strong> {method} learns the joint distribution of all numeric fields simultaneously",
+                    "Records are scored by how well they fit the learned patterns - higher scores = more unusual",
+                    "This captures complex multi-field relationships that simple pairwise correlations might miss",
+                    f"<strong>What it considers:</strong> All {len(columns_analyzed) if isinstance(columns_analyzed, list) else 'numeric'} fields together, not just pairs",
+                    "Note: This is independent of the Correlations section, which shows pairwise relationships"
                 ],
-                ml_model=method,
-                semantic_confidence=ae_semantic_badge
+                ml_model=None,
+                semantic_confidence=None,  # Removed - too confusing
+                chart_html=recon_chart_html,
+                section_id="multivariate-section",
+                count_badge=ae_count
             )
         else:
             # Show that multivariate analysis was performed but found nothing
             widgets_html += self._build_insight_widget(
                 icon="✓",
-                title="Row-Level Anomalies",
+                title="Unusual Combinations",
                 badge_text="None detected",
                 badge_class="good",
                 plain_english='''When looking at multiple columns together, all records appear normal.
@@ -7353,6 +7913,90 @@ combinations that might indicate errors or special cases.''',
                 ],
                 ml_model="Isolation Forest"
             )
+
+        # ═══════════════════════════════════════════════════════════════
+        # OVERLAP ANALYSIS: Records with BOTH Individual + Combination Anomalies
+        # ═══════════════════════════════════════════════════════════════
+        # Find records that appear in BOTH analyses - these are highest priority
+        if numeric_outliers and autoencoder and autoencoder.get('anomaly_count', 0) > 0:
+            # Collect row IDs from field-level outliers
+            field_outlier_rows = set()
+            for col_name, data in numeric_outliers.items():
+                samples = data.get('sample_rows', [])
+                for sample in samples:
+                    if isinstance(sample, dict):
+                        row_id = sample.get('PassengerId', sample.get('row_index', sample.get('index')))
+                        if row_id is not None:
+                            field_outlier_rows.add(str(row_id))
+
+            # Collect row IDs from multivariate anomalies
+            combo_outlier_rows = set()
+            sample_records = autoencoder.get('sample_rows', autoencoder.get('sample_anomalies', []))
+            for record in sample_records:
+                if isinstance(record, dict):
+                    row_id = record.get('PassengerId', record.get('row_index', record.get('index')))
+                    if row_id is not None:
+                        combo_outlier_rows.add(str(row_id))
+
+            # Find overlap
+            overlap_rows = field_outlier_rows & combo_outlier_rows
+            if len(overlap_rows) > 0:
+                overlap_pct = (len(overlap_rows) / analyzed_rows * 100) if analyzed_rows > 0 else 0
+
+                # Build table of overlap records
+                overlap_table = ''
+                overlap_count = 0
+                for record in sample_records[:10]:
+                    if isinstance(record, dict):
+                        row_id = record.get('PassengerId', record.get('row_index', record.get('index')))
+                        if row_id is not None and str(row_id) in overlap_rows:
+                            # Find which field had the outlier
+                            outlier_fields = []
+                            for col_name, data in numeric_outliers.items():
+                                for sample in data.get('sample_rows', []):
+                                    if isinstance(sample, dict):
+                                        sample_id = sample.get('PassengerId', sample.get('row_index', sample.get('index')))
+                                        if str(sample_id) == str(row_id):
+                                            outlier_fields.append(get_friendly(col_name))
+                                            break
+
+                            field_list = ', '.join(outlier_fields) if outlier_fields else 'Multiple fields'
+                            overlap_table += f'''
+                            <tr>
+                                <td class="row-id">{row_id}</td>
+                                <td>{field_list}</td>
+                                <td><span class="severity-badge extreme">Priority</span></td>
+                            </tr>'''
+                            overlap_count += 1
+                            if overlap_count >= 3:
+                                break
+
+                if overlap_table:
+                    widgets_html += self._build_insight_widget(
+                        icon="⚡",
+                        title="Priority Records",
+                        badge_text=f"{len(overlap_rows)} records",
+                        badge_class="warning",
+                        plain_english=f'''<strong>{len(overlap_rows)} records</strong> flagged by <em>both</em> analyses above.
+These have individual field outliers AND unusual combinations - making them the highest priority for review.
+<span style="font-size: 0.85em; color: var(--text-muted); display: block; margin-top: 4px;">
+<em>Records appearing in both analyses are more likely to represent genuine anomalies rather than false positives.</em></span>''',
+                        table_headers=["Row", "Outlier Fields", "Priority"],
+                        table_rows=overlap_table,
+                        technical_items=f'''
+                            <div class="insight-technical-item">
+                                <span class="insight-technical-item-label">Overlap Count</span>
+                                <span class="insight-technical-item-value">{len(overlap_rows)} of {len(field_outlier_rows | combo_outlier_rows)} total flagged records</span>
+                            </div>
+                        ''',
+                        technical_context=[
+                            f"Records flagged by field-level analysis: {len(field_outlier_rows)}",
+                            f"Records flagged by combination analysis: {len(combo_outlier_rows)}",
+                            f"Records flagged by both (overlap): {len(overlap_rows)}"
+                        ],
+                        ml_model=None,
+                        semantic_confidence=None
+                    )
 
         # ═══════════════════════════════════════════════════════════════
         # INSIGHT 3: CROSS-FIELD RELATIONSHIPS
@@ -7424,6 +8068,9 @@ a pattern - but these rows break that pattern significantly.'''
                 near_zero = sample.get('near_zero_baseline', False)
                 row_idx = sample.get('row_index', '?')
                 col1, col2 = cols[0] if len(cols) > 0 else '?', cols[1] if len(cols) > 1 else '?'
+                # Use friendly names
+                friendly1 = get_friendly(col1)
+                friendly2 = get_friendly(col2)
                 val1 = sample.get(col1, 'N/A')
                 val2 = sample.get(col2, 'N/A')
                 # Format large numbers
@@ -7432,16 +8079,28 @@ a pattern - but these rows break that pattern significantly.'''
                 if isinstance(val2, (int, float)):
                     val2 = f'{val2:,.2f}' if isinstance(val2, float) else f'{val2:,}'
                 row_display = f'{row_idx:,}' if isinstance(row_idx, int) else str(row_idx)
+
+                # Build "Why unusual" explanation
+                if near_zero:
+                    why_unusual = "Near-zero baseline"
+                elif ratio >= 10:
+                    why_unusual = f"{friendly1} is {ratio:.0f}× {friendly2}"
+                elif ratio <= 0.1:
+                    why_unusual = f"{friendly1} is {1/ratio:.0f}× smaller than {friendly2}"
+                else:
+                    why_unusual = f"Ratio {ratio:.2f}× outside normal range"
+
                 example_rows += f'''
                     <tr>
                         <td class="row-id">{row_display}</td>
-                        <td>{col1} ↔ {col2}</td>
+                        <td>{friendly1} ↔ {friendly2}</td>
                         <td>{val1} ↔ {val2}</td>
                         <td class="value-highlight">{fmt_ratio(ratio, near_zero)}</td>
+                        <td style="font-size: 0.85em;">{why_unusual}</td>
                     </tr>'''
 
             if not example_rows:
-                example_rows = '<tr><td colspan="4" style="text-align: center; color: var(--text-muted);">Sample data not available</td></tr>'
+                example_rows = '<tr><td colspan="5" style="text-align: center; color: var(--text-muted);">Sample data not available</td></tr>'
 
             # Primary badge shows extreme ratio count (most actionable)
             primary_count = extreme_ratio_count if extreme_ratio_count > 0 else corr_break_total
@@ -7494,7 +8153,7 @@ a pattern - but these rows break that pattern significantly.'''
                 badge_text=f"{primary_count:,} records",
                 badge_class="warning" if primary_count > 100 else "info",
                 plain_english=plain_english,
-                table_headers=["Row #", "Fields", "Values", "Ratio"],
+                table_headers=["Row #", "Fields", "Values", "Ratio", "Why Unusual"],
                 table_rows=example_rows,
                 technical_items=tech_items,
                 technical_context=[
@@ -7512,35 +8171,48 @@ a pattern - but these rows break that pattern significantly.'''
         if rare_categories:
             total_rare = sum(f.get('total_rare_count', 0) for f in rare_categories.values())
 
-            plain_english = f'''Some columns have values that appear only a few times ({total_rare:,} total).
+            # Build list of affected columns with friendly names
+            affected_cols = [f"<strong>{get_friendly(col)}</strong>" for col in list(rare_categories.keys())[:3]]
+            col_list = ', '.join(affected_cols[:-1]) + ' and ' + affected_cols[-1] if len(affected_cols) > 1 else affected_cols[0] if affected_cols else ''
+
+            plain_english = f'''Found {total_rare:,} rare values in {col_list}.
 These might be spelling mistakes, edge cases, or simply uncommon but valid entries.
 Worth reviewing to see if any should be corrected or grouped together.'''
 
             example_rows = ''
             for col_name, data in list(rare_categories.items())[:3]:
+                friendly_col = get_friendly(col_name)
                 rare_vals = data.get('rare_values', [])
                 for rv in rare_vals[:3]:
                     val = rv.get('value', 'N/A')
                     count = rv.get('count', 0)
                     pct = rv.get('percentage', 0)
+                    # Suggest what this might be
+                    if pct < 0.1:
+                        suggestion = "Likely typo or one-off"
+                    elif pct < 0.5:
+                        suggestion = "Edge case or rare category"
+                    else:
+                        suggestion = "Uncommon but possibly valid"
                     example_rows += f'''
                     <tr>
-                        <td>{col_name}</td>
+                        <td>{friendly_col}</td>
                         <td class="value-highlight">"{val}"</td>
                         <td>{count:,}</td>
                         <td class="value-normal">{pct:.2f}%</td>
+                        <td style="font-size: 0.85em;">{suggestion}</td>
                     </tr>'''
 
             if not example_rows:
-                example_rows = '<tr><td colspan="4" style="text-align: center; color: var(--text-muted);">No rare values found</td></tr>'
+                example_rows = '<tr><td colspan="5" style="text-align: center; color: var(--text-muted);">No rare values found</td></tr>'
 
             widgets_html += self._build_insight_widget(
                 icon="📊",
-                title="Value Distribution",
-                badge_text=f"{total_rare:,} rare values",
+                title="Rare Values",
+                badge_text=f"{total_rare:,} values",
                 badge_class="info",
                 plain_english=plain_english,
-                table_headers=["Column", "Rare Value", "Count", "Frequency"],
+                table_headers=["Field", "Value", "Count", "Frequency", "Assessment"],
                 table_rows=example_rows,
                 technical_items=f'''
                     <div class="insight-technical-item">
@@ -7548,7 +8220,7 @@ Worth reviewing to see if any should be corrected or grouped together.'''
                         <span class="insight-technical-item-value">Frequency analysis (threshold &lt; 1%)</span>
                     </div>
                     <div class="insight-technical-item">
-                        <span class="insight-technical-item-label">Columns Analyzed</span>
+                        <span class="insight-technical-item-label">Fields Analyzed</span>
                         <span class="insight-technical-item-value">{len(rare_categories)}</span>
                     </div>
                 ''',
@@ -7567,25 +8239,42 @@ Worth reviewing to see if any should be corrected or grouped together.'''
             # Calculate total large gaps dynamically
             total_large_gaps = sum(d.get('large_gaps_count', 0) for d in temporal_warnings.values())
 
-            plain_english = f'''Your date/time columns have {total_large_gaps:,} noticeable gaps - periods much
-longer than usual between entries. These could mean missing data, seasonal slowdowns,
-system downtime, or simply natural pauses in activity.'''
+            # Build list of affected columns with friendly names
+            affected_cols = [f"<strong>{get_friendly(col)}</strong>" for col in list(temporal_warnings.keys())[:3]]
+            col_list = ', '.join(affected_cols[:-1]) + ' and ' + affected_cols[-1] if len(affected_cols) > 1 else affected_cols[0] if affected_cols else ''
+
+            plain_english = f'''Found {total_large_gaps:,} significant time gaps in {col_list}.
+These are periods much longer than usual between entries. Could indicate missing data,
+seasonal slowdowns, system downtime, or natural pauses in activity.'''
 
             example_rows = ''
             for col_name, data in list(temporal_warnings.items())[:3]:
+                friendly_col = get_friendly(col_name)
                 interpretation = data.get('interpretation', 'Temporal irregularity detected')
                 # large_gaps_count = significant gaps (>10x median frequency from ML)
                 significant_gaps = data.get('large_gaps_count', 0)
                 # Try both old and new key names for largest gap
                 largest_gap = data.get('largest_gap_days', data.get('largest_gap', 'N/A'))
                 if isinstance(largest_gap, (int, float)):
-                    largest_gap = f'{largest_gap} days'
+                    if largest_gap >= 365:
+                        largest_gap_display = f'{largest_gap/365:.1f} years'
+                    elif largest_gap >= 30:
+                        largest_gap_display = f'{largest_gap/30:.1f} months'
+                    else:
+                        largest_gap_display = f'{largest_gap:.0f} days'
+                else:
+                    largest_gap_display = str(largest_gap)
+
+                # Truncate interpretation sensibly
+                if len(interpretation) > 50:
+                    interpretation = interpretation[:47] + '...'
+
                 example_rows += f'''
                 <tr>
-                    <td>{col_name}</td>
-                    <td>{interpretation[:60]}...</td>
-                    <td>{significant_gaps:,} large gaps</td>
-                    <td class="value-highlight">{largest_gap}</td>
+                    <td>{friendly_col}</td>
+                    <td style="font-size: 0.85em;">{interpretation}</td>
+                    <td>{significant_gaps:,}</td>
+                    <td class="value-highlight">{largest_gap_display}</td>
                 </tr>'''
 
             if not example_rows:
@@ -7593,11 +8282,11 @@ system downtime, or simply natural pauses in activity.'''
 
             widgets_html += self._build_insight_widget(
                 icon="📅",
-                title="Temporal Patterns",
-                badge_text=f"{len(temporal_warnings)} fields",
+                title="Time Gaps",
+                badge_text=f"{total_large_gaps:,} gaps",
                 badge_class="info",
                 plain_english=plain_english,
-                table_headers=["Column", "Pattern", "Gaps", "Largest"],
+                table_headers=["Field", "Pattern", "Gap Count", "Largest Gap"],
                 table_rows=example_rows,
                 technical_items=f'''
                     <div class="insight-technical-item">
@@ -7631,9 +8320,17 @@ system downtime, or simply natural pauses in activity.'''
             rows_analyzed_cluster = clustering.get('rows_analyzed', analyzed_rows)
             noise_pct = clustering.get('noise_percentage', (noise_points / rows_analyzed_cluster * 100) if rows_analyzed_cluster > 0 else 0)
 
-            plain_english = f'''Your data naturally groups into {n_clusters} distinct clusters. This reveals
-underlying structure - perhaps different customer segments, transaction types, or
-data sources. {noise_pct:.2f}% of records don't fit any cluster (these may be unusual cases).'''
+            # Interpret what clusters might mean
+            if n_clusters == 2:
+                cluster_interpretation = "binary segmentation (e.g., active/inactive, premium/standard)"
+            elif n_clusters <= 4:
+                cluster_interpretation = "natural segments (e.g., customer tiers, product categories)"
+            else:
+                cluster_interpretation = "complex segmentation across multiple dimensions"
+
+            plain_english = f'''Your data naturally groups into <strong>{n_clusters} distinct clusters</strong>.
+This suggests {cluster_interpretation}. {noise_pct:.1f}% of records don't fit any cluster
+and may warrant individual review as potential anomalies.'''
 
             # Build cluster details table showing top clusters
             clusters_info = clustering.get('clusters', [])
@@ -7645,38 +8342,50 @@ data sources. {noise_pct:.2f}% of records don't fit any cluster (these may be un
                 size = cluster.get('size', 0)
                 pct = cluster.get('percentage', 0)
 
-                # Build characteristics summary
+                # Build characteristics summary with friendly names
                 chars = cluster.get('characteristics', {})
                 char_summary = []
                 for col_name, stats in list(chars.items())[:2]:  # Show first 2 columns
+                    friendly_col = get_friendly(col_name)
                     mean = stats.get('mean', 0)
                     if mean > 1000000:
-                        char_summary.append(f"{col_name}: {mean/1000000:.1f}M")
+                        char_summary.append(f"{friendly_col}: {mean/1000000:.1f}M")
                     elif mean > 1000:
-                        char_summary.append(f"{col_name}: {mean/1000:.1f}K")
+                        char_summary.append(f"{friendly_col}: {mean/1000:.1f}K")
                     else:
-                        char_summary.append(f"{col_name}: {mean:.1f}")
+                        char_summary.append(f"{friendly_col}: {mean:.1f}")
 
                 char_display = ', '.join(char_summary) if char_summary else 'N/A'
 
+                # Label clusters descriptively
+                if pct > 50:
+                    cluster_label = f"Cluster {cluster_id} (majority)"
+                elif pct < 5:
+                    cluster_label = f"Cluster {cluster_id} (small)"
+                else:
+                    cluster_label = f"Cluster {cluster_id}"
+
                 example_rows += f'''
                 <tr>
-                    <td class="value-normal">Cluster {cluster_id}</td>
-                    <td>{size:,} ({pct:.2f}%)</td>
+                    <td class="value-normal">{cluster_label}</td>
+                    <td>{size:,} ({pct:.1f}%)</td>
                     <td style="font-size: 0.85em;">{char_display}</td>
                 </tr>'''
 
             # Add noise points row
-            example_rows += f'''
-            <tr style="border-top: 1px solid rgba(148,163,184,0.1);">
-                <td class="value-highlight">Noise (outliers)</td>
-                <td>{noise_points:,} ({noise_pct:.2f}%)</td>
-                <td style="font-size: 0.85em; color: var(--text-muted);">Records not fitting any cluster</td>
-            </tr>'''
+            if noise_points > 0:
+                example_rows += f'''
+                <tr style="border-top: 1px solid rgba(148,163,184,0.1);">
+                    <td class="value-highlight">Noise (outliers)</td>
+                    <td>{noise_points:,} ({noise_pct:.1f}%)</td>
+                    <td style="font-size: 0.85em; color: var(--text-muted);">Records not fitting any cluster - review individually</td>
+                </tr>'''
 
             cluster_method = clustering.get('method', 'DBSCAN')
             columns_analyzed = clustering.get('columns_analyzed', [])
-            cols_display = ', '.join(columns_analyzed[:4]) if isinstance(columns_analyzed, list) else str(columns_analyzed)
+            # Use friendly names for columns
+            cols_friendly = [get_friendly(c) for c in columns_analyzed[:4]] if isinstance(columns_analyzed, list) else []
+            cols_display = ', '.join(cols_friendly) if cols_friendly else str(columns_analyzed)
             if isinstance(columns_analyzed, list) and len(columns_analyzed) > 4:
                 cols_display += f' +{len(columns_analyzed)-4} more'
 
@@ -7729,38 +8438,54 @@ data sources. {noise_pct:.2f}% of records don't fit any cluster (these may be un
                 if not biased_features:
                     continue
 
-                plain_english = f'''Found {len(biased_features)} column(s) where missing values occur more
-often in some groups than others (based on '{target_col}'). This means the gaps in your data
-aren't random and could make certain groups under-represented if not handled carefully.'''
+                friendly_target = get_friendly(target_col)
+                # Build list of affected fields with friendly names
+                affected_fields = [f"<strong>{get_friendly(f.get('feature', ''))}</strong>" for f in biased_features[:3]]
+                field_list = ', '.join(affected_fields[:-1]) + ' and ' + affected_fields[-1] if len(affected_fields) > 1 else affected_fields[0] if affected_fields else ''
+
+                plain_english = f'''Found {len(biased_features)} field(s) where missing values occur more often in some
+<strong>{friendly_target}</strong> groups than others. Affected: {field_list}.
+This non-random missingness could bias analyses if not handled carefully.'''
 
                 example_rows = ''
                 for feat in biased_features[:5]:
                     feature_name = feat.get('feature', '')
+                    friendly_feature = get_friendly(feature_name)
                     max_diff = feat.get('max_difference', 0)
                     miss_by_target = feat.get('missingness_by_target', {})
                     rates = [f"{k}: {v.get('rate', 0):.1f}%" for k, v in list(miss_by_target.items())[:2]]
+
+                    # Severity based on difference
+                    if max_diff >= 20:
+                        severity = '<span class="severity-badge extreme">High bias</span>'
+                    elif max_diff >= 10:
+                        severity = '<span class="severity-badge high">Moderate</span>'
+                    else:
+                        severity = '<span class="severity-badge moderate">Low</span>'
+
                     example_rows += f'''
                     <tr>
-                        <td>{feature_name}</td>
+                        <td>{friendly_feature}</td>
                         <td class="value-highlight">{max_diff:.1f}%</td>
                         <td style="font-size: 0.85em;">{', '.join(rates)}</td>
+                        <td>{severity}</td>
                     </tr>'''
 
                 widgets_html += self._build_insight_widget(
                     icon="🕳️",
-                    title=f"Missing Data Bias: {target_col}",
-                    badge_text=f"{len(biased_features)} biased",
+                    title=f"Missing Data Bias",
+                    badge_text=f"{len(biased_features)} fields",
                     badge_class="warning" if biased_features else "good",
                     plain_english=plain_english,
-                    table_headers=["Feature", "Rate Diff", "Missingness by Class"],
+                    table_headers=["Field", "Rate Diff", f"By {friendly_target}", "Severity"],
                     table_rows=example_rows,
                     technical_items=f'''
                         <div class="insight-technical-item">
                             <span class="insight-technical-item-label">Target Column</span>
-                            <span class="insight-technical-item-value">{target_col}</span>
+                            <span class="insight-technical-item-value">{friendly_target}</span>
                         </div>
                         <div class="insight-technical-item">
-                            <span class="insight-technical-item-label">Features with Bias</span>
+                            <span class="insight-technical-item-label">Fields with Bias</span>
                             <span class="insight-technical-item-value">{len(biased_features)} of {total_analyzed}</span>
                         </div>
                     ''',
@@ -7785,39 +8510,53 @@ aren't random and could make certain groups under-represented if not handled car
 
             if significant:
                 top_corr = significant[0][1] if significant else {}
-                plain_english = f'''Found {len(significant)} significant categorical-to-numeric relationships.
-The strongest: '{top_corr.get("categorical_column", "N/A")}' explains {top_corr.get("eta_squared", 0)*100:.1f}%
-of variance in '{top_corr.get("numeric_column", "N/A")}' (η = {top_corr.get("eta", 0):.3f}).'''
+                top_cat = get_friendly(top_corr.get("categorical_column", "N/A"))
+                top_num = get_friendly(top_corr.get("numeric_column", "N/A"))
+                eta_squared_pct = top_corr.get("eta_squared", 0) * 100
+
+                plain_english = f'''Found <strong>{len(significant)} significant</strong> categorical-to-numeric relationships.
+The strongest: <strong>{top_cat}</strong> explains {eta_squared_pct:.1f}% of variance in <strong>{top_num}</strong>.
+These relationships can be valuable for predictive modeling and segmentation.'''
 
                 example_rows = ''
                 for key, data in list(significant)[:5]:
                     cat_col = data.get('categorical_column', '')
                     num_col = data.get('numeric_column', '')
+                    friendly_cat = get_friendly(cat_col)
+                    friendly_num = get_friendly(num_col)
                     eta = data.get('eta', 0)
-                    interp = data.get('interpretation', '')
-                    eta_class = 'value-highlight' if eta > 0.3 else 'value-normal'
+
+                    # Strength interpretation
+                    if eta >= 0.5:
+                        strength = '<span class="severity-badge extreme">Strong</span>'
+                    elif eta >= 0.3:
+                        strength = '<span class="severity-badge high">Moderate</span>'
+                    else:
+                        strength = '<span class="severity-badge moderate">Weak</span>'
+
                     example_rows += f'''
                     <tr>
-                        <td>{cat_col}</td>
-                        <td>{num_col}</td>
-                        <td class="{eta_class}">{eta:.3f}</td>
+                        <td>{friendly_cat}</td>
+                        <td>{friendly_num}</td>
+                        <td>{eta:.3f}</td>
+                        <td>{strength}</td>
                     </tr>'''
 
                 widgets_html += self._build_insight_widget(
                     icon="🔗",
-                    title="Categorical-Numeric Correlations",
-                    badge_text=f"{len(significant)} relationships",
+                    title="Category-Number Links",
+                    badge_text=f"{len(significant)} found",
                     badge_class="info",
                     plain_english=plain_english,
-                    table_headers=["Categorical", "Numeric", "η (eta)"],
+                    table_headers=["Category Field", "Numeric Field", "η (eta)", "Strength"],
                     table_rows=example_rows,
                     technical_items=f'''
                         <div class="insight-technical-item">
-                            <span class="insight-technical-item-label">Categorical Columns</span>
+                            <span class="insight-technical-item-label">Categorical Fields</span>
                             <span class="insight-technical-item-value">{len(cols_analyzed.get("categorical", []))}</span>
                         </div>
                         <div class="insight-technical-item">
-                            <span class="insight-technical-item-label">Numeric Columns</span>
+                            <span class="insight-technical-item-label">Numeric Fields</span>
                             <span class="insight-technical-item-value">{len(cols_analyzed.get("numeric", []))}</span>
                         </div>
                     ''',
@@ -7841,6 +8580,8 @@ of variance in '{top_corr.get("numeric_column", "N/A")}' (η = {top_corr.get("et
                 if not feature_dists:
                     continue
 
+                friendly_target = get_friendly(target_col)
+
                 # Find most discriminative feature (largest mean difference)
                 max_diff_feature = None
                 max_diff_val = 0
@@ -7853,34 +8594,53 @@ of variance in '{top_corr.get("numeric_column", "N/A")}' (η = {top_corr.get("et
                             max_diff_val = diff
                             max_diff_feature = feat_name
 
+                friendly_max_diff = get_friendly(max_diff_feature) if max_diff_feature else "Multiple features"
                 total_samples = sum(class_counts.values())
-                plain_english = f'''Analyzing how numeric features distribute across '{target_col}' classes
-({len(class_counts)} classes, {total_samples:,} samples). {max_diff_feature or "Multiple features"} shows
-the largest difference between classes, which could be useful for predictive modeling.'''
+
+                plain_english = f'''Analyzing how numeric features vary across <strong>{friendly_target}</strong> classes
+({len(class_counts)} classes, {total_samples:,} samples). <strong>{friendly_max_diff}</strong> shows
+the largest difference between classes - a strong candidate for predictive modeling.'''
 
                 example_rows = ''
                 for feat_name, feat_data in list(feature_dists.items())[:5]:
+                    friendly_feat = get_friendly(feat_name)
                     by_class = feat_data.get('by_target_class', {})
                     class_stats = []
+                    means_list = []
                     for cls, stats in list(by_class.items())[:2]:
                         mean = stats.get('mean', 0)
+                        means_list.append(mean)
                         if mean > 1000:
                             class_stats.append(f"{cls}: {mean/1000:.1f}K")
                         else:
                             class_stats.append(f"{cls}: {mean:.1f}")
+
+                    # Calculate discriminative power
+                    if len(means_list) >= 2 and max(means_list) > 0:
+                        diff_ratio = abs(means_list[0] - means_list[1]) / max(max(means_list), 1)
+                        if diff_ratio > 0.5:
+                            power = '<span class="severity-badge extreme">High</span>'
+                        elif diff_ratio > 0.2:
+                            power = '<span class="severity-badge high">Medium</span>'
+                        else:
+                            power = '<span class="severity-badge moderate">Low</span>'
+                    else:
+                        power = '-'
+
                     example_rows += f'''
                     <tr>
-                        <td>{feat_name}</td>
-                        <td colspan="2" style="font-size: 0.85em;">{' | '.join(class_stats)}</td>
+                        <td>{friendly_feat}</td>
+                        <td style="font-size: 0.85em;">{' | '.join(class_stats)}</td>
+                        <td>{power}</td>
                     </tr>'''
 
                 widgets_html += self._build_insight_widget(
                     icon="📊",
-                    title=f"Class Distributions: {target_col}",
+                    title=f"Feature Separation by {friendly_target}",
                     badge_text=f"{len(feature_dists)} features",
                     badge_class="info",
                     plain_english=plain_english,
-                    table_headers=["Feature", "Mean by Class", ""],
+                    table_headers=["Feature", f"Mean by {friendly_target}", "Predictive Power"],
                     table_rows=example_rows,
                     technical_items=f'''
                         <div class="insight-technical-item">
@@ -7893,7 +8653,7 @@ the largest difference between classes, which could be useful for predictive mod
                         </div>
                     ''',
                     technical_context=[
-                        "Shows mean and standard deviation of numeric features per target class",
+                        "Shows mean of numeric features per target class",
                         "Large differences in means indicate discriminative features",
                         "Useful for feature selection in supervised learning"
                     ],
@@ -7906,20 +8666,149 @@ the largest difference between classes, which could be useful for predictive mod
 
         sample_note = f" (sample of {original_rows:,})" if original_rows > analyzed_rows else ""
 
-        return f'''
-            <div class="insights-summary" style="background: rgba(99, 102, 241, 0.08); border: 1px solid rgba(99, 102, 241, 0.2); border-radius: 8px; padding: 12px 16px; margin-bottom: 20px;">
-                <p style="margin: 0; font-size: 0.9em; color: var(--text-secondary);">
-                    <svg style="width: 16px; height: 16px; vertical-align: -3px; margin-right: 8px;" viewBox="0 0 24 24" fill="none" stroke="#818cf8" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
-                    Patterns observed from analyzing <strong>{analyzed_rows:,} rows</strong>{sample_note} in {analysis_time:.1f}s
-                </p>
+        # ═══════════════════════════════════════════════════════════════
+        # BUILD NATURAL LANGUAGE SUMMARY
+        # Groups anomalies by category and provides executive narrative
+        # ═══════════════════════════════════════════════════════════════
+        summary_parts = []
+
+        # Count totals for summary
+        total_field_outliers_raw = sum(f.get('anomaly_count', 0) for f in numeric_outliers.values()) if numeric_outliers else 0
+        total_combo_anomalies = autoencoder.get('anomaly_count', 0) if autoencoder else 0
+        total_cross_field = sum(i.get('total_issues', 0) for i in cross_issues) if cross_issues else 0
+        total_rare = sum(f.get('total_rare_count', 0) for f in rare_categories.values()) if rare_categories else 0
+
+        # Check if context validation has reduced outlier count
+        has_context_summary = context_validation and context_validation.get('total_validated', 0) > 0
+        validated_count_summary = context_validation.get('total_validated', total_field_outliers_raw) if has_context_summary else total_field_outliers_raw
+        reduction_pct_summary = context_validation.get('reduction_percentage', 0) if has_context_summary else 0
+
+        # Use validated count if context validation significantly reduced outliers (>10% reduction)
+        total_field_outliers = validated_count_summary if (has_context_summary and reduction_pct_summary > 10) else total_field_outliers_raw
+
+        # Group 1: Value Observations (Statistical outliers + rare values)
+        # Use neutral language - outliers may be valid data, not errors
+        # Include anchor links to jump to relevant sub-sections
+        value_anomaly_count = total_field_outliers + total_rare
+        if value_anomaly_count > 0:
+            if total_field_outliers > 0 and total_rare > 0:
+                summary_parts.append(
+                    f"<a href='#numeric-outliers-section' style='color: inherit; text-decoration: underline; text-decoration-style: dotted;'>"
+                    f"<strong>{value_anomaly_count:,}</strong> value observations</a> "
+                    f"({total_field_outliers:,} statistical outliers, {total_rare:,} rare categories)"
+                )
+            elif total_field_outliers > 0:
+                summary_parts.append(
+                    f"<a href='#numeric-outliers-section' style='color: inherit; text-decoration: underline; text-decoration-style: dotted;'>"
+                    f"<strong>{total_field_outliers:,}</strong> statistical outliers</a> in numeric fields"
+                )
+            else:
+                summary_parts.append(f"<strong>{total_rare:,}</strong> rare category values")
+
+        # Group 2: Pattern Observations (Atypical combinations + cross-field patterns)
+        pattern_anomaly_count = total_combo_anomalies + total_cross_field
+        if pattern_anomaly_count > 0:
+            if total_combo_anomalies > 0 and total_cross_field > 0:
+                summary_parts.append(
+                    f"<a href='#multivariate-section' style='color: inherit; text-decoration: underline; text-decoration-style: dotted;'>"
+                    f"<strong>{pattern_anomaly_count:,}</strong> pattern observations</a> "
+                    f"({total_combo_anomalies:,} atypical combinations, {total_cross_field:,} cross-field patterns)"
+                )
+            elif total_combo_anomalies > 0:
+                summary_parts.append(
+                    f"<a href='#multivariate-section' style='color: inherit; text-decoration: underline; text-decoration-style: dotted;'>"
+                    f"<strong>{total_combo_anomalies:,}</strong> atypical field combinations</a>"
+                )
+            else:
+                summary_parts.append(f"<strong>{total_cross_field:,}</strong> cross-field relationship patterns")
+
+        # Group 3: Missing Data (columns with incomplete data)
+        if columns:
+            missing_fields = [(col.name, get_friendly(col.name), 100 - col.quality.completeness)
+                              for col in columns
+                              if hasattr(col, 'quality') and hasattr(col.quality, 'completeness')
+                              and col.quality.completeness < 100]
+            if missing_fields:
+                # Sort by missing percentage descending
+                missing_fields.sort(key=lambda x: x[2], reverse=True)
+                top_missing = missing_fields[0]  # (raw_name, friendly_name, pct)
+                summary_parts.append(
+                    f"<a href='#section-missing' style='color: inherit; text-decoration: underline; text-decoration-style: dotted;'>"
+                    f"<strong>{len(missing_fields)}</strong> fields with missing data</a> "
+                    f"(highest: {top_missing[1]} at {top_missing[2]:.1f}%)"
+                )
+
+        # Build the executive summary narrative
+        total_anomalies = value_anomaly_count + pattern_anomaly_count
+        if total_anomalies > 0:
+            anomaly_pct = (total_anomalies / analyzed_rows * 100) if analyzed_rows > 0 else 0
+
+            # Determine narrative tone - neutral/exploratory, not judgmental
+            # These are statistical observations, not necessarily data quality issues
+            if anomaly_pct < 1:
+                quality_assessment = "Data shows <strong style='color: #22c55e;'>typical patterns</strong> with few statistical outliers."
+                quality_icon = "📊"
+                quality_color = "#22c55e"
+            elif anomaly_pct < 5:
+                quality_assessment = "Data contains <strong style='color: #6366f1;'>some notable patterns</strong> worth exploring."
+                quality_icon = "📊"
+                quality_color = "#6366f1"
+            else:
+                quality_assessment = "Data contains <strong style='color: #6366f1;'>statistical outliers</strong> that may warrant investigation."
+                quality_icon = "🔍"
+                quality_color = "#6366f1"
+
+            summary_bullets = ''.join([f"<li>{part}</li>" for part in summary_parts])
+
+            executive_summary = f'''
+            <div class="dual-layer-explanation" style="margin-bottom: 20px;">
+                <div class="dual-layer-summary">
+                    <div class="dual-layer-summary-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7V17a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-2.3A7 7 0 0 0 12 2z"/></svg> What this means</div>
+                    <div class="dual-layer-summary-text">
+                        {quality_assessment} Identified <strong>{total_anomalies:,} observations</strong> ({anomaly_pct:.2f}% of {analyzed_rows:,} rows) for review.
+                        <ul style="margin: 8px 0 0 0; padding-left: 18px;">
+                            {summary_bullets}
+                        </ul>
+                    </div>
+                </div>
             </div>
+            '''
+        else:
+            executive_summary = f'''
+            <div class="dual-layer-explanation" style="margin-bottom: 20px;">
+                <div class="dual-layer-summary" style="background: rgba(34, 197, 94, 0.12); border-left-color: #22c55e;">
+                    <div class="dual-layer-summary-label" style="color: #22c55e;"><svg viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2" style="width:16px;height:16px"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> What this means</div>
+                    <div class="dual-layer-summary-text">
+                        <strong style="color: #22c55e;">No significant anomalies detected.</strong> All {analyzed_rows:,} rows appear consistent with expected patterns.
+                    </div>
+                </div>
+            </div>
+            '''
+
+        # Check if context file with field descriptions was used
+        context_note = ''
+        if field_descs:
+            num_friendly = sum(1 for fd in field_descs.values() if fd.get('friendly_name'))
+            num_labels = sum(1 for fd in field_descs.values() if fd.get('value_labels'))
+            if num_friendly > 0 or num_labels > 0:
+                context_parts = []
+                if num_friendly > 0:
+                    context_parts.append(f"{num_friendly} friendly name{'s' if num_friendly != 1 else ''}")
+                if num_labels > 0:
+                    context_parts.append(f"{num_labels} value label set{'s' if num_labels != 1 else ''}")
+                context_note = f''' • <span style="color: #22c55e;"><svg style="width: 14px; height: 14px; vertical-align: -2px; margin-right: 4px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>Context config applied ({", ".join(context_parts)})</span>'''
+
+        return f'''
+            {executive_summary}
             {widgets_html}
         '''
 
     def _build_insight_widget(self, icon: str, title: str, badge_text: str, badge_class: str,
                               plain_english: str, table_headers: list, table_rows: str,
                               technical_items: str, technical_context: list,
-                              ml_model: str = None, semantic_confidence: str = None) -> str:
+                              ml_model: str = None, semantic_confidence: str = None,
+                              chart_html: str = None, section_id: str = None,
+                              count_badge: int = None, mobile_cards: str = None) -> str:
         """
         Build a single insight widget with the masterpiece design.
 
@@ -7935,6 +8824,10 @@ the largest difference between classes, which could be useful for predictive mod
             technical_context: List of context bullet points
             ml_model: Optional ML model name to display (e.g., "Isolation Forest")
             semantic_confidence: Optional HTML for semantic confidence badge
+            chart_html: Optional HTML for embedded chart visualization
+            section_id: Optional anchor ID for linking from executive summary
+            count_badge: Optional count to display as prominent badge on header
+            mobile_cards: Optional HTML for mobile-friendly card layout (shows on small screens)
         """
         # Convert emoji icon to SVG if possible
         icon_html = emoji_to_svg(icon, size=18) if icon else ''
@@ -7948,17 +8841,28 @@ the largest difference between classes, which could be useful for predictive mod
         # Generate unique ID for toggle functionality
         widget_id = f"tech_{hash(title) % 10000}"
 
-        # ML model badge if specified
+        # ML model badge - removed to reduce clutter (details in Technical section)
         ml_badge = ''
-        if ml_model:
-            brain_svg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;vertical-align:-1px;margin-right:3px"><path d="M12 18V5"/><path d="M15 13a4.17 4.17 0 0 1-3-4 4.17 4.17 0 0 1-3 4"/><path d="M17.598 6.5A3 3 0 1 0 12 5a3 3 0 1 0-5.598 1.5"/><path d="M17.997 5.125a4 4 0 0 1 2.526 5.77"/><path d="M18 18a4 4 0 0 0 2-7.464"/><path d="M19.967 17.483A4 4 0 1 1 12 18a4 4 0 1 1-7.967-.517"/><path d="M6 18a4 4 0 0 1-2-7.464"/><path d="M6.003 5.125a4 4 0 0 0-2.526 5.77"/></svg>'
-            ml_badge = f'<span class="insight-ml-badge">{brain_svg} {ml_model}</span>'
 
         # Semantic confidence badge (optional)
         semantic_badge_html = semantic_confidence if semantic_confidence else ''
 
+        # Section anchor ID for linking from executive summary
+        anchor_id = f' id="{section_id}"' if section_id else ''
+
+        # Combined badge showing count and percentage together
+        # If count_badge provided, combine with badge_text for single cohesive badge
+        combined_badge_html = ''
+        if count_badge is not None and count_badge > 0:
+            # Single pill: "30 (3.37%)" instead of two separate badges
+            combined_badge_html = f'''<span class="insight-widget-badge {badge_class}" style="font-weight: 600;">
+                <strong>{count_badge:,}</strong> <span style="opacity: 0.8;">({badge_text})</span>
+            </span>'''
+        else:
+            combined_badge_html = f'<span class="insight-widget-badge {badge_class}">{badge_text}</span>'
+
         return f'''
-        <div class="insight-widget">
+        <div class="insight-widget"{anchor_id}>
             <div class="insight-widget-header" onclick="this.closest('.insight-widget').classList.toggle('collapsed')">
                 <div class="insight-widget-title-group">
                     <span class="insight-widget-icon">{icon_html}</span>
@@ -7966,7 +8870,7 @@ the largest difference between classes, which could be useful for predictive mod
                     {ml_badge}
                 </div>
                 <div style="display: flex; align-items: center;">
-                    <span class="insight-widget-badge {badge_class}">{badge_text}</span>
+                    {combined_badge_html}
                     <span class="insight-widget-chevron"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px"><polyline points="6 9 12 15 18 9"/></svg></span>
                 </div>
             </div>
@@ -7978,10 +8882,10 @@ the largest difference between classes, which could be useful for predictive mod
                     <div class="insight-summary-text">{plain_english}</div>
                 </div>
 
-                <!-- Example Table -->
+                <!-- Example Table (desktop) / Cards (mobile) -->
                 <div class="insight-examples">
                     <div class="insight-examples-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M7 16h8"/><path d="M7 11h12"/><path d="M7 6h3"/></svg> Sample data</div>
-                    <table class="insight-examples-table">
+                    <table class="insight-examples-table{' has-mobile-cards' if mobile_cards else ''}">
                         <thead>
                             <tr>{headers_html}</tr>
                         </thead>
@@ -7989,10 +8893,17 @@ the largest difference between classes, which could be useful for predictive mod
                             {table_rows}
                         </tbody>
                     </table>
+                    {f'<div class="outlier-cards-mobile">{mobile_cards}</div>' if mobile_cards else ''}
                 </div>
 
                 <!-- Semantic Confidence (if applicable) -->
                 {semantic_badge_html}
+
+                <!-- Embedded Chart (if provided) -->
+                {f'''<div class="insight-chart-section" style="margin-top: 16px;">
+                    <div class="insight-examples-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg> Distribution</div>
+                    {chart_html}
+                </div>''' if chart_html else ''}
 
                 <!-- Technical Details (Collapsed by default) -->
                 <details class="dual-layer-technical">
@@ -8008,6 +8919,383 @@ the largest difference between classes, which could be useful for predictive mod
                         </div>
                     </div>
                 </details>
+            </div>
+        </div>
+        '''
+
+    def _build_contribution_breakdown(self, contributing_features: list, columns_analyzed: list,
+                                       analyzed_rows: int, method: str, get_friendly) -> str:
+        """
+        Build field-level contribution breakdown HTML for the Unusual Combinations technical section.
+
+        Args:
+            contributing_features: List of dicts with 'column' and 'importance' keys
+            columns_analyzed: List of column names that were analyzed
+            analyzed_rows: Number of rows analyzed
+            method: ML method used (e.g., 'Isolation Forest')
+            get_friendly: Function to get friendly name for a column
+        """
+        # Basic stats
+        basic_items = f'''
+            <div class="insight-technical-item">
+                <span class="insight-technical-item-label">Algorithm</span>
+                <span class="insight-technical-item-value">{method}</span>
+            </div>
+            <div class="insight-technical-item">
+                <span class="insight-technical-item-label">Fields Analyzed</span>
+                <span class="insight-technical-item-value">{len(columns_analyzed) if isinstance(columns_analyzed, list) else 'All numeric'}</span>
+            </div>
+            <div class="insight-technical-item">
+                <span class="insight-technical-item-label">Sample Size</span>
+                <span class="insight-technical-item-value">{analyzed_rows:,} rows</span>
+            </div>
+        '''
+
+        # Build contribution breakdown if available
+        if contributing_features and len(contributing_features) > 0:
+            # Get total importance for percentage calculation
+            # Try 'importance' first, then 'error_contribution' as fallback
+            total_importance = sum(f.get('importance', f.get('error_contribution', 0)) for f in contributing_features)
+
+            # Build contribution bars
+            contribution_html = '<div style="margin-top: 12px; border-top: 1px solid var(--border-color); padding-top: 12px;">'
+            contribution_html += '<div style="font-size: 0.8em; color: var(--text-muted); margin-bottom: 8px; font-weight: 600;">Field Contribution to Anomalies</div>'
+
+            for i, feat in enumerate(contributing_features[:5]):  # Top 5
+                col_name = feat.get('column', f'Feature {i+1}')
+                # Try 'importance' first, then 'error_contribution' as fallback
+                importance = feat.get('importance', feat.get('error_contribution', 0))
+
+                friendly_name = get_friendly(col_name)
+
+                # Calculate percentage
+                if total_importance > 0:
+                    pct = (importance / total_importance) * 100
+                else:
+                    pct = 0
+
+                # Color based on contribution level
+                if pct > 30:
+                    bar_color = '#ef4444'  # Red - high contribution
+                elif pct > 15:
+                    bar_color = '#f59e0b'  # Orange - moderate
+                else:
+                    bar_color = '#6366f1'  # Purple - low
+
+                contribution_html += f'''
+                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+                    <div style="min-width: 100px; font-size: 0.75em; color: var(--text-secondary); text-align: right;">{friendly_name}</div>
+                    <div style="flex: 1; height: 12px; background: var(--bg-secondary); border-radius: 6px; overflow: hidden;">
+                        <div style="width: {min(pct, 100):.1f}%; height: 100%; background: {bar_color}; border-radius: 6px;"></div>
+                    </div>
+                    <div style="min-width: 45px; font-size: 0.75em; color: var(--text-muted);">{pct:.1f}%</div>
+                </div>
+                '''
+
+            contribution_html += '<div style="font-size: 0.7em; color: var(--text-muted); margin-top: 6px; font-style: italic;">Higher % = field contributes more to unusual patterns</div>'
+            contribution_html += '</div>'
+
+            return basic_items + contribution_html
+        else:
+            # Fallback - just show top contributors list
+            top_contributors = [f.get('column', '') for f in contributing_features[:3]] if contributing_features else []
+            basic_items += f'''
+            <div class="insight-technical-item">
+                <span class="insight-technical-item-label">Top Contributors</span>
+                <span class="insight-technical-item-value">{', '.join([get_friendly(c) for c in top_contributors]) if top_contributors else 'N/A'}</span>
+            </div>
+            '''
+            return basic_items
+
+    def _categorize_anomalies_by_driver(self, sample_records: list, columns_analyzed: list,
+                                         field_stats: Dict, get_friendly) -> Dict[str, list]:
+        """
+        Group anomalous records by their primary driver (the field contributing most to the anomaly).
+
+        Args:
+            sample_records: List of anomalous record dictionaries
+            columns_analyzed: List of column names that were analyzed
+            field_stats: Dict of column stats with 'median' and 'mean'
+            get_friendly: Function to get friendly name for a column
+
+        Returns:
+            Dict mapping category name to list of records in that category
+        """
+        categories = {}
+
+        for record in sample_records:
+            if not isinstance(record, dict):
+                continue
+
+            # Find the field with the highest deviation from typical values
+            max_deviation = 0
+            primary_driver = None
+
+            for col in columns_analyzed:
+                if col in record and col != '_reconstruction_error':
+                    try:
+                        val = float(record[col])
+                        stats = field_stats.get(col, {})
+                        median = stats.get('median', 0) or stats.get('mean', 0)
+                        if median > 0:
+                            deviation = abs(val - median) / median
+                            if deviation > max_deviation:
+                                max_deviation = deviation
+                                primary_driver = col
+                    except (ValueError, TypeError):
+                        pass
+
+            # Assign to category based on primary driver
+            if primary_driver:
+                friendly_name = get_friendly(primary_driver)
+                category_name = f"{friendly_name}-related"
+            else:
+                category_name = "Multi-field patterns"
+
+            if category_name not in categories:
+                categories[category_name] = []
+            categories[category_name].append(record)
+
+        return categories
+
+    def _build_category_summary_html(self, categories: Dict[str, list], total_count: int) -> str:
+        """
+        Build HTML summary of anomaly categories (deprecated - use _build_category_summary_from_counts).
+        """
+        if not categories or len(categories) <= 1:
+            return ''
+
+        sorted_cats = sorted(categories.items(), key=lambda x: len(x[1]), reverse=True)
+        pills_html = '<div style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px;">'
+        for cat_name, records in sorted_cats[:4]:
+            count = len(records)
+            pills_html += f'''
+                <span style="display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px;
+                       background: rgba(99, 102, 241, 0.1); border: 1px solid rgba(99, 102, 241, 0.2);
+                       border-radius: 12px; font-size: 0.8em; color: var(--text-secondary);">
+                    <strong>{count}</strong> {cat_name}
+                </span>'''
+        pills_html += '</div>'
+        return pills_html
+
+    def _build_category_summary_from_counts(self, category_counts: Dict[str, int],
+                                             total_count: int, get_friendly) -> str:
+        """
+        Build HTML summary of anomaly categories from pre-computed counts.
+
+        Args:
+            category_counts: Dict mapping column name to count of anomalies
+            total_count: Total number of anomalous records
+            get_friendly: Function to get friendly name for a column
+
+        Returns:
+            HTML string with category breakdown
+        """
+        if not category_counts or len(category_counts) <= 1:
+            return ''
+
+        # Sort categories by count (descending)
+        sorted_cats = sorted(category_counts.items(), key=lambda x: x[1], reverse=True)
+
+        # Build category pills/tags
+        pills_html = '<div style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px;">'
+        for col_name, count in sorted_cats[:4]:  # Top 4 categories
+            friendly_name = get_friendly(col_name)
+            pct = (count / total_count * 100) if total_count > 0 else 0
+            pills_html += f'''
+                <span style="display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px;
+                       background: rgba(99, 102, 241, 0.1); border: 1px solid rgba(99, 102, 241, 0.2);
+                       border-radius: 12px; font-size: 0.8em; color: var(--text-secondary);">
+                    <strong>{count}</strong> {friendly_name}-related
+                </span>'''
+        pills_html += '</div>'
+
+        return pills_html
+
+    def _build_embedded_recon_error_chart(self, recon_errors: Dict, chart_id: str = "embeddedReconErrorChart") -> str:
+        """
+        Build an embedded reconstruction error distribution chart for the Unusual Combinations widget.
+
+        Args:
+            recon_errors: Dictionary with median, q75, threshold, anomaly_count, anomaly_percentage
+            chart_id: Unique ID for the canvas element
+        """
+        if not recon_errors:
+            return ''
+
+        median_err = recon_errors.get('median', 0)
+        q75_err = recon_errors.get('q75', 0)
+        threshold = recon_errors.get('threshold', 0)
+        std_err = recon_errors.get('std', 0)
+        mean_err = recon_errors.get('mean', 0)
+        anomaly_count = recon_errors.get('anomaly_count', 0)
+        anomaly_pct = recon_errors.get('anomaly_percentage', 0)
+
+        # If threshold is 0 or missing, compute from mean + 2.5*std
+        if threshold == 0 and std_err > 0:
+            threshold = mean_err + 2.5 * std_err
+
+        return f'''
+        <div style="background: var(--bg-card); border-radius: 8px; padding: 12px; height: 160px;">
+            <canvas id="{chart_id}"></canvas>
+        </div>
+        <script>
+        document.addEventListener('DOMContentLoaded', function() {{
+            const ctx = document.getElementById('{chart_id}');
+            if (ctx) {{
+                const median = {median_err};
+                const q75 = {q75_err};
+                const threshold = {threshold};
+                const iqr = (q75 - median) * 2;
+                const displayStd = iqr > 0 ? iqr : 0.001;
+                const bins = 40;
+                const labels = [];
+                const data = [];
+                const bgColors = [];
+
+                for (let i = 0; i < bins; i++) {{
+                    const x = median - 3*displayStd + (6*displayStd/bins) * i;
+                    const y = Math.exp(-0.5 * Math.pow((x - median) / displayStd, 2)) * 1000;
+                    labels.push(x.toExponential(2));
+                    data.push(Math.max(0, y));
+                    bgColors.push(x > threshold ? 'rgba(239, 68, 68, 0.7)' : 'rgba(139, 92, 246, 0.6)');
+                }}
+
+                new Chart(ctx, {{
+                    type: 'bar',
+                    data: {{
+                        labels: labels,
+                        datasets: [{{
+                            label: 'Frequency',
+                            data: data,
+                            backgroundColor: bgColors,
+                            borderWidth: 0
+                        }}]
+                    }},
+                    options: {{
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {{
+                            legend: {{ display: false }},
+                            tooltip: {{
+                                callbacks: {{
+                                    title: function(context) {{
+                                        return 'Error: ' + context[0].label;
+                                    }}
+                                }}
+                            }}
+                        }},
+                        scales: {{
+                            x: {{ display: false }},
+                            y: {{
+                                grid: {{ color: 'rgba(148, 163, 184, 0.1)' }},
+                                ticks: {{ display: false }}
+                            }}
+                        }}
+                    }}
+                }});
+            }}
+        }});
+        </script>
+        <div style="font-size: 0.75em; color: var(--text-muted); margin-top: 8px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <span><span style="display: inline-block; width: 10px; height: 10px; background: rgba(139, 92, 246, 0.6); border-radius: 2px; margin-right: 4px;"></span>Normal patterns</span>
+                <span><span style="display: inline-block; width: 10px; height: 10px; background: rgba(239, 68, 68, 0.7); border-radius: 2px; margin-right: 4px;"></span>Unusual ({anomaly_count:,} records)</span>
+            </div>
+            <div style="padding: 8px 10px; background: var(--bg-elevated); border-radius: 6px; line-height: 1.5;">
+                <strong>What this chart shows:</strong> An Isolation Forest model learns how values typically combine across all numeric fields.
+                Each record gets a "reconstruction error" - how different it is from normal patterns. The chart shows this error distribution:
+                most records cluster on the left (low error = normal), while unusual records appear on the right (high error).
+                Records above the threshold ({threshold:.4f}) are flagged because their field combinations are rare or unexpected.
+            </div>
+        </div>
+        '''
+
+    def _build_embedded_anomaly_score_chart(self, anomaly_scores: Dict, chart_id: str = "embeddedAnomalyScoreChart") -> str:
+        """
+        Build an embedded anomaly score distribution chart for the Individual Field Outliers widget.
+
+        Args:
+            anomaly_scores: Dictionary with histogram data, threshold, anomaly_count
+            chart_id: Unique ID for the canvas element
+        """
+        if not anomaly_scores:
+            return ''
+
+        histogram = anomaly_scores.get('histogram', {})
+        threshold = anomaly_scores.get('threshold', -0.5)
+        anomaly_count = anomaly_scores.get('count', 0)
+
+        # Get histogram data
+        bin_centers = histogram.get('bin_centers', [])
+        counts = histogram.get('counts', [])
+
+        if not bin_centers or not counts:
+            return ''
+
+        import json
+
+        return f'''
+        <div style="background: var(--bg-card); border-radius: 8px; padding: 12px; height: 160px;">
+            <canvas id="{chart_id}"></canvas>
+        </div>
+        <script>
+        document.addEventListener('DOMContentLoaded', function() {{
+            const ctx = document.getElementById('{chart_id}');
+            if (ctx) {{
+                const binCenters = {json.dumps(bin_centers)};
+                const counts = {json.dumps(counts)};
+                const threshold = {threshold};
+
+                const bgColors = binCenters.map(x => x < threshold ? 'rgba(239, 68, 68, 0.7)' : 'rgba(34, 197, 94, 0.6)');
+                const labels = binCenters.map(x => x.toFixed(2));
+
+                new Chart(ctx, {{
+                    type: 'bar',
+                    data: {{
+                        labels: labels,
+                        datasets: [{{
+                            label: 'Frequency',
+                            data: counts,
+                            backgroundColor: bgColors,
+                            borderWidth: 0
+                        }}]
+                    }},
+                    options: {{
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {{
+                            legend: {{ display: false }},
+                            tooltip: {{
+                                callbacks: {{
+                                    title: function(context) {{
+                                        return 'Score: ' + context[0].label;
+                                    }}
+                                }}
+                            }}
+                        }},
+                        scales: {{
+                            x: {{ display: false }},
+                            y: {{
+                                grid: {{ color: 'rgba(148, 163, 184, 0.1)' }},
+                                ticks: {{ display: false }}
+                            }}
+                        }}
+                    }}
+                }});
+            }}
+        }});
+        </script>
+        <div style="font-size: 0.75em; color: var(--text-muted); margin-top: 8px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <span><span style="display: inline-block; width: 10px; height: 10px; background: rgba(239, 68, 68, 0.7); border-radius: 2px; margin-right: 4px;"></span>Outliers ({anomaly_count:,} records)</span>
+                <span><span style="display: inline-block; width: 10px; height: 10px; background: rgba(34, 197, 94, 0.6); border-radius: 2px; margin-right: 4px;"></span>Normal values</span>
+            </div>
+            <div style="padding: 8px 10px; background: var(--bg-elevated); border-radius: 6px; line-height: 1.5;">
+                <strong>What this chart shows:</strong> Isolation Forest analyzes each numeric field independently to find unusual values.
+                It works by trying to "isolate" each value - rare values are easy to isolate (low score), common values are hard to isolate (high score).
+                The chart shows the score distribution: values on the left (score &lt; {threshold:.2f}) are flagged as outliers because they're
+                unusually easy to separate from the rest of the data.
             </div>
         </div>
         '''
@@ -8851,290 +10139,9 @@ the largest difference between classes, which could be useful for predictive mod
 
         # ═══════════════════════════════════════════════════════════════
         # 5. RECONSTRUCTION ERROR DISTRIBUTION (Autoencoder)
+        # NOTE: This chart is now embedded in the "Unusual Combinations" insight widget
+        # in _generate_ml_section_v2 for a unified, consolidated view.
         # ═══════════════════════════════════════════════════════════════
-        recon_errors = viz_data.get('reconstruction_errors')
-        if recon_errors:
-            mean_err = recon_errors.get('mean', 0)
-            median_err = recon_errors.get('median', 0)
-            q75_err = recon_errors.get('q75', 0)
-            std_err = recon_errors.get('std', 0)
-            threshold = recon_errors.get('threshold', 0)
-            # If threshold is 0 or missing, compute from mean + 2.5*std (approximation)
-            if threshold == 0 and std_err > 0:
-                threshold = mean_err + 2.5 * std_err
-            anomaly_count = recon_errors.get('anomaly_count', 0)
-            anomaly_pct = recon_errors.get('anomaly_percentage', 0)
-
-            # Smart formatting for very small values (use scientific notation)
-            def fmt_err(val):
-                if val == 0:
-                    return "0"
-                elif abs(val) < 0.0001:
-                    return f"{val:.2e}"
-                else:
-                    return f"{val:.4f}"
-
-            threshold_str = fmt_err(threshold)
-            median_str = fmt_err(median_err)
-            q75_str = fmt_err(q75_err)
-
-            # Dynamic explanation for right-skewed distributions where errors collapse to near-zero
-            # Skew detection: median near zero while mean/max are much higher indicates right-skew
-            # Right-skewed if: median is zero, OR median << q75, OR median << mean (less than 0.1% of mean)
-            skew_explanation = ""
-            is_right_skewed = (
-                median_err == 0 or
-                (q75_err > 0 and median_err < q75_err * 0.1) or
-                (mean_err > 0 and median_err < mean_err * 0.001)
-            )
-            if is_right_skewed and (q75_err > 0 or mean_err > 0):
-                skew_explanation = '<br><em style="font-size: 0.9em; color: var(--text-muted);">Note: Reconstruction errors are heavily right-skewed in this dataset; most errors are near zero, so the anomaly threshold is determined from the upper tail of the error distribution rather than from quartiles.</em>'
-
-            # Build plain-English summary for Autoencoder
-            if anomaly_pct > 3:
-                ae_plain_summary = f"This analysis found {anomaly_count:,} rows ({anomaly_pct:.2f}%) that look unusual compared to the rest of the data. These rows have combinations of values that don't fit the typical patterns, which could indicate data entry issues, rare cases, or special situations worth reviewing."
-            elif anomaly_pct > 0.5:
-                ae_plain_summary = f"A small number of rows ({anomaly_count:,}, or {anomaly_pct:.2f}%) appear unusual compared to typical patterns. Most of these are likely legitimate edge cases, but they may be worth a quick look."
-            else:
-                ae_plain_summary = f"Nearly all rows follow normal patterns. Only {anomaly_count:,} rows ({anomaly_pct:.2f}%) look slightly unusual, which is a very low rate indicating consistent, well-behaved data."
-
-            ae_dual_layer = self._build_dual_layer_explanation(
-                plain_english=ae_plain_summary,
-                technical_stats={
-                    "Median Error": median_str,
-                    "Q75 Error": q75_str,
-                    "Anomaly Threshold": threshold_str,
-                    "Anomaly Rate": f"{anomaly_pct:.2f}%",
-                    "Anomalies Found": f"{anomaly_count:,}"
-                },
-                technical_context=[
-                    "Autoencoder neural network learns normal data patterns",
-                    "Reconstruction error = how different a record is from normal",
-                    "Records above threshold are flagged as anomalies",
-                    f"Threshold calculated from error distribution upper tail" if is_right_skewed else "Threshold based on mean + 2.5 standard deviations"
-                ]
-            )
-
-            charts_by_section['anomalies'].append(f'''
-                <div class="accordion" data-accordion="viz-autoencoder">
-                    <div class="accordion-header" onclick="toggleAccordion(this)">
-                        <div class="accordion-title-group">
-                            <div class="accordion-icon"><svg style="width:16px;height:16px;color:#64748b;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 18V5"/><path d="M15 13a4.17 4.17 0 0 1-3-4 4.17 4.17 0 0 1-3 4"/><path d="M17.598 6.5A3 3 0 1 0 12 5a3 3 0 1 0-5.598 1.5"/><path d="M6 18a4 4 0 0 1-2-7.464"/></svg></div>
-                            <div>
-                                <div class="accordion-title">Autoencoder Reconstruction Errors</div>
-                                <div class="accordion-subtitle">Deep learning anomaly detection</div>
-                            </div>
-                        </div>
-                        <div class="accordion-meta">
-                            <span class="accordion-badge {'critical' if anomaly_pct > 5 else 'warning' if anomaly_pct > 1 else 'good'}">{anomaly_count:,} Anomalies</span>
-                            <span class="accordion-chevron"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><polyline points="6 9 12 15 18 9"/></svg></span>
-                        </div>
-                    </div>
-                    <div class="accordion-content">
-                        {ae_dual_layer}
-                        <div style="background: var(--bg-card); border-radius: 8px; padding: 16px; height: 200px; margin-top: 16px;">
-                            <canvas id="reconErrorChart"></canvas>
-                        </div>
-                        <script>
-                        document.addEventListener('DOMContentLoaded', function() {{
-                            const reconCtx = document.getElementById('reconErrorChart');
-                            if (reconCtx) {{
-                                // Use median for center (robust to outliers) and IQR-based scale
-                                const median = {median_err};
-                                const q75 = {q75_err};
-                                const threshold = {threshold};
-                                // Use IQR to estimate distribution width (more robust than std)
-                                const iqr = (q75 - median) * 2;  // Approximate IQR
-                                const displayStd = iqr > 0 ? iqr : 0.001;  // Fallback for very tight distributions
-                                const bins = 40;
-                                const labels = [];
-                                const data = [];
-                                const bgColors = [];
-
-                                for (let i = 0; i < bins; i++) {{
-                                    const x = median - 3*displayStd + (6*displayStd/bins) * i;
-                                    const y = Math.exp(-0.5 * Math.pow((x - median) / displayStd, 2)) * 1000;
-                                    labels.push(x.toExponential(2));
-                                    data.push(Math.max(0, y));
-                                    bgColors.push(x > threshold ? 'rgba(239, 68, 68, 0.7)' : 'rgba(139, 92, 246, 0.6)');
-                                }}
-
-                                new Chart(reconCtx, {{
-                                    type: 'bar',
-                                    data: {{
-                                        labels: labels,
-                                        datasets: [{{
-                                            label: 'Frequency',
-                                            data: data,
-                                            backgroundColor: bgColors,
-                                            borderWidth: 0
-                                        }}]
-                                    }},
-                                    options: {{
-                                        responsive: true,
-                                        maintainAspectRatio: false,
-                                        plugins: {{
-                                            legend: {{ display: false }},
-                                            annotation: {{
-                                                annotations: {{
-                                                    thresholdLine: {{
-                                                        type: 'line',
-                                                        xMin: threshold,
-                                                        xMax: threshold,
-                                                        borderColor: 'rgba(239, 68, 68, 1)',
-                                                        borderWidth: 2,
-                                                        borderDash: [5, 5],
-                                                        label: {{
-                                                            display: true,
-                                                            content: 'Threshold',
-                                                            position: 'start'
-                                                        }}
-                                                    }}
-                                                }}
-                                            }}
-                                        }},
-                                        scales: {{
-                                            x: {{
-                                                display: false
-                                            }},
-                                            y: {{
-                                                grid: {{ color: 'rgba(148, 163, 184, 0.1)' }},
-                                                ticks: {{ display: false }}
-                                            }}
-                                        }}
-                                    }}
-                                }});
-                            }}
-                        }});
-                        </script>
-                    </div>
-                </div>''')
-
-        # ═══════════════════════════════════════════════════════════════
-        # 6. ISOLATION FOREST ANOMALY SCORES
-        # ═══════════════════════════════════════════════════════════════
-        anomaly_scores = viz_data.get('anomaly_scores', {})
-        # Show fallback message when there are no anomaly scores
-        if not anomaly_scores:
-            charts_by_section['anomalies'].append(f'''
-                <div class="accordion" data-accordion="viz-anomaly-scores">
-                    <div class="accordion-header" onclick="toggleAccordion(this)">
-                        <div class="accordion-title-group">
-                            <div class="accordion-icon"><svg style="width:16px;height:16px;color:#64748b;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></svg></div>
-                            <div>
-                                <div class="accordion-title">Isolation Forest Anomaly Scores</div>
-                                <div class="accordion-subtitle">Statistical outlier detection per numeric field</div>
-                            </div>
-                        </div>
-                        <div class="accordion-meta">
-                            <span class="accordion-badge neutral">Not Available</span>
-                            <span class="accordion-chevron"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><polyline points="6 9 12 15 18 9"/></svg></span>
-                        </div>
-                    </div>
-                    <div class="accordion-content">
-                        <div style="padding: 24px; background: var(--bg-card); border-radius: 8px; text-align: center;">
-                            <div style="margin-bottom: 12px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:48px;height:48px;color:var(--text-muted)"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div>
-                            <h4 style="margin: 0 0 8px 0; color: var(--text-primary);">Insufficient Numeric Fields for Anomaly Detection</h4>
-                            <p style="color: var(--text-muted); margin: 0; max-width: 500px; margin: 0 auto;">
-                                This dataset has too few continuous numeric fields for Isolation Forest analysis. Fields with only a few unique values (like binary flags or small categories) are excluded as they don't benefit from this type of analysis.
-                            </p>
-                            <p style="color: var(--text-muted); font-size: 0.85em; margin-top: 12px;">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;vertical-align:-2px;color:#f59e0b"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> <strong>Tip:</strong> Isolation Forest works best on continuous numeric data like amounts, counts, measurements, and scores with many distinct values.
-                            </p>
-                        </div>
-                    </div>
-                </div>''')
-        elif anomaly_scores:
-            anomaly_cards = ''
-            for col, data in list(anomaly_scores.items())[:6]:
-                min_score = data.get('min_score', 0)
-                max_score = data.get('max_score', 0)
-                anomaly_count = data.get('anomaly_count', 0)
-                total = data.get('total_analyzed', 0)
-                pct = (anomaly_count / total * 100) if total > 0 else 0
-
-                # Score interpretation (Isolation Forest: lower = more anomalous)
-                severity = 'critical' if pct > 5 else 'warning' if pct > 1 else 'good'
-
-                anomaly_cards += f'''
-                    <div style="flex: 1; min-width: 200px; background: var(--bg-card); border-radius: 8px; padding: 16px; border: 1px solid var(--border-subtle);">
-                        <h4 style="margin: 0 0 12px 0; font-size: 0.9em; color: var(--text-primary);">{col}</h4>
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-                            <div style="text-align: center; padding: 8px; background: rgba(139, 92, 246, 0.1); border-radius: 6px;">
-                                <div style="font-size: 1.1em; font-weight: bold; color: var(--text-primary);">{anomaly_count:,}</div>
-                                <div style="font-size: 0.7em; color: var(--text-muted);">Anomalies</div>
-                            </div>
-                            <div style="text-align: center; padding: 8px; background: rgba(239, 68, 68, 0.1); border-radius: 6px;">
-                                <div style="font-size: 1.1em; font-weight: bold; color: var(--{severity});">{pct:.2f}%</div>
-                                <div style="font-size: 0.7em; color: var(--text-muted);">Rate</div>
-                            </div>
-                        </div>
-                        <div style="margin-top: 12px; font-size: 0.75em; color: var(--text-muted);">
-                            Score range: {min_score:.3f} to {max_score:.3f}
-                        </div>
-                    </div>'''
-
-            # Calculate totals for dual-layer explanation
-            # Note: total_anomalies sums per-field counts but the SAME ROW may be anomalous in multiple fields
-            total_anomalies = sum(d.get('anomaly_count', 0) for d in anomaly_scores.values())
-            # Get sample size from any field (all fields analyze the same rows)
-            sample_size = next(iter(anomaly_scores.values())).get('total_analyzed', 0) if anomaly_scores else 0
-            # Calculate average per-field anomaly rate (total anomalies / sample_size)
-            # This represents the average rate of anomalies per field, not row-level rate
-            overall_pct = (total_anomalies / sample_size * 100) if sample_size > 0 else 0
-            # Per-field average rate is total / (sample * fields), but for the summary display
-            # we show total/sample which represents "if each anomaly were unique rows"
-            per_field_avg_pct = (total_anomalies / (sample_size * len(anomaly_scores)) * 100) if sample_size > 0 and len(anomaly_scores) > 0 else 0
-            avg_min_score = sum(d.get('min_score', 0) for d in anomaly_scores.values()) / len(anomaly_scores) if anomaly_scores else 0
-            avg_max_score = sum(d.get('max_score', 0) for d in anomaly_scores.values()) / len(anomaly_scores) if anomaly_scores else 0
-
-            # Dual-layer explanation
-            if overall_pct > 3:
-                plain_summary = f"A notable number of records ({total_anomalies:,}, or {overall_pct:.2f}%) look unusual compared to the rest of the data. These values stand out because they differ significantly from what most rows contain."
-            elif overall_pct > 0.5:
-                plain_summary = f"A small number of records ({total_anomalies:,}, or {overall_pct:.2f}%) have values that look unusual. Most of these are likely legitimate edge cases, but they may be worth reviewing."
-            else:
-                plain_summary = f"Nearly all records ({100-overall_pct:.2f}%) look normal. Only {total_anomalies:,} records appear unusual, which means the data is consistent and well-behaved."
-
-            dual_layer = self._build_dual_layer_explanation(
-                plain_english=plain_summary,
-                technical_stats={
-                    "Algorithm": "Isolation Forest",
-                    "Fields Analyzed": f"{len(anomaly_scores)}",
-                    "Total Anomalies": f"{total_anomalies:,}",
-                    "Anomaly Rate": f"{overall_pct:.3f}%",
-                    "Avg Score Range": f"{avg_min_score:.3f} - {avg_max_score:.3f}"
-                },
-                technical_context=[
-                    "Isolation Forest scores: lower values = more anomalous (harder to isolate)",
-                    "Contamination parameter set to 'auto' (adaptive threshold)",
-                    "Each column analyzed independently for outliers",
-                    f"Anomaly rate = total field anomalies ({total_anomalies:,}) / sample size ({sample_size:,})"
-                ]
-            )
-
-            charts_by_section['anomalies'].append(f'''
-                <div class="accordion" data-accordion="viz-anomaly-scores">
-                    <div class="accordion-header" onclick="toggleAccordion(this)">
-                        <div class="accordion-title-group">
-                            <div class="accordion-icon"><svg style="width:16px;height:16px;color:#64748b;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></svg></div>
-                            <div>
-                                <div class="accordion-title">Isolation Forest Anomaly Scores</div>
-                                <div class="accordion-subtitle">Statistical outlier detection per numeric field</div>
-                            </div>
-                        </div>
-                        <div class="accordion-meta">
-                            <span class="accordion-badge info">{len(anomaly_scores)} Fields</span>
-                            <span class="accordion-chevron"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><polyline points="6 9 12 15 18 9"/></svg></span>
-                        </div>
-                    </div>
-                    <div class="accordion-content">
-                        {dual_layer}
-                        <div style="display: flex; flex-wrap: wrap; gap: 12px; margin-top: 16px;">
-                            {anomaly_cards}
-                        </div>
-                    </div>
-                </div>''')
 
         # ═══════════════════════════════════════════════════════════════
         # 7. NUMERIC DISTRIBUTION BOX PLOTS
@@ -9414,9 +10421,28 @@ the largest difference between classes, which could be useful for predictive mod
                 chi_sq_values = [data.get('chi_square', 0) for _, data in benford_analysis.items()]
                 avg_chi_sq = sum(chi_sq_values) / len(chi_sq_values) if chi_sq_values else 0
 
-                # Plain-English summary based on results (neutral wording)
+                # Check if suspicious columns are pricing/monetary fields (semantic-aware)
+                pricing_cols = []
+                for col_name in benford_analysis.keys():
+                    if columns:
+                        col_obj = next((c for c in columns if c.name == col_name), None)
+                        if col_obj and hasattr(col_obj, 'semantic_info') and col_obj.semantic_info:
+                            resolved = col_obj.semantic_info.get('resolved', {})
+                            display_label = resolved.get('display_label', '').lower()
+                            if any(term in display_label for term in ['monetary', 'price', 'amount', 'cost', 'fee', 'fare', 'tariff']):
+                                pricing_cols.append(col_name)
+
+                # Plain-English summary based on results (semantic-aware)
                 if suspicious_count > 0:
-                    plain_summary = f"First-digit frequencies deviate significantly from the Benford distribution in {suspicious_count} of {len(benford_analysis)} columns analyzed. For naturally occurring transactional datasets this may indicate anomalies, but for pricing or tariff tables it can simply reflect business structure."
+                    if pricing_cols and all(col in pricing_cols for col in [c for c, d in benford_analysis.items() if d.get('is_suspicious', False)]):
+                        # All suspicious columns are pricing/monetary - this is expected
+                        col_names = ', '.join(pricing_cols)
+                        plain_summary = f"First-digit frequencies deviate from the Benford distribution in {suspicious_count} of {len(benford_analysis)} columns. However, <strong>all deviating columns ({col_names}) are identified as pricing/monetary values</strong>, where deviation is expected due to structured pricing rather than natural variation. This is not a concern."
+                    elif pricing_cols:
+                        # Some suspicious are pricing
+                        plain_summary = f"First-digit frequencies deviate significantly from the Benford distribution in {suspicious_count} of {len(benford_analysis)} columns. Note: {', '.join(pricing_cols)} are pricing/monetary fields where deviation is normal."
+                    else:
+                        plain_summary = f"First-digit frequencies deviate significantly from the Benford distribution in {suspicious_count} of {len(benford_analysis)} columns analyzed. For naturally occurring transactional datasets this may indicate anomalies, but for pricing or tariff tables it can simply reflect business structure."
                 else:
                     plain_summary = f"All {len(benford_analysis)} number columns have first-digit patterns that match what we expect from naturally-occurring data. This is a good sign that values weren't artificially created or changed, though it's not proof by itself."
 
@@ -9623,109 +10649,10 @@ the largest difference between classes, which could be useful for predictive mod
 
         # ═══════════════════════════════════════════════════════════════
         # 10. MISSING DATA PATTERN
+        # NOTE: This section has been consolidated into the "Missing Data Bias"
+        # insight widget in _generate_ml_section_v2 to avoid duplicate information.
+        # The insight widget provides a more integrated view within the Anomalies section.
         # ═══════════════════════════════════════════════════════════════
-        missingness_impact = ml_findings.get('missingness_impact', {}) if ml_findings else {}
-        if missingness_impact:
-            missing_cards = []
-            all_diffs = []  # Track all differential values for summary
-            all_fields = []  # Track field names
-            for target_col, analysis in list(missingness_impact.items())[:2]:
-                biased_features = analysis.get('features_with_differential_missingness', [])
-                if biased_features:
-                    for feat in biased_features[:4]:
-                        # Use correct field names from JSON structure
-                        field = feat.get('feature', feat.get('field', ''))
-                        diff = feat.get('max_difference', feat.get('differential_pct', 0))
-                        all_diffs.append(abs(diff))
-                        all_fields.append(field)
-
-                        # Calculate overall missing from missingness_by_target if available
-                        missingness_by_target = feat.get('missingness_by_target', {})
-                        if missingness_by_target:
-                            total_missing = 0
-                            total_rows = 0
-                            for target_val, stats in missingness_by_target.items():
-                                rate = stats.get('rate', 0)
-                                count = stats.get('total', 0)
-                                total_missing += (rate / 100) * count
-                                total_rows += count
-                            overall = (total_missing / total_rows * 100) if total_rows > 0 else 0
-                        else:
-                            overall = feat.get('overall_missing_pct', 0)
-
-                        severity = 'critical' if abs(diff) > 10 else 'warning' if abs(diff) > 5 else 'info'
-
-                        missing_cards.append(f'''
-                            <div style="flex: 1; min-width: 180px; background: var(--bg-card); border-radius: 8px; padding: 12px; border: 1px solid var(--border-subtle);">
-                                <div style="font-size: 0.85em; font-weight: 600; color: var(--text-primary); margin-bottom: 8px;">{field}</div>
-                                <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-                                    <span style="font-size: 0.75em; color: var(--text-muted);">Overall Missing</span>
-                                    <span style="font-size: 0.85em; font-weight: 500; color: var(--text-secondary);">{overall:.1f}%</span>
-                                </div>
-                                <div style="display: flex; justify-content: space-between;">
-                                    <span style="font-size: 0.75em; color: var(--text-muted);">Differential</span>
-                                    <span style="font-size: 0.85em; font-weight: 600; color: var(--{severity});">{diff:+.1f}%</span>
-                                </div>
-                            </div>''')
-
-            if missing_cards:
-                # Calculate stats for dual-layer explanation
-                max_diff = max(all_diffs) if all_diffs else 0
-                avg_diff = sum(all_diffs) / len(all_diffs) if all_diffs else 0
-                critical_count = sum(1 for d in all_diffs if d > 10)
-                warning_count = sum(1 for d in all_diffs if 5 < d <= 10)
-
-                # Find field with highest differential
-                max_idx = all_diffs.index(max_diff) if all_diffs else 0
-                worst_field = all_fields[max_idx] if all_fields else "N/A"
-
-                # Plain-English summary based on severity
-                if max_diff > 10:
-                    plain_summary = f"Missing values are not evenly spread across different groups in your data. The column '{worst_field}' has a {max_diff:.2f}% difference in missing rates between groups. Some groups have more gaps than others, which could affect your analysis if you delete or fill in missing rows without considering this."
-                elif max_diff > 5:
-                    plain_summary = f"Some groups have more missing values than others. The biggest gap is {max_diff:.2f}% in '{worst_field}'. This suggests missing data isn't completely random, so look at patterns before deciding how to handle gaps."
-                else:
-                    plain_summary = f"Missing values are spread fairly evenly across groups (largest gap: {max_diff:.2f}%). This means the gaps in your data look random, which is a good sign for filling them in with standard methods."
-
-                missing_dual_layer = self._build_dual_layer_explanation(
-                    plain_english=plain_summary,
-                    technical_stats={
-                        "Fields with Bias": f"{len(missing_cards)}",
-                        "Max Differential": f"{max_diff:.2f}%",
-                        "Avg Differential": f"{avg_diff:.2f}%",
-                        "Critical (>10%)": f"{critical_count}",
-                        "Warning (5-10%)": f"{warning_count}"
-                    },
-                    technical_context=[
-                        "Differential = max missingness rate difference between target classes",
-                        "MCAR: Missing Completely At Random (ideal)",
-                        "MAR: Missing At Random (conditional on observed data)",
-                        "MNAR: Missing Not At Random (problematic for analysis)"
-                    ]
-                )
-
-                charts_by_section['missingness'].append(f'''
-                    <div class="accordion" data-accordion="viz-missing-pattern">
-                        <div class="accordion-header" onclick="toggleAccordion(this)">
-                            <div class="accordion-title-group">
-                                <div class="accordion-icon"><svg style="width:16px;height:16px;color:#64748b;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/></svg></div>
-                                <div>
-                                    <div class="accordion-title">Missing Data Pattern Analysis</div>
-                                    <div class="accordion-subtitle">Detect non-random missingness across target classes</div>
-                                </div>
-                            </div>
-                            <div class="accordion-meta">
-                                <span class="accordion-badge warning">{len(missing_cards)} Biased Fields</span>
-                                <span class="accordion-chevron"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><polyline points="6 9 12 15 18 9"/></svg></span>
-                            </div>
-                        </div>
-                        <div class="accordion-content">
-                            {missing_dual_layer}
-                            <div style="display: flex; flex-wrap: wrap; gap: 12px; margin-top: 16px;">
-                                {''.join(missing_cards)}
-                            </div>
-                        </div>
-                    </div>''')
 
         # ═══════════════════════════════════════════════════════════════
         # 11. FEATURE CORRELATION MINI-HEATMAP
@@ -10437,23 +11364,14 @@ the largest difference between classes, which could be useful for predictive mod
 
         # Generate plain-English summary
         score = profile.overall_quality_score
-        if score >= 90:
-            quality_description = "Your data quality is excellent."
-        elif score >= 80:
-            quality_description = "Your data quality is good with minor gaps."
-        elif score >= 70:
-            quality_description = "Your data quality is acceptable but has some areas needing attention."
-        else:
-            quality_description = "Your data quality needs improvement in several areas."
-
-        plain_english = f"{quality_description} "
         if low_completeness_cols:
             if len(low_completeness_cols) <= 3:
-                plain_english += f"The columns {', '.join(low_completeness_cols)} have missing values that may affect analysis. "
+                cols_list = ', '.join(f"<strong>{c}</strong>" for c in low_completeness_cols)
+                plain_english = f"{cols_list} {'has' if len(low_completeness_cols) == 1 else 'have'} missing values that may affect analysis."
             else:
-                plain_english += f"{len(low_completeness_cols)} columns have significant missing values. "
+                plain_english = f"<strong>{len(low_completeness_cols)} columns</strong> have significant missing values."
         else:
-            plain_english += "All columns have good data coverage with minimal missing values. "
+            plain_english = "All columns have good data coverage with minimal missing values."
 
         # Return content directly without accordion wrapper (parent section-accordion provides structure)
         return f'''
@@ -10768,31 +11686,37 @@ the largest difference between classes, which could be useful for predictive mod
                         </div>
                     </details>
                 </div>
-                <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 20px;">
-                    <div class="chart-container" style="min-width: 280px;">
+                <div class="distributions-chart-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                    <div class="chart-container" style="min-height: 320px;">
                         <div class="chart-title">Column Quality: {x_axis_metric_name} vs Validity</div>
-                        <canvas id="bubbleChart" height="180"></canvas>
+                        <div style="height: 280px;">
+                            <canvas id="bubbleChart"></canvas>
+                        </div>
                     </div>
-                    <div class="chart-container">
+                    <div class="chart-container" style="min-height: 320px;">
                         <div class="chart-title">Categorical Values Word Cloud</div>
                         <div style="color: var(--text-muted); font-size: 0.85em; margin-bottom: 8px;">Showing top values from: {cat_names}</div>
-                        <div id="wordCloudContainer" style="width: 100%; height: 350px; background: var(--bg-elevated); border-radius: var(--radius-md);"></div>
+                        <div id="wordCloudContainer" style="width: 100%; height: 280px; background: var(--bg-elevated); border-radius: var(--radius-md);"></div>
                     </div>
                 </div>
                 <style>
-                    @media (max-width: 900px) {{
-                        #section-distributions .section-accordion-content > div:last-child {{
+                    @media (max-width: 768px) {{
+                        .distributions-chart-grid {{
                             grid-template-columns: 1fr !important;
+                        }}
+                        .distributions-chart-grid .chart-container {{
+                            min-width: 100% !important;
                         }}
                     }}
                 </style>'''
 
-    def _generate_column_explorer(self, profile: ProfileResult) -> str:
+    def _generate_column_explorer(self, profile: ProfileResult, field_descriptions: Dict = None) -> str:
         """Generate the column explorer accordion."""
+        field_descriptions = field_descriptions or {}
 
         column_rows = ''
         for col in profile.columns:
-            column_rows += self._generate_column_row(col)
+            column_rows += self._generate_column_row(col, field_descriptions)
 
         tagged_count = sum(1 for col in profile.columns if col.semantic_info or col.pii_info and col.pii_info.get('detected'))
 
@@ -10883,8 +11807,14 @@ the largest difference between classes, which could be useful for predictive mod
                     </div>
                 </div>'''
 
-    def _generate_column_row(self, col: ColumnProfile) -> str:
+    def _generate_column_row(self, col: ColumnProfile, field_descriptions: Dict = None) -> str:
         """Generate a single column row for the explorer."""
+        field_descriptions = field_descriptions or {}
+
+        # Get friendly name if available
+        friendly_name = ''
+        if col.name in field_descriptions:
+            friendly_name = field_descriptions[col.name].get('friendly_name', '')
 
         # Determine icon and type class
         inferred_type = col.type_info.inferred_type
@@ -11009,7 +11939,7 @@ the largest difference between classes, which could be useful for predictive mod
                                         <div class="column-type-icon {type_class}">{icon}</div>
                                         <div class="column-info">
                                             <div class="column-name-row">
-                                                <span class="column-name">{col.name}</span>
+                                                <span class="column-name">{col.name}{f' ({friendly_name})' if friendly_name else ''}</span>
                                                 {semantic_badge_mobile}
                                             </div>
                                             <div class="column-type">{inferred_type} ({col.type_info.confidence*100:.0f}% confidence)</div>
@@ -11036,10 +11966,8 @@ the largest difference between classes, which could be useful for predictive mod
         """Generate statistics grid for a column."""
         stats = col.statistics
 
-        # Check if unique count equals sample size (indicates likely higher actual cardinality)
+        # Format unique count
         unique_display = f'{stats.unique_count:,}'
-        if stats.sample_size and stats.unique_count >= stats.sample_size:
-            unique_display = f'{stats.unique_count:,}*'  # Asterisk indicates capped
 
         stat_items = [
             ('Row Count', f'{stats.count:,}'),
@@ -12482,7 +13410,7 @@ the largest difference between classes, which could be useful for predictive mod
             </div>
             <div class="filter-buttons">
                 <button class="filter-btn active" onclick="filterByType('all')">All</button>
-                <button class="filter-btn" onclick="filterByType('issues')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;vertical-align:-1px;color:#f59e0b"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> With Issues</button>
+                <button class="filter-btn" onclick="filterByType('issues')" title="Fields with quality score &lt;70% or completeness &lt;80%"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;vertical-align:-1px;color:#f59e0b"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg> Needs Review</button>
                 <button class="filter-btn" onclick="filterByType('numeric')">Numeric</button>
                 <button class="filter-btn" onclick="filterByType('string')">String</button>
                 <button class="filter-btn" onclick="filterByType('date')">Date</button>
