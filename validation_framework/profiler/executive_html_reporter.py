@@ -377,9 +377,11 @@ class ExecutiveHTMLReporter:
         # Extract field descriptions and context store for friendly names and context-aware insights
         field_descriptions = {}
         context_store = {}
+        has_context_file = False
         if profile.ml_findings:
             context_store = profile.ml_findings.get('context_store', {})
             field_descriptions = context_store.get('field_descriptions', {})
+            has_context_file = bool(field_descriptions)
 
         # Generate advanced visualization charts categorized by section
         viz_charts = self._generate_advanced_visualizations(
@@ -498,6 +500,7 @@ class ExecutiveHTMLReporter:
                 </div>
             </div>
             <div class="dq-sidebar-actions">
+                {'<button class="field-names-toggle" id="fieldNamesToggle" onclick="toggleFieldNames()" title="Toggle between friendly names and actual field names"><span class="toggle-icon">' + icon('tag', 14) + '</span> <span id="fieldNamesLabel">Show Field Names</span></button>' if has_context_file else ''}
                 <button class="expand-all-btn" id="expandAllBtn" onclick="toggleExpandAll()" title="Expand/Collapse all sections">
                     <span class="expand-icon">+</span> Expand All
                 </button>
@@ -2833,6 +2836,44 @@ class ExecutiveHTMLReporter:
             font-weight: 600;
         }
 
+        .field-names-toggle {
+            background: transparent;
+            border: 1px solid var(--border-subtle);
+            color: var(--text-muted);
+            padding: 8px 12px;
+            border-radius: var(--radius-md);
+            font-size: var(--dq-font-size-sm);
+            font-weight: 400;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: all 0.2s ease;
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+
+        .field-names-toggle:hover {
+            border-color: var(--accent);
+            color: var(--text-secondary);
+            background: var(--bg-hover);
+        }
+
+        .field-names-toggle.active {
+            background: rgba(74, 144, 226, 0.1);
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        .field-names-toggle .toggle-icon {
+            opacity: 0.7;
+        }
+
+        .field-names-toggle.active .toggle-icon {
+            opacity: 1;
+        }
+
         .export-pdf-btn {
             background: linear-gradient(135deg, #059669 0%, #10b981 100%);
             border: none;
@@ -4914,6 +4955,32 @@ class ExecutiveHTMLReporter:
             // Toggle plain/tech view sections
             document.querySelectorAll('.plain-view, .tech-view').forEach(view => {{
                 view.style.display = allExpanded ? 'block' : '';
+            }});
+        }}
+
+        // ======================================================
+        // FIELD NAMES TOGGLE (Friendly Names vs Actual Field Names)
+        // ======================================================
+        let showingActualFieldNames = false;
+
+        function toggleFieldNames() {{
+            const btn = document.getElementById('fieldNamesToggle');
+            const label = document.getElementById('fieldNamesLabel');
+            if (!btn || !label) return;
+
+            showingActualFieldNames = !showingActualFieldNames;
+
+            // Update button appearance
+            btn.classList.toggle('active', showingActualFieldNames);
+            label.textContent = showingActualFieldNames ? 'Show Friendly Names' : 'Show Field Names';
+
+            // Toggle all elements with data-field-name attribute
+            document.querySelectorAll('[data-field-name]').forEach(el => {{
+                const fieldName = el.getAttribute('data-field-name');
+                const friendlyName = el.getAttribute('data-friendly-name');
+                if (fieldName && friendlyName) {{
+                    el.textContent = showingActualFieldNames ? fieldName : friendlyName;
+                }}
             }});
         }}
 
@@ -9977,7 +10044,7 @@ the largest difference between classes - a strong candidate for predictive model
                             else:
                                 bar_color = '#10b981' if strength >= 0.3 else '#f59e0b' if strength >= 0.15 else '#6b7280'
                             feature_bars += f'''<div style="display:flex;align-items:center;margin-bottom:4px;">
-                                <span style="font-size:0.7em;color:var(--text-muted);width:70px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="{feat_friendly}">{feat_name}{'*' if is_unlikely else ''}</span>
+                                <span style="font-size:0.7em;color:var(--text-muted);width:70px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="{feat_friendly}" data-field-name="{feat_full_name[:12]}{'*' if is_unlikely else ''}" data-friendly-name="{feat_name}{'*' if is_unlikely else ''}">{feat_name}{'*' if is_unlikely else ''}</span>
                                 <div style="flex:1;height:6px;background:rgba(255,255,255,0.1);border-radius:3px;margin:0 6px;overflow:hidden;">
                                     <div style="height:100%;width:{bar_width}%;background:{bar_color};border-radius:3px;"></div>
                                 </div>
@@ -10036,7 +10103,7 @@ the largest difference between classes - a strong candidate for predictive model
                             <!-- Left: Chart -->
                             <div style="flex:1;min-width:140px;">
                                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-                                    <h4 style="margin:0;font-size:0.9em;color:var(--text-primary);" title="{col}">{col_friendly}</h4>
+                                    <h4 style="margin:0;font-size:0.9em;color:var(--text-primary);" title="{col}" data-field-name="{col}" data-friendly-name="{col_friendly}">{col_friendly}</h4>
                                     <span class="accordion-badge {imbalance_status}" style="font-size:0.65em;padding:2px 6px;">{imbalance_note}</span>
                                 </div>
                                 <div style="height:130px;"><canvas id="{chart_id}"></canvas></div>
@@ -10056,10 +10123,11 @@ the largest difference between classes - a strong candidate for predictive model
                     </div>'''
                     target_charts += chart_html
                 else:
+                    col_friendly_other = get_friendly_name(col)
                     chart_html = f'''
                     <div style="flex: 1; min-width: 280px; background: var(--bg-card); border-radius: 8px; padding: 16px; border: 1px solid var(--border-subtle);">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                            <h4 style="margin: 0; font-size: 0.95em; color: var(--text-primary);">{col}</h4>
+                            <h4 style="margin: 0; font-size: 0.95em; color: var(--text-primary);" data-field-name="{col}" data-friendly-name="{col_friendly_other}">{col_friendly_other}</h4>
                             <span class="accordion-badge {imbalance_status}">{imbalance_note}</span>
                         </div>
                         <div style="height: 200px;">
@@ -12153,7 +12221,7 @@ the largest difference between classes - a strong candidate for predictive model
                                         <div class="column-type-icon {type_class}">{icon}</div>
                                         <div class="column-info">
                                             <div class="column-name-row">
-                                                <span class="column-name">{col.name}{f' ({friendly_name})' if friendly_name else ''}</span>
+                                                <span class="column-name" data-field-name="{col.name}" data-friendly-name="{friendly_name if friendly_name else col.name}">{friendly_name if friendly_name else col.name}</span>
                                                 {semantic_badge_mobile}
                                             </div>
                                             <div class="column-type">{inferred_type} ({col.type_info.confidence*100:.0f}% confidence)</div>
