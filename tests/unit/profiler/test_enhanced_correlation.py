@@ -33,11 +33,11 @@ class TestEnhancedCorrelationAnalyzer:
 
     @pytest.fixture
     def correlation_test_data(self):
-        """Load correlation test data."""
-        test_data_path = Path(__file__).parent / 'test_data' / 'correlation_patterns.csv'
-        if not test_data_path.exists():
-            pytest.skip(f"Test data not found: {test_data_path}")
-        return pd.read_csv(test_data_path)
+        """Load correlation test data from testsuite."""
+        from tests.testsuite import TESTSUITE_CORRELATION_PATTERNS
+        if not TESTSUITE_CORRELATION_PATTERNS.exists():
+            pytest.skip(f"Test data not found: {TESTSUITE_CORRELATION_PATTERNS}")
+        return pd.read_csv(TESTSUITE_CORRELATION_PATTERNS)
 
     @pytest.fixture
     def linear_data(self):

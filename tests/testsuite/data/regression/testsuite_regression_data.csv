@@ -1,0 +1,26 @@
+employee_id,first_name,last_name,email,phone,dept_id,salary,hire_date,status,performance_score,years_experience,manager_id,last_review_date
+EMP0001,Alice,Smith,john.doe@company.com,(555) 123-4567,1,50000,2020-01-31,active,4,9,,2023-01-01
+EMP0002,Bob,Johnson,,(555) 234-5678,2,55000,2020-02-29,active,5,15,EMP0001,2023-01-08
+EMP0003,Carol,White,carol.white@company.com,,1,60000,2020-03-31,active,3,14,EMP0001,2023-01-15
+EMP0004,David,Brown,david.brown@company.com,(555) 345-6789,3,45000,2020-04-30,active,5,14,EMP0003,2023-01-22
+EMP0005,Eve,Davis,,(555) 456-7890,2,52000,2020-05-31,active,5,18,EMP0003,2023-01-29
+EMP0006,Frank,Miller,frank.miller@company.com,,1,58000,2020-06-30,active,2,11,EMP0002,2023-02-05
+EMP0007,Grace,Wilson,grace.wilson@company.com,(555) 567-8901,3,62000,2020-07-31,active,3,19,EMP0002,2023-02-12
+EMP0008,Henry,Taylor,henry.taylor@company.com,(555) 678-9012,2,48000,2020-08-31,active,3,2,EMP0002,2023-02-19
+EMP0009,Iris,Lee,iris.lee@company.com,(555) 789-0123,1,54000,2020-09-30,active,3,4,EMP0002,2023-02-26
+EMP0010,Jack,Harris,jack.harris@company.com,(555) 890-1234,3,250000,2020-10-31,active,5,18,EMP0009,2023-03-05
+EMP0011,Kate,Clark,kate.clark@company.com,(555) 901-2345,2,51000,2020-11-30,active,4,6,EMP0002,2023-03-12
+EMP0012,Leo,Lewis,leo.lewis@company.com,(555) 012-3456,1,56000,2020-12-31,active,3,8,EMP0010,2023-03-19
+EMP0013,Mia,King,mia.king@company.com,,3,61000,2021-01-31,active,5,6,EMP0007,2023-03-26
+EMP0014,Noah,Hall,noah.hall@company.com,(555) 123-4567,2,46000,2021-02-28,active,2,17,EMP0001,2023-04-02
+EMP0015,Olivia,Allen,olivia.allen@company.com,(555) 234-5678,1,53000,2021-03-31,active,4,3,EMP0001,2023-04-09
+EMP0016,Paul,Young,paul.young@company.com,(555) 345-6789,3,59000,2021-04-30,active,2,13,EMP0002,2023-04-16
+EMP0017,Quinn,Wright,quinn.wright@company.com,(555) 456-7890,2,63000,2021-05-31,active,4,17,EMP0007,2023-04-23
+EMP0018,Rose,Lopez,rose.lopez@company.com,(555) 567-8901,1,49000,2021-06-30,active,5,8,EMP0008,2023-04-30
+EMP0019,Sam,Scott,sam.scott@company.com,(555) 678-9012,3,55000,2021-07-31,active,1,1,EMP0017,2023-05-07
+EMP0020,Tina,Green,tina.green@company.com,(555) 789-0123,2,57000,2021-08-31,active,4,19,EMP0001,2023-05-14
+EMP0021,Uma,Adams,john.doe@company.com,,1,52000,2021-09-30,inactive,2,14,EMP0018,2023-05-21
+EMP0022,Victor,Baker,victor.baker@company.com,(555) 890-1234,3,58000,2021-10-31,inactive,5,6,EMP0007,2023-05-28
+EMP0023,Wendy,Rivera,wendy.rivera@company.com,(555) 901-2345,2,64000,2021-11-30,inactive,4,11,EMP0021,2023-06-04
+EMP0024,Xavier,Carter,xavier.carter@company.com,(555) 012-3456,1,47000,2021-12-31,inactive,1,7,EMP0023,2023-06-11
+EMP0025,Zoe,Mitchell,zoe.mitchell@company.com,(555) 123-4567,3,500000,2022-01-31,inactive,1,14,EMP0018,2023-06-18

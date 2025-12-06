@@ -30,11 +30,11 @@ class TestTemporalAnalyzer:
 
     @pytest.fixture
     def temporal_test_data(self):
-        """Load temporal test data."""
-        test_data_path = Path(__file__).parent / 'test_data' / 'temporal_patterns.csv'
-        if not test_data_path.exists():
-            pytest.skip(f"Test data not found: {test_data_path}")
-        return pd.read_csv(test_data_path)
+        """Load temporal test data from testsuite."""
+        from tests.testsuite import TESTSUITE_TEMPORAL_PATTERNS
+        if not TESTSUITE_TEMPORAL_PATTERNS.exists():
+            pytest.skip(f"Test data not found: {TESTSUITE_TEMPORAL_PATTERNS}")
+        return pd.read_csv(TESTSUITE_TEMPORAL_PATTERNS)
 
     @pytest.fixture
     def daily_series(self):

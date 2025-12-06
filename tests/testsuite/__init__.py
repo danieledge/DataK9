@@ -42,3 +42,9 @@ TESTSUITE_CUSTOMERS = CROSS_FILE_DATA_DIR / "testsuite_customers.csv"
 TESTSUITE_ORDERS = CROSS_FILE_DATA_DIR / "testsuite_orders.csv"
 TESTSUITE_TITANIC = SAMPLES_DATA_DIR / "testsuite_titanic.csv"
 TESTSUITE_TRANSACTIONS = SAMPLES_DATA_DIR / "testsuite_transactions.csv"
+TESTSUITE_REGRESSION_DATA = REGRESSION_DATA_DIR / "testsuite_regression_data.csv"
+
+# JSON fixtures
+TESTSUITE_CUSTOMERS_JSON = JSON_DATA_DIR / "testsuite_customers.json"
+TESTSUITE_NESTED_DATA_JSON = JSON_DATA_DIR / "testsuite_nested_data.json"
+TESTSUITE_EMPTY_JSON = JSON_DATA_DIR / "testsuite_empty.json"
