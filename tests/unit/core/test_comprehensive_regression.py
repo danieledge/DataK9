@@ -4,6 +4,9 @@ Comprehensive Regression Test Suite for DataK9 Validation Framework
 Tests data structure and validation configuration for regression testing.
 Ensures test data and configuration files are properly structured.
 Also includes actual execution tests to verify validations run correctly.
+
+Note: These tests require external fixture files in test_data/ directory.
+If fixtures don't exist, tests will be skipped.
 """
 
 import pytest
@@ -13,6 +16,18 @@ from validation_framework.core.config import ValidationConfig
 from validation_framework.core.engine import ValidationEngine
 
 
+# Check if test fixtures exist
+TEST_DATA_DIR = Path(__file__).parent / "test_data"
+REGRESSION_CONFIG_EXISTS = (TEST_DATA_DIR / "regression_test_config.yaml").exists()
+REGRESSION_DATA_EXISTS = (TEST_DATA_DIR / "regression_test_data.csv").exists()
+COMPREHENSIVE_CONFIG_EXISTS = (TEST_DATA_DIR / "comprehensive_test_config.yaml").exists()
+COMPREHENSIVE_DATA_EXISTS = (TEST_DATA_DIR / "comprehensive_test_data.csv").exists()
+
+
+@pytest.mark.skipif(
+    not (REGRESSION_CONFIG_EXISTS and REGRESSION_DATA_EXISTS),
+    reason="Regression test fixtures not found in tests/unit/core/test_data/"
+)
 class TestComprehensiveRegression:
     """Comprehensive regression tests for test data and configuration."""
 
@@ -135,6 +150,10 @@ class TestComprehensiveRegression:
         print(f"  - All major categories represented")
 
 
+@pytest.mark.skipif(
+    not (COMPREHENSIVE_CONFIG_EXISTS and COMPREHENSIVE_DATA_EXISTS),
+    reason="Comprehensive test fixtures not found in tests/unit/core/test_data/"
+)
 class TestComprehensiveValidationExecution:
     """Tests that actually RUN the comprehensive validation config end-to-end."""
 

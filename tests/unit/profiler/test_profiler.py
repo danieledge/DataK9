@@ -25,7 +25,7 @@ from validation_framework.profiler.profile_result import (
     ProfileResult, ColumnProfile, TypeInference, ColumnStatistics,
     QualityMetrics, CorrelationResult, ValidationSuggestion
 )
-from validation_framework.profiler.html_reporter import ProfileHTMLReporter
+from validation_framework.profiler.executive_html_reporter import ExecutiveHTMLReporter
 
 
 class TestTypeDetection:
@@ -756,11 +756,11 @@ class TestEndToEndProfiling:
 
 
 class TestHTMLReporter:
-    """Test HTML report generation."""
+    """Test Executive HTML report generation."""
 
     def setup_method(self):
         """Setup test fixtures."""
-        self.reporter = ProfileHTMLReporter()
+        self.reporter = ExecutiveHTMLReporter()
         self.test_dir = tempfile.mkdtemp()
 
     def teardown_method(self):
@@ -770,7 +770,7 @@ class TestHTMLReporter:
             shutil.rmtree(self.test_dir)
 
     def test_generate_html_report(self):
-        """Test HTML report generation."""
+        """Test Executive HTML report generation."""
         # Create minimal profile result
         profile = ProfileResult(
             file_name="test.csv",
@@ -829,36 +829,11 @@ class TestHTMLReporter:
         with open(output_path, 'r') as f:
             html_content = f.read()
 
-        # Check for key sections
+        # Check for key sections in Executive report
         assert "<!DOCTYPE html>" in html_content
-        assert "Data Profile Report" in html_content
+        assert "Data Quality Report" in html_content
         assert "test.csv" in html_content
-        assert "Overall Quality" in html_content
-        assert "Column Profiles" in html_content
-        assert "Suggested Validations" in html_content
-
-    def test_html_escaping(self):
-        """Test HTML special character escaping."""
-        test_string = '<script>alert("XSS")</script>'
-        escaped = self.reporter._escape_html(test_string)
-
-        assert "&lt;" in escaped
-        assert "&gt;" in escaped
-        assert "<script>" not in escaped
-
-    def test_format_file_size(self):
-        """Test file size formatting."""
-        assert self.reporter._format_file_size(500) == "500 B"
-        assert "KB" in self.reporter._format_file_size(2048)
-        assert "MB" in self.reporter._format_file_size(2 * 1024 * 1024)
-        assert "GB" in self.reporter._format_file_size(2 * 1024 * 1024 * 1024)
-
-    def test_quality_class_assignment(self):
-        """Test quality class assignment."""
-        assert self.reporter._get_quality_class(95.0) == "quality-excellent"
-        assert self.reporter._get_quality_class(80.0) == "quality-good"
-        assert self.reporter._get_quality_class(60.0) == "quality-fair"
-        assert self.reporter._get_quality_class(40.0) == "quality-poor"
+        assert "100 rows" in html_content
 
 
 class TestDataStructures:

@@ -233,15 +233,14 @@ python3 -m validation_framework.cli profile \
 | `--sample` | `-s` | Profile only first N rows (quick analysis) | None (full file) |
 | `--no-memory-check` | | Disable memory usage warnings | False |
 | `--log-level` | | Logging level (DEBUG, INFO, WARNING, ERROR) | INFO |
-| `--report-style` | | HTML report style: `classic` or `executive` | executive |
 | `--disable-temporal` | | Disable temporal analysis for datetime columns | False |
 | `--disable-pii` | | Disable PII detection with privacy risk scoring | False |
 | `--disable-correlation` | | Disable enhanced correlation analysis | False |
 | `--disable-all-enhancements` | | Disable all profiler enhancements | False |
 | `--no-ml` | | Disable ML-based anomaly detection | False |
-| `--beta-llm` | | Enable AI summary using local LLM (experimental) | False |
 | `--full-analysis` | | Disable internal sampling (slower but more accurate) | False |
 | `--analysis-sample-size` | | Sample size for analysis when file exceeds this | 100000 |
+| `--field-descriptions` | | YAML file with friendly field names and descriptions | None |
 
 **Examples:**
 

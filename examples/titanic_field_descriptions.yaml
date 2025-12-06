@@ -1,9 +1,21 @@
 # Field Descriptions for Titanic Dataset
-# These friendly names and descriptions are used to generate
-# human-readable anomaly explanations.
+# =======================================
+# These friendly names, descriptions, and value labels are used to generate
+# human-readable reports with context-aware anomaly explanations.
+#
+# Features demonstrated:
+#   - friendly_name: Human-readable column labels
+#   - description: Context for what the field represents
+#   - value_labels: Map coded values to meaningful labels
 #
 # Usage:
-#   python3 -m validation_framework.cli profile data.csv --field-descriptions titanic_field_descriptions.yaml
+#   python3 -m validation_framework.cli profile titanic.csv \
+#     --field-descriptions titanic_field_descriptions.yaml \
+#     -o titanic_profile.html
+#
+# Result:
+#   Instead of "Pclass = 1 shows 7.5x higher Fare"
+#   You get: "1st Class shows 7.5x higher Ticket Fare"
 
 field_descriptions:
   PassengerId:
@@ -11,45 +23,59 @@ field_descriptions:
     description: "Unique identifier for each passenger"
 
   Survived:
-    friendly_name: "Survived"
-    description: "Survival status (0=No, 1=Yes)"
+    friendly_name: "Survival Status"
+    description: "Whether the passenger survived the disaster"
+    value_labels:
+      "0": "Did Not Survive"
+      "1": "Survived"
 
   Pclass:
     friendly_name: "Passenger Class"
-    description: "Ticket class (1=First, 2=Second, 3=Third)"
+    description: "Ticket class indicating travel accommodation level"
+    value_labels:
+      "1": "1st Class"
+      "2": "2nd Class"
+      "3": "3rd Class"
 
   Name:
-    friendly_name: "Name"
-    description: "Full name of passenger"
+    friendly_name: "Passenger Name"
+    description: "Full name of passenger including titles"
 
   Sex:
     friendly_name: "Gender"
-    description: "Passenger's gender (male/female)"
+    description: "Passenger's gender"
+    value_labels:
+      "male": "Male"
+      "female": "Female"
 
   Age:
     friendly_name: "Age"
-    description: "Age of passenger in years"
+    description: "Age of passenger in years (fractional for infants)"
 
   SibSp:
     friendly_name: "Siblings/Spouses"
-    description: "Number of siblings and spouses aboard"
+    description: "Number of siblings and spouses traveling with the passenger"
 
   Parch:
     friendly_name: "Parents/Children"
-    description: "Number of parents and children aboard"
+    description: "Number of parents and children traveling with the passenger"
 
   Ticket:
     friendly_name: "Ticket Number"
-    description: "Ticket identifier"
+    description: "Ticket identifier (various formats used by different agents)"
 
   Fare:
     friendly_name: "Ticket Fare"
     description: "Price paid for ticket in British pounds"
 
   Cabin:
-    friendly_name: "Cabin"
-    description: "Cabin number (if assigned)"
+    friendly_name: "Cabin Number"
+    description: "Assigned cabin (if recorded - many missing)"
 
   Embarked:
     friendly_name: "Port of Embarkation"
-    description: "Port where passenger boarded (C=Cherbourg, Q=Queenstown, S=Southampton)"
+    description: "Port where passenger boarded the ship"
+    value_labels:
+      "S": "Southampton"
+      "C": "Cherbourg"
+      "Q": "Queenstown"

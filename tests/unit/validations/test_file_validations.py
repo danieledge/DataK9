@@ -15,7 +15,8 @@ from pathlib import Path
 from validation_framework.validations.builtin.file_checks import (
     EmptyFileCheck,
     RowCountRangeCheck,
-    FileSizeCheck
+    FileSizeCheck,
+    CSVFormatCheck
 )
 from validation_framework.core.results import Severity
 from tests.conftest import create_data_iterator
@@ -328,6 +329,134 @@ class TestFileSizeCheck:
         
         # Zero-byte file should pass size check
         assert result.passed is True
+
+
+# ============================================================================
+# CSV FORMAT CHECK TESTS
+# ============================================================================
+
+@pytest.mark.unit
+class TestCSVFormatCheck:
+    """Test CSVFormatCheck validation."""
+
+    def test_well_formed_csv_passes(self, tmp_path):
+        """Test validation passes for well-formed CSV."""
+        test_file = tmp_path / "good.csv"
+        test_file.write_text("id,name,value\n1,Alice,100\n2,Bob,200\n3,Charlie,300\n")
+
+        validation = CSVFormatCheck(
+            name="CSVFormatCheck",
+            severity=Severity.ERROR,
+            params={"delimiter": ","}
+        )
+        result = validation.validate(
+            create_data_iterator(pd.DataFrame()),
+            {"file_path": str(test_file)}
+        )
+
+        assert result.passed is True
+
+    def test_inconsistent_column_count_fails(self, tmp_path):
+        """Test validation fails when rows have inconsistent column counts."""
+        test_file = tmp_path / "bad.csv"
+        # Row 3 has extra column, row 4 has missing column
+        test_file.write_text("id,name,value\n1,Alice,100\n2,Bob,200,extra\n3,Charlie\n")
+
+        validation = CSVFormatCheck(
+            name="CSVFormatCheck",
+            severity=Severity.ERROR,
+            params={"delimiter": ",", "max_errors": 1}
+        )
+        result = validation.validate(
+            create_data_iterator(pd.DataFrame()),
+            {"file_path": str(test_file)}
+        )
+
+        assert result.passed is False
+        assert result.failed_count >= 1
+
+    def test_auto_detect_delimiter(self, tmp_path):
+        """Test validation auto-detects semicolon delimiter."""
+        test_file = tmp_path / "semicolon.csv"
+        test_file.write_text("id;name;value\n1;Alice;100\n2;Bob;200\n")
+
+        validation = CSVFormatCheck(
+            name="CSVFormatCheck",
+            severity=Severity.ERROR,
+            params={}  # No delimiter specified - should auto-detect
+        )
+        result = validation.validate(
+            create_data_iterator(pd.DataFrame()),
+            {"file_path": str(test_file)}
+        )
+
+        assert result.passed is True
+
+    def test_missing_file_path_fails(self):
+        """Test validation fails when file_path not provided."""
+        validation = CSVFormatCheck(
+            name="CSVFormatCheck",
+            severity=Severity.ERROR,
+            params={}
+        )
+        result = validation.validate(
+            create_data_iterator(pd.DataFrame()),
+            {}  # No file_path
+        )
+
+        assert result.passed is False
+
+    def test_sample_rows_parameter(self, tmp_path):
+        """Test that sample_rows parameter limits checking."""
+        test_file = tmp_path / "large.csv"
+        # Create file with error on row 101 (beyond sample_rows=50)
+        lines = ["id,name,value"]
+        for i in range(100):
+            lines.append(f"{i},Name{i},{i*10}")
+        lines.append("101,Bad,Row,Extra")  # Error row at 101
+        test_file.write_text("\n".join(lines))
+
+        validation = CSVFormatCheck(
+            name="CSVFormatCheck",
+            severity=Severity.ERROR,
+            params={"sample_rows": 50}  # Only check first 50 rows
+        )
+        result = validation.validate(
+            create_data_iterator(pd.DataFrame()),
+            {"file_path": str(test_file)}
+        )
+
+        # Should pass because error is beyond sample limit
+        assert result.passed is True
+
+    def test_max_errors_detection(self, tmp_path):
+        """Test that max_errors parameter limits error reporting."""
+        test_file = tmp_path / "multiple_errors.csv"
+        # Create file with 2 inconsistent rows
+        test_file.write_text(
+            "id,name,value\n"
+            "1,Alice,100\n"
+            "2,Bob\n"           # Error 1: missing column
+            "3,Charlie,300\n"
+            "4,Dave\n"          # Error 2: missing column
+            "5,Eve,500\n"
+        )
+
+        # CSVFormatCheck fails when any errors are detected
+        validation = CSVFormatCheck(
+            name="CSVFormatCheck",
+            severity=Severity.ERROR,
+            params={"max_errors": 10}
+        )
+        result = validation.validate(
+            create_data_iterator(pd.DataFrame()),
+            {"file_path": str(test_file)}
+        )
+
+        # Should fail because there are format errors
+        assert result.passed is False
+        # Should detect both errors
+        assert result.failed_count == 2
 
 
 # ============================================================================

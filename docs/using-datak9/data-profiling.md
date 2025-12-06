@@ -33,6 +33,8 @@ python3 -m validation_framework.cli profile your_data.csv -o profile.html
 
 The DataK9 Profiler has received a significant overhaul with new capabilities:
 
+- **Field Descriptions (Context YAML)** ⭐ NEW - Provide friendly names and value labels for human-readable reports
+- **Context-Aware Anomaly Detection** - Explains outliers in context of subgroups
 - **Dual Semantic Classification** - FIBO (financial) + Schema.org (general) ontologies
 - **Smart Validation Suggestions** - Semantic-aware rules that work across datasets
 - **Binary Flag Detection** - Automatic Boolean classification for 0/1 columns
@@ -54,13 +56,13 @@ The DataK9 Profiler has received a significant overhaul with new capabilities:
   - [Auto-Generated Validations](#-auto-generated-validations)
   - [Comprehensive Analysis](#-comprehensive-analysis)
   - [ML-Based Anomaly Detection](#-ml-based-anomaly-detection-beta)
-  - [Local LLM Summarization](#-local-llm-summarization-experimental) - EXPERIMENTAL
   - [Intelligent Sampling](#-intelligent-sampling) - NEW!
   - [Memory-Efficient Processing](#-memory-efficient-processing)
 - [Analytics Reference](#-analytics-reference) - All analysis types explained
 - [Understanding Reports](#-understanding-reports) - Read your profile results
 - [How It Works](#-how-it-works) - Under the hood (10 stages)
 - [Command Reference](#-command-reference) - All options and examples
+  - [Field Descriptions (Context YAML)](#field-descriptions-file-context-yaml-) - NEW! Human-readable insights
 - [Best Practices](#-best-practices) - Tips for success
 
 ---
@@ -437,90 +439,6 @@ The ML analyzer flags values for human review. High counts may indicate:
 
 ---
 
-### 🧪 Local LLM Summarization (Experimental)
-
-**Status: BETA - Untested, Mixed Results**
-
-DataK9 includes an experimental feature to generate AI-powered executive summaries using small local LLMs. This feature is **disabled by default** and should be considered experimental.
-
-#### What It Does
-
-When enabled, the profiler uses a local LLM (via `llama-cpp-python`) to generate a plain-English summary of the profile findings:
-
-```
-🤖 AI-Generated Summary [LOCAL LLM]
-
-This dataset shows 87% overall quality with notable missing data in
-the Cabin field (77%). The strong correlation between Fare and Pclass
-suggests pricing tiers. Recommend adding MandatoryFieldCheck for
-passenger identification and RangeCheck for Age validation.
-
-⚠️ AI-generated using qwen2.5-1.5b • May contain inaccuracies • Review manually
-```
-
-#### Why It's Experimental
-
-| Issue | Description |
-|-------|-------------|
-| **Mixed quality** | Small LLMs (0.5B-3B parameters) produce inconsistent summaries |
-| **Hallucinations** | May generate plausible-sounding but incorrect insights |
-| **Slow on CPU** | 15-90 seconds generation time depending on model |
-| **No GPU acceleration** | Currently CPU-only for compatibility |
-| **Model dependency** | Requires downloading 400MB-2GB GGUF model files |
-
-**Our testing found:** Larger models (Phi-3, Qwen 1.5B) produce reasonable summaries ~70% of the time, but smaller models often generate generic or incorrect analysis.
-
-#### Enabling the Feature
-
-```bash
-# Enable LLM summary (requires setup first)
-python3 -m validation_framework.cli profile data.csv --beta-llm -o report.html
-```
-
-#### Setup Requirements
-
-1. Install llama-cpp-python:
-   ```bash
-   pip install llama-cpp-python
-   ```
-
-2. Download a GGUF model (recommended: Qwen2.5-1.5B-Instruct):
-   ```bash
-   # Models are auto-discovered from common locations:
-   # ~/.cache/huggingface/hub/
-   # ~/.local/share/models/
-   # ~/models/
-   ```
-
-3. Or set explicit path:
-   ```bash
-   export DATAK9_LLM_MODEL=/path/to/model.gguf
-   ```
-
-#### Recommended Models
-
-| Model | Size | Speed | Quality |
-|-------|------|-------|---------|
-| Qwen2.5-1.5B-Instruct | ~1GB | ~18s | Best balance |
-| Qwen2.5-0.5B-Instruct | ~400MB | ~8s | Faster, lower quality |
-| Phi-3-mini-4k-instruct | ~2GB | ~90s | Best quality, slow |
-
-#### When to Use
-
-✅ **Use when:**
-- You want automated summary drafts to review
-- Processing many files and need quick overviews
-- You have a suitable local model already installed
-
-❌ **Don't use when:**
-- You need accurate, reliable summaries
-- Processing sensitive data (LLM may leak patterns)
-- You don't have time to verify LLM output
-
-**Bottom line:** This feature is provided as-is for experimentation. The rule-based analysis (FIBO, Schema.org, ML anomaly detection) provides more reliable insights.
-
----
-
 ### 📊 Intelligent Sampling
 
 **Large datasets are profiled efficiently using statistical sampling.**
@@ -731,8 +649,7 @@ python3 -m validation_framework.cli profile data.csv --beta-ml --full-analysis
 | `--disable-temporal` | Skip temporal analysis |
 | `--disable-correlation` | Skip correlation analysis |
 | `--disable-all-enhancements` | Minimal profiling (basic stats only) |
-| `--beta-ml` | Enable ML-based anomaly detection |
-| `--beta-llm` | Enable experimental LLM summaries |
+| `--no-ml` | Disable ML-based anomaly detection |
 | `--full-analysis` | Disable internal sampling for ML |
 
 ---
@@ -1024,45 +941,150 @@ python3 -m validation_framework.cli profile <file_path>
 
 **Note:** Semantic tagging, PII detection, temporal analysis, and correlation are all enabled by default since v1.54.
 
-### Field Descriptions File
+### Field Descriptions File (Context YAML) ⭐
 
-Use `--field-descriptions` to provide friendly names and value labels for better report readability:
+The `--field-descriptions` option enables **context-aware profiling** by providing friendly names, descriptions, and value labels for your columns. This transforms cryptic column names and codes into human-readable insights.
+
+#### Why Use Field Descriptions?
+
+| Challenge | Solution |
+|-----------|----------|
+| Cryptic column names like `SibSp`, `Parch` | Friendly names: "Siblings/Spouses", "Parents/Children" |
+| Coded values like `1`, `2`, `3` | Value labels: "1st Class", "2nd Class", "3rd Class" |
+| Confusing anomaly explanations | Context-aware insights that explain *why* values are unusual |
+| Technical correlation outputs | Business-friendly relationship descriptions |
+
+#### YAML Format
 
 ```yaml
 # field_descriptions.yaml
 field_descriptions:
+  # Simple field with friendly name only
+  PassengerId:
+    friendly_name: "Passenger ID"
+
+  # Field with name and description
+  Age:
+    friendly_name: "Age"
+    description: "Age of passenger in years"
+
+  # Field with coded values (categorical)
   Pclass:
     friendly_name: "Passenger Class"
+    description: "Ticket class indicating travel accommodation level"
     value_labels:
       "1": "1st Class"
       "2": "2nd Class"
       "3": "3rd Class"
+
+  # Binary/flag field
   Survived:
     friendly_name: "Survival Status"
     value_labels:
       "0": "Did Not Survive"
       "1": "Survived"
-  Sex:
-    friendly_name: "Gender"
-    value_labels:
-      "male": "Male"
-      "female": "Female"
+
+  # Field with abbreviated name
+  SibSp:
+    friendly_name: "Siblings/Spouses"
+    description: "Number of siblings and spouses aboard"
+
+  Parch:
+    friendly_name: "Parents/Children"
+    description: "Number of parents and children aboard"
+
+  # Location codes
   Embarked:
     friendly_name: "Port of Embarkation"
+    description: "Port where passenger boarded the ship"
     value_labels:
       "S": "Southampton"
       "C": "Cherbourg"
       "Q": "Queenstown"
+
+  # Monetary field
+  Fare:
+    friendly_name: "Ticket Fare"
+    description: "Price paid for ticket in British pounds"
 ```
 
-**Usage:**
+#### Usage
+
 ```bash
 python3 -m validation_framework.cli profile data.csv \
   --field-descriptions field_descriptions.yaml \
   -o profile.html
 ```
 
-**Result:** Instead of "Pclass = 1 shows 7.5x higher Fare than Pclass = 3", the report shows "1st Class shows 7.5x higher Fare than 3rd Class".
+#### How Reports Improve
+
+**Correlation Insights:**
+
+| Without Field Descriptions | With Field Descriptions |
+|---------------------------|------------------------|
+| "Pclass = 1 shows 7.5x higher Fare than Pclass = 3" | "1st Class shows 7.5x higher Ticket Fare than 3rd Class" |
+| "Strong correlation between Pclass and Fare" | "Strong correlation between Passenger Class and Ticket Fare" |
+| "SibSp negatively correlates with Age" | "Siblings/Spouses negatively correlates with Age" |
+
+**Anomaly Explanations:**
+
+| Without Context | With Context |
+|-----------------|--------------|
+| "Fare value 512.33 is 3.8σ above mean" | "Ticket Fare of £512.33 is unusually high but **normal for 1st Class passengers** (avg Fare for Passenger Class=1st Class is £84.15)" |
+| "Age outlier detected: 0.42" | "Age of 0.42 years detected - infant passenger" |
+
+#### Context-Aware Anomaly Detection
+
+When you provide field descriptions, the profiler performs **subgroup pattern discovery**:
+
+1. **Identifies categorical segmentation** - Discovers how categorical columns (like Pclass) segment numeric columns (like Fare)
+2. **Calculates subgroup statistics** - Computes mean, std, quartiles for each segment
+3. **Contextualizes outliers** - A £500 fare is an outlier overall, but expected for 1st Class
+
+**Example Output:**
+```
+Value Analysis: Fare = £512.33
+
+Without context:
+  ⚠️ Outlier: 3.8 standard deviations above mean (£32.20)
+
+With context (Pclass = 1st Class):
+  ✓ Normal for segment: Within 2.0σ of 1st Class mean (£84.15)
+  → Explanation: "Normal for Passenger Class=1st Class (avg Ticket Fare=£84.15 for this group)"
+```
+
+#### Correlation Insight Synthesis
+
+Field descriptions also improve correlation insights by:
+- Using friendly names in all explanations
+- Translating value codes to labels in breakdowns
+- Making statistical findings accessible to non-technical stakeholders
+
+```
+Without: "Pearson r=-0.55 between Pclass and Fare (p<0.001)"
+
+With: "Passenger Class strongly correlates with Ticket Fare:
+       1st Class passengers paid 7.5x more on average than 3rd Class"
+```
+
+#### Example File
+
+See `examples/titanic_field_descriptions.yaml` for a complete working example:
+
+```bash
+# Profile Titanic dataset with context
+python3 -m validation_framework.cli profile titanic.csv \
+  --field-descriptions examples/titanic_field_descriptions.yaml \
+  -o titanic_profile.html
+```
+
+#### Best Practices
+
+1. **Start with key columns** - Focus on columns with cryptic names or coded values
+2. **Include value_labels for categoricals** - Especially important for numeric codes (1, 2, 3)
+3. **Add descriptions for domain context** - Help explain what the data represents
+4. **Reuse across datasets** - Create standard context files for common data structures
+5. **Update when schema changes** - Keep field descriptions in sync with your data
 
 ### Common Examples
 

@@ -177,15 +177,15 @@ class TestTemporalAnalyzer:
     def test_analyze_trend_flat(self, analyzer):
         """Test trend analysis with flat/constant data."""
         # Create series with same timestamp repeated - this represents constant data
-        # Trend analysis on same timestamps should either be unavailable or flat
+        # Trend analysis on same timestamps should either be unavailable or constant
         start_date = datetime(2023, 1, 1)
         flat_series = pd.Series([start_date] * 50)
         result = analyzer._analyze_trend(flat_series)
 
         # Either unavailable (can't calculate trend on identical values)
-        # or available with flat direction
+        # or available with constant direction (all values identical)
         if result["available"]:
-            assert result["direction"] == "flat"
+            assert result["direction"] == "constant"
         else:
             # Acceptable - identical timestamps can't have meaningful trend
             assert result["available"] is False

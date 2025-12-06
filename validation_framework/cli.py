@@ -493,15 +493,12 @@ def version():
 @click.option('--disable-pii', is_flag=True, help='Disable PII detection with privacy risk scoring')
 @click.option('--disable-correlation', is_flag=True, help='Disable enhanced multi-method correlation analysis')
 @click.option('--disable-all-enhancements', is_flag=True, help='Disable all profiler enhancements (temporal, PII, correlation)')
-@click.option('--report-style', type=click.Choice(['classic', 'executive'], case_sensitive=False),
-              default='executive', help='HTML report style: classic (detailed) or executive (dashboard view)')
 @click.option('--no-ml', is_flag=True, help='Disable ML-based anomaly detection (Benford, outliers, autoencoder)')
-@click.option('--beta-llm', is_flag=True, help='[BETA] Enable AI-generated summary using local LLM (requires llama-cpp-python)')
 @click.option('--full-analysis', is_flag=True, help='Disable internal sampling - analyze full dataset (slower but more accurate for ML analysis)')
 @click.option('--analysis-sample-size', type=int, default=100000, help='Sample size for analysis when file exceeds this many rows (default: 100000). Files <= this size are analyzed fully.')
 @click.option('--field-descriptions', type=click.Path(exists=True), help='YAML file with friendly field names and descriptions for better anomaly explanations')
 def profile(file_path, format, delimiter, database, table, query, html_output, json_output, config_output, chunk_size, sample, no_memory_check, log_level,
-            disable_temporal, disable_pii, disable_correlation, disable_all_enhancements, report_style, no_ml, beta_llm, full_analysis, analysis_sample_size, field_descriptions):
+            disable_temporal, disable_pii, disable_correlation, disable_all_enhancements, no_ml, full_analysis, analysis_sample_size, field_descriptions):
     """
     Profile a data file or database table to understand its structure and quality.
 
@@ -550,7 +547,6 @@ def profile(file_path, format, delimiter, database, table, query, html_output, j
     data-validate profile --db "postgresql://user:pass@localhost/db" --query "SELECT * FROM orders WHERE date > '2024-01-01'"
     """
     from validation_framework.profiler.engine import DataProfiler
-    from validation_framework.profiler.html_reporter import ProfileHTMLReporter
     from validation_framework.profiler.executive_html_reporter import ExecutiveHTMLReporter
     from validation_framework.loaders.factory import LoaderFactory
 
@@ -852,17 +848,14 @@ def profile(file_path, format, delimiter, database, table, query, html_output, j
         validation_count = len(profile_result.suggested_validations) if profile_result.suggested_validations else 0
         po.validations_summary(validation_count)
 
-        # Generate HTML report (choose reporter based on style)
-        if report_style and report_style.lower() == 'classic':
-            reporter = ProfileHTMLReporter()
-        else:
-            reporter = ExecutiveHTMLReporter(enable_llm=beta_llm)
+        # Generate HTML report
+        reporter = ExecutiveHTMLReporter()
         reporter.generate_report(profile_result, html_output)
 
         # Output files section
         po.blank_line()
         po.subsection("Output Files")
-        po.output_file(f"HTML Report ({report_style or 'executive'})", html_output)
+        po.output_file("HTML Report", html_output)
 
         # Generate JSON output if requested
         if json_output:

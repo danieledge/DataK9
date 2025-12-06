@@ -194,6 +194,48 @@ In just 5 minutes, you've:
 
 ---
 
+## Bonus: Auto-Generate Validations with the Profiler
+
+Don't want to write validation configs manually? Let the **profiler** do it for you!
+
+### Profile Your Data
+
+```bash
+python3 -m validation_framework.cli profile customers.csv -o profile.html -c validations.yaml
+```
+
+This generates:
+- `profile.html` - Interactive report with data quality insights
+- `validations.yaml` - Auto-generated validation configuration
+
+### Use Field Descriptions for Better Insights
+
+Create a `fields.yaml` to provide friendly names for your columns:
+
+```yaml
+field_descriptions:
+  customer_id:
+    friendly_name: "Customer ID"
+    description: "Unique customer identifier"
+  account_balance:
+    friendly_name: "Account Balance"
+    description: "Current balance in USD"
+```
+
+Run with context:
+
+```bash
+python3 -m validation_framework.cli profile customers.csv \
+  --field-descriptions fields.yaml \
+  -o profile.html
+```
+
+**Result:** Reports show "Account Balance" instead of "account_balance" and provide context-aware anomaly explanations.
+
+**[Learn more about profiling →](../using-datak9/data-profiling.md)**
+
+---
+
 ## Next Steps
 
 ### Continue Learning:

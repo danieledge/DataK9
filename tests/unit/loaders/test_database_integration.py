@@ -203,7 +203,7 @@ class TestSourceCompatibility:
         # Create fresh loader to avoid singleton cache issues
         from pathlib import Path
         from validation_framework.utils.definition_loader import ValidationDefinitionLoader
-        def_file = Path(__file__).parent.parent / "validation_framework" / "validation_definitions.json"
+        def_file = Path(__file__).parent.parent.parent.parent / "validation_framework" / "validation_definitions.json"
         loader = ValidationDefinitionLoader(def_file)
 
         # MandatoryFieldCheck should work on both
@@ -223,7 +223,7 @@ class TestSourceCompatibility:
         # Create fresh loader
         from pathlib import Path
         from validation_framework.utils.definition_loader import ValidationDefinitionLoader
-        def_file = Path(__file__).parent.parent / "validation_framework" / "validation_definitions.json"
+        def_file = Path(__file__).parent.parent.parent.parent / "validation_framework" / "validation_definitions.json"
         loader = ValidationDefinitionLoader(def_file)
 
         db_compat = loader.get_by_source_compatibility("database")
@@ -242,7 +242,7 @@ class TestSourceCompatibility:
         # Create fresh loader
         from pathlib import Path
         from validation_framework.utils.definition_loader import ValidationDefinitionLoader
-        def_file = Path(__file__).parent.parent / "validation_framework" / "validation_definitions.json"
+        def_file = Path(__file__).parent.parent.parent.parent / "validation_framework" / "validation_definitions.json"
         loader = ValidationDefinitionLoader(def_file)
 
         summary = loader.get_compatibility_summary()
