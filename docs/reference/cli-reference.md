@@ -405,17 +405,19 @@ python3 -m validation_framework.cli validate config.yaml \
 
 ## profile
 
-Analyze data files and generate profiling reports with auto-generated validation suggestions.
+Analyze data files and generate profiling reports with auto-generated validation suggestions. The profiler provides comprehensive data analysis including semantic classification, anomaly detection, PII identification, and correlation analysis.
 
 ### Syntax
 
 ```bash
 python3 -m validation_framework.cli profile <file_path> [options]
+# Or for database sources:
+python3 -m validation_framework.cli profile --database <connection_string> --table <table_name>
 ```
 
 ### Arguments
 
-#### `<file_path>` (Required)
+#### `<file_path>` (Optional if using --database)
 
 Path to data file to profile.
 
@@ -426,7 +428,7 @@ python3 -m validation_framework.cli profile data/customers.csv
 # Profile Excel file
 python3 -m validation_framework.cli profile data/sales.xlsx
 
-# Profile Parquet file
+# Profile Parquet file (recommended for large files)
 python3 -m validation_framework.cli profile data/transactions.parquet
 
 # Profile JSON file
@@ -434,12 +436,42 @@ python3 -m validation_framework.cli profile data/products.json
 ```
 
 **Supported Formats:**
-- CSV (`.csv`)
+- CSV (`.csv`) - with auto-detected delimiter
 - Excel (`.xlsx`, `.xls`)
-- Parquet (`.parquet`)
+- Parquet (`.parquet`) - recommended for large files
 - JSON (`.json`, `.jsonl`)
 
-### Options
+### Core Options
+
+#### `--html-output` / `-o`
+
+Specify HTML report output path.
+
+```bash
+python3 -m validation_framework.cli profile data.csv -o profile_report.html
+```
+
+**Default:** `<filename>_profile_report_<date>.html`
+
+#### `--json-output` / `-j`
+
+Export profile results to JSON for programmatic use.
+
+```bash
+python3 -m validation_framework.cli profile data.csv -j profile.json
+```
+
+#### `--config-output` / `-c`
+
+Specify path for auto-generated validation configuration YAML.
+
+```bash
+python3 -m validation_framework.cli profile data.csv -c validation_config.yaml
+```
+
+**Default:** `<filename>_validation_<timestamp>.yaml`
+
+### Data Source Options
 
 #### `--format` / `-f`
 
@@ -449,184 +481,320 @@ Explicitly specify file format (auto-detected if omitted).
 python3 -m validation_framework.cli profile data.txt --format csv
 ```
 
-**Supported Formats:**
-- `csv`
-- `excel`
-- `parquet`
-- `json`
+**When to Use:** File extension doesn't match format, or files without extensions.
 
-**When to Use:**
-- File extension doesn't match format
-- Files without extensions
-- Override auto-detection
+#### `--delimiter` / `-d`
 
-#### `--backend` / `-b` ⚡ Performance Critical
-
-Select data processing backend for profiling.
+Column delimiter for CSV files (auto-detected if omitted).
 
 ```bash
-# Use Polars backend (5-10x faster, recommended for large files)
-python3 -m validation_framework.cli profile data.csv --backend polars
-
-# Use pandas backend (full HTML reporting)
-python3 -m validation_framework.cli profile data.csv --backend pandas
+python3 -m validation_framework.cli profile data.tsv --delimiter "\t"
 ```
 
-**Available Options:**
-- `polars` (default) - Polars backend for high-performance profiling
-- `pandas` - Pandas backend with full HTML reporting
+#### `--database` / `--db`
 
-**Default:** `polars` (if installed), otherwise `pandas`
-
-**Performance Comparison:**
-
-| Backend | Speed | Memory | HTML Reports | Best For |
-|---------|-------|--------|--------------|----------|
-| **Polars** | **High performance** | **Efficient** | JSON only | Large files, speed-critical |
-| pandas | Standard | Standard | Full HTML | Small files, rich reporting |
-
-**When to Use Polars:**
-- ✅ Large files (> 1GB or 10M+ rows)
-- ✅ Quick profiling for validation config generation
-- ✅ JSON output sufficient
-- ✅ When speed is critical
-
-**When to Use pandas:**
-- ✅ Full interactive HTML reports needed
-- ✅ Small to medium files (< 1GB)
-- ✅ Excel files
-- ✅ Rich visualizations required
-
-**Examples:**
-```bash
-# Profile large CSV with Polars (fastest)
-python3 -m validation_framework.cli profile large_data.csv --backend polars -j profile.json
-
-# Profile with pandas for full HTML report
-python3 -m validation_framework.cli profile data.csv --backend pandas -o report.html
-```
-
-**Real-World Performance:**
-- **Polars** (100K rows): ~3 seconds (✅ Full HTML reports!)
-- **pandas** (100K rows): ~30 seconds
-
-**Note:** Polars profiler now generates full HTML reports with charts - fast performance with beautiful interactive visualizations.
-
-#### `--output-dir` / `-o`
-
-Specify output directory for profile reports.
+Connection string for database profiling.
 
 ```bash
-python3 -m validation_framework.cli profile data/customers.csv --output-dir reports/
+python3 -m validation_framework.cli profile --database "postgresql://user:pass@host/db" --table customers
 ```
 
-**Default:** Same directory as input file
+#### `--table` / `-t`
 
-#### `--sheet` / `-s`
+Table name for database profiling.
 
-Specify Excel sheet name or index (Excel files only).
+#### `--query` / `-q`
+
+SQL query as alternative to table (for database sources).
 
 ```bash
-# By name
-python3 -m validation_framework.cli profile sales.xlsx --sheet "Q1 Sales"
-
-# By index (0-based)
-python3 -m validation_framework.cli profile sales.xlsx --sheet 0
+python3 -m validation_framework.cli profile --db "postgresql://..." --query "SELECT * FROM orders WHERE date > '2024-01-01'"
 ```
 
-**Default:** First sheet
+### Processing Options
 
-#### `--sample-size` / `-n`
+#### `--sample` / `-s`
 
-Limit analysis to first N rows.
+Profile first N rows only (useful for very large files).
 
 ```bash
-python3 -m validation_framework.cli profile large_file.csv --sample-size 100000
+python3 -m validation_framework.cli profile large_file.csv --sample 100000
 ```
 
-**Default:** Entire file
+#### `--chunk-size`
 
-**Use Cases:**
-- Quick profiling of very large files
-- Representative sampling
-- Performance optimization
-
-#### `--no-validation-config`
-
-Skip auto-generation of validation YAML.
+Rows per processing chunk (auto-calculated based on available memory if omitted).
 
 ```bash
-python3 -m validation_framework.cli profile customers.csv --no-validation-config
+python3 -m validation_framework.cli profile data.csv --chunk-size 50000
 ```
 
-**Use Cases:**
-- Only need profile report
-- Custom validation configuration needed
+#### `--analysis-sample-size`
+
+Sample size threshold for internal analysis (default: 100,000 rows).
+
+```bash
+python3 -m validation_framework.cli profile data.csv --analysis-sample-size 200000
+```
+
+#### `--full-analysis`
+
+Disable internal sampling for maximum accuracy (slower but more thorough).
+
+```bash
+python3 -m validation_framework.cli profile data.csv --full-analysis
+```
+
+### Enhancement Flags
+
+**All enhancements are ENABLED by default since v1.54.** Use disable flags to turn them off.
+
+#### `--disable-temporal`
+
+Disable temporal analysis for datetime columns.
+
+```bash
+python3 -m validation_framework.cli profile data.csv --disable-temporal
+```
+
+#### `--disable-pii`
+
+Disable PII detection with privacy risk scoring.
+
+```bash
+python3 -m validation_framework.cli profile data.csv --disable-pii
+```
+
+#### `--disable-correlation`
+
+Disable enhanced multi-method correlation analysis.
+
+```bash
+python3 -m validation_framework.cli profile data.csv --disable-correlation
+```
+
+#### `--disable-all-enhancements`
+
+Minimal profiling mode - disables temporal, PII, and correlation analysis.
+
+```bash
+python3 -m validation_framework.cli profile data.csv --disable-all-enhancements
+```
+
+### ML Options
+
+#### `--no-ml`
+
+Disable ML-based anomaly detection (Isolation Forest, Benford's Law, etc.).
+
+```bash
+python3 -m validation_framework.cli profile data.csv --no-ml
+```
+
+### Context & Metadata
+
+#### `--field-descriptions` ⭐ NEW
+
+YAML file providing friendly names, descriptions, and value labels for columns. This enables **context-aware anomaly explanations** and more readable reports.
+
+```bash
+python3 -m validation_framework.cli profile data.csv --field-descriptions context.yaml
+```
+
+**Why Use This:**
+- Transform cryptic column names into readable labels
+- Provide meaningful value labels for categorical codes
+- Enable context-aware anomaly explanations
+- Improve correlation insight readability
+
+**YAML Format:**
+
+```yaml
+# context.yaml - Field descriptions for your dataset
+field_descriptions:
+  # Basic field with friendly name and description
+  Pclass:
+    friendly_name: "Passenger Class"
+    description: "Ticket class indicating travel accommodation level"
+
+  # Field with value labels for categorical codes
+  Embarked:
+    friendly_name: "Port of Embarkation"
+    description: "Port where passenger boarded the ship"
+    value_labels:
+      "S": "Southampton"
+      "C": "Cherbourg"
+      "Q": "Queenstown"
+
+  # Binary/flag field with semantic labels
+  Survived:
+    friendly_name: "Survival Status"
+    value_labels:
+      "0": "Did Not Survive"
+      "1": "Survived"
+
+  # Numeric field with domain context
+  Fare:
+    friendly_name: "Ticket Fare"
+    description: "Price paid for ticket in British pounds"
+
+  # Abbreviated field names
+  SibSp:
+    friendly_name: "Siblings/Spouses"
+    description: "Number of siblings and spouses aboard"
+
+  Parch:
+    friendly_name: "Parents/Children"
+    description: "Number of parents and children aboard"
+```
+
+**How It Improves Reports:**
+
+| Without Field Descriptions | With Field Descriptions |
+|---------------------------|------------------------|
+| "Pclass = 1 shows 7.5x higher Fare" | "1st Class shows 7.5x higher Ticket Fare" |
+| "Anomaly in Fare for Pclass=3" | "Anomaly in Ticket Fare for 3rd Class passengers" |
+| "Strong correlation: Pclass ↔ Fare" | "Strong correlation: Passenger Class ↔ Ticket Fare" |
+| "SibSp affects survival rate" | "Siblings/Spouses affects survival rate" |
+
+**Context-Aware Anomaly Detection:**
+
+When you provide field descriptions, the profiler uses them for smarter anomaly explanations:
+
+```
+Without context:
+  "Value 512.33 in Fare is 3.8σ above mean"
+
+With context:
+  "Ticket Fare of $512.33 is unusually high but expected for 1st Class passengers
+   (average Fare for Passenger Class=1st Class is $84.15)"
+```
+
+**Example with Titanic Dataset:**
+
+```bash
+# Profile with context for readable insights
+python3 -m validation_framework.cli profile titanic.csv \
+  --field-descriptions titanic_context.yaml \
+  -o titanic_profile.html
+
+# See examples/titanic_field_descriptions.yaml for a complete example
+```
+
+### Memory Options
+
+#### `--no-memory-check`
+
+Disable memory safety warnings and checks. **Use with caution** - may cause out-of-memory errors on large files.
+
+```bash
+python3 -m validation_framework.cli profile huge_file.csv --no-memory-check
+```
+
+#### `--log-level`
+
+Set logging verbosity.
+
+```bash
+python3 -m validation_framework.cli profile data.csv --log-level DEBUG
+```
+
+**Options:** `DEBUG`, `INFO`, `WARNING` (default), `ERROR`
 
 ### Output Files
 
-The `profile` command generates two files:
+The `profile` command generates:
 
 #### 1. Profile Report (HTML)
 
-**Filename:** `<filename>_profile_report.html`
+**Filename:** `<filename>_profile_report_<date>.html`
 
 **Contents:**
-- Column statistics (min, max, mean, median, percentiles)
-- Type inference (detected vs declared types)
-- Quality metrics (completeness, uniqueness, validity)
-- Distribution charts
-- Correlation matrix
-- Sample data
+- Executive summary with quality score
+- Semantic classification (FIBO + Schema.org)
+- Column statistics and distributions
+- Correlation analysis with insights
+- ML-based anomaly findings
+- PII detection results
+- Validation suggestions with YAML snippets
 
 #### 2. Validation Configuration (YAML)
 
-**Filename:** `<filename>_validation.yaml`
+**Filename:** `<filename>_validation_<timestamp>.yaml`
 
 **Contents:**
 - Auto-generated validation rules
-- Based on discovered patterns
+- Based on semantic understanding and discovered patterns
 - Ready to use with `validate` command
+
+#### 3. JSON Profile (Optional)
+
+**Filename:** Specified with `-j` flag
+
+**Contents:**
+- Complete profile data in machine-readable format
+- Useful for programmatic analysis or integration
 
 ### Examples
 
-#### Basic Profiling
+#### Basic Profiling (All Enhancements Enabled)
 
 ```bash
-python3 -m validation_framework.cli profile data/customers.csv
+python3 -m validation_framework.cli profile data/customers.csv -o profile.html
 ```
 
-**Output:**
-```
-Profiling customers.csv...
-✅ Profile complete
-  Rows: 10,000
-  Columns: 8
-  Quality Score: 94.5%
-
-Generated files:
-  📊 customers_profile_report.html
-  📝 customers_validation.yaml
-```
-
-#### Profile Excel Sheet
+#### Profile with Context for Better Insights
 
 ```bash
-python3 -m validation_framework.cli profile sales.xlsx --sheet "January"
+python3 -m validation_framework.cli profile financial_data.csv \
+  --field-descriptions field_context.yaml \
+  -o readable_profile.html \
+  -c validations.yaml
 ```
 
-#### Large File Sampling
+#### Full Analysis with ML Anomaly Detection
 
 ```bash
 python3 -m validation_framework.cli profile transactions.parquet \
-    --sample-size 1000000 \
-    --output-dir reports/
+  --full-analysis \
+  -o full_analysis.html \
+  -j analysis.json
 ```
 
-#### Profile Only (No Validation Config)
+#### Large File with Sampling
 
 ```bash
-python3 -m validation_framework.cli profile data.csv --no-validation-config
+python3 -m validation_framework.cli profile huge_file.csv \
+  --sample 1000000 \
+  -o quick_profile.html
+```
+
+#### Database Table Profiling
+
+```bash
+python3 -m validation_framework.cli profile \
+  --database "postgresql://user:pass@localhost/mydb" \
+  --table customers \
+  -o db_profile.html
+```
+
+#### Minimal Fast Profiling
+
+```bash
+python3 -m validation_framework.cli profile data.csv \
+  --disable-all-enhancements \
+  --no-ml \
+  -o minimal.html
+```
+
+#### Complete Output Suite
+
+```bash
+python3 -m validation_framework.cli profile data.csv \
+  --field-descriptions context.yaml \
+  -o profile.html \
+  -c validation.yaml \
+  -j profile.json
 ```
 
 ---

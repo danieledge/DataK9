@@ -9,14 +9,247 @@ The DataK9 profiler has been significantly enhanced with advanced data science c
 
 ## Table of Contents
 
-1. [Distribution Analysis](#distribution-analysis)
-2. [Anomaly Detection](#anomaly-detection)
-3. [Temporal Pattern Analysis](#temporal-pattern-analysis)
-4. [Enhanced Pattern Detection](#enhanced-pattern-detection)
-5. [Functional Dependency Discovery](#functional-dependency-discovery)
-6. [Enhanced Validation Suggestions](#enhanced-validation-suggestions)
-7. [Usage Examples](#usage-examples)
-8. [API Reference](#api-reference)
+1. [Field Descriptions (Context YAML)](#field-descriptions-context-yaml) - NEW!
+2. [Context-Aware Anomaly Detection](#context-aware-anomaly-detection) - NEW!
+3. [Distribution Analysis](#distribution-analysis)
+4. [Anomaly Detection](#anomaly-detection)
+5. [Temporal Pattern Analysis](#temporal-pattern-analysis)
+6. [Enhanced Pattern Detection](#enhanced-pattern-detection)
+7. [Functional Dependency Discovery](#functional-dependency-discovery)
+8. [Enhanced Validation Suggestions](#enhanced-validation-suggestions)
+9. [Usage Examples](#usage-examples)
+10. [API Reference](#api-reference)
+
+---
+
+## Field Descriptions (Context YAML)
+
+### Overview
+
+The profiler now supports **field descriptions** via the `--field-descriptions` CLI option, enabling human-readable reports with friendly names, descriptions, and value labels for your columns.
+
+### Why Use Field Descriptions?
+
+Many datasets contain:
+- **Cryptic column names** - `SibSp`, `Parch`, `txn_amt`
+- **Coded values** - `1`, `2`, `3` instead of "1st Class", "2nd Class", "3rd Class"
+- **Abbreviated identifiers** - `C`, `Q`, `S` instead of "Cherbourg", "Queenstown", "Southampton"
+
+Field descriptions transform these into human-readable insights, making reports accessible to non-technical stakeholders.
+
+### YAML Format
+
+```yaml
+# field_descriptions.yaml
+field_descriptions:
+  # Simple field with friendly name
+  PassengerId:
+    friendly_name: "Passenger ID"
+    description: "Unique identifier for each passenger"
+
+  # Field with value labels for categorical codes
+  Pclass:
+    friendly_name: "Passenger Class"
+    description: "Ticket class indicating travel accommodation level"
+    value_labels:
+      "1": "1st Class"
+      "2": "2nd Class"
+      "3": "3rd Class"
+
+  # Binary field with semantic labels
+  Survived:
+    friendly_name: "Survival Status"
+    value_labels:
+      "0": "Did Not Survive"
+      "1": "Survived"
+
+  # Abbreviated column names
+  SibSp:
+    friendly_name: "Siblings/Spouses"
+    description: "Number of siblings and spouses aboard"
+
+  Parch:
+    friendly_name: "Parents/Children"
+    description: "Number of parents and children aboard"
+
+  # Location codes
+  Embarked:
+    friendly_name: "Port of Embarkation"
+    value_labels:
+      "S": "Southampton"
+      "C": "Cherbourg"
+      "Q": "Queenstown"
+
+  # Monetary field
+  Fare:
+    friendly_name: "Ticket Fare"
+    description: "Price paid for ticket in British pounds"
+```
+
+### CLI Usage
+
+```bash
+python3 -m validation_framework.cli profile data.csv \
+  --field-descriptions field_descriptions.yaml \
+  -o profile_report.html
+```
+
+### How It Improves Reports
+
+| Report Element | Without Field Descriptions | With Field Descriptions |
+|----------------|---------------------------|------------------------|
+| **Column headers** | `Pclass` | `Passenger Class (Pclass)` |
+| **Value displays** | `1`, `2`, `3` | `1st Class`, `2nd Class`, `3rd Class` |
+| **Correlations** | `Pclass ↔ Fare` | `Passenger Class ↔ Ticket Fare` |
+| **Anomaly reports** | `SibSp outlier: 8` | `Siblings/Spouses outlier: 8` |
+
+### Integration Points
+
+Field descriptions are used throughout the profiler:
+
+1. **HTML Report Generation** - Column headers, value labels, insights
+2. **Correlation Insight Synthesizer** - Friendly names in relationship explanations
+3. **ML Analyzer** - Context in anomaly explanations
+4. **Context Discovery** - Subgroup pattern explanations
+5. **Validation Suggestions** - Human-readable validation comments
+
+---
+
+## Context-Aware Anomaly Detection
+
+### Overview
+
+When field descriptions are provided, the profiler performs **context-aware anomaly detection** using subgroup pattern discovery. This means outliers are evaluated not just globally, but within their natural segments.
+
+### The Problem with Global Outlier Detection
+
+Consider a dataset with passenger fares:
+- **Global mean**: £32.20
+- **1st Class mean**: £84.15
+- **3rd Class mean**: £13.68
+
+A fare of £512.33 is 15 standard deviations above the global mean - a massive outlier! But if the passenger was in 1st Class, this fare is only 2.5σ above the 1st Class mean - unusual but not extreme.
+
+### How Context Discovery Works
+
+The profiler automatically discovers **subgroup patterns**:
+
+1. **Identifies categorical segmenters** - Columns like `Pclass`, `Embarked`, `Sex`
+2. **Calculates segment statistics** - Mean, std, quartiles for each category
+3. **Measures variance explained** - How much of the numeric variance is explained by the categorical split
+4. **Builds contextual explanations** - Explains outliers in terms of their natural segment
+
+### Subgroup Statistics
+
+For each discovered pattern, the profiler calculates:
+
+```python
+@dataclass
+class SubgroupStats:
+    segment_value: Any      # e.g., "1" for 1st Class
+    count: int              # Number of records in segment
+    mean: float             # Mean of numeric column for this segment
+    std: float              # Standard deviation
+    min_val: float          # Minimum value
+    max_val: float          # Maximum value
+    q1: float               # 25th percentile
+    q3: float               # 75th percentile
+```
+
+### Contextual Anomaly Explanation
+
+When an anomaly is detected, the profiler checks if it can be explained by context:
+
+```python
+# Without context:
+"Value 512.33 in Fare is 15.0σ above mean (32.20)"
+
+# With context (when Pclass=1):
+"Normal for Passenger Class=1st Class (avg Ticket Fare=$84.15 for this group)"
+```
+
+### Output Example
+
+```json
+{
+  "subgroup_patterns": [
+    {
+      "segment_col": "Pclass",
+      "value_col": "Fare",
+      "variance_explained": 0.42,
+      "stats_by_segment": {
+        "1": {"mean": 84.15, "std": 78.38, "count": 216},
+        "2": {"mean": 20.66, "std": 13.42, "count": 184},
+        "3": {"mean": 13.68, "std": 11.78, "count": 491}
+      }
+    }
+  ],
+  "contextual_explanations": [
+    {
+      "value": 512.33,
+      "column": "Fare",
+      "global_zscore": 15.0,
+      "segment": "Pclass=1",
+      "segment_zscore": 2.5,
+      "explanation": "Normal for Passenger Class=1st Class (avg Ticket Fare=$84.15)"
+    }
+  ]
+}
+```
+
+### Correlation Pattern Discovery
+
+In addition to subgroup patterns, the profiler discovers **correlation patterns** between numeric columns:
+
+```python
+@dataclass
+class CorrelationPattern:
+    col1: str               # First column
+    col2: str               # Second column
+    correlation: float      # Pearson correlation coefficient
+    slope: float            # Linear regression slope
+    intercept: float        # Linear regression intercept
+    tolerance: float        # Expected prediction error (residual std)
+```
+
+This enables explanations like:
+- "Age increases with Fare (correlation: 0.35)"
+- "Ticket Fare decreases with Passenger Class (correlation: -0.55)"
+
+### API Integration
+
+```python
+from validation_framework.profiler.context_discovery import (
+    ContextDiscovery,
+    load_field_descriptions
+)
+
+# Load field descriptions from YAML
+field_desc = load_field_descriptions("field_descriptions.yaml")
+
+# Create context discovery engine
+discovery = ContextDiscovery(field_descriptions=field_desc)
+
+# Discover patterns in data
+context_store = discovery.discover(df)
+
+# Access discovered patterns
+for pattern in context_store.subgroups:
+    print(f"{pattern.segment_col} segments {pattern.value_col}")
+    print(f"  Variance explained: {pattern.variance_explained:.1%}")
+
+# Get human-readable column names
+display_name = context_store.get_field_display_name("SibSp")
+# Returns: "Siblings/Spouses (SibSp)"
+```
+
+### Best Practices
+
+1. **Provide field descriptions for key columns** - Focus on cryptic names and coded values
+2. **Include value_labels for categoricals** - Essential for context-aware explanations
+3. **Use descriptions for domain context** - Helps explain what the data represents
+4. **Review contextual explanations** - They reveal hidden patterns in your data
+5. **Leverage for stakeholder communication** - Share reports with non-technical audiences
 
 ---
 

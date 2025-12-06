@@ -17,7 +17,6 @@ from typing import List, Dict, Any, Optional
 from datetime import datetime
 from validation_framework.profiler.profile_result import ProfileResult, ColumnProfile
 from validation_framework.profiler.insight_engine import InsightEngine, generate_insights
-# LLM summarizer is imported dynamically when needed (--beta-llm flag)
 import logging
 import math
 
@@ -311,26 +310,9 @@ def emoji_to_svg(emoji: str, size: int = 14, style: str = '') -> str:
 class ExecutiveHTMLReporter:
     """Generate executive-style HTML reports for profile results."""
 
-    def __init__(self, enable_llm: bool = False):
-        """
-        Initialize the reporter.
-
-        Args:
-            enable_llm: Enable AI-generated summary (--beta-llm flag)
-        """
-        self._enable_llm = enable_llm
-
-    def _get_llm_summary_html(self, profile_dict: Dict[str, Any]) -> str:
-        """Get LLM summary HTML if enabled, empty string otherwise."""
-        if not self._enable_llm:
-            return ""
-
-        try:
-            from validation_framework.profiler.llm_summarizer import get_llm_summary_for_report
-            return get_llm_summary_for_report(profile_dict)
-        except Exception as e:
-            logger.debug(f"LLM summary failed: {e}")
-            return ""
+    def __init__(self):
+        """Initialize the reporter."""
+        pass
 
     def generate_report(self, profile: ProfileResult, output_path: str) -> None:
         """
@@ -538,9 +520,6 @@ class ExecutiveHTMLReporter:
         <!-- 1. EXECUTIVE SUMMARY WITH DIAL WIDGETS                          -->
         <!-- ═══════════════════════════════════════════════════════════════ -->
         {self._generate_exec1_summary(profile, avg_completeness, avg_validity, type_counts, insights)}
-
-        <!-- AI-Generated Executive Summary (only with --beta-llm flag) -->
-        {self._get_llm_summary_html(profile_dict)}
 
         <!-- ═══════════════════════════════════════════════════════════════ -->
         <!-- 3. DATA QUALITY OVERVIEW - High-level metrics first             -->
