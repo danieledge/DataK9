@@ -1,0 +1,8 @@
+{"transaction_id": "TXN001", "customer_id": "CUST001", "amount": 150.00, "category": "Electronics"}
+{"transaction_id": "TXN002", "customer_id": "CUST002", "amount": 75.25, "category": "Clothing"}
+{"transaction_id": "TXN003", "customer_id": "CUST001", "amount": 225.00, "category": "Electronics"}
+{"transaction_id": "TXN004", "customer_id": "CUST003", "amount": 50.00, "category": "Food"}
+{"transaction_id": "TXN005", "customer_id": "CUST002", "amount": 300.00, "category": "Electronics"}
+{"transaction_id": "TXN006", "customer_id": "CUST004", "amount": 125.75, "category": "Clothing"}
+{"transaction_id": "TXN007", "customer_id": "CUST001", "amount": 89.99, "category": "Food"}
+{"transaction_id": "TXN008", "customer_id": "CUST005", "amount": 450.00, "category": "Electronics"}

@@ -279,7 +279,7 @@ class TestJSONLoader:
 
     def test_json_loader_standard_array(self):
         """Test loading standard JSON array format."""
-        test_file = Path("tests/fixtures/json/customers.json")
+        test_file = Path("tests/testsuite/data/json/testsuite_customers.json")
         loader = JSONLoader(file_path=str(test_file))
 
         # Load all chunks
@@ -301,7 +301,7 @@ class TestJSONLoader:
 
     def test_json_loader_jsonl_format(self):
         """Test loading JSON Lines (JSONL) format."""
-        test_file = Path("tests/fixtures/json/transactions.jsonl")
+        test_file = Path("tests/testsuite/data/json/testsuite_transactions.jsonl")
         loader = JSONLoader(file_path=str(test_file))
 
         # Load all chunks
@@ -318,7 +318,7 @@ class TestJSONLoader:
 
     def test_json_loader_nested_flattening(self):
         """Test loading nested JSON with automatic flattening."""
-        test_file = Path("tests/fixtures/json/nested_data.json")
+        test_file = Path("tests/testsuite/data/json/testsuite_nested_data.json")
         loader = JSONLoader(file_path=str(test_file), flatten=True)
 
         chunks = list(loader.load())
@@ -333,7 +333,7 @@ class TestJSONLoader:
 
     def test_json_loader_empty_file(self):
         """Test loading empty JSON array."""
-        test_file = Path("tests/fixtures/json/empty.json")
+        test_file = Path("tests/testsuite/data/json/testsuite_empty.json")
         loader = JSONLoader(file_path=str(test_file))
 
         chunks = list(loader.load())
@@ -366,7 +366,7 @@ class TestJSONLoader:
 
     def test_json_loader_explicit_lines_parameter(self):
         """Test explicit lines=True parameter for JSONL."""
-        test_file = Path("tests/fixtures/json/transactions.jsonl")
+        test_file = Path("tests/testsuite/data/json/testsuite_transactions.jsonl")
         loader = JSONLoader(file_path=str(test_file), lines=True)
 
         chunks = list(loader.load())
@@ -377,7 +377,7 @@ class TestJSONLoader:
 
     def test_json_loader_metadata(self):
         """Test getting metadata from JSON file."""
-        test_file = Path("tests/fixtures/json/customers.json")
+        test_file = Path("tests/testsuite/data/json/testsuite_customers.json")
         loader = JSONLoader(file_path=str(test_file))
 
         metadata = loader.get_metadata()
@@ -395,7 +395,7 @@ class TestJSONLoader:
 
     def test_json_loader_jsonl_metadata(self):
         """Test getting metadata from JSONL file."""
-        test_file = Path("tests/fixtures/json/transactions.jsonl")
+        test_file = Path("tests/testsuite/data/json/testsuite_transactions.jsonl")
         loader = JSONLoader(file_path=str(test_file))
 
         metadata = loader.get_metadata()
@@ -405,7 +405,7 @@ class TestJSONLoader:
 
     def test_json_loader_factory_integration(self):
         """Test creating JSON loader through factory."""
-        test_file = Path("tests/fixtures/json/customers.json")
+        test_file = Path("tests/testsuite/data/json/testsuite_customers.json")
 
         loader = LoaderFactory.create_loader(
             file_path=str(test_file),
@@ -416,7 +416,7 @@ class TestJSONLoader:
 
     def test_json_loader_factory_auto_detect(self):
         """Test auto-detecting JSON format from extension."""
-        test_file = Path("tests/fixtures/json/customers.json")
+        test_file = Path("tests/testsuite/data/json/testsuite_customers.json")
 
         loader = LoaderFactory.create_loader(file_path=str(test_file))
 
@@ -424,7 +424,7 @@ class TestJSONLoader:
 
     def test_json_loader_jsonl_extension_detection(self):
         """Test auto-detecting JSONL from .jsonl extension."""
-        test_file = Path("tests/fixtures/json/transactions.jsonl")
+        test_file = Path("tests/testsuite/data/json/testsuite_transactions.jsonl")
 
         loader = LoaderFactory.create_loader(file_path=str(test_file))
 
@@ -447,7 +447,7 @@ class TestJSONLoader:
 
     def test_json_loader_no_flatten(self):
         """Test loading nested JSON without flattening."""
-        test_file = Path("tests/fixtures/json/nested_data.json")
+        test_file = Path("tests/testsuite/data/json/testsuite_nested_data.json")
         loader = JSONLoader(file_path=str(test_file), flatten=False)
 
         chunks = list(loader.load())
