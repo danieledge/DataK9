@@ -15,8 +15,9 @@ from validation_framework.validations.builtin.cross_file_checks import (
 from validation_framework.core.results import Severity
 
 
-# Test data directory
-TEST_DATA_DIR = Path(__file__).parent / "test_data" / "cross_file"
+# Test data directory - use testsuite for standardized test data
+from tests.testsuite import CROSS_FILE_DATA_DIR
+TEST_DATA_DIR = CROSS_FILE_DATA_DIR
 
 
 class TestReferentialIntegrityCheck:
@@ -37,14 +38,14 @@ class TestReferentialIntegrityCheck:
             severity=Severity.ERROR,
             params={
                 'foreign_key': 'customer_id',
-                'reference_file': str(TEST_DATA_DIR / 'customers.csv'),
+                'reference_file': str(TEST_DATA_DIR / 'testsuite_customers.csv'),
                 'reference_key': 'id',
                 'allow_null': False,
             }
         )
 
         # Run validation
-        context = {'file_path': str(TEST_DATA_DIR / 'orders.csv')}
+        context = {'file_path': str(TEST_DATA_DIR / 'testsuite_orders.csv')}
         result = validation.validate(iter([data]), context)
 
         # Assert passed
@@ -66,14 +67,14 @@ class TestReferentialIntegrityCheck:
             severity=Severity.ERROR,
             params={
                 'foreign_key': 'customer_id',
-                'reference_file': str(TEST_DATA_DIR / 'customers.csv'),
+                'reference_file': str(TEST_DATA_DIR / 'testsuite_customers.csv'),
                 'reference_key': 'id',
                 'allow_null': False,
             }
         )
 
         # Run validation
-        context = {'file_path': str(TEST_DATA_DIR / 'orders.csv')}
+        context = {'file_path': str(TEST_DATA_DIR / 'testsuite_orders.csv')}
         result = validation.validate(iter([data]), context)
 
         # Assert failed
@@ -96,14 +97,14 @@ class TestReferentialIntegrityCheck:
             severity=Severity.ERROR,
             params={
                 'foreign_key': 'customer_id',
-                'reference_file': str(TEST_DATA_DIR / 'customers.csv'),
+                'reference_file': str(TEST_DATA_DIR / 'testsuite_customers.csv'),
                 'reference_key': 'id',
                 'allow_null': False,
             }
         )
 
         # Run validation
-        context = {'file_path': str(TEST_DATA_DIR / 'orders.csv')}
+        context = {'file_path': str(TEST_DATA_DIR / 'testsuite_orders.csv')}
         result = validation.validate(iter([data]), context)
 
         # Assert failed due to NULL
@@ -125,14 +126,14 @@ class TestReferentialIntegrityCheck:
             severity=Severity.ERROR,
             params={
                 'foreign_key': 'customer_id',
-                'reference_file': str(TEST_DATA_DIR / 'customers.csv'),
+                'reference_file': str(TEST_DATA_DIR / 'testsuite_customers.csv'),
                 'reference_key': 'id',
                 'allow_null': True,
             }
         )
 
         # Run validation
-        context = {'file_path': str(TEST_DATA_DIR / 'orders.csv')}
+        context = {'file_path': str(TEST_DATA_DIR / 'testsuite_orders.csv')}
         result = validation.validate(iter([data]), context)
 
         # Assert passed (NULL is allowed, other values are valid)
@@ -181,14 +182,14 @@ class TestCrossFileComparisonCheck:
             params={
                 'aggregation': 'count',
                 'comparison': '==',
-                'reference_file': str(TEST_DATA_DIR / 'customers.csv'),
+                'reference_file': str(TEST_DATA_DIR / 'testsuite_customers.csv'),
                 'reference_aggregation': 'count',
                 'tolerance': 0,
             }
         )
 
         # Run validation
-        context = {'file_path': str(TEST_DATA_DIR / 'orders.csv')}
+        context = {'file_path': str(TEST_DATA_DIR / 'testsuite_orders.csv')}
         result = validation.validate(iter([data]), context)
 
         # Assert (both files have 5 rows)
@@ -208,7 +209,7 @@ class TestCrossFileComparisonCheck:
             params={
                 'aggregation': 'count',
                 'comparison': '==',
-                'reference_file': str(TEST_DATA_DIR / 'customers.csv'),
+                'reference_file': str(TEST_DATA_DIR / 'testsuite_customers.csv'),
                 'reference_aggregation': 'count',  # Count is 5
                 'tolerance_pct': 50,  # Allow 50% tolerance: 3 is within 50% of 5
             }
@@ -233,7 +234,7 @@ class TestCrossFileComparisonCheck:
             params={
                 'aggregation': 'count',
                 'comparison': '>',
-                'reference_file': str(TEST_DATA_DIR / 'customers.csv'),
+                'reference_file': str(TEST_DATA_DIR / 'testsuite_customers.csv'),
                 'reference_aggregation': 'count',  # customers has 5 rows
             }
         )
@@ -261,7 +262,7 @@ class TestCrossFileDuplicateCheck:
             severity=Severity.ERROR,
             params={
                 'columns': ['id'],
-                'reference_files': [str(TEST_DATA_DIR / 'customers.csv')],
+                'reference_files': [str(TEST_DATA_DIR / 'testsuite_customers.csv')],
             }
         )
 
@@ -284,7 +285,7 @@ class TestCrossFileDuplicateCheck:
             severity=Severity.ERROR,
             params={
                 'columns': ['id'],
-                'reference_files': [str(TEST_DATA_DIR / 'customers.csv')],
+                'reference_files': [str(TEST_DATA_DIR / 'testsuite_customers.csv')],
             }
         )
 
@@ -309,7 +310,7 @@ class TestCrossFileDuplicateCheck:
             severity=Severity.WARNING,
             params={
                 'columns': ['id', 'name'],
-                'reference_files': [str(TEST_DATA_DIR / 'customers.csv')],
+                'reference_files': [str(TEST_DATA_DIR / 'testsuite_customers.csv')],
             }
         )
 
@@ -326,7 +327,7 @@ class TestCrossFileValidationIntegration:
     def test_full_order_validation_workflow(self):
         """Test a realistic order validation scenario."""
         # Read actual test data
-        orders_df = pd.read_csv(TEST_DATA_DIR / 'orders.csv')
+        orders_df = pd.read_csv(TEST_DATA_DIR / 'testsuite_orders.csv')
 
         # 1. Check referential integrity
         ref_check = ReferentialIntegrityCheck(
@@ -334,12 +335,12 @@ class TestCrossFileValidationIntegration:
             severity=Severity.ERROR,
             params={
                 'foreign_key': 'customer_id',
-                'reference_file': str(TEST_DATA_DIR / 'customers.csv'),
+                'reference_file': str(TEST_DATA_DIR / 'testsuite_customers.csv'),
                 'reference_key': 'id',
             }
         )
 
-        context = {'file_path': str(TEST_DATA_DIR / 'orders.csv')}
+        context = {'file_path': str(TEST_DATA_DIR / 'testsuite_orders.csv')}
         ref_result = ref_check.validate(iter([orders_df]), context)
 
         # Should fail (orders.csv has invalid customer IDs: 99, 88)
@@ -353,7 +354,7 @@ class TestCrossFileValidationIntegration:
             params={
                 'aggregation': 'count',
                 'comparison': '>',
-                'reference_file': str(TEST_DATA_DIR / 'customers.csv'),
+                'reference_file': str(TEST_DATA_DIR / 'testsuite_customers.csv'),
                 'reference_aggregation': 'count',
             }
         )

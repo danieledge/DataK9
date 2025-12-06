@@ -30,11 +30,11 @@ class TestPIIDetector:
 
     @pytest.fixture
     def pii_test_data(self):
-        """Load PII test data."""
-        test_data_path = Path(__file__).parent / 'test_data' / 'pii_samples.csv'
-        if not test_data_path.exists():
-            pytest.skip(f"Test data not found: {test_data_path}")
-        return pd.read_csv(test_data_path)
+        """Load PII test data from testsuite."""
+        from tests.testsuite import TESTSUITE_PII_SAMPLES
+        if not TESTSUITE_PII_SAMPLES.exists():
+            pytest.skip(f"Test data not found: {TESTSUITE_PII_SAMPLES}")
+        return pd.read_csv(TESTSUITE_PII_SAMPLES)
 
     # -------------------------------------------------------------------------
     # Email Detection Tests
