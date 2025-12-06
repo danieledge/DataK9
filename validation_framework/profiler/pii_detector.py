@@ -11,11 +11,16 @@ Detects sensitive data patterns including:
 - Names, addresses (semantic detection)
 
 Provides privacy risk scoring and redaction strategy recommendations.
+
+Pattern and indicator definitions are loaded from external JSON files
+(reference_data/pii/) for maintainability and auditability.
 """
 
 import re
 from typing import Dict, List, Any, Optional
 import logging
+
+from validation_framework.reference_data import ReferenceDataLoader
 
 
 logger = logging.getLogger(__name__)
@@ -27,10 +32,13 @@ class PIIDetector:
 
     Uses pattern-based (regex) and semantic (column name) detection
     to identify personally identifiable information.
+
+    Patterns and indicators are loaded from external JSON files via
+    ReferenceDataLoader for maintainability and auditability.
     """
 
-    # Regex patterns for common PII types
-    PATTERNS = {
+    # Default patterns (fallback if JSON not available)
+    _DEFAULT_PATTERNS = {
         'email': {
             'regex': r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b',
             'name': 'Email Address',
@@ -43,119 +51,25 @@ class PIIDetector:
             'risk_score': 95,
             'regulatory': ['HIPAA §164.514', 'SOX', 'PCI-DSS']
         },
-        'ssn_no_dash': {
-            'regex': r'\b\d{9}\b',
-            'name': 'SSN (No Dashes)',
-            'risk_score': 85,
-            'regulatory': ['HIPAA §164.514', 'SOX']
-        },
-        'phone_us': {
-            'regex': r'\b(\d{3}[-.\s]?\d{3}[-.\s]?\d{4}|\(\d{3}\)\s*\d{3}[-.\s]?\d{4}|1[-.\s]?\d{3}[-.\s]?\d{3}[-.\s]?\d{4})\b',
-            'name': 'US Phone Number',
-            'risk_score': 60,
-            'regulatory': ['GDPR Article 6', 'CCPA']
-        },
-        'phone_intl': {
-            'regex': r'\+\d{1,3}\s?\d{1,14}',
-            'name': 'International Phone Number',
-            'risk_score': 60,
-            'regulatory': ['GDPR Article 6']
-        },
         'credit_card': {
             'regex': r'\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b',
             'name': 'Credit Card Number',
             'risk_score': 100,
             'regulatory': ['PCI-DSS', 'SOX']
-        },
-        'ip_v4': {
-            'regex': r'\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b',
-            'name': 'IPv4 Address',
-            'risk_score': 40,
-            'regulatory': ['GDPR Article 6', 'CCPA']
-        },
-        'ip_v6': {
-            'regex': r'\b([0-9a-fA-F]{0,4}:){7}[0-9a-fA-F]{0,4}\b',
-            'name': 'IPv6 Address',
-            'risk_score': 40,
-            'regulatory': ['GDPR Article 6']
-        },
-        'postal_code_us': {
-            'regex': r'\b\d{5}(-\d{4})?\b',
-            'name': 'US Postal Code',
-            'risk_score': 30,
-            'regulatory': ['HIPAA §164.514(b)']
-        },
-        'postal_code_uk': {
-            'regex': r'\b[A-Z]{1,2}\d{1,2}[A-Z]?\s?\d[A-Z]{2}\b',
-            'name': 'UK Postal Code',
-            'risk_score': 30,
-            'regulatory': ['GDPR Article 6']
-        },
-        'postal_code_ca': {
-            'regex': r'\b[A-Z]\d[A-Z]\s?\d[A-Z]\d\b',
-            'name': 'Canadian Postal Code',
-            'risk_score': 30,
-            'regulatory': ['PIPEDA']
-        },
-        'date_of_birth': {
-            'regex': r'\b(0[1-9]|1[0-2])/(0[1-9]|[12]\d|3[01])/(19|20)\d{2}\b',
-            'name': 'Date of Birth (MM/DD/YYYY)',
-            'risk_score': 75,
-            'regulatory': ['HIPAA §164.514', 'GDPR Article 9']
         }
     }
 
-    # Semantic column name indicators
-    COLUMN_NAME_INDICATORS = {
+    # Default column indicators (fallback if JSON not available)
+    _DEFAULT_COLUMN_INDICATORS = {
         'email': {
-            'keywords': ['email', 'e_mail', 'mail', 'email_address', 'contact_email'],
+            'keywords': ['email', 'e_mail', 'mail'],
             'risk_score': 70,
             'pii_type': 'email'
         },
         'ssn': {
-            'keywords': ['ssn', 'social_security', 'social_security_number', 'tax_id', 'tin'],
+            'keywords': ['ssn', 'social_security'],
             'risk_score': 95,
             'pii_type': 'ssn'
-        },
-        'phone': {
-            'keywords': ['phone', 'telephone', 'mobile', 'cell', 'phone_number', 'tel', 'fax'],
-            'risk_score': 60,
-            'pii_type': 'phone_us'
-        },
-        'credit_card': {
-            'keywords': ['cc', 'credit_card', 'card_number', 'pan', 'card_num', 'cc_number'],
-            'risk_score': 100,
-            'pii_type': 'credit_card'
-        },
-        'name': {
-            'keywords': ['first_name', 'last_name', 'full_name', 'name', 'surname', 'given_name', 'family_name'],
-            'risk_score': 50,
-            'pii_type': 'name'
-        },
-        'address': {
-            'keywords': ['address', 'street', 'street_address', 'address_line', 'city', 'state', 'zip', 'postal'],
-            'risk_score': 60,
-            'pii_type': 'address'
-        },
-        'dob': {
-            'keywords': ['dob', 'date_of_birth', 'birthdate', 'birth_date', 'birthday'],
-            'risk_score': 75,
-            'pii_type': 'date_of_birth'
-        },
-        'account': {
-            'keywords': ['account_number', 'account_num', 'acct_num', 'bank_account', 'account', 'acct'],
-            'risk_score': 85,
-            'pii_type': 'account_number'
-        },
-        'license': {
-            'keywords': ['license', 'licence', 'drivers_license', 'dl_number', 'license_number'],
-            'risk_score': 80,
-            'pii_type': 'license'
-        },
-        'passport': {
-            'keywords': ['passport', 'passport_number', 'passport_num'],
-            'risk_score': 90,
-            'pii_type': 'passport'
         }
     }
 
@@ -170,10 +84,27 @@ class PIIDetector:
         self.min_confidence = min_confidence
         self.sample_size = sample_size
 
+        # Load patterns from external JSON via ReferenceDataLoader
+        self.patterns = ReferenceDataLoader.get_pii_patterns()
+        if not self.patterns:
+            logger.warning("No PII patterns loaded from JSON, using defaults")
+            self.patterns = self._DEFAULT_PATTERNS
+
+        # Load column name indicators from external JSON
+        self.column_indicators = ReferenceDataLoader.get_column_indicators()
+        if not self.column_indicators:
+            logger.warning("No column indicators loaded from JSON, using defaults")
+            self.column_indicators = self._DEFAULT_COLUMN_INDICATORS
+
+        logger.debug(
+            f"PIIDetector initialized: {len(self.patterns)} patterns, "
+            f"{len(self.column_indicators)} column indicators"
+        )
+
         # Compile regex patterns for performance
         self.compiled_patterns = {
             pii_type: re.compile(info['regex'], re.IGNORECASE)
-            for pii_type, info in self.PATTERNS.items()
+            for pii_type, info in self.patterns.items()
         }
 
     def detect_pii_in_column(
@@ -300,7 +231,7 @@ class PIIDetector:
         # Also include the full normalized name for multi-word keyword matching
         column_tokens.add(column_name_normalized)
 
-        for category, info in self.COLUMN_NAME_INDICATORS.items():
+        for category, info in self.column_indicators.items():
             for keyword in info['keywords']:
                 # Use word boundary matching to avoid false positives like 'cc' in 'account'
                 # Check if keyword matches a full token OR if keyword (with underscores)
@@ -390,7 +321,7 @@ class PIIDetector:
 
                 # Only report if confidence meets threshold
                 if confidence >= self.min_confidence:
-                    pattern_info = self.PATTERNS[pii_type]
+                    pattern_info = self.patterns[pii_type]
 
                     matches.append({
                         "pii_type": pii_type,
@@ -452,8 +383,8 @@ class PIIDetector:
 
     def _get_regulatory_frameworks(self, pii_type: str) -> List[str]:
         """Get applicable regulatory frameworks for PII type."""
-        if pii_type in self.PATTERNS:
-            return self.PATTERNS[pii_type].get('regulatory', [])
+        if pii_type in self.patterns:
+            return self.patterns[pii_type].get('regulatory', [])
         return []
 
     def _suggest_redaction_strategy(

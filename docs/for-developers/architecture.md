@@ -726,6 +726,14 @@ validation_framework/
 │   │   └── advanced_checks.py # Statistical validations
 │   └── custom/
 │       └── __init__.py       # Custom validations
+├── reference_data/
+│   ├── __init__.py           # Exports ReferenceDataLoader
+│   ├── loader.py             # ISO standard data loading (pycountry)
+│   ├── pii/
+│   │   ├── patterns.json     # PII detection patterns
+│   │   └── column_indicators.json  # Column name indicators
+│   └── patterns/
+│       └── validation_patterns.json  # ID/measurement patterns
 └── reporters/
     ├── __init__.py
     ├── base.py               # Reporter abstract base
@@ -736,9 +744,11 @@ validation_framework/
 ### Dependencies
 
 **Core Dependencies**:
-- `pandas >= 1.3.0` - Data manipulation
-- `pyyaml >= 5.4.0` - YAML parsing
-- `jinja2 >= 3.0.0` - HTML templating
+- `pandas >= 2.0.0` - Data manipulation
+- `polars >= 0.20.0` - High-performance data processing (default backend)
+- `pyyaml >= 6.0` - YAML parsing
+- `jinja2 >= 3.1.0` - HTML templating
+- `pycountry >= 22.3.5` - ISO standards (countries, currencies)
 
 **Optional Dependencies**:
 - `openpyxl >= 3.0.0` - Excel support

@@ -452,6 +452,7 @@ class ProfileResult:
     ml_findings: Optional[Dict[str, Any]] = None  # Beta ML analysis results
     data_lineage: Optional[DataLineage] = None  # Data lineage and provenance tracking
     csv_format_issues: Optional[Dict[str, Any]] = None  # CSV structural issues detected
+    categorical_analysis: Optional[Dict[str, Any]] = None  # Categorical association analysis
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary representation."""
@@ -491,5 +492,9 @@ class ProfileResult:
         # Add CSV format issues if present
         if self.csv_format_issues:
             result["csv_format_issues"] = self.csv_format_issues
+
+        # Add categorical analysis if present
+        if self.categorical_analysis:
+            result["categorical_analysis"] = convert_numpy_types(self.categorical_analysis)
 
         return result
