@@ -16,9 +16,10 @@ import re
 import json
 import logging
 from pathlib import Path
-from typing import Dict, List, Any, Optional, Tuple
+from typing import Dict, List, Any, Optional, Tuple, Set
 
 from validation_framework.profiler.semantic_info import SemanticInfo
+from validation_framework.reference_data import ReferenceDataLoader
 
 logger = logging.getLogger(__name__)
 
@@ -491,3 +492,49 @@ class SemanticTagger:
             return self.tag_definitions[semantic_tag].get('skip_validations', [])
 
         return []
+
+    def get_expected_values(self, semantic_tag: str) -> Optional[Set[str]]:
+        """
+        Get expected valid values for a semantic tag.
+
+        For tags with reference_source (e.g., money.currency), loads values
+        from ReferenceDataLoader. Otherwise returns static expected_values
+        from taxonomy.
+
+        Args:
+            semantic_tag: Semantic tag (e.g., 'money.currency')
+
+        Returns:
+            Set of valid values or None if not applicable
+        """
+        if semantic_tag not in self.tag_definitions:
+            return None
+
+        tag_def = self.tag_definitions[semantic_tag]
+
+        # Check for dynamic reference source
+        ref_source = tag_def.get('reference_source')
+        if ref_source:
+            loader_name = ref_source.get('loader')
+            method_name = ref_source.get('method')
+
+            if loader_name == 'ReferenceDataLoader' and method_name:
+                # Dynamically call the ReferenceDataLoader method
+                loader_method = getattr(ReferenceDataLoader, method_name, None)
+                if loader_method:
+                    try:
+                        values = loader_method()
+                        logger.debug(
+                            f"Loaded {len(values)} expected values for {semantic_tag} "
+                            f"from {loader_name}.{method_name} ({ref_source.get('standard', 'unknown')})"
+                        )
+                        return values
+                    except Exception as e:
+                        logger.warning(f"Failed to load reference values for {semantic_tag}: {e}")
+
+        # Fall back to static expected_values if defined
+        expected = tag_def.get('expected_values')
+        if expected:
+            return set(expected)
+
+        return None

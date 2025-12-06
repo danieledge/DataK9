@@ -392,6 +392,7 @@ class ExecutiveHTMLReporter:
         # Pre-join charts for each section
         distribution_charts = ''.join(viz_charts.get('distributions', []))
         predictive_ml_charts = ''.join(viz_charts.get('predictive_ml', []))
+        # Detection reasons now shown directly on ML TARGET cards (unified view)
         anomaly_charts = ''.join(viz_charts.get('anomalies', []))
         temporal_charts = ''.join(viz_charts.get('temporal', []))
         correlation_charts = ''.join(viz_charts.get('correlations', []))
@@ -571,6 +572,9 @@ class ExecutiveHTMLReporter:
                 <!-- Quality Metrics Accordion -->
                 {self._generate_quality_accordion(profile)}
 
+                <!-- Missing Data Patterns -->
+                {self._generate_missing_patterns_section(profile.categorical_analysis) if profile.categorical_analysis else ''}
+
                 <!-- Overview Visualizations - Quality Radar (relocated from Advanced Visualizations) -->
                 {overview_charts}
             </div>
@@ -695,7 +699,7 @@ class ExecutiveHTMLReporter:
             </div>
             <div class="section-accordion-content">
                 <!-- Column Relationships / Correlations -->
-                {self._generate_correlations_section(profile.correlations, field_descriptions, context_store, profile.ml_findings) if profile.correlations else '<p style="color: var(--text-muted);">No significant correlations detected.</p>'}
+                {self._generate_correlations_section(profile.correlations, field_descriptions, context_store, profile.ml_findings, profile.categorical_analysis) if profile.correlations or profile.categorical_analysis else '<p style="color: var(--text-muted);">No significant correlations detected.</p>'}
 
                 <!-- Correlation Visualizations (relocated from Advanced Visualizations) -->
                 {correlation_charts}
@@ -5780,10 +5784,12 @@ class ExecutiveHTMLReporter:
             </div>
         </section>'''
 
-    def _generate_correlations_section(self, correlations: List, field_descriptions: Dict = None, context_store: Dict = None, ml_findings: Dict = None) -> str:
+    def _generate_correlations_section(self, correlations: List, field_descriptions: Dict = None, context_store: Dict = None, ml_findings: Dict = None, categorical_analysis: Dict = None) -> str:
         """Generate column correlations/associations section with insight-driven cards."""
-        if not correlations:
+        if not correlations and not categorical_analysis:
             return ''
+
+        correlations = correlations or []
 
         # Helper to get friendly name
         def get_friendly(col):
@@ -5798,7 +5804,8 @@ class ExecutiveHTMLReporter:
 
         # If we have synthesized insights, use the new card layout
         if correlation_insights and len(correlation_insights) > 0:
-            return self._generate_insight_cards_section(correlation_insights, field_descriptions, context_store)
+            insight_html = self._generate_insight_cards_section(correlation_insights, field_descriptions, context_store)
+            return insight_html
 
         # Fallback to original implementation if no insights available
         # Get correlations used for context-aware validation
@@ -5827,7 +5834,13 @@ class ExecutiveHTMLReporter:
                 seen[key] = c
 
         unique_correlations = sorted(seen.values(), key=lambda x: abs(x.get('correlation', 0)), reverse=True)
-        if not unique_correlations:
+
+        # Check if we have categorical analysis data
+        has_categorical_data = (categorical_analysis and categorical_analysis.get('available') and
+                               (categorical_analysis.get('cramers_v_associations') or
+                                categorical_analysis.get('point_biserial_associations')))
+
+        if not unique_correlations and not has_categorical_data:
             return ''
 
         # Build unified list of all relationships
@@ -5867,6 +5880,48 @@ class ExecutiveHTMLReporter:
                 'used_for_context': pair_key in context_correlations,
                 'method': c.get('type', 'pearson')
             })
+
+        # Add Cramér's V associations (categorical×categorical)
+        if categorical_analysis and categorical_analysis.get('available'):
+            for assoc in categorical_analysis.get('cramers_v_associations', []):
+                col1_raw = assoc.get('column1', '')
+                col2_raw = assoc.get('column2', '')
+                v_value = assoc.get('association', 0)
+                all_relationships.append({
+                    'type': 'cramers_v',
+                    'strength': v_value ** 2,  # V² for comparable "variance explained"
+                    'col1_raw': col1_raw,
+                    'col2_raw': col2_raw,
+                    'col1': get_friendly(col1_raw),
+                    'col2': get_friendly(col2_raw),
+                    'cramers_v': v_value,
+                    'p_value': assoc.get('p_value', 0),
+                    'is_significant': assoc.get('is_significant', False),
+                    'used_for_context': False,
+                    'method': 'cramers_v',
+                    'interpretation': assoc.get('interpretation', '')
+                })
+
+            # Add point-biserial associations (binary×numeric)
+            for assoc in categorical_analysis.get('point_biserial_associations', []):
+                binary_col = assoc.get('binary_column', '')
+                numeric_col = assoc.get('numeric_column', '')
+                corr_val = assoc.get('correlation', 0)
+                all_relationships.append({
+                    'type': 'point_biserial',
+                    'strength': corr_val ** 2,
+                    'col1_raw': binary_col,
+                    'col2_raw': numeric_col,
+                    'col1': get_friendly(binary_col),
+                    'col2': get_friendly(numeric_col),
+                    'correlation': corr_val,
+                    'p_value': assoc.get('p_value', 0),
+                    'is_significant': assoc.get('is_significant', False),
+                    'used_for_context': False,
+                    'method': 'point_biserial',
+                    'direction': assoc.get('direction', 'positive'),
+                    'interpretation': assoc.get('interpretation', '')
+                })
 
         all_relationships.sort(key=lambda x: x['strength'], reverse=True)
 
@@ -5935,16 +5990,47 @@ class ExecutiveHTMLReporter:
                         <div><span style="color: var(--text-muted);">Grouping Column:</span> {rel['col2']}</div>
                         <div><span style="color: var(--text-muted);">Value Column:</span> {rel['col1']}</div>
                     </div>'''
+            elif rel['type'] == 'cramers_v':
+                v_value = rel.get('cramers_v', 0)
+                p_value = rel.get('p_value', 0)
+                rel_title = f"{rel['col1']} ↔ {rel['col2']}"
+                plain_text = f"Knowing the value of <strong>{rel['col1']}</strong> helps predict <strong>{rel['col2']}</strong> (and vice versa). These categorical columns are associated."
+                implication = rel.get('interpretation', "These categorical columns tend to vary together.")
+                sig_text = "statistically significant" if rel.get('is_significant') else "not statistically significant"
+                tech_details = f'''
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 0.8em;">
+                        <div><span style="color: var(--text-muted);">Type:</span> Categorical Association (Cramér's V)</div>
+                        <div><span style="color: var(--text-muted);">Cramér's V:</span> {v_value:.3f}</div>
+                        <div><span style="color: var(--text-muted);">V² (Variance Explained):</span> {strength*100:.1f}%</div>
+                        <div><span style="color: var(--text-muted);">P-value:</span> {p_value:.4f} ({sig_text})</div>
+                    </div>'''
+            elif rel['type'] == 'point_biserial':
+                corr_val = rel.get('correlation', 0)
+                p_value = rel.get('p_value', 0)
+                direction = rel.get('direction', 'positive')
+                rel_title = f"{rel['col1']} → {rel['col2']}"
+                direction_word = "higher" if direction == 'positive' else "lower"
+                plain_text = f"When <strong>{rel['col1']}</strong> is true/1, <strong>{rel['col2']}</strong> tends to be {direction_word}."
+                implication = rel.get('interpretation', "This binary flag is associated with differences in the numeric column.")
+                sig_text = "statistically significant" if rel.get('is_significant') else "not statistically significant"
+                tech_details = f'''
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 0.8em;">
+                        <div><span style="color: var(--text-muted);">Type:</span> Binary×Numeric (Point-Biserial)</div>
+                        <div><span style="color: var(--text-muted);">Correlation (r):</span> {corr_val:+.3f}</div>
+                        <div><span style="color: var(--text-muted);">R² (Variance Explained):</span> {strength*100:.1f}%</div>
+                        <div><span style="color: var(--text-muted);">P-value:</span> {p_value:.4f} ({sig_text})</div>
+                    </div>'''
             else:
-                corr_val = rel['correlation']
+                corr_val = rel.get('correlation', 0)
                 r_squared = rel['strength']
                 direction_word = "decreases" if corr_val < 0 else "increases"
                 rel_title = f"{rel['col1']} ↔ {rel['col2']}"
                 plain_text = f"When <strong>{rel['col1']}</strong> goes up, <strong>{rel['col2']}</strong> tends to go {'down' if corr_val < 0 else 'up'} (and vice versa)."
                 implication = "These columns are linked — changes in one are associated with changes in the other."
+                method_name = rel.get('method', 'pearson').title()
                 tech_details = f'''
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 0.8em;">
-                        <div><span style="color: var(--text-muted);">Type:</span> Numeric Correlation (Pearson)</div>
+                        <div><span style="color: var(--text-muted);">Type:</span> Numeric Correlation ({method_name})</div>
                         <div><span style="color: var(--text-muted);">Correlation (r):</span> {corr_val:+.3f}</div>
                         <div><span style="color: var(--text-muted);">R² (Variance Explained):</span> {r_squared*100:.1f}%</div>
                         <div><span style="color: var(--text-muted);">Direction:</span> {'Negative (inverse)' if corr_val < 0 else 'Positive'}</div>
@@ -6049,6 +6135,161 @@ class ExecutiveHTMLReporter:
                 {''.join(relationship_cards)}
             </div>
         '''
+
+    def _generate_missing_patterns_section(self, categorical_analysis: Dict) -> str:
+        """Generate missing data pattern analysis for Quality section."""
+        if not categorical_analysis or not categorical_analysis.get('available'):
+            return ''
+
+        patterns = categorical_analysis.get('missing_patterns', [])
+        if not patterns:
+            return ''
+
+        cards_html = []
+        for pattern in patterns:
+            col_name = pattern.get('column', '')
+            missing_rate = pattern.get('missing_rate', 0)
+            mechanism = pattern.get('likely_mechanism', 'MCAR')
+            confidence = pattern.get('confidence', 0.5)
+            interpretation = pattern.get('interpretation', '')
+            correlations = pattern.get('correlations_with_missingness', [])
+
+            # Color based on mechanism type
+            mechanism_colors = {
+                'MCAR': ('#10b981', 'Random'),
+                'MAR': ('#f59e0b', 'Predictable'),
+                'MNAR': ('#ef4444', 'Systematic')
+            }
+            mech_color, mech_label = mechanism_colors.get(mechanism, ('#6b7280', 'Unknown'))
+
+            # Build correlations list
+            corr_items = []
+            for corr in correlations[:3]:  # Show top 3
+                corr_col = corr.get('column', '')
+                if 'correlation' in corr:
+                    corr_val = corr.get('correlation', 0)
+                    corr_items.append(f'<li><strong>{corr_col}</strong> (r={corr_val:+.2f})</li>')
+                elif 'chi_squared' in corr:
+                    chi2 = corr.get('chi_squared', 0)
+                    corr_items.append(f'<li><strong>{corr_col}</strong> (χ²={chi2:.1f})</li>')
+
+            corr_html = f'<ul style="margin: 8px 0 0 0; padding: 0 0 0 20px; font-size: 0.85em; color: var(--text-secondary);">{" ".join(corr_items)}</ul>' if corr_items else ''
+
+            cards_html.append(f'''
+            <div style="background: var(--bg-card); border-radius: 10px; border: 1px solid var(--border-subtle); border-left: 4px solid {mech_color}; padding: 16px; margin-bottom: 12px;">
+                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+                    <div style="flex: 1;">
+                        <div style="font-weight: 600; font-size: 1em; color: var(--text-primary);">{col_name}</div>
+                        <div style="font-size: 0.8em; color: var(--text-muted);">{missing_rate:.1f}% missing</div>
+                    </div>
+                    <div style="text-align: right;">
+                        <div style="background: {mech_color}20; color: {mech_color}; padding: 4px 10px; border-radius: 12px; font-size: 0.8em; font-weight: 600;">
+                            {mechanism} - {mech_label}
+                        </div>
+                    </div>
+                </div>
+                <div style="background: var(--bg-primary); padding: 12px; border-radius: 6px;">
+                    <p style="margin: 0; font-size: 0.85em; color: var(--text-secondary);">{interpretation}</p>
+                    {corr_html}
+                </div>
+            </div>''')
+
+        return f'''
+        <div style="margin-top: 24px; margin-bottom: 20px;">
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" style="width: 20px; height: 20px;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                <h3 style="margin: 0; font-size: 1em; color: var(--text-primary);">Missing Data Patterns</h3>
+                <span style="background: #f59e0b20; color: #f59e0b; padding: 2px 8px; border-radius: 10px; font-size: 0.75em; font-weight: 600;">{len(patterns)} analyzed</span>
+            </div>
+            <p style="margin: 0 0 16px 0; font-size: 0.9em; color: var(--text-secondary);">
+                Understanding <em>why</em> data is missing helps choose the right imputation strategy.
+                <strong>MCAR</strong> = random, <strong>MAR</strong> = predictable from other columns, <strong>MNAR</strong> = related to the missing value itself.
+            </p>
+            {''.join(cards_html)}
+        </div>
+        '''
+
+    def _generate_potential_outcomes_section(self, categorical_analysis: Dict) -> str:
+        """Generate potential ML target outcomes section based on past-tense verb patterns."""
+        if not categorical_analysis or not categorical_analysis.get('potential_outcomes'):
+            return ''
+
+        outcomes = categorical_analysis['potential_outcomes']
+        if not outcomes:
+            return ''
+
+        outcome_cards = []
+        for rank, outcome in enumerate(outcomes, 1):
+            col_name = outcome.get('column', '')
+            pattern_matched = outcome.get('pattern_matched', '')
+            value_counts = outcome.get('value_counts', {})
+            ml_score = outcome.get('ml_target_score', 0)
+            score_factors = outcome.get('score_factors', [])
+            correlated_features = outcome.get('correlated_features', 0)
+            class_balance = outcome.get('class_balance', 0)
+            values_str = ', '.join(f"{k}: {v}" for k, v in list(value_counts.items())[:3])
+
+            # Score color based on ML target potential
+            if ml_score >= 70:
+                score_color = '#10b981'  # Green - excellent
+                score_label = 'Excellent'
+            elif ml_score >= 50:
+                score_color = '#f59e0b'  # Amber - good
+                score_label = 'Good'
+            elif ml_score >= 30:
+                score_color = '#6366f1'  # Purple - fair
+                score_label = 'Fair'
+            else:
+                score_color = '#6b7280'  # Gray - limited
+                score_label = 'Limited'
+
+            # Build score factors display
+            factors_html = ''
+            if score_factors:
+                factors_html = f'''<div style="margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px;">
+                    {''.join(f'<span style="background: var(--bg-primary); padding: 2px 8px; border-radius: 10px; font-size: 0.75em; color: var(--text-muted);">{f}</span>' for f in score_factors)}
+                </div>'''
+
+            outcome_cards.append(f'''
+            <div style="background: var(--bg-card); border-radius: 10px; border-left: 4px solid {score_color}; padding: 12px 16px; border: 1px solid var(--border-subtle);">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <div style="background: linear-gradient(135deg, {score_color}, {score_color}dd); width: 40px; height: 40px; border-radius: 8px; display: flex; align-items: center; justify-content: center; flex-direction: column;">
+                        <span style="color: white; font-weight: 700; font-size: 0.9em;">{ml_score:.0f}</span>
+                    </div>
+                    <div style="flex: 1;">
+                        <div style="font-weight: 600; color: var(--text-primary); font-size: 0.95em;">{col_name}</div>
+                        <div style="font-size: 0.8em; color: var(--text-muted);">
+                            Matched: <code style="background: var(--bg-primary); padding: 1px 4px; border-radius: 3px;">{pattern_matched}</code>
+                        </div>
+                    </div>
+                    <div style="text-align: right;">
+                        <div style="background: {score_color}; color: white; padding: 3px 10px; border-radius: 12px; font-size: 0.75em; font-weight: 600;">
+                            {score_label} Target
+                        </div>
+                        <div style="font-size: 0.7em; color: var(--text-muted); margin-top: 4px;">ML Score</div>
+                    </div>
+                </div>
+                <div style="margin-top: 10px; font-size: 0.85em; color: var(--text-secondary);">
+                    <strong>Distribution:</strong> {values_str}
+                </div>
+                {factors_html}
+            </div>''')
+
+        return f'''
+        <div style="margin-top: 24px; border-top: 1px solid var(--border-subtle); padding-top: 20px;">
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" stroke-width="2" style="width: 20px; height: 20px;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                <h4 style="margin: 0; font-size: 0.95em; color: var(--text-primary);">Potential ML Target Columns</h4>
+                <span style="font-size: 0.75em; color: var(--text-muted);">(past-tense verb pattern detected)</span>
+            </div>
+            <p style="font-size: 0.85em; color: var(--text-secondary); margin: 0 0 12px 0;">
+                Columns with names like "Survived", "Passed", or "Completed" often represent outcomes suitable for ML classification.
+                Score based on class balance, correlated features, and data completeness.
+            </p>
+            <div style="display: flex; flex-direction: column; gap: 12px;">
+                {''.join(outcome_cards)}
+            </div>
+        </div>'''
 
     def _generate_insight_cards_section(self, insights: List[Dict], field_descriptions: Dict = None, context_store: Dict = None) -> str:
         """Generate new insight-driven correlation cards with comparison bars and metric pills."""
@@ -9646,15 +9887,48 @@ the largest difference between classes - a strong candidate for predictive model
         # ═══════════════════════════════════════════════════════════════
         class_data = viz_data.get('class_imbalance', {})
         if class_data:
+            # Get field descriptions for friendly names in detection reasons
+            context_store = ml_findings.get('context_store', {})
+            field_descs = context_store.get('field_descriptions', {})
+
+            def get_friendly_name(col_name):
+                """Get friendly name for a column."""
+                if field_descs and col_name in field_descs:
+                    return field_descs[col_name].get('friendly_name', col_name)
+                return col_name
+
+            def translate_detection_reason(reason):
+                """Translate column names in detection reason to friendly names."""
+                import re
+                # Pattern: "Past-tense verb: ColumnName" or similar
+                patterns = [
+                    (r'Past-tense verb: (\w+)', 'Past-tense verb'),
+                    (r'Keyword: \'(\w+)\'', 'Keyword'),
+                    (r'Prefix pattern: (\w+)\*', 'Prefix pattern'),
+                    (r'Suffix pattern: \*(\w+)', 'Suffix pattern'),
+                ]
+                for pattern, label in patterns:
+                    match = re.search(pattern, reason)
+                    if match:
+                        col_name = match.group(1)
+                        friendly = get_friendly_name(col_name)
+                        if friendly != col_name:
+                            return reason.replace(col_name, friendly)
+                return reason
+
             # Separate target columns from non-target columns for visual grouping
             target_charts = ''
             other_charts = ''
             imbalance_scripts = []
 
-            # Sort to prioritize target columns first, then limit to 6 total
+            # Sort by number of detection signals (most first), then by target status, then by name
             sorted_items = sorted(
                 class_data.items(),
-                key=lambda x: (not x[1].get('is_target_like', False), x[0])
+                key=lambda x: (
+                    -len(x[1].get('detection_reasons', [])),  # Most signals first
+                    not x[1].get('is_target_like', False),    # Targets before non-targets
+                    x[0]                                       # Alphabetical tie-breaker
+                )
             )
 
             for idx, (col, data) in enumerate(sorted_items[:6]):
@@ -9666,161 +9940,121 @@ the largest difference between classes - a strong candidate for predictive model
                 is_target = data.get('is_target_like', False)
                 is_binary = data.get('is_binary', False)
                 total = data.get('total', 0)
+                detection_reasons = data.get('detection_reasons', [])
 
-                # Check for imbalance
+                # Check for imbalance - use consistent format
                 if is_binary and len(classes) >= 2:
                     minority_pct = min(c['percentage'] for c in classes)
                     imbalance_status = 'critical' if minority_pct < 10 else 'warning' if minority_pct < 30 else 'good'
-                    imbalance_note = f"Minority class: {minority_pct:.1f}%"
+                    imbalance_note = f"binary"
                 else:
                     imbalance_status = 'info'
-                    imbalance_note = f"{len(classes)} classes"
+                    imbalance_note = f"{len(classes)}-class"
 
-                # Target columns get a highlighted border and badge
+                # Target columns get a consolidated card layout
                 if is_target:
                     # Get feature importance data for this target
                     target_feature_analysis = ml_findings.get('target_feature_analysis', {}).get(col, {})
-                    feature_associations = target_feature_analysis.get('feature_associations', [])[:5]
+                    feature_associations = target_feature_analysis.get('feature_associations', [])  # All predictors
 
-                    # Build feature importance bars
+                    # Build compact feature bars
                     feature_bars = ''
-                    # Semantic types that indicate unlikely useful predictors
                     unlikely_useful_types = {'schema:name', 'schema:identifier', 'schema:email',
                                              'schema:telephone', 'schema:URL', 'schema:Text'}
+                    has_warned = False
                     if feature_associations:
                         for fa in feature_associations:
                             feat_full_name = fa.get('feature', '')
-                            feat_name = feat_full_name[:15]  # Truncate long names
+                            feat_friendly = get_friendly_name(feat_full_name)
+                            feat_name = feat_friendly[:12]
                             strength = fa.get('association_strength', 0)
                             bar_width = min(100, strength * 100)
-
-                            # Check semantic type for this feature
                             feat_semantic = column_semantic.get(feat_full_name, {})
-                            schema_type = feat_semantic.get('schema_type', '')
-                            is_unlikely_useful = schema_type in unlikely_useful_types
-
-                            # Dim the bar and add tag for unlikely useful features
-                            if is_unlikely_useful:
-                                bar_color = '#6b728080'  # Dimmed gray
-                                semantic_tag = f'<span style="font-size: 0.6em; color: #f59e0b; margin-left: 4px;" title="High correlation due to uniqueness, not predictive value"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;vertical-align:-1px"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span>'
+                            is_unlikely = feat_semantic.get('schema_type', '') in unlikely_useful_types
+                            if is_unlikely:
+                                has_warned = True
+                                bar_color = '#6b728080'
                             else:
                                 bar_color = '#10b981' if strength >= 0.3 else '#f59e0b' if strength >= 0.15 else '#6b7280'
-                                semantic_tag = ''
-
-                            feature_bars += f'''
-                                <div style="display: flex; align-items: center; margin-bottom: 6px;">
-                                    <span style="font-size: 0.75em; color: var(--text-secondary); width: 80px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{feat_full_name}">{feat_name}{semantic_tag}</span>
-                                    <div style="flex: 1; height: 8px; background: rgba(255,255,255,0.1); border-radius: 4px; margin: 0 8px; overflow: hidden;">
-                                        <div style="height: 100%; width: {bar_width}%; background: {bar_color}; border-radius: 4px;{' opacity: 0.5;' if is_unlikely_useful else ''}"></div>
-                                    </div>
-                                    <span style="font-size: 0.7em; color: var(--text-muted); width: 35px; text-align: right;">{strength:.2f}</span>
-                                </div>'''
-
-                    feature_importance_card = ''
-                    # Check if any features have warning tags
-                    has_warned_features = any(
-                        column_semantic.get(fa.get('feature', ''), {}).get('schema_type', '') in unlikely_useful_types
-                        for fa in feature_associations[:5]
-                    )
-                    warning_legend = ''
-                    if has_warned_features:
-                        warning_legend = '''
-                            <div style="font-size: 0.7em; color: #f59e0b; margin-top: 8px; padding: 6px 8px; background: rgba(245, 158, 11, 0.1); border-radius: 4px; border-left: 2px solid #f59e0b;">
-                                <svg style="width: 12px; height: 12px; vertical-align: -1px; margin-right: 4px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
-                                <strong>Dimmed features:</strong> High-cardinality fields (names, IDs, tickets) show high correlation due to uniqueness, not predictive value. Exclude these from ML models.
+                            feature_bars += f'''<div style="display:flex;align-items:center;margin-bottom:4px;">
+                                <span style="font-size:0.7em;color:var(--text-muted);width:70px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="{feat_friendly}">{feat_name}{'*' if is_unlikely else ''}</span>
+                                <div style="flex:1;height:6px;background:rgba(255,255,255,0.1);border-radius:3px;margin:0 6px;overflow:hidden;">
+                                    <div style="height:100%;width:{bar_width}%;background:{bar_color};border-radius:3px;"></div>
+                                </div>
+                                <span style="font-size:0.65em;color:var(--text-muted);width:28px;text-align:right;">{strength:.2f}</span>
                             </div>'''
 
-                    if feature_bars:
-                        feature_importance_card = f'''
-                        <div style="flex: 1; min-width: 280px; background: var(--bg-card); border-radius: 8px; padding: 16px; border: 2px solid #f59e0b; position: relative;">
-                            <div style="position: absolute; top: -10px; left: 12px; background: linear-gradient(135deg, #10b981, #059669); color: white; font-size: 0.7em; font-weight: 600; padding: 2px 8px; border-radius: 4px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:10px;height:10px;vertical-align:-1px;margin-right:2px"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg> FEATURE IMPORTANCE</div>
-                            <div style="margin-top: 8px;">
-                                <div style="font-size: 0.85em; color: var(--text-primary); margin-bottom: 12px; font-weight: 500;">Top Predictors for {col}</div>
-                                {feature_bars}
-                            </div>
-                            <div style="font-size: 0.7em; color: var(--text-muted); margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--border-color);">
-                                Higher values = stronger association with target
-                            </div>
-                            {warning_legend}
-                        </div>'''
-
-                    # ML Readiness assessment
-                    ml_readiness_items = []
-                    ml_issues = []
-
-                    # Check class balance
+                    # ML Readiness - compact assessment
+                    ml_status_items = []
                     if is_binary and len(classes) >= 2:
-                        class_counts_sorted = sorted([c['count'] for c in classes], reverse=True)
-                        if len(class_counts_sorted) >= 2:
-                            minority_ratio = class_counts_sorted[-1] / class_counts_sorted[0]
-                            if minority_ratio < 0.1:
-                                ml_issues.append(('Severe class imbalance', f'Minority class is only {minority_ratio*100:.1f}% of majority'))
-                            elif minority_ratio < 0.3:
-                                ml_issues.append(('Moderate imbalance', 'Consider SMOTE or class weights'))
+                        class_counts = sorted([c['count'] for c in classes], reverse=True)
+                        if len(class_counts) >= 2:
+                            ratio = class_counts[-1] / class_counts[0]
+                            if ratio >= 0.3:
+                                ml_status_items.append(('✓', 'Balanced'))
+                            elif ratio >= 0.1:
+                                ml_status_items.append(('⚠', 'Imbalanced'))
                             else:
-                                ml_readiness_items.append(('✓ Class balance', 'OK for training'))
+                                ml_status_items.append(('✗', 'Severe imbalance'))
 
-                    # Check if we have enough features
                     if feature_associations:
-                        strong_features = sum(1 for fa in feature_associations if fa.get('association_strength', 0) >= 0.2)
-                        if strong_features >= 2:
-                            ml_readiness_items.append(('✓ Feature signal', f'{strong_features} predictive features'))
-                        elif strong_features == 1:
-                            ml_issues.append(('Limited features', 'Only 1 strong predictor found'))
+                        strong = sum(1 for fa in feature_associations if fa.get('association_strength', 0) >= 0.2)
+                        if strong >= 2:
+                            ml_status_items.append(('✓', f'{strong} predictors'))
+                        elif strong == 1:
+                            ml_status_items.append(('⚠', '1 predictor'))
                         else:
-                            ml_issues.append(('Weak signal', 'No strong predictors detected'))
+                            ml_status_items.append(('⚠', 'Weak signal'))
 
-                    # Check sample size
                     if total >= 1000:
-                        ml_readiness_items.append(('✓ Sample size', f'{total:,} rows sufficient'))
+                        ml_status_items.append(('✓', f'{total:,} rows'))
                     elif total >= 100:
-                        ml_issues.append(('Small dataset', f'Only {total:,} rows - may overfit'))
+                        ml_status_items.append(('⚠', f'{total:,} rows'))
                     else:
-                        ml_issues.append(('Very small', f'{total:,} rows - insufficient'))
+                        ml_status_items.append(('✗', f'{total:,} rows'))
 
-                    # Build ML readiness card
-                    readiness_color = '#10b981' if len(ml_issues) == 0 else '#f59e0b' if len(ml_issues) <= 1 else '#ef4444'
-                    readiness_label = 'READY' if len(ml_issues) == 0 else 'CAUTION' if len(ml_issues) <= 1 else 'ISSUES'
+                    # Build compact status line
+                    status_html = ' '.join([
+                        f'<span style="color:{"#10b981" if s=="✓" else "#f59e0b" if s=="⚠" else "#ef4444"};font-size:0.7em;">{s} {t}</span>'
+                        for s, t in ml_status_items
+                    ])
 
-                    readiness_items_html = ''
-                    for label, detail in ml_readiness_items:
-                        readiness_items_html += f'<div style="font-size: 0.8em; color: #10b981; margin-bottom: 4px;">{label}: <span style="color: var(--text-muted);">{detail}</span></div>'
-                    for label, detail in ml_issues:
-                        readiness_items_html += f'<div style="font-size: 0.8em; color: #ef4444; margin-bottom: 4px;">⚠ {label}: <span style="color: var(--text-muted);">{detail}</span></div>'
+                    # Detection signals - inline chips
+                    signals_html = ''
+                    if detection_reasons:
+                        translated = [translate_detection_reason(r) for r in detection_reasons]
+                        signals_html = ''.join([f'<span style="display:inline-block;background:rgba(245,158,11,0.15);color:#f59e0b;font-size:0.65em;padding:1px 5px;border-radius:3px;margin-right:3px;">{r}</span>' for r in translated])
 
-                    # Recommended model type
-                    model_rec = 'Logistic Regression, Random Forest' if is_binary else 'Multi-class Classifier'
-                    if total < 500:
-                        model_rec = 'Simple models (avoid deep learning)'
-
-                    ml_readiness_card = f'''
-                    <div style="flex: 1; min-width: 280px; background: var(--bg-card); border-radius: 8px; padding: 16px; border: 2px solid {readiness_color}; position: relative;">
-                        <div style="position: absolute; top: -10px; left: 12px; background: linear-gradient(135deg, {readiness_color}, {readiness_color}dd); color: white; font-size: 0.7em; font-weight: 600; padding: 2px 8px; border-radius: 4px;">🔬 ML {readiness_label}</div>
-                        <div style="margin-top: 8px;">
-                            <div style="font-size: 0.85em; color: var(--text-primary); margin-bottom: 10px; font-weight: 500;">Data Quality for ML</div>
-                            {readiness_items_html}
-                            <div style="margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--border-color);">
-                                <div style="font-size: 0.7em; color: var(--text-muted);">Suggested: {model_rec}</div>
+                    # Combined card with chart and info
+                    col_friendly = get_friendly_name(col)
+                    chart_html = f'''
+                    <div style="flex:1;min-width:320px;max-width:400px;background:var(--bg-card);border-radius:8px;padding:14px;border:2px solid #f59e0b;position:relative;">
+                        <div style="position:absolute;top:-10px;left:12px;background:linear-gradient(135deg,#f59e0b,#d97706);color:white;font-size:0.65em;font-weight:600;padding:2px 8px;border-radius:4px;">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:9px;height:9px;vertical-align:-1px;margin-right:3px"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>POTENTIAL TARGET
+                        </div>
+                        <div style="display:flex;gap:12px;margin-top:4px;">
+                            <!-- Left: Chart -->
+                            <div style="flex:1;min-width:140px;">
+                                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                                    <h4 style="margin:0;font-size:0.9em;color:var(--text-primary);" title="{col}">{col_friendly}</h4>
+                                    <span class="accordion-badge {imbalance_status}" style="font-size:0.65em;padding:2px 6px;">{imbalance_note}</span>
+                                </div>
+                                <div style="height:130px;"><canvas id="{chart_id}"></canvas></div>
+                            </div>
+                            <!-- Right: Info -->
+                            <div style="flex:1;min-width:140px;border-left:1px solid var(--border-subtle);padding-left:12px;">
+                                <div style="font-size:0.75em;color:var(--text-secondary);font-weight:500;margin-bottom:6px;">Top Predictors</div>
+                                {feature_bars if feature_bars else '<div style="font-size:0.7em;color:var(--text-muted);font-style:italic;">No strong predictors</div>'}
+                                {f'<div style="font-size:0.6em;color:var(--text-muted);margin-top:4px;">* High-cardinality (likely not useful)</div>' if has_warned else ''}
+                                <div style="margin-top:8px;padding-top:6px;border-top:1px solid var(--border-subtle);">
+                                    <div style="font-size:0.7em;color:var(--text-secondary);font-weight:500;margin-bottom:4px;">ML Readiness</div>
+                                    <div>{status_html}</div>
+                                </div>
                             </div>
                         </div>
+                        {f'<div style="margin-top:8px;padding-top:6px;border-top:1px solid var(--border-subtle);"><div style="font-size:0.65em;color:var(--text-muted);margin-bottom:2px;">Why detected:</div>{signals_html}</div>' if signals_html else ''}
                     </div>'''
-                    feature_importance_card += ml_readiness_card
-
-                    chart_html = f'''
-                    <div style="flex: 1; min-width: 280px; background: var(--bg-card); border-radius: 8px; padding: 16px; border: 2px solid #f59e0b; position: relative;">
-                        <div style="position: absolute; top: -10px; left: 12px; background: linear-gradient(135deg, #f59e0b, #d97706); color: white; font-size: 0.7em; font-weight: 600; padding: 2px 8px; border-radius: 4px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:10px;height:10px;vertical-align:-1px;margin-right:2px"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg> ML TARGET</div>
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; margin-top: 4px;">
-                            <h4 style="margin: 0; font-size: 0.95em; color: var(--text-primary);">{col}</h4>
-                            <span class="accordion-badge {imbalance_status}">{imbalance_note}</span>
-                        </div>
-                        <div style="height: 200px;">
-                            <canvas id="{chart_id}"></canvas>
-                        </div>
-                        <div style="font-size: 0.8em; color: var(--text-muted); margin-top: 8px; text-align: center;">
-                            Total: {total:,}
-                        </div>
-                    </div>'''
-                    target_charts += chart_html + feature_importance_card
+                    target_charts += chart_html
                 else:
                     chart_html = f'''
                     <div style="flex: 1; min-width: 280px; background: var(--bg-card); border-radius: 8px; padding: 16px; border: 1px solid var(--border-subtle);">
@@ -9889,8 +10123,9 @@ the largest difference between classes - a strong candidate for predictive model
                             <div class="dual-layer-technical-content" style="padding: 12px;">
                                 <p style="font-weight: 600; margin-bottom: 8px; color: var(--text-secondary);">Target Detection</p>
                                 <ul style="margin: 0 0 12px 0; padding-left: 20px; color: var(--text-secondary); font-size: 0.85em;">
-                                    <li><strong>Keywords:</strong> target, label, class, outcome, churn, fraud, survived</li>
+                                    <li><strong>Keywords:</strong> target, label, class, outcome, status, result</li>
                                     <li><strong>Patterns:</strong> is_*, has_*, *_flag, *_indicator</li>
+                                    <li><strong>Past-tense verbs:</strong> Survived, Completed, Chosen, Passed, etc. (-ed/-en endings)</li>
                                     <li><strong>Binary/low cardinality:</strong> 2-5 unique values with target-like name</li>
                                 </ul>
                                 <p style="font-weight: 600; margin-bottom: 8px; color: var(--text-secondary);">Class Imbalance</p>

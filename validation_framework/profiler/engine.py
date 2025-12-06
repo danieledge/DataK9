@@ -79,6 +79,14 @@ except ImportError:
     ML_ANALYSIS_AVAILABLE = False
     # ML analysis is optional
 
+# Phase 4: Categorical Association Analysis
+try:
+    from validation_framework.profiler.categorical_analysis import CategoricalAnalyzer
+    CATEGORICAL_ANALYSIS_AVAILABLE = True
+except ImportError:
+    CATEGORICAL_ANALYSIS_AVAILABLE = False
+    logger.debug("Categorical analysis not available")
+
 # Validation Suggestion Generator (extracted from god class)
 from validation_framework.profiler.validation_suggester import ValidationSuggestionGenerator
 
@@ -264,6 +272,10 @@ class DataProfiler:
         # Initialize Phase 3: ML analyzer (Beta)
         self.enable_ml_analysis = enable_ml_analysis and ML_ANALYSIS_AVAILABLE
         self.ml_analyzer = MLAnalyzer() if self.enable_ml_analysis else None
+
+        # Initialize Phase 4: Categorical analysis
+        self.enable_categorical_analysis = CATEGORICAL_ANALYSIS_AVAILABLE
+        self.categorical_analyzer = CategoricalAnalyzer() if self.enable_categorical_analysis else None
 
         # Initialize validation suggestion generator (extracted from god class)
         self.validation_suggester = ValidationSuggestionGenerator()
@@ -1396,6 +1408,7 @@ class DataProfiler:
 
         # Phase 3: ML-based Anomaly Detection (Beta)
         ml_findings = None
+        categorical_analysis = None  # Phase 4: Categorical analysis
         skip_ml_analysis = False
         if self.enable_ml_analysis and self.ml_analyzer:
             # Memory check before ML analysis
@@ -1577,6 +1590,45 @@ class DataProfiler:
                         except Exception as e:
                             logger.debug(f"Correlation insight synthesis failed: {e}")
 
+                    # ═══════════════════════════════════════════════════════════════
+                    # PHASE 4: CATEGORICAL ASSOCIATION ANALYSIS
+                    # Analyze relationships involving categorical columns
+                    # (Cramér's V, point-biserial, target detection, missing patterns)
+                    # Must run before ml_df cleanup!
+                    # ═══════════════════════════════════════════════════════════════
+                    if self.enable_categorical_analysis and self.categorical_analyzer:
+                        cat_start = time.time()
+                        try:
+                            # Build column types dict from profiles
+                            column_types = {}
+                            for col in columns:
+                                if hasattr(col, 'type_info') and col.type_info:
+                                    column_types[col.name] = col.type_info.inferred_type
+
+                            categorical_analysis = self.categorical_analyzer.analyze_categorical_associations(
+                                ml_df,
+                                column_types
+                            )
+
+                            # Log results
+                            cramers_v_count = len(categorical_analysis.get('cramers_v_associations', []))
+                            point_biserial_count = len(categorical_analysis.get('point_biserial_associations', []))
+                            target_count = len(categorical_analysis.get('target_columns', []))
+                            missing_patterns = len(categorical_analysis.get('missing_patterns', []))
+
+                            if cramers_v_count + point_biserial_count + target_count > 0:
+                                logger.debug(f"📊 Categorical analysis: {cramers_v_count} categorical associations, "
+                                           f"{point_biserial_count} binary-numeric correlations, "
+                                           f"{target_count} target candidates, "
+                                           f"{missing_patterns} missing patterns")
+
+                            phase_timings['categorical_analysis'] = time.time() - cat_start
+                        except Exception as e:
+                            logger.debug(f"Categorical analysis failed: {e}")
+                            categorical_analysis = None
+                    else:
+                        categorical_analysis = None
+
                     # Clean up ml_df after context validation
                     del ml_df
                     gc.collect()
@@ -1691,6 +1743,8 @@ class DataProfiler:
             analysis_applied.append("correlation_analysis")
         if self.enable_enhanced_correlation and enhanced_correlations:
             analysis_applied.append("enhanced_correlation_analysis")
+        if self.enable_categorical_analysis and categorical_analysis:
+            analysis_applied.append("categorical_association_analysis")
 
         # Build sampling info for lineage
         sampling_info = None
@@ -1733,7 +1787,8 @@ class DataProfiler:
             file_metadata=file_metadata if file_metadata else None,
             ml_findings=ml_findings,
             data_lineage=data_lineage,
-            csv_format_issues=csv_format_check if csv_format_check and not csv_format_check['valid'] else None
+            csv_format_issues=csv_format_check if csv_format_check and not csv_format_check['valid'] else None,
+            categorical_analysis=categorical_analysis
         )
 
     def _initialize_column_profile(

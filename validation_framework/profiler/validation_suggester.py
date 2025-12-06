@@ -48,6 +48,7 @@ from validation_framework.profiler.profile_result import (
     ColumnProfile,
     ValidationSuggestion,
 )
+from validation_framework.reference_data import ReferenceDataLoader
 
 logger = logging.getLogger(__name__)
 
@@ -61,10 +62,10 @@ class ValidationSuggestionGenerator:
     provide contextually relevant suggestions with confidence scores.
 
     Attributes:
-        ID_PATTERNS: Regex patterns identifying columns that are likely identifiers
-            (should NOT receive range checks). Examples: customer_id, sku, zip.
-        MEASUREMENT_PATTERNS: Regex patterns identifying measurement columns
-            (SHOULD receive range checks). Examples: amount, quantity, temperature.
+        _id_patterns: Regex patterns identifying columns that are likely identifiers
+            (should NOT receive range checks). Loaded from ReferenceDataLoader.
+        _measurement_patterns: Regex patterns identifying measurement columns
+            (SHOULD receive range checks). Loaded from ReferenceDataLoader.
         _id_regex: Pre-compiled regex combining all ID patterns.
         _measurement_regex: Pre-compiled regex combining all measurement patterns.
 
@@ -78,40 +79,40 @@ class ValidationSuggestionGenerator:
         ValidValuesCheck: 85.0%
     """
 
-    # Patterns that indicate an ID/code field (should NOT get range checks)
-    ID_PATTERNS = [
-        r'_id$', r'^id_', r'^id$',  # Standard ID patterns
-        r'_code$', r'^code_', r'_cd$',  # Code patterns
-        r'_key$', r'^key_',  # Key patterns
-        r'_num$', r'_number$', r'^num_',  # Number as identifier
-        r'_ref$', r'^ref_', r'reference',  # Reference patterns
-        r'account', r'customer', r'user', r'employee',  # Entity identifiers
-        r'sku', r'upc', r'ean', r'isbn',  # Product codes
-        r'zip', r'postal', r'phone', r'fax',  # Location/contact codes
-        r'ssn', r'ein', r'tax_id',  # Tax/government IDs
-        r'serial', r'batch', r'lot',  # Manufacturing identifiers
-        r'version', r'revision',  # Version numbers
+    # Default fallback patterns (used if external JSON not available)
+    _DEFAULT_ID_PATTERNS = [
+        r'_id$', r'^id_', r'^id$',
+        r'_code$', r'^code_',
+        r'account', r'customer',
     ]
 
-    # Patterns that indicate a measurement (SHOULD get range checks)
-    MEASUREMENT_PATTERNS = [
-        r'amount', r'price', r'cost', r'fee', r'charge',  # Money
-        r'quantity', r'qty', r'count', r'total',  # Quantities
-        r'weight', r'height', r'width', r'length', r'size',  # Dimensions
-        r'rate', r'ratio', r'percent', r'pct',  # Rates
-        r'score', r'rating', r'rank',  # Scores
-        r'temperature', r'temp', r'pressure',  # Physical measurements
-        r'balance', r'limit', r'threshold',  # Financial
-        r'age', r'duration', r'period',  # Time-based measurements
-        r'distance', r'speed', r'velocity',  # Motion
-        r'volume', r'capacity',  # Volume
+    _DEFAULT_MEASUREMENT_PATTERNS = [
+        r'amount', r'price', r'cost',
+        r'quantity', r'qty', r'count',
     ]
 
     def __init__(self):
         """Initialize the validation suggestion generator."""
+        # Load patterns from external JSON via ReferenceDataLoader
+        self._id_patterns = ReferenceDataLoader.get_id_patterns()
+        if not self._id_patterns:
+            logger.warning("No ID patterns loaded from JSON, using defaults")
+            self._id_patterns = self._DEFAULT_ID_PATTERNS
+
+        self._measurement_patterns = ReferenceDataLoader.get_measurement_patterns()
+        if not self._measurement_patterns:
+            logger.warning("No measurement patterns loaded from JSON, using defaults")
+            self._measurement_patterns = self._DEFAULT_MEASUREMENT_PATTERNS
+
+        logger.debug(
+            f"ValidationSuggestionGenerator initialized: "
+            f"{len(self._id_patterns)} ID patterns, "
+            f"{len(self._measurement_patterns)} measurement patterns"
+        )
+
         # Compile regex patterns for performance
-        self._id_regex = re.compile('|'.join(self.ID_PATTERNS), re.IGNORECASE)
-        self._measurement_regex = re.compile('|'.join(self.MEASUREMENT_PATTERNS), re.IGNORECASE)
+        self._id_regex = re.compile('|'.join(self._id_patterns), re.IGNORECASE)
+        self._measurement_regex = re.compile('|'.join(self._measurement_patterns), re.IGNORECASE)
 
     def generate_suggestions(
         self,

@@ -61,13 +61,13 @@
             "StringLengthCheck",
             "ValidValuesCheck"
           ],
-          "expected_values": [
-            "USD", "EUR", "GBP", "JPY", "CHF", "CAD", "AUD", "CNY", "INR", "BRL",
-            "MXN", "KRW", "SGD", "HKD", "NOK", "SEK", "DKK", "PLN", "THB", "IDR",
-            "MYR", "PHP", "CZK", "ILS", "ZAR", "TRY", "AED", "SAR", "RUB", "NZD"
-          ],
+          "reference_source": {
+            "loader": "ReferenceDataLoader",
+            "method": "get_currency_codes_only",
+            "standard": "ISO 4217"
+          },
           "ml_rare_behavior": "reference_validate",
-          "ml_rare_reason": "Only flag currencies not matching valid ISO codes - rare but valid currencies are legitimate"
+          "ml_rare_reason": "Only flag currencies not matching valid ISO 4217 codes from pycountry - rare but valid currencies are legitimate"
         },
         "money.price": {
           "fibo_class": "fibo-fnd-acc-cur:Price",

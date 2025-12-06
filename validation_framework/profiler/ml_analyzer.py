@@ -35,6 +35,9 @@ from validation_framework.profiler.visualization_fallbacks import (
     get_semantic_type_hint
 )
 
+# Import centralized reference data loader
+from validation_framework.reference_data import ReferenceDataLoader
+
 logger = logging.getLogger(__name__)
 
 # Default sample size threshold - if file has more rows than this, sampling is applied
@@ -78,7 +81,7 @@ class ChunkedMLAccumulator:
         self.max_reservoir_size = 1000000  # Allow up to 1M samples for autoencoder
 
         # Target/Feature Analysis accumulators (memory-efficient streaming)
-        self.detected_targets: List[str] = []  # Detected target columns
+        self.detected_targets: Dict[str, Dict] = {}  # Detected target columns with reasons
         self.target_value_counts: Dict[str, Counter] = {}  # target_col -> Counter of target values
         # Streaming target-feature associations: {target_col: {feature_col: {target_val: Counter(feature_vals)}}}
         self.target_feature_counts: Dict[str, Dict[str, Dict[str, Counter]]] = {}
@@ -154,7 +157,7 @@ class ChunkedMLAccumulator:
 
         return True
 
-    def _detect_target_columns(self, df: pd.DataFrame) -> List[str]:
+    def _detect_target_columns(self, df: pd.DataFrame) -> Dict[str, Dict]:
         """
         Detect likely target/label columns using semantic types and patterns.
 
@@ -165,7 +168,7 @@ class ChunkedMLAccumulator:
         4. Binary columns with low cardinality (2 unique values)
 
         Returns:
-            List of detected target column names
+            Dict mapping column names to detection info {reasons, is_binary, cardinality}
         """
         # Generic target keywords (domain-agnostic, no hardcoded field names)
         generic_keywords = [
@@ -175,6 +178,9 @@ class ChunkedMLAccumulator:
         ]
         prefix_patterns = ['is_', 'has_', 'was_', 'did_', 'will_']
         suffix_patterns = ['_flag', '_indicator', '_label', '_target', '_class', '_outcome', '_status', '_type', '_category']
+
+        # Past-tense verb pattern: words ending in -ed/-en suggest outcome (Survived, Completed, Chosen)
+        past_tense_pattern = re.compile(r'(?i)^[a-z]+(?:ed|en)$')
 
         # Semantic types indicating targets (FIBO + Schema.org)
         target_semantic_types = {
@@ -194,7 +200,7 @@ class ChunkedMLAccumulator:
                     return True
             return False
 
-        detected = []
+        detected = {}
         for col in df.columns:
             if col is None:
                 continue
@@ -215,6 +221,9 @@ class ChunkedMLAccumulator:
             is_prefix_match = any(col_lower.startswith(p) for p in prefix_patterns)
             is_suffix_match = any(col_lower.endswith(s) for s in suffix_patterns)
 
+            # Check past-tense verb pattern (Survived, Completed, Chosen, etc.)
+            is_past_tense_match = bool(past_tense_pattern.match(col_lower))
+
             # Check cardinality
             try:
                 n_unique = df[col].nunique(dropna=True)
@@ -224,16 +233,33 @@ class ChunkedMLAccumulator:
                 is_binary = False
                 is_low_cardinality = False
 
-            # Detection logic (semantic-first):
+            # Detection logic (semantic-first) - track detection reasons
             # - Semantic type match with low cardinality -> target
             # - Generic keyword match with low cardinality -> target
             # - Prefix/suffix pattern with binary -> target
+            # - Past-tense verb with binary -> target (Survived, Completed, etc.)
+            detection_reasons = []
             if is_semantic_target and is_low_cardinality:
-                detected.append(col)
-            elif is_keyword_match and is_low_cardinality:
-                detected.append(col)
-            elif (is_prefix_match or is_suffix_match) and is_binary:
-                detected.append(col)
+                detection_reasons.append(f"Semantic type: {primary_type}")
+            if is_keyword_match and is_low_cardinality:
+                # Find which keyword matched
+                matched_kw = next((kw for kw in generic_keywords if is_keyword_present(col_lower, [kw])), None)
+                detection_reasons.append(f"Keyword: '{matched_kw}'" if matched_kw else "Keyword match")
+            if is_prefix_match and is_binary:
+                matched_prefix = next((p for p in prefix_patterns if col_lower.startswith(p)), None)
+                detection_reasons.append(f"Prefix pattern: {matched_prefix}*")
+            if is_suffix_match and is_binary:
+                matched_suffix = next((s for s in suffix_patterns if col_lower.endswith(s)), None)
+                detection_reasons.append(f"Suffix pattern: *{matched_suffix}")
+            if is_past_tense_match and is_binary:
+                detection_reasons.append(f"Past-tense verb: {col}")
+
+            if detection_reasons:
+                detected[col] = {
+                    'reasons': detection_reasons,
+                    'is_binary': is_binary,
+                    'cardinality': n_unique
+                }
 
         return detected
 
@@ -1657,7 +1683,7 @@ class MLAnalyzer:
 
         return numeric_cols, coerced_info
 
-    def _detect_target_columns(self, df: pd.DataFrame) -> List[str]:
+    def _detect_target_columns(self, df: pd.DataFrame) -> Dict[str, Dict]:
         """
         Detect likely target/label columns using semantic types and patterns.
 
@@ -1668,7 +1694,7 @@ class MLAnalyzer:
         4. Binary columns with low cardinality (2 unique values)
 
         Returns:
-            List of detected target column names
+            Dict mapping column names to detection info {reasons, is_binary, cardinality}
         """
         # Generic target keywords (domain-agnostic, no hardcoded field names)
         generic_keywords = [
@@ -1678,6 +1704,9 @@ class MLAnalyzer:
         ]
         prefix_patterns = ['is_', 'has_', 'was_', 'did_', 'will_']
         suffix_patterns = ['_flag', '_indicator', '_label', '_target', '_class', '_outcome', '_status', '_type', '_category']
+
+        # Past-tense verb pattern: words ending in -ed/-en suggest outcome (Survived, Completed, Chosen)
+        past_tense_pattern = re.compile(r'(?i)^[a-z]+(?:ed|en)$')
 
         # Semantic types indicating targets (FIBO + Schema.org)
         target_semantic_types = {
@@ -1697,7 +1726,7 @@ class MLAnalyzer:
                     return True
             return False
 
-        detected = []
+        detected = {}
         for col in df.columns:
             if col is None:
                 continue
@@ -1718,6 +1747,9 @@ class MLAnalyzer:
             is_prefix_match = any(col_lower.startswith(p) for p in prefix_patterns)
             is_suffix_match = any(col_lower.endswith(s) for s in suffix_patterns)
 
+            # Check past-tense verb pattern (Survived, Completed, Chosen, etc.)
+            is_past_tense_match = bool(past_tense_pattern.match(col_lower))
+
             # Check cardinality
             try:
                 n_unique = df[col].nunique(dropna=True)
@@ -1727,16 +1759,33 @@ class MLAnalyzer:
                 is_binary = False
                 is_low_cardinality = False
 
-            # Detection logic (semantic-first):
+            # Detection logic (semantic-first) - track detection reasons
             # - Semantic type match with low cardinality -> target
             # - Generic keyword match with low cardinality -> target
             # - Prefix/suffix pattern with binary -> target
+            # - Past-tense verb with binary -> target (Survived, Completed, etc.)
+            detection_reasons = []
             if is_semantic_target and is_low_cardinality:
-                detected.append(col)
-            elif is_keyword_match and is_low_cardinality:
-                detected.append(col)
-            elif (is_prefix_match or is_suffix_match) and is_binary:
-                detected.append(col)
+                detection_reasons.append(f"Semantic type: {primary_type}")
+            if is_keyword_match and is_low_cardinality:
+                # Find which keyword matched
+                matched_kw = next((kw for kw in generic_keywords if is_keyword_present(col_lower, [kw])), None)
+                detection_reasons.append(f"Keyword: '{matched_kw}'" if matched_kw else "Keyword match")
+            if is_prefix_match and is_binary:
+                matched_prefix = next((p for p in prefix_patterns if col_lower.startswith(p)), None)
+                detection_reasons.append(f"Prefix pattern: {matched_prefix}*")
+            if is_suffix_match and is_binary:
+                matched_suffix = next((s for s in suffix_patterns if col_lower.endswith(s)), None)
+                detection_reasons.append(f"Suffix pattern: *{matched_suffix}")
+            if is_past_tense_match and is_binary:
+                detection_reasons.append(f"Past-tense verb: {col}")
+
+            if detection_reasons:
+                detected[col] = {
+                    'reasons': detection_reasons,
+                    'is_binary': is_binary,
+                    'cardinality': n_unique
+                }
 
         return detected
 
@@ -2616,11 +2665,16 @@ class MLAnalyzer:
                     value_counts = df[col].value_counts()
                     total = len(df[col].dropna())
                     if total > 0:
+                        # Get detection reasons if this is a detected target
+                        target_info = self.detected_targets.get(col, {})
+                        detection_reasons = target_info.get('reasons', []) if isinstance(target_info, dict) else []
+
                         viz_data["class_imbalance"][col] = {
                             "classes": [{"value": str(v), "count": int(c), "percentage": round(c/total*100, 2)}
                                        for v, c in value_counts.items()],
                             "is_binary": unique_count == 2,
                             "is_target_like": is_target,
+                            "detection_reasons": detection_reasons,
                             "total": total
                         }
             except Exception:
@@ -3424,37 +3478,33 @@ class MLAnalyzer:
 
         return "".join(compressed)
 
-    # Known valid values for common domains - rare but valid values should not be flagged
-    KNOWN_CURRENCIES = {
-        'usd', 'us dollar', 'dollar', 'eur', 'euro', 'gbp', 'uk pound', 'pound', 'sterling',
-        'jpy', 'yen', 'cny', 'yuan', 'renminbi', 'cad', 'canadian dollar', 'aud', 'australian dollar',
-        'chf', 'swiss franc', 'franc', 'inr', 'rupee', 'rub', 'ruble', 'brl', 'brazil real', 'real',
-        'mxn', 'mexican peso', 'peso', 'krw', 'won', 'sgd', 'singapore dollar', 'hkd', 'hong kong dollar',
-        'nok', 'norwegian krone', 'krone', 'sek', 'swedish krona', 'krona', 'dkk', 'danish krone',
-        'pln', 'zloty', 'thb', 'baht', 'idr', 'rupiah', 'myr', 'ringgit', 'php', 'philippine peso',
-        'czk', 'czech koruna', 'ils', 'shekel', 'zar', 'rand', 'try', 'turkish lira', 'lira',
-        'aed', 'dirham', 'sar', 'riyal', 'bitcoin', 'btc', 'eth', 'ethereum', 'crypto'
-    }
-
-    KNOWN_COUNTRIES = {
-        'us', 'usa', 'united states', 'uk', 'united kingdom', 'gb', 'great britain', 'canada', 'ca',
-        'australia', 'au', 'germany', 'de', 'france', 'fr', 'japan', 'jp', 'china', 'cn',
-        'india', 'in', 'brazil', 'br', 'mexico', 'mx', 'russia', 'ru', 'italy', 'it',
-        'spain', 'es', 'netherlands', 'nl', 'switzerland', 'ch', 'sweden', 'se', 'norway', 'no'
-        # Add more as needed - this is just a sample
-    }
+    # Known valid values now loaded from centralized ReferenceDataLoader
+    # This provides complete ISO 4217 currencies (180+) and ISO 3166-1 countries (249)
+    # with common aliases, backed by pycountry for authoritative data
 
     def _is_known_domain_column(self, col_name: str) -> Optional[set]:
-        """Check if column represents a known domain with valid reference values."""
+        """
+        Check if column represents a known domain with valid reference values.
+
+        Uses ReferenceDataLoader to get authoritative reference data:
+        - Currencies: ISO 4217 standard (180+ codes) + common aliases
+        - Countries: ISO 3166-1 standard (249 codes) + common aliases
+
+        Args:
+            col_name: Column name to check
+
+        Returns:
+            Set of valid values for the domain, or None if not a known domain
+        """
         col_lower = col_name.lower()
 
         # Check for currency columns
         if any(word in col_lower for word in ['currency', 'curr', 'ccy']):
-            return self.KNOWN_CURRENCIES
+            return ReferenceDataLoader.get_currencies(include_aliases=True)
 
         # Check for country columns
         if any(word in col_lower for word in ['country', 'nation', 'region']):
-            return self.KNOWN_COUNTRIES
+            return ReferenceDataLoader.get_countries(include_aliases=True)
 
         return None
 
