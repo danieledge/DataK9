@@ -29,18 +29,33 @@ python3 -m validation_framework.cli profile your_data.csv -o profile.html
 
 ---
 
-## 🆕 Recent Enhancements (v1.55+)
+## 🆕 Recent Enhancements (v1.56+)
 
 The DataK9 Profiler has received a significant overhaul with new capabilities:
 
-- **Field Descriptions (Context YAML)** ⭐ NEW - Provide friendly names and value labels for human-readable reports
+### Semantic Intelligence
+- **Four-Layer Semantic Classification** ⭐ NEW - FIBO (finance) + Schema.org (general) + Wikidata (knowledge) + Science (QUDT/ChEBI/UO)
+- **Configurable Semantic Resolution** - Priority-based resolution with confidence thresholds in `semantic_config.yaml`
+- **Identifier Detection** - Automatic classification of ID columns using semantic metadata
+
+### Analysis Enhancements
+- **PCA/Dimensionality Reduction** ⭐ NEW - 2D visualization with explained variance and feature loadings
+- **Column Family Detection** ⭐ NEW - Groups similar columns in wide datasets (50+ columns)
+- **Categorical Association Analysis** ⭐ NEW - Cramér's V for categorical×categorical, point-biserial for binary×numeric
+- **Target/Outcome Detection** - Automatic identification of likely prediction targets
+- **Correlation Insight Synthesis** - Data-driven headlines with actual values and multipliers
+
+### Report Quality
+- **Field Descriptions (Context YAML)** - Provide friendly names and value labels for human-readable reports
 - **Context-Aware Anomaly Detection** - Explains outliers in context of subgroups
-- **Dual Semantic Classification** - FIBO (financial) + Schema.org (general) ontologies
-- **Smart Validation Suggestions** - Semantic-aware rules that work across datasets
-- **Binary Flag Detection** - Automatic Boolean classification for 0/1 columns
-- **Intelligent Range Calculation** - Domain-aware bounds (e.g., Age: 0-120)
-- **Executive HTML Reports** - Redesigned with plain-English explanations
-- **Consolidated Sampling Banner** - Clear data analysis methodology
+- **Soft Language for Weak Correlations** - Uses appropriate language for |r| < 0.3
+- **Benford's Law Context** - Appropriate risk language for transactional vs non-transactional data
+- **Identifier Filtering** - Correlations involving ID columns automatically suppressed
+
+### Infrastructure
+- **Data Lineage Tracking** - Full provenance with file hash, timestamps, environment info
+- **Configurable Memory Safety** - Adjustable thresholds with graceful termination
+- **Chunked ML Accumulation** - Memory-efficient streaming for large datasets
 
 ---
 
@@ -49,20 +64,27 @@ The DataK9 Profiler has received a significant overhaul with new capabilities:
 - [Quick Start](#-quick-start) - Get profiling in 30 seconds
 - [Why Profile First?](#-why-profile-first) - The compelling reason
 - [Key Features](#-key-features) - What makes DataK9's profiler unique
-  - [Dual Semantic Classification](#-dual-semantic-classification-fibo--schemaorg) - NEW!
+  - [Four-Layer Semantic Classification](#-four-layer-semantic-classification) - NEW!
   - [FIBO Semantic Intelligence](#-fibo-semantic-intelligence)
-  - [Schema.org General Semantics](#-schemaorg-general-semantics) - NEW!
+  - [Schema.org General Semantics](#-schemaorg-general-semantics)
+  - [Wikidata Knowledge Semantics](#-wikidata-knowledge-semantics) - NEW!
+  - [Science Ontology Semantics](#-science-ontology-semantics-qudt-chebi-uo) - NEW!
+  - [PCA/Dimensionality Reduction](#-pcadimensionality-reduction) - NEW!
+  - [Column Family Detection](#-column-family-detection) - NEW!
+  - [Categorical Association Analysis](#-categorical-association-analysis) - NEW!
+  - [Correlation Insight Synthesis](#-correlation-insight-synthesis) - NEW!
   - [Smart Validation Suggestions](#-smart-validation-suggestions) - ENHANCED!
   - [Auto-Generated Validations](#-auto-generated-validations)
   - [Comprehensive Analysis](#-comprehensive-analysis)
   - [ML-Based Anomaly Detection](#-ml-based-anomaly-detection-beta)
-  - [Intelligent Sampling](#-intelligent-sampling) - NEW!
+  - [Intelligent Sampling](#-intelligent-sampling)
   - [Memory-Efficient Processing](#-memory-efficient-processing)
+- [Analysis Decision Logic](#-analysis-decision-logic) - When each analysis runs - NEW!
 - [Analytics Reference](#-analytics-reference) - All analysis types explained
 - [Understanding Reports](#-understanding-reports) - Read your profile results
-- [How It Works](#-how-it-works) - Under the hood (10 stages)
+- [How It Works](#-how-it-works) - Under the hood
 - [Command Reference](#-command-reference) - All options and examples
-  - [Field Descriptions (Context YAML)](#field-descriptions-file-context-yaml-) - NEW! Human-readable insights
+  - [Field Descriptions (Context YAML)](#field-descriptions-file-context-yaml-) - Human-readable insights
 - [Best Practices](#-best-practices) - Tips for success
 
 ---
@@ -128,34 +150,63 @@ After Profiling:
 
 ## ✨ Key Features
 
-### 🔄 Dual Semantic Classification (FIBO + Schema.org)
+### 🔄 Four-Layer Semantic Classification
 
-**What's New:** DataK9 now uses TWO complementary ontologies to understand your data:
+**What's New:** DataK9 uses FOUR complementary ontologies to understand your data with configurable priority resolution:
 
-| Ontology | Purpose | Best For |
-|----------|---------|----------|
-| **FIBO** | Financial Industry Business Ontology | Banking, transactions, currencies, accounts |
-| **Schema.org** | General-purpose web vocabulary | Names, dates, emails, addresses, quantities |
+| Layer | Ontology | Purpose | Best For |
+|-------|----------|---------|----------|
+| 1 (Highest) | **FIBO** | Financial Industry Business Ontology | Banking, transactions, currencies, accounts |
+| 2 | **Science** | QUDT, ChEBI, UO ontologies | Measurements, chemicals, scientific units |
+| 3 | **Wikidata** | General knowledge types | Geographic codes, reference data, entities |
+| 4 (Baseline) | **Schema.org** | General-purpose web vocabulary | Names, dates, emails, addresses, quantities |
 
-**How It Works:**
+**Resolution Priority:**
+
+The `SemanticResolver` combines all four layers using configurable confidence thresholds:
+
+```yaml
+# semantic_config.yaml (configurable thresholds)
+resolution:
+  fibo_min_conf: 0.7      # FIBO wins at 70%+ confidence
+  science_min_conf: 0.6   # Science wins at 60%+ (if no strong FIBO)
+  wikidata_min_conf: 0.6  # Wikidata wins at 60%+ (if no strong FIBO/Science)
+  schema_min_conf: 0.5    # Schema.org baseline
+```
+
+**How Resolution Works:**
 
 ```
-Column: "Age"
-├── Step 1: FIBO Analysis → No match (not financial)
-├── Step 2: Schema.org Analysis → schema:Integer (85% confidence)
-├── Resolution: Use Schema.org classification
-└── Smart Validation: RangeCheck 0-120 (human-sensible bounds)
-
 Column: "transaction_amount"
-├── Step 1: FIBO Analysis → money.amount (95% confidence)
-├── Step 2: Schema.org Analysis → schema:Number
-├── Resolution: Use FIBO (domain-specific wins)
-└── Smart Validation: Non-negative check (monetary rule)
+├── Layer 1: FIBO → money.amount (95% confidence) ✓ WINS
+├── Layer 2: Science → No match
+├── Layer 3: Wikidata → No match
+├── Layer 4: Schema.org → schema:Number (70%)
+├── Resolution: FIBO (highest priority with 95% > 70%)
+└── Validation Driver: fibo (monetary rules apply)
+
+Column: "temperature_celsius"
+├── Layer 1: FIBO → No match
+├── Layer 2: Science → qudt:Temperature (85% confidence) ✓ WINS
+├── Layer 3: Wikidata → No match
+├── Layer 4: Schema.org → schema:Number (60%)
+├── Resolution: Science (no FIBO, science > threshold)
+└── Validation Driver: science (unit-aware rules apply)
+
+Column: "country_code"
+├── Layer 1: FIBO → No match
+├── Layer 2: Science → No match
+├── Layer 3: Wikidata → wd:Country (80% confidence) ✓ WINS
+├── Layer 4: Schema.org → schema:Text (50%)
+├── Resolution: Wikidata (no FIBO/Science, wikidata > threshold)
+└── Validation Driver: wikidata (ISO code validation applies)
 ```
 
 **The Benefit:**
-- Financial data gets FIBO's specialized rules
-- Non-financial data gets Schema.org's broad coverage
+- Financial data gets FIBO's specialized rules (highest priority)
+- Scientific measurements get QUDT/ChEBI precision
+- Geographic/reference data gets Wikidata knowledge
+- Everything else gets Schema.org's broad coverage
 - No columns left unclassified
 
 ---
@@ -257,6 +308,176 @@ The profiler uses semantic classification to avoid false positives:
 ❌ Excluded: Amount (schema:MonetaryAmount - not an identifier)
 ❌ Excluded: Timestamp (temporal - not unique by nature)
 ```
+
+---
+
+### 🌐 Wikidata Knowledge Semantics
+
+**What is Wikidata?**
+Wikidata is a free knowledge base maintained by the Wikimedia Foundation, containing structured data for millions of entities, places, and concepts.
+
+**Wikidata Types DataK9 Detects:**
+
+| Type | Description | Example Columns |
+|------|-------------|-----------------|
+| `wd:Country` | ISO country codes and names | country, country_code, nationality |
+| `wd:Region` | Geographic regions/states | state, province, region |
+| `wd:City` | City/municipality names | city, town, municipality |
+| `wd:Language` | Language codes and names | language, locale |
+| `wd:Organization` | Company/organization names | company, employer, organization |
+
+**When Wikidata Takes Priority:**
+
+Wikidata wins when:
+- FIBO has no match or low confidence
+- Science has no match
+- Wikidata confidence ≥ 60% (configurable)
+
+---
+
+### 🔬 Science Ontology Semantics (QUDT, ChEBI, UO)
+
+**What are these ontologies?**
+
+| Ontology | Purpose | Examples |
+|----------|---------|----------|
+| **QUDT** | Quantities, Units, Dimensions | Temperature, pressure, velocity, mass |
+| **ChEBI** | Chemical Entities of Biological Interest | Alcohol content, pH, chemical concentrations |
+| **UO** | Units Ontology | Measurement units and conversions |
+
+**Science Types DataK9 Detects:**
+
+| Type | Description | Example Columns |
+|------|-------------|-----------------|
+| `qudt:Temperature` | Temperature measurements | temperature, temp_celsius, temp_f |
+| `qudt:Pressure` | Pressure readings | pressure, psi, bar |
+| `qudt:Mass` | Mass/weight values | weight, mass, kg |
+| `qudt:Length` | Length/distance | height, width, distance |
+| `qudt:Velocity` | Speed measurements | speed, velocity, mph |
+| `chebi:Alcohol` | Alcohol content | alcohol, abv, alcohol_content |
+| `chebi:pH` | Acidity/basicity | ph, ph_level, acidity |
+
+**When Science Takes Priority:**
+
+Science wins when:
+- FIBO has no match or low confidence
+- Science confidence ≥ 60% (configurable)
+- Column patterns match scientific measurement naming
+
+---
+
+### 📊 PCA/Dimensionality Reduction
+
+**What is PCA Analysis?**
+Principal Component Analysis reduces high-dimensional data to 2D for visualization, showing how records cluster and which features drive the most variation.
+
+**When PCA Runs:**
+- Dataset has ≥ 10 rows
+- Dataset has ≥ 3 numeric columns
+- ML analysis is enabled
+
+**What PCA Provides:**
+
+| Output | Description |
+|--------|-------------|
+| **2D Projection** | Scatter plot showing record positions in reduced space |
+| **Explained Variance** | How much information each component captures (e.g., PC1: 45%, PC2: 23%) |
+| **Feature Loadings** | Which columns contribute most to each component |
+| **Top Contributors** | Top 5 features for each principal component |
+| **Outlier Separation** | Whether outliers cluster separately in reduced space |
+
+**Example Output:**
+```
+PCA Analysis Results
+├── Explained Variance: PC1 (45.2%), PC2 (23.1%) = 68.3% total
+├── Top Contributors to PC1:
+│   ├── income: 0.82
+│   ├── age: 0.71
+│   └── credit_score: 0.68
+├── Top Contributors to PC2:
+│   ├── account_tenure: 0.76
+│   └── transaction_count: 0.54
+└── Outlier Separation: Detected (outliers cluster in lower-left quadrant)
+```
+
+---
+
+### 📁 Column Family Detection
+
+**What is Column Family Detection?**
+For wide datasets (50+ columns), the profiler automatically groups similar columns into "families" based on naming patterns.
+
+**When It Runs:**
+- Dataset has > 50 columns (configurable threshold)
+- Pattern detection identifies ≥ 5 columns per family
+
+**Pattern Types Detected:**
+
+| Pattern Type | Description | Example |
+|--------------|-------------|---------|
+| **Date Columns** | M/D/YY, YYYY-MM-DD formats in column names | 1/22/20, 2020-01-22 (COVID time series) |
+| **Numeric Sequences** | col_1, col_2, col_3... or feature_001, feature_002... | Sensor readings, questionnaire items |
+| **Prefix Groups** | Common prefixes | sales_Q1, sales_Q2, sales_Q3, sales_Q4 |
+| **Suffix Groups** | Common suffixes | revenue_2020, revenue_2021, revenue_2022 |
+| **Dtype Families** | Columns with identical types and similar statistics | All float columns with similar ranges |
+
+**Benefits:**
+- Reduces report clutter for wide datasets
+- Identifies time series date columns automatically
+- Provides aggregate statistics per family
+- Flags anomalous columns within families
+
+---
+
+### 📈 Categorical Association Analysis
+
+**Beyond Pearson Correlation**
+Standard Pearson correlation only works for numeric×numeric relationships. Categorical analysis extends this to all column type combinations.
+
+**Methods Used:**
+
+| Method | Relationship Type | What It Measures |
+|--------|-------------------|------------------|
+| **Cramér's V** | Categorical × Categorical | Association strength (0 = independent, 1 = perfectly associated) |
+| **Point-Biserial** | Binary × Numeric | Correlation between a 0/1 flag and numeric column |
+| **Variance Explained** | Categorical → Numeric | How much a categorical grouping explains numeric variation |
+
+**When It Runs:**
+- At least 2 categorical columns (for Cramér's V)
+- At least 1 binary column and 1 numeric column (for point-biserial)
+- Maximum 50 columns analyzed pairwise (configurable limit)
+
+**Target/Outcome Detection:**
+The analyzer automatically identifies likely target columns for ML using:
+- Past-tense verb patterns (e.g., "Survived", "Churned")
+- Keyword matching (e.g., "class", "target", "outcome", "label")
+- Suffix patterns (e.g., "_class", "_target", "_label")
+- Binary flag patterns in combination with predictive associations
+
+---
+
+### 🔗 Correlation Insight Synthesis
+
+**Data-Driven Insights, Not Generic Descriptions**
+
+The correlation insight synthesizer transforms raw statistics into actionable, value-based insights.
+
+**What Gets Synthesized:**
+
+| Input | Output |
+|-------|--------|
+| r = 0.72 between Age and Income | "Records with Age above median tend to have 2.3x higher Income" |
+| Cramér's V = 0.55 between Class and Outcome | "1st Class records show 67% positive outcome rate vs 24% for 3rd Class" |
+| Variance explained = 0.42 | "Knowing the categorical group explains 42% of the variation in the numeric column" |
+
+**Identifier Filtering:**
+Correlations involving identifier columns (detected via semantic metadata) are automatically suppressed from insights, as they represent structural relationships, not predictive signals.
+
+**Weak Correlation Language:**
+For correlations with |r| < 0.3, softer language is used:
+- "Weak relationship" instead of "Strong correlation"
+- "slightly higher" instead of definitive statements
+- Focus on statistical uncertainty
 
 ---
 
@@ -526,6 +747,117 @@ File Size    Memory Usage    Processing
 **How:** Chunked processing - only one chunk in memory at a time.
 
 **Tested:** 357 million rows, no memory leaks.
+
+---
+
+## 🧭 Analysis Decision Logic
+
+**How the Profiler Decides What to Run**
+
+The profiler makes intelligent decisions about which analyses to apply based on data characteristics. This section documents the triggers, thresholds, and conditions for each analysis type.
+
+### Semantic Analysis Decisions
+
+| Analysis | Trigger Condition | Skip Condition |
+|----------|-------------------|----------------|
+| **FIBO Tagging** | Always runs | Disabled via `--disable-all-enhancements` |
+| **Schema.org Tagging** | Always runs (baseline) | Disabled via `--disable-all-enhancements` |
+| **Wikidata Tagging** | Always runs | Module not installed |
+| **Science Tagging** | Always runs | Module not installed |
+| **Semantic Resolution** | All taggers complete | Any tagger unavailable |
+
+### Correlation Analysis Decisions
+
+| Analysis | Trigger Condition | Skip Condition |
+|----------|-------------------|----------------|
+| **Pearson Correlation** | ≥ 2 numeric columns | `--disable-correlation` or > 20 columns (uses sampling) |
+| **Cramér's V** | ≥ 2 categorical columns (cardinality ≤ 20) | scipy unavailable or > 50 columns |
+| **Point-Biserial** | ≥ 1 binary + ≥ 1 numeric column | scipy unavailable |
+| **Correlation Insights** | Correlation results available | No significant correlations (|r| < threshold) |
+
+**Identifier Column Filtering:**
+Correlations involving columns classified as identifiers (via semantic metadata) are automatically suppressed from insight generation. Detection uses:
+- `resolved.primary_type` containing "identifier" or "id"
+- `semantic_tags` containing "identifier"
+
+### ML Analysis Decisions
+
+| Analysis | Trigger Condition | Skip Condition |
+|----------|-------------------|----------------|
+| **Isolation Forest (Univariate)** | ≥ 500 rows, numeric column | `--no-ml` or binary column |
+| **Isolation Forest (Multivariate)** | ≥ 500 rows, ≥ 2 numeric columns | `--no-ml` or all columns are identifiers |
+| **DBSCAN Clustering** | ≥ 500 rows, ≥ 2 numeric columns | `--no-ml` |
+| **Benford's Law** | Numeric column with ≥ 100 values | Column is identifier, bounded (0-100), binary, or negative |
+| **Rare Category Detection** | Categorical with ≥ 5 unique values | Column is identifier (semantic) |
+| **Autoencoder** | ≥ 500 rows, mixed columns | tensorflow/keras unavailable |
+
+**Benford's Law Eligibility:**
+A column is **excluded** from Benford analysis if:
+- Classified as identifier (semantic_type contains "id" or "identifier")
+- Has bounded range (0-100 like percentages or ages)
+- Contains significant negative values
+- Is binary (≤ 3 unique values)
+- Has average/ratio naming patterns (avg_, mean_, ratio_, per_)
+
+### PCA Analysis Decisions
+
+| Condition | Threshold | Behavior |
+|-----------|-----------|----------|
+| Minimum rows | 10 | Skip if fewer rows |
+| Minimum numeric columns | 3 | Skip if fewer columns |
+| Maximum features | 50 | Select top 50 by variance |
+| Missing values | Drops rows with NaN | Must have ≥ 10 complete rows |
+
+### Column Family Detection Decisions
+
+| Condition | Threshold | Behavior |
+|-----------|-----------|----------|
+| Wide dataset trigger | > 50 columns | Activate family detection |
+| Minimum family size | 5 columns | Only report families with ≥ 5 members |
+| Sample size | 10 columns | Profile representative sample per family |
+
+**Pattern Priority Order:**
+1. Date-formatted column names (M/D/YY, YYYY-MM-DD)
+2. Numeric sequences (col_1, col_2...)
+3. Prefix/suffix groups
+4. Dtype similarity families
+
+### Memory Safety Decisions
+
+| Metric | Warning Threshold | Critical Threshold | Behavior |
+|--------|-------------------|-------------------|----------|
+| System memory usage | 70% | 80% | Warn → Terminate |
+| Check interval | Every 5 chunks | - | Log memory status |
+| Disable safety | `--no-memory-check` | - | Continue despite high memory |
+
+### Sampling Decisions
+
+| File Size | Analysis Sampling | ML Sampling |
+|-----------|-------------------|-------------|
+| < 100K rows | Full analysis | Full analysis |
+| 100K - 1M rows | Full analysis | 100K sample (configurable) |
+| > 1M rows | Stratified sample | 100K sample (configurable) |
+| `--full-analysis` | Full analysis | Full analysis (slower) |
+
+**Configurable via:**
+- `--analysis-sample-size N` - Set sample size threshold
+- `--full-analysis` - Disable all internal sampling
+
+### Validation Suggestion Decisions
+
+| Suggestion Type | Trigger Condition | Severity |
+|-----------------|-------------------|----------|
+| **MandatoryFieldCheck** | Completeness > 95% | ERROR |
+| **UniqueKeyCheck** | 100% unique + identifier semantic type | ERROR |
+| **RangeCheck** | Numeric column with defined bounds | WARNING |
+| **BooleanCheck** | Binary column (schema:Boolean) | ERROR |
+| **RegexCheck** | Pattern detected in > 90% of values | WARNING |
+| **ValidValuesCheck** | Categorical with ≤ 20 values | WARNING |
+
+**Identifier Exclusions:**
+- UniqueKeyCheck is suggested only for columns with identifier semantic type
+- Names (schema:name) are excluded even if 100% unique
+- Timestamps are excluded even if unique
 
 ---
 
