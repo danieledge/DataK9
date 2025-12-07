@@ -1,0 +1,478 @@
+# semantic_config.yaml
+# Global semantic detection configuration for DataK9 Profiler
+#
+# This file centralizes all tunable parameters for semantic type detection.
+# All values here can be adjusted without modifying Python code.
+#
+# Version: 1.0.0
+
+version: "1.0.0"
+
+# =============================================================================
+# SCORING WEIGHTS
+# Base score contributions when evidence matches a semantic type.
+# Positive values increase confidence; negative values penalize mismatches.
+# =============================================================================
+scoring:
+  # Column name matches a positive pattern from taxonomy
+  name_pattern_match: 0.50
+
+  # Column name matches a negative/exclusion pattern (penalty)
+  name_pattern_negative: -0.40
+
+  # Data type matches expected type(s) for the semantic type
+  dtype_match: 0.20
+
+  # Data type does NOT match expected type(s) (penalty)
+  dtype_mismatch: -0.30
+
+  # Cardinality (unique ratio) within expected range
+  cardinality_match: 0.15
+
+  # Cardinality outside expected range (penalty)
+  cardinality_mismatch: -0.10
+
+  # Value range (min/max) within expected bounds
+  value_range_match: 0.10
+
+  # Sample values match regex patterns (e.g., email, phone)
+  value_pattern_match: 0.30
+
+  # Unique ratio within expected range for the type
+  unique_ratio_match: 0.15
+
+  # String length within expected range
+  string_length_match: 0.10
+
+# =============================================================================
+# RESOLUTION THRESHOLDS
+# Minimum confidence scores for each semantic layer to be selected as primary.
+# Higher thresholds mean more certainty required before overriding lower layers.
+#
+# Priority order: FIBO > Science > Wikidata > Schema.org
+# =============================================================================
+resolution:
+  # FIBO (financial) minimum confidence to override other layers
+  fibo_min_conf: 0.70
+
+  # Science (QUDT/ChEBI) minimum confidence
+  science_min_conf: 0.60
+
+  # Wikidata (general knowledge) minimum confidence
+  wikidata_min_conf: 0.60
+
+  # Schema.org (baseline) minimum confidence
+  schema_min_conf: 0.50
+
+  # Fallback confidence when using dtype-based classification only
+  fallback_conf: 0.30
+
+# =============================================================================
+# GLOBAL NEGATIVE PATTERNS
+# Patterns that should NEVER match certain semantic categories.
+# These act as a safety net to prevent common false positives.
+#
+# Format: category_name: [list of regex patterns]
+# Patterns are case-insensitive by default.
+# =============================================================================
+global_negative_patterns:
+
+  # Prevent monetary detection on scientific/measurement columns
+  monetary:
+    - "(?i)^(total_)?phenol"
+    - "(?i)^(total_)?sulfur"
+    - "(?i)^(total_)?acid"
+    - "(?i)^(fixed|volatile)_acidity"
+    - "(?i)^(sepal|petal)_(length|width)"
+    - "(?i)^(mean|std|se|worst)_"
+    - "(?i)_(mean|std|se|worst)$"
+    - "(?i)^(radius|texture|perimeter|area|smoothness|compactness|concavity|symmetry)"
+    - "(?i)^proline$"
+    - "(?i)^magnesium$"
+    - "(?i)^ash$"
+    - "(?i)^alcalinity"
+    - "(?i)^color_intensity$"
+    - "(?i)^hue$"
+    - "(?i)^od280"
+    - "(?i)^flavanoids$"
+    - "(?i)^nonflavanoid"
+    - "(?i)^proanthocyanins$"
+
+  # Prevent identifier detection on counts/quantities
+  identifier:
+    - "(?i)^(count|cnt|num|qty)_"
+    - "(?i)_count$"
+    - "(?i)^total_"
+    - "(?i)^(sib|par)sp$"
+    - "(?i)^pclass$"
+    - "(?i)^n_"
+    - "(?i)_n$"
+
+  # Prevent PII detection on measurement/feature columns
+  pii:
+    - "(?i)^(mean|worst|se)_"
+    - "(?i)_(mean|worst|se)$"
+    - "(?i)^(radius|texture|perimeter|area|smoothness|compactness|concavity|symmetry)_"
+    - "(?i)^(sepal|petal)_"
+    - "(?i)^feature_"
+
+  # Prevent temporal detection on non-date columns
+  temporal:
+    - "(?i)^age$"
+    - "(?i)^duration$"
+    - "(?i)^tenure$"
+    - "(?i)_months$"
+    - "(?i)_years$"
+    - "(?i)_days$"
+
+# =============================================================================
+# VALUE HINTS DEFAULTS
+# Default thresholds for value-based semantic detection.
+# Individual taxonomy tags can override these with their own value_hints.
+# =============================================================================
+value_hints_defaults:
+
+  # High-cardinality unique identifiers
+  identifier:
+    min_unique_ratio: 0.80
+    max_unique_ratio: 1.05
+    min_avg_length: 2
+    max_avg_length: 64
+    prefer_alphanumeric: true
+
+  # Low-cardinality categorical fields
+  categorical:
+    max_unique_ratio: 0.50
+    min_cardinality: 2
+    max_cardinality: 100
+    allow_nulls: true
+
+  # Binary/boolean flags
+  boolean:
+    max_cardinality: 2
+    allowed_values:
+      - "true"
+      - "false"
+      - "t"
+      - "f"
+      - "yes"
+      - "no"
+      - "y"
+      - "n"
+      - "0"
+      - "1"
+      - "on"
+      - "off"
+      - "active"
+      - "inactive"
+      - "enabled"
+      - "disabled"
+
+  # Free-form text fields
+  free_text:
+    min_avg_length: 20
+    min_unique_ratio: 0.50
+    allow_nulls: true
+
+  # Continuous measurements
+  measurement:
+    min_unique_ratio: 0.10
+    min_cardinality: 10
+    prefer_float: true
+
+  # Monetary amounts
+  monetary:
+    min_value: 0
+    max_negative_fraction: 0.30
+    prefer_float: true
+    expect_right_skew: true
+
+  # Geographic coordinates
+  geo_coordinate:
+    latitude_range: [-90, 90]
+    longitude_range: [-180, 180]
+    min_unique_ratio: 0.10
+
+  # Codes (short alphanumeric strings)
+  code:
+    min_cardinality: 2
+    max_cardinality: 1000
+    max_avg_length: 20
+    prefer_alphanumeric: true
+
+# =============================================================================
+# VALUE PATTERNS
+# Configurable regex patterns for detecting semantic types from sample values.
+# These patterns are applied to sample data, not column names.
+#
+# Each pattern has:
+#   - pattern: The regex to match
+#   - min_match_ratio: Minimum fraction of samples that must match
+#   - tags: Semantic tags to assign when pattern matches
+#   - confidence: Confidence score for pattern matches
+#   - skip_if_name_matches: Column name patterns that disable this detection
+# =============================================================================
+value_patterns:
+
+  email:
+    pattern: '\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
+    min_match_ratio: 0.50
+    tags:
+      - "contact.email"
+      - "pii.email"
+    confidence: 0.95
+
+  phone:
+    pattern: '(?:(?:\+\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}|\+\d{1,3}\s?\d{1,14})(?:\s?(?:ext|x)\s?\d{2,5})?'
+    min_match_ratio: 0.50
+    tags:
+      - "contact.phone"
+      - "pii.phone"
+    confidence: 0.95
+    skip_if_name_matches:
+      - "(?i)(account|id|transaction|reference|number|code|routing)"
+
+  url:
+    pattern: 'https?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+'
+    min_match_ratio: 0.50
+    tags:
+      - "identifier.url"
+    confidence: 0.95
+
+  ipv4:
+    pattern: '\b(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\b'
+    min_match_ratio: 0.50
+    tags:
+      - "identifier.ip"
+    confidence: 0.90
+
+  uuid:
+    pattern: '\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b'
+    min_match_ratio: 0.50
+    tags:
+      - "identifier.uuid"
+    confidence: 0.95
+
+  credit_card:
+    pattern: '\b(?:4[0-9]{12}(?:[0-9]{3})?|5[1-5][0-9]{14}|3[47][0-9]{13}|3(?:0[0-5]|[68][0-9])[0-9]{11}|6(?:011|5[0-9]{2})[0-9]{12}|(?:2131|1800|35\d{3})\d{11})\b'
+    min_match_ratio: 0.50
+    tags:
+      - "pii.credit_card"
+    confidence: 0.95
+    skip_if_name_matches:
+      - "(?i)(account|id|bank|transaction|reference|routing)"
+
+  ssn:
+    pattern: '\b\d{3}-\d{2}-\d{4}\b'
+    min_match_ratio: 0.50
+    tags:
+      - "pii.ssn"
+    confidence: 0.95
+
+  date_iso:
+    pattern: '\b\d{4}-\d{2}-\d{2}\b'
+    min_match_ratio: 0.50
+    tags:
+      - "temporal.date"
+    confidence: 0.85
+
+  currency_symbol:
+    pattern: '[$\u20AC\u00A3\u00A5]\s*[\d,]+(?:\.\d{2})?'
+    min_match_ratio: 0.30
+    tags:
+      - "money.amount"
+    confidence: 0.90
+
+  percentage:
+    pattern: '\b\d+(?:\.\d+)?%\b'
+    min_match_ratio: 0.30
+    tags:
+      - "measure.percentage"
+    confidence: 0.85
+
+# =============================================================================
+# COLUMN NAME TOKENS
+# Token-based matching for column names (simpler than full regex).
+# Used for quick first-pass classification before detailed analysis.
+#
+# Format: semantic_type: {positive: [...], negative: [...]}
+# =============================================================================
+name_tokens:
+
+  identifier:
+    positive:
+      - id
+      - identifier
+      - guid
+      - uuid
+      - key
+      - pk
+      - fk
+      - ref
+      - reference
+    negative:
+      - amount
+      - price
+      - score
+      - rating
+      - age
+      - count
+
+  monetary:
+    positive:
+      - amount
+      - amt
+      - price
+      - cost
+      - fare
+      - fee
+      - charge
+      - tax
+      - salary
+      - wage
+      - income
+      - revenue
+      - sales
+      - balance
+      - payment
+    negative:
+      - percent
+      - pct
+      - ratio
+      - score
+      - rating
+      - phenol
+      - acid
+      - alcohol
+
+  categorical:
+    positive:
+      - type
+      - category
+      - class
+      - status
+      - segment
+      - group
+      - level
+      - grade
+      - tier
+      - code
+      - label
+      - gender
+      - sex
+    negative:
+      - amount
+      - price
+      - score
+      - distance
+      - length
+      - width
+
+  temporal:
+    positive:
+      - date
+      - time
+      - datetime
+      - timestamp
+      - ts
+      - created
+      - updated
+      - valid_from
+      - valid_to
+    negative:
+      - score
+      - rating
+      - age
+
+  pii:
+    positive:
+      - name
+      - first_name
+      - last_name
+      - email
+      - phone
+      - mobile
+      - address
+      - postcode
+      - zip
+      - ssn
+    negative:
+      - feature
+      - mean
+      - radius
+      - texture
+      - smoothness
+
+  measurement:
+    positive:
+      - length
+      - width
+      - height
+      - depth
+      - distance
+      - radius
+      - diameter
+      - weight
+      - mass
+      - area
+      - volume
+      - temperature
+      - density
+      - pressure
+      - concentration
+      - mean
+      - avg
+      - std
+    negative:
+      - id
+      - code
+      - key
+      - ticket
+
+  boolean:
+    positive:
+      - is_
+      - has_
+      - flag
+      - active
+      - enabled
+      - valid
+      - deleted
+      - survived
+      - approved
+      - cancelled
+    negative: []
+
+# =============================================================================
+# VALIDATION RULE MAPPINGS
+# Default validation rules to suggest based on semantic type.
+# These are recommendations, not enforced constraints.
+# =============================================================================
+validation_rules:
+
+  monetary:
+    - NonNegativeCheck
+    - OutlierDetectionCheck
+
+  identifier:
+    - UniqueKeyCheck
+    - MandatoryFieldCheck
+
+  categorical:
+    - ValidValuesCheck
+    - CardinalityCheck
+
+  temporal:
+    - DateFormatCheck
+    - DateRangeCheck
+
+  pii:
+    - PIIDetectionCheck
+    - MaskingRequired
+
+  boolean:
+    - BinaryValueCheck
+
+  measurement:
+    - RangeCheck
+    - OutlierDetectionCheck

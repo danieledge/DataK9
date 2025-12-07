@@ -71,6 +71,22 @@ except ImportError:
     SchemaOrgTagger = None
     SemanticResolver = None
 
+# Phase 2c: Wikidata General Knowledge Semantics
+try:
+    from validation_framework.profiler.wikidata_tagger import WikidataTagger
+    WIKIDATA_AVAILABLE = True
+except ImportError:
+    WIKIDATA_AVAILABLE = False
+    WikidataTagger = None
+
+# Phase 2d: Science/Laboratory Semantics (QUDT, ChEBI, UO)
+try:
+    from validation_framework.profiler.science_tagger import ScienceTagger
+    SCIENCE_AVAILABLE = True
+except ImportError:
+    SCIENCE_AVAILABLE = False
+    ScienceTagger = None
+
 # Phase 3: ML-based Anomaly Detection (Beta)
 try:
     from validation_framework.profiler.ml_analyzer import MLAnalyzer, ChunkedMLAccumulator
@@ -79,6 +95,14 @@ except ImportError:
     ML_ANALYSIS_AVAILABLE = False
     # ML analysis is optional
 
+# Phase 4: PCA/Dimensionality Reduction
+try:
+    from validation_framework.profiler.pca_analyzer import PCAAnalyzer
+    PCA_AVAILABLE = True
+except ImportError:
+    PCA_AVAILABLE = False
+    PCAAnalyzer = None
+
 # Phase 4: Categorical Association Analysis
 try:
     from validation_framework.profiler.categorical_analysis import CategoricalAnalyzer
@@ -86,6 +110,16 @@ try:
 except ImportError:
     CATEGORICAL_ANALYSIS_AVAILABLE = False
     logger.debug("Categorical analysis not available")
+
+# Wide Dataset Column Family Detection
+try:
+    from validation_framework.profiler.column_family_detector import (
+        ColumnFamilyDetector, detect_and_summarize_families
+    )
+    COLUMN_FAMILY_DETECTION_AVAILABLE = True
+except ImportError:
+    COLUMN_FAMILY_DETECTION_AVAILABLE = False
+    logger.debug("Column family detection not available")
 
 # Validation Suggestion Generator (extracted from god class)
 from validation_framework.profiler.validation_suggester import ValidationSuggestionGenerator
@@ -219,6 +253,7 @@ class DataProfiler:
         self,
         chunk_size: Optional[int] = None,
         max_correlation_columns: int = 20,
+        correlation_threshold: float = 0.3,
         enable_temporal_analysis: bool = True,
         enable_pii_detection: bool = True,
         enable_enhanced_correlation: bool = True,
@@ -235,6 +270,7 @@ class DataProfiler:
         Args:
             chunk_size: Number of rows to process per chunk (None = auto-calculate based on available memory)
             max_correlation_columns: Maximum columns for correlation analysis
+            correlation_threshold: Minimum absolute correlation to report (default 0.3, Cohen's medium effect)
             enable_temporal_analysis: Enable Phase 1 temporal analysis (default: True)
             enable_pii_detection: Enable Phase 1 PII detection (default: True)
             enable_enhanced_correlation: Enable Phase 1 enhanced correlation (default: True)
@@ -248,6 +284,7 @@ class DataProfiler:
         self.chunk_size = chunk_size  # None means auto-calculate
         self.analysis_sample_size = analysis_sample_size  # Configurable sample size
         self.max_correlation_columns = max_correlation_columns
+        self.correlation_threshold = correlation_threshold
 
         # Phase 1 enhancement flags
         self.enable_temporal_analysis = enable_temporal_analysis and TEMPORAL_ANALYSIS_AVAILABLE
@@ -269,9 +306,19 @@ class DataProfiler:
         self.schema_org_tagger = SchemaOrgTagger() if SCHEMA_ORG_AVAILABLE else None
         self.semantic_resolver = SemanticResolver() if SCHEMA_ORG_AVAILABLE else None
 
+        # Initialize Phase 2c: Wikidata general knowledge semantics
+        self.wikidata_tagger = WikidataTagger() if WIKIDATA_AVAILABLE else None
+
+        # Initialize Phase 2d: Science/Laboratory semantics (QUDT, ChEBI, UO)
+        self.science_tagger = ScienceTagger() if SCIENCE_AVAILABLE else None
+
         # Initialize Phase 3: ML analyzer (Beta)
         self.enable_ml_analysis = enable_ml_analysis and ML_ANALYSIS_AVAILABLE
         self.ml_analyzer = MLAnalyzer() if self.enable_ml_analysis else None
+
+        # Initialize Phase 4: PCA/Dimensionality Reduction
+        self.enable_pca_analysis = PCA_AVAILABLE and enable_ml_analysis  # Enable with ML
+        self.pca_analyzer = PCAAnalyzer() if self.enable_pca_analysis else None
 
         # Initialize Phase 4: Categorical analysis
         self.enable_categorical_analysis = CATEGORICAL_ANALYSIS_AVAILABLE
@@ -284,7 +331,10 @@ class DataProfiler:
         self.type_inferrer = TypeInferrer()
 
         # Initialize statistics calculator (extracted from god class)
-        self.stats_calculator = StatisticsCalculator(max_correlation_columns=max_correlation_columns)
+        self.stats_calculator = StatisticsCalculator(
+            max_correlation_columns=max_correlation_columns,
+            correlation_threshold=correlation_threshold
+        )
 
         # Memory safety configuration
         self.disable_memory_safety = disable_memory_safety  # WARNING: Only for development/testing
@@ -474,6 +524,15 @@ class DataProfiler:
         start_time = time.time()
         logger.debug(f"Starting profile of DataFrame: {name}")
 
+        # Convert polars DataFrame to pandas if needed
+        try:
+            import polars as pl
+            if isinstance(df, pl.DataFrame):
+                logger.debug("Converting polars DataFrame to pandas")
+                df = df.to_pandas()
+        except ImportError:
+            pass  # polars not installed, df should already be pandas
+
         row_count = len(df)
 
         # Track phase timings for performance analysis
@@ -509,9 +568,11 @@ class DataProfiler:
         MAX_CORRELATION_SAMPLES = 50000  # Sufficient for statistical correlation analysis
         for column in columns:
             # Collect numeric data for correlations
+            # IMPORTANT: Keep NaN values to preserve row alignment for correlation
+            # pandas.DataFrame.corr() uses pairwise deletion automatically
             if column.type_info.inferred_type in ["integer", "float"]:
                 try:
-                    numeric_values = pd.to_numeric(df[column.name], errors='coerce').dropna()
+                    numeric_values = pd.to_numeric(df[column.name], errors='coerce')
                     # Bound to MAX_CORRELATION_SAMPLES to prevent memory leaks
                     bounded_values = numeric_values.head(MAX_CORRELATION_SAMPLES)
                     numeric_data[column.name] = bounded_values.tolist()
@@ -605,12 +666,34 @@ class DataProfiler:
                             "signals": list(fibo_info.evidence.keys()) if fibo_info.evidence else []
                         }
 
+                # Step 2c: Compute Wikidata semantics (general knowledge types)
+                wikidata_result = None
+                if self.wikidata_tagger:
+                    wikidata_result = self.wikidata_tagger.tag_column(
+                        column_name=column.name,
+                        inferred_type=column.type_info.inferred_type,
+                        statistics=column.statistics,
+                        sample_values=column.type_info.sample_values
+                    )
+
+                # Step 2d: Compute Science semantics (QUDT, ChEBI, UO)
+                science_result = None
+                if self.science_tagger:
+                    science_result = self.science_tagger.tag_column(
+                        column_name=column.name,
+                        inferred_type=column.type_info.inferred_type,
+                        statistics=column.statistics,
+                        sample_values=column.type_info.sample_values
+                    )
+
                 # Step 3: Resolve which layer is primary
                 if self.semantic_resolver:
                     column.semantic_info = self.semantic_resolver.resolve(
                         structural_type=structural_type,
                         schema_org=schema_org_result,
-                        fibo=fibo_result
+                        fibo=fibo_result,
+                        wikidata=wikidata_result,
+                        science=science_result
                     )
                     resolved = column.semantic_info.get("resolved", {})
                     logger.debug(f"Semantic tagging for '{column.name}': {resolved.get('display_label')} (source: {resolved.get('primary_source')})")
@@ -666,18 +749,9 @@ class DataProfiler:
                     row_count=row_count,
                     methods=['pearson', 'spearman']
                 )
-                # Update correlations list with enhanced correlation info
-                for pair in enhanced_correlations.get('correlation_pairs', []):
-                    correlations.append(CorrelationResult(
-                        column1=pair['column1'],
-                        column2=pair['column2'],
-                        correlation=pair['correlation'],
-                        type=pair['method'],
-                        strength=pair.get('strength'),
-                        direction=pair.get('direction'),
-                        p_value=pair.get('p_value'),
-                        is_significant=pair.get('is_significant')
-                    ))
+                # Note: enhanced_correlations stored separately - don't append to correlations
+                # to avoid duplication. The enhanced_correlations includes both methods with
+                # p-values and significance, while correlations is the deduplicated summary.
                 logger.debug(f"Enhanced correlation analysis found {len(enhanced_correlations.get('correlation_pairs', []))} significant correlations")
             except Exception as e:
                 logger.warning(f"Enhanced correlation analysis failed: {e}")
@@ -711,8 +785,186 @@ class DataProfiler:
             name, "", "database", 0, row_count, columns, suggested_validations
         )
 
+        # Phase 3: ML-based Anomaly Detection (Beta)
+        ml_findings = None
+        pca_analysis = None
+        if self.enable_ml_analysis and self.ml_analyzer:
+            ml_start = time.time()
+            logger.debug("🧠 Running ML-based anomaly detection (Beta)...")
+            try:
+                # Build semantic info from columns for intelligent analysis
+                column_semantic_info = {}
+                for col in columns:
+                    if hasattr(col, 'semantic_info') and col.semantic_info:
+                        column_semantic_info[col.name] = col.semantic_info
+
+                # Run ML analysis with semantic context
+                ml_findings = self.ml_analyzer.analyze(df, column_semantic_info=column_semantic_info)
+
+                # Update sample_info
+                if 'sample_info' in ml_findings:
+                    ml_findings['sample_info']['original_rows'] = row_count
+                    ml_findings['sample_info']['sampled'] = False
+                    ml_findings['sample_info']['sample_percentage'] = 100.0
+
+                # Context-aware anomaly validation
+                if ml_findings.get('numeric_outliers') or ml_findings.get('outliers'):
+                    try:
+                        from validation_framework.profiler.contextual_validator import validate_outliers_with_context
+
+                        outliers = ml_findings.get('numeric_outliers', {}) or ml_findings.get('outliers', {})
+                        context_result, context_store = validate_outliers_with_context(
+                            outliers, df,
+                            field_descriptions=self.field_descriptions
+                        )
+                        ml_findings['context_validation'] = context_result.to_dict()
+                        ml_findings['context_store'] = context_store.to_dict()
+
+                        if context_result.total_explained > 0:
+                            reduction = (context_result.total_original - context_result.total_validated) / context_result.total_original * 100
+                            logger.debug(f"🎯 Context validation: {context_result.total_original} → {context_result.total_validated} outliers ({reduction:.0f}% reduction)")
+                    except Exception as e:
+                        logger.debug(f"Context validation failed: {e}")
+
+                # Correlation insights synthesis
+                if CORRELATION_INSIGHT_AVAILABLE and correlations:
+                    try:
+                        synthesizer = CorrelationInsightSynthesizer(
+                            df,
+                            field_descriptions=self.field_descriptions,
+                            column_profiles=columns
+                        )
+
+                        corr_dicts = []
+                        for c in correlations:
+                            if isinstance(c, CorrelationResult):
+                                corr_dicts.append({
+                                    'column1': c.column1,
+                                    'column2': c.column2,
+                                    'correlation': c.correlation,
+                                    'type': c.type,
+                                    'p_value': c.p_value,
+                                    'strength': c.strength,
+                                    'direction': c.direction
+                                })
+                            else:
+                                corr_dicts.append(c)
+
+                        subgroups = []
+                        if ml_findings and 'context_store' in ml_findings:
+                            subgroups = ml_findings['context_store'].get('subgroups', [])
+
+                        insights = synthesizer.synthesize_all(corr_dicts, subgroups)
+                        ml_findings['correlation_insights'] = synthesizer.to_dict_list()
+                        logger.debug(f"💡 Synthesized {len(insights)} correlation insights")
+                    except Exception as e:
+                        logger.debug(f"Correlation insight synthesis failed: {e}")
+
+                phase_timings['ml_analysis'] = time.time() - ml_start
+                logger.debug(f"🧠 ML analysis complete: {ml_findings.get('summary', {}).get('total_issues', 0)} potential issues found")
+
+            except Exception as e:
+                logger.warning(f"ML analysis failed: {e}")
+                import traceback
+                logger.debug(traceback.format_exc())
+
+        # Phase 4: Categorical analysis for target detection and associations
+        categorical_analysis = None
+        if self.enable_categorical_analysis and CATEGORICAL_ANALYSIS_AVAILABLE:
+            cat_start = time.time()
+            try:
+                # Build column types dict from profiles (same pattern as profile_file)
+                column_types = {}
+                for col in columns:
+                    if hasattr(col, 'type_info') and col.type_info:
+                        column_types[col.name] = col.type_info.inferred_type
+
+                categorical_analysis = self.categorical_analyzer.analyze_categorical_associations(
+                    df,
+                    column_types
+                )
+                if categorical_analysis:
+                    target_count = len(categorical_analysis.get('potential_outcomes', []))
+                    if target_count > 0:
+                        logger.debug(f"📊 Categorical analysis: {target_count} potential target columns detected")
+                phase_timings['categorical_analysis'] = time.time() - cat_start
+            except Exception as e:
+                logger.debug(f"Categorical analysis failed: {e}")
+
+        # Phase 5: PCA/Dimensionality Reduction Analysis
+        if self.enable_pca_analysis and self.pca_analyzer and ml_findings:
+            pca_start = time.time()
+            try:
+                # Get numeric column names from profiles
+                numeric_columns = [
+                    col.name for col in columns
+                    if hasattr(col, 'type_info') and col.type_info
+                    and col.type_info.inferred_type in ('integer', 'float', 'decimal')
+                ]
+
+                # Get outlier indices from ML findings
+                outlier_indices = []
+                if ml_findings and 'numeric_outliers' in ml_findings:
+                    for col_outliers in ml_findings['numeric_outliers'].values():
+                        if isinstance(col_outliers, dict):
+                            outlier_indices.extend(col_outliers.get('indices', []))
+                    outlier_indices = list(set(outlier_indices))
+
+                # Get target column if detected from ML findings
+                target_column = None
+                if ml_findings:
+                    viz_data = ml_findings.get('viz_data', {})
+                    class_imbalance = viz_data.get('class_imbalance', {})
+                    for col, data in class_imbalance.items():
+                        if data.get('is_target_like') and col in df.columns:
+                            target_column = col
+                            break
+                    if not target_column:
+                        tfa = ml_findings.get('target_feature_analysis', {})
+                        if tfa:
+                            target_column = next(iter(tfa.keys()), None)
+
+                # Run PCA analysis
+                pca_analysis = self.pca_analyzer.analyze(
+                    df,
+                    numeric_columns,
+                    outlier_indices=outlier_indices,
+                    target_column=target_column
+                )
+
+                if pca_analysis.get('available'):
+                    logger.debug(
+                        f"📊 PCA: {len(numeric_columns)} features → 2D, "
+                        f"explained variance: {sum(pca_analysis.get('explained_variance', []))*100:.1f}%"
+                    )
+                else:
+                    logger.debug(f"PCA skipped: {pca_analysis.get('reason', 'unknown')}")
+
+                phase_timings['pca_analysis'] = time.time() - pca_start
+            except Exception as e:
+                logger.debug(f"PCA analysis failed: {e}")
+                pca_analysis = None
+
+        # ML-based validation suggestions
+        if ml_findings:
+            try:
+                ml_based_suggestions = self._generate_ml_based_validations(ml_findings, columns)
+                if ml_based_suggestions:
+                    logger.debug(f"💡 Generated {len(ml_based_suggestions)} ML-based validation suggestions")
+                    suggested_validations.extend(ml_based_suggestions)
+                    suggested_validations = self._deduplicate_validations_by_field(suggested_validations)
+                    suggested_validations = sorted(suggested_validations, key=lambda x: x.confidence, reverse=True)
+                    config_yaml, config_command = self._generate_validation_config(
+                        name, "", "database", 0, row_count, columns, suggested_validations
+                    )
+            except Exception as e:
+                logger.warning(f"ML-based suggestion generation failed: {e}")
+
         processing_time = time.time() - start_time
         logger.debug(f"Profile completed in {processing_time:.2f} seconds")
+
+        # Deduplicate correlations before returning
+        correlations = self._deduplicate_correlations(correlations)
 
         return ProfileResult(
             file_name=f"{name} (DataFrame)",
@@ -730,7 +982,10 @@ class DataProfiler:
             generated_config_yaml=config_yaml,
             generated_config_command=config_command,
             enhanced_correlations=enhanced_correlations,
-            dataset_privacy_risk=dataset_privacy_risk
+            dataset_privacy_risk=dataset_privacy_risk,
+            categorical_analysis=categorical_analysis,
+            ml_findings=ml_findings,
+            pca_analysis=pca_analysis
         )
 
     def _extract_parquet_column_stats(self, file_path: str) -> Optional[Dict[str, Any]]:
@@ -990,6 +1245,10 @@ class DataProfiler:
         datetime_data: Dict[str, List] = {}  # For temporal analysis
         all_column_data: Dict[str, List] = {}  # For PII detection (sample-based)
 
+        # Wide dataset column family detection
+        column_families_info = None
+        family_columns_set: set = set()  # Columns to exclude from correlation analysis
+
         # Phase 3: Chunked ML accumulator for full analysis mode
         # When full_analysis=True, we accumulate ML stats during chunk processing
         # instead of loading all data at once (which would cause OOM on large datasets)
@@ -1092,6 +1351,22 @@ class DataProfiler:
                         col, declared_schema
                     )
 
+                # Detect column families for wide datasets
+                if COLUMN_FAMILY_DETECTION_AVAILABLE and len(chunk.columns) > 50:
+                    try:
+                        family_detector = ColumnFamilyDetector()
+                        column_families_info = family_detector.detect_families(chunk)
+                        if column_families_info.get('is_wide'):
+                            families = column_families_info.get('families', [])
+                            family_columns_set = set(column_families_info.get('family_columns', []))
+                            logger.info(f"📊 Wide dataset detected ({len(chunk.columns)} columns)")
+                            logger.info(f"   Excluding {len(family_columns_set)} family columns from correlation analysis")
+                            for family in families:
+                                family_detector.compute_family_stats(family, chunk)
+                                logger.info(f"   Family: {family.name} - {family.count} columns ({family.pattern_description})")
+                    except Exception as e:
+                        logger.warning(f"Column family detection failed: {e}")
+
             # Update profiles with chunk data
             for col in chunk.columns:
                 self._update_column_profile(
@@ -1101,7 +1376,8 @@ class DataProfiler:
                 # Collect numeric data for correlations with memory-efficient sampling
                 # Limit to MAX_CORRELATION_SAMPLES per column to prevent memory exhaustion with very large datasets
                 # Note: Check pandas dtype directly since inferred_type is not set until after chunk processing
-                if pd.api.types.is_numeric_dtype(chunk[col]):
+                # Skip family columns (wide dataset mode) - they're correlated by definition
+                if pd.api.types.is_numeric_dtype(chunk[col]) and col not in family_columns_set:
                     if col not in numeric_data:
                         numeric_data[col] = []
 
@@ -1109,24 +1385,26 @@ class DataProfiler:
                     current_count = len(numeric_data[col])
                     if current_count < MAX_CORRELATION_SAMPLES:
                         # Convert to numeric, handling errors
-                        numeric_values = pd.to_numeric(chunk[col], errors='coerce').dropna()
+                        # IMPORTANT: Keep NaN values to preserve row alignment for correlation
+                        # pandas.DataFrame.corr() uses pairwise deletion automatically
+                        numeric_values = pd.to_numeric(chunk[col], errors='coerce')
 
                         # Calculate how many samples to take from this chunk
                         samples_needed = MAX_CORRELATION_SAMPLES - current_count
 
-                        # Use simple random sampling if chunk is larger than samples needed
-                        if len(numeric_values) > samples_needed:
-                            # Use pandas .sample() instead of tolist() to avoid memory spike
+                        # For datasets under the sample limit, keep all values (including NaN)
+                        # This preserves row alignment which is critical for correlation
+                        if len(numeric_values) <= samples_needed:
+                            numeric_data[col].extend(numeric_values.tolist())
+                        else:
+                            # Large dataset: sample values (note: this breaks row alignment
+                            # but is necessary for memory safety on very large datasets)
                             sampled = numeric_values.sample(n=samples_needed, random_state=42)
                             numeric_data[col].extend(sampled.tolist())
                             # Log when we hit the limit
                             if col not in sampling_triggered:
                                 sampling_triggered[col] = row_count
                                 logger.debug(f"💾 Memory optimization: Column '{col}' sampling limit reached at {row_count:,} rows (using {MAX_CORRELATION_SAMPLES:,} samples for correlation)")
-                        else:
-                            # Size is under limit, but still bound to samples_needed to prevent unbounded growth
-                            bounded_values = numeric_values.head(samples_needed)
-                            numeric_data[col].extend(bounded_values.tolist())
 
                 # Collect datetime data for temporal analysis with memory-efficient sampling
                 # CRITICAL: Only attempt datetime conversion on likely datetime columns to avoid memory bloat
@@ -1291,12 +1569,34 @@ class DataProfiler:
                             "signals": list(fibo_info.evidence.keys()) if fibo_info.evidence else []
                         }
 
+                # Step 2c: Compute Wikidata semantics (general knowledge types)
+                wikidata_result = None
+                if self.wikidata_tagger:
+                    wikidata_result = self.wikidata_tagger.tag_column(
+                        column_name=column.name,
+                        inferred_type=column.type_info.inferred_type,
+                        statistics=column.statistics,
+                        sample_values=column.type_info.sample_values
+                    )
+
+                # Step 2d: Compute Science semantics (QUDT, ChEBI, UO)
+                science_result = None
+                if self.science_tagger:
+                    science_result = self.science_tagger.tag_column(
+                        column_name=column.name,
+                        inferred_type=column.type_info.inferred_type,
+                        statistics=column.statistics,
+                        sample_values=column.type_info.sample_values
+                    )
+
                 # Step 3: Resolve which layer is primary
                 if self.semantic_resolver:
                     column.semantic_info = self.semantic_resolver.resolve(
                         structural_type=structural_type,
                         schema_org=schema_org_result,
-                        fibo=fibo_result
+                        fibo=fibo_result,
+                        wikidata=wikidata_result,
+                        science=science_result
                     )
                     resolved = column.semantic_info.get("resolved", {})
                     logger.debug(f"Semantic tagging for '{column.name}': {resolved.get('display_label')} (source: {resolved.get('primary_source')})")
@@ -1352,18 +1652,9 @@ class DataProfiler:
                     row_count=row_count,
                     methods=['pearson', 'spearman']
                 )
-                # Update correlations list with enhanced correlation info
-                for pair in enhanced_correlations.get('correlation_pairs', []):
-                    correlations.append(CorrelationResult(
-                        column1=pair['column1'],
-                        column2=pair['column2'],
-                        correlation=pair['correlation'],
-                        type=pair['method'],
-                        strength=pair.get('strength'),
-                        direction=pair.get('direction'),
-                        p_value=pair.get('p_value'),
-                        is_significant=pair.get('is_significant')
-                    ))
+                # Note: enhanced_correlations stored separately - don't append to correlations
+                # to avoid duplication. The enhanced_correlations includes both methods with
+                # p-values and significance, while correlations is the deduplicated summary.
                 logger.debug(f"Enhanced correlation analysis found {len(enhanced_correlations.get('correlation_pairs', []))} significant correlations")
             except Exception as e:
                 logger.warning(f"Enhanced correlation analysis failed: {e}")
@@ -1386,8 +1677,11 @@ class DataProfiler:
         # Use actual_total_rows for suggestions to get correct row count range (not sampled count)
         suggestions_start = time.time()
         actual_rows_for_suggestions = actual_total_rows if actual_total_rows else row_count
+        # For wide datasets, exclude family columns from suggestion generation
+        # (they're homogeneous and would generate thousands of duplicate suggestions)
+        columns_for_suggestions = [c for c in columns if c.name not in family_columns_set] if family_columns_set else columns
         suggested_validations = self.validation_suggester.generate_suggestions(
-            columns, actual_rows_for_suggestions,
+            columns_for_suggestions, actual_rows_for_suggestions,
             enable_ml_suggestions=self.enable_ml_analysis,
             ml_analyzer=self.ml_analyzer
         )
@@ -1555,7 +1849,8 @@ class DataProfiler:
                             insight_start = time.time()
                             synthesizer = CorrelationInsightSynthesizer(
                                 ml_df,
-                                field_descriptions=self.field_descriptions
+                                field_descriptions=self.field_descriptions,
+                                column_profiles=columns
                             )
 
                             # Convert CorrelationResult objects to dicts
@@ -1628,6 +1923,67 @@ class DataProfiler:
                             categorical_analysis = None
                     else:
                         categorical_analysis = None
+
+                    # ═══════════════════════════════════════════════════════════════
+                    # PHASE 5: PCA/DIMENSIONALITY REDUCTION ANALYSIS
+                    # Create 2D projection for visualization and insight discovery
+                    # Must run before ml_df cleanup!
+                    # ═══════════════════════════════════════════════════════════════
+                    pca_analysis = None
+                    if self.enable_pca_analysis and self.pca_analyzer:
+                        pca_start = time.time()
+                        try:
+                            # Get numeric column names from profiles
+                            numeric_columns = [
+                                col.name for col in columns
+                                if hasattr(col, 'type_info') and col.type_info
+                                and col.type_info.inferred_type in ('integer', 'float', 'decimal')
+                            ]
+
+                            # Get outlier indices from ML findings
+                            outlier_indices = []
+                            if ml_findings and 'numeric_outliers' in ml_findings:
+                                for col_outliers in ml_findings['numeric_outliers'].values():
+                                    if isinstance(col_outliers, dict):
+                                        outlier_indices.extend(col_outliers.get('indices', []))
+                                outlier_indices = list(set(outlier_indices))
+
+                            # Get target column if detected from ML findings
+                            target_column = None
+                            if ml_findings:
+                                # Check class_imbalance for is_target_like columns
+                                viz_data = ml_findings.get('viz_data', {})
+                                class_imbalance = viz_data.get('class_imbalance', {})
+                                for col, data in class_imbalance.items():
+                                    if data.get('is_target_like') and col in ml_df.columns:
+                                        target_column = col
+                                        break
+                                # Also check target_feature_analysis as fallback
+                                if not target_column:
+                                    tfa = ml_findings.get('target_feature_analysis', {})
+                                    if tfa:
+                                        target_column = next(iter(tfa.keys()), None)
+
+                            # Run PCA analysis
+                            pca_analysis = self.pca_analyzer.analyze(
+                                ml_df,
+                                numeric_columns,
+                                outlier_indices=outlier_indices,
+                                target_column=target_column
+                            )
+
+                            if pca_analysis.get('available'):
+                                logger.debug(
+                                    f"📊 PCA: {len(numeric_columns)} features → 2D, "
+                                    f"explained variance: {sum(pca_analysis.get('explained_variance', []))*100:.1f}%"
+                                )
+                            else:
+                                logger.debug(f"PCA skipped: {pca_analysis.get('reason', 'unknown')}")
+
+                            phase_timings['pca_analysis'] = time.time() - pca_start
+                        except Exception as e:
+                            logger.debug(f"PCA analysis failed: {e}")
+                            pca_analysis = None
 
                     # Clean up ml_df after context validation
                     del ml_df
@@ -1745,6 +2101,8 @@ class DataProfiler:
             analysis_applied.append("enhanced_correlation_analysis")
         if self.enable_categorical_analysis and categorical_analysis:
             analysis_applied.append("categorical_association_analysis")
+        if self.enable_pca_analysis and pca_analysis and pca_analysis.get('available'):
+            analysis_applied.append("pca_dimensionality_reduction")
 
         # Build sampling info for lineage
         sampling_info = None
@@ -1767,6 +2125,9 @@ class DataProfiler:
             sampling_info=sampling_info
         )
 
+        # Deduplicate correlations before returning
+        correlations = self._deduplicate_correlations(correlations)
+
         return ProfileResult(
             file_name=file_name,
             file_path=file_path,
@@ -1788,7 +2149,9 @@ class DataProfiler:
             ml_findings=ml_findings,
             data_lineage=data_lineage,
             csv_format_issues=csv_format_check if csv_format_check and not csv_format_check['valid'] else None,
-            categorical_analysis=categorical_analysis
+            categorical_analysis=categorical_analysis,
+            column_families=self._serialize_column_families(column_families_info) if column_families_info else None,
+            pca_analysis=pca_analysis
         )
 
     def _initialize_column_profile(
@@ -2706,15 +3069,18 @@ class DataProfiler:
 
         # Get primary type from resolved semantics
         resolved = col.semantic_info.get('resolved', {})
-        primary_type = resolved.get('primary_type', '').lower() if resolved else ''
+        primary_type_raw = resolved.get('primary_type', '') if resolved else ''
+        primary_type = (primary_type_raw or '').lower()
 
         # If no resolved type, try schema_org or fibo directly
         if not primary_type:
             schema_org = col.semantic_info.get('schema_org', {})
-            primary_type = schema_org.get('type', '').lower() if schema_org else ''
+            type_raw = schema_org.get('type', '') if schema_org else ''
+            primary_type = (type_raw or '').lower()
         if not primary_type:
             fibo = col.semantic_info.get('fibo', {})
-            primary_type = fibo.get('type', '').lower() if fibo else ''
+            type_raw = fibo.get('type', '') if fibo else ''
+            primary_type = (type_raw or '').lower()
 
         # HIGH confidence types for Benford (truly numeric/monetary measures)
         high_conf_numeric = {
@@ -2781,6 +3147,10 @@ class DataProfiler:
         outlier_columns = outlier_summary.get('outlier_columns', {})
 
         for col_name, outlier_data in outlier_columns.items():
+            # Skip null column names
+            if col_name is None:
+                continue
+
             outlier_count = outlier_data.get('count', 0)
             outlier_pct = outlier_data.get('percentage', 0)
 
@@ -2812,6 +3182,9 @@ class DataProfiler:
         benford_analysis = ml_findings.get('benford_analysis', {})
 
         for col_name, benford_data in benford_analysis.items():
+            # Skip null column names
+            if col_name is None:
+                continue
             confidence = benford_data.get('confidence', 'Unknown')
             is_suspicious = benford_data.get('is_suspicious', False)
             chi_square = benford_data.get('chi_square', 0)
@@ -3427,6 +3800,38 @@ class DataProfiler:
 
         return None
 
+    def _serialize_column_families(self, families_info: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """
+        Serialize column family detection results for storage in ProfileResult.
+
+        Converts ColumnFamily dataclass objects to plain dicts for JSON serialization.
+        """
+        if not families_info or not families_info.get('is_wide'):
+            return None
+
+        serialized = {
+            'is_wide': families_info.get('is_wide', False),
+            'total_columns': families_info.get('total_columns', 0),
+            'standalone_columns': families_info.get('standalone_columns', []),
+            'family_columns': families_info.get('family_columns', []),
+            'families': []
+        }
+
+        for family in families_info.get('families', []):
+            family_dict = {
+                'name': family.name,
+                'pattern_type': family.pattern_type,
+                'pattern_description': family.pattern_description,
+                'column_count': family.count,
+                'columns': family.columns[:100],  # Limit for serialization
+                'sample_columns': family.sample_columns,
+                'anomalous_columns': family.anomalous_columns,
+                'aggregate_stats': family.aggregate_stats
+            }
+            serialized['families'].append(family_dict)
+
+        return serialized
+
     def _calculate_overall_quality(self, columns: List[ColumnProfile]) -> float:
         """Calculate overall data quality score."""
         if not columns:
@@ -3435,6 +3840,41 @@ class DataProfiler:
         # Average of all column quality scores
         total_score = sum(col.quality.overall_score for col in columns)
         return total_score / len(columns)
+
+    def _deduplicate_correlations(self, correlations: List[CorrelationResult]) -> List[CorrelationResult]:
+        """
+        Deduplicate correlations by column pair, keeping the strongest correlation.
+
+        When multiple methods (Pearson, Spearman, etc.) report correlations for the same
+        column pair, keep only the one with the highest absolute correlation value.
+        This prevents duplicate entries in reports.
+
+        Args:
+            correlations: List of correlation results (may contain duplicates)
+
+        Returns:
+            Deduplicated list with one entry per column pair
+        """
+        if not correlations:
+            return correlations
+
+        # Use dict keyed by sorted column pair to deduplicate
+        best_by_pair: Dict[tuple, CorrelationResult] = {}
+
+        for corr in correlations:
+            # Create canonical key (sorted tuple of column names)
+            pair_key = tuple(sorted([corr.column1, corr.column2]))
+
+            if pair_key not in best_by_pair:
+                best_by_pair[pair_key] = corr
+            else:
+                # Keep the one with highest absolute correlation
+                existing = best_by_pair[pair_key]
+                if abs(corr.correlation) > abs(existing.correlation):
+                    best_by_pair[pair_key] = corr
+
+        # Return as list, sorted by absolute correlation descending
+        return sorted(best_by_pair.values(), key=lambda c: abs(c.correlation), reverse=True)
 
     def _generate_validation_config(
         self,

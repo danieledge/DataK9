@@ -23,6 +23,8 @@ import logging
 from pathlib import Path
 from typing import Dict, List, Any, Optional, Tuple
 
+from validation_framework.profiler.semantic_config import get_semantic_config
+
 logger = logging.getLogger(__name__)
 
 
@@ -72,6 +74,7 @@ class SchemaOrgTagger:
         """
         self.taxonomy = self._load_taxonomy(taxonomy_path)
         self.tag_definitions = self._flatten_taxonomy()
+        self.semantic_config = get_semantic_config()
         logger.info(f"Loaded {len(self.tag_definitions)} Schema.org semantic definitions")
 
     def _load_taxonomy(self, taxonomy_path: Optional[str] = None) -> Dict[str, Any]:
@@ -234,18 +237,33 @@ class SchemaOrgTagger:
         """
         Score how well a column matches a schema type.
 
+        Uses configurable scoring weights from semantic_config.yaml.
+
         Returns:
             (score, signals) tuple
         """
         score = 0.0
         signals = []
 
+        # Get scoring weights from config
+        scoring = self.semantic_config.scoring
+
+        # Check global negative patterns first (from semantic_config.yaml)
+        # This prevents false positives like scientific measurements tagged as monetary
+        category = tag_def.get("category", "")
+        if self.semantic_config.matches_negative_pattern(category, column_name):
+            logger.debug(
+                f"Column '{column_name}': Excluded from {schema_type} "
+                f"by global negative pattern for category '{category}'"
+            )
+            return 0.0, []
+
         # Pattern matching on column name (strongest signal)
         patterns = tag_def.get("patterns", [])
         for pattern in patterns:
             try:
                 if re.search(pattern, column_name, re.IGNORECASE):
-                    score += 0.5
+                    score += scoring.name_pattern_match
                     signals.append(f"name_pattern:{pattern[:30]}")
                     break  # Only count one pattern match
             except re.error:
@@ -255,11 +273,11 @@ class SchemaOrgTagger:
         data_props = tag_def.get("data_properties", {})
         expected_types = data_props.get("type", [])
         if expected_types and inferred_type in expected_types:
-            score += 0.2
+            score += scoring.dtype_match
             signals.append(f"dtype:{inferred_type}")
         elif expected_types and inferred_type not in expected_types:
             # Type mismatch - reduce score
-            score -= 0.3
+            score += scoring.dtype_mismatch
 
         # Cardinality checks
         cardinality = getattr(statistics, 'cardinality', None)
@@ -267,21 +285,21 @@ class SchemaOrgTagger:
 
         if 'cardinality_min' in data_props and cardinality is not None:
             if cardinality >= data_props['cardinality_min']:
-                score += 0.15
+                score += scoring.cardinality_match
                 signals.append(f"high_cardinality:{cardinality:.2f}")
             else:
-                score -= 0.1
+                score += scoring.cardinality_mismatch
 
         if 'cardinality_max' in data_props and cardinality is not None:
             if cardinality <= data_props['cardinality_max']:
-                score += 0.15
+                score += scoring.cardinality_match
                 signals.append(f"low_cardinality:{cardinality:.2f}")
             else:
-                score -= 0.1
+                score += scoring.cardinality_mismatch
 
         if 'unique_count_max' in data_props and unique_count is not None:
             if unique_count <= data_props['unique_count_max']:
-                score += 0.2
+                score += scoring.unique_ratio_match
                 signals.append(f"unique_count:{unique_count}")
 
         # Value range checks
@@ -291,7 +309,7 @@ class SchemaOrgTagger:
         if 'min_value' in data_props and min_val is not None:
             try:
                 if float(min_val) >= data_props['min_value']:
-                    score += 0.1
+                    score += scoring.value_range_match
                     signals.append("non_negative")
             except (ValueError, TypeError):
                 pass
@@ -300,7 +318,7 @@ class SchemaOrgTagger:
         avg_length = getattr(statistics, 'avg_length', None)
         if 'avg_length_min' in data_props and avg_length is not None:
             if avg_length >= data_props['avg_length_min']:
-                score += 0.15
+                score += scoring.string_length_match
                 signals.append(f"long_text:{avg_length:.0f}")
 
         # Value pattern checks (for sample values)
@@ -311,7 +329,7 @@ class SchemaOrgTagger:
                 try:
                     match_count = sum(1 for s in str_samples if re.search(vp, s))
                     if match_count > len(str_samples) * 0.5:
-                        score += 0.3
+                        score += scoring.value_pattern_match
                         signals.append(f"value_pattern:{vp[:20]}")
                         break
                 except re.error:

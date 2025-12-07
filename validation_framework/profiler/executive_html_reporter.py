@@ -22,6 +22,71 @@ import math
 
 logger = logging.getLogger(__name__)
 
+# Configuration for semantic types that should be treated as categorical
+# These types indicate the column represents a category/classification rather than a unique identifier
+# Organized by schema source - can be modified to add/remove types as needed
+CATEGORICAL_SEMANTIC_TYPES = {
+    'fibo': [
+        'Rating',
+        'CreditRating',
+        'Country',
+        'Jurisdiction',
+        'OrganizationalForm',
+        'LegalStructure',
+        'Citizenship',
+        'DocumentType',
+        'InstrumentClassification',
+        'SecurityType',
+        'FinancialInstrumentCategory',
+        'TransactionType',
+        'PartyRole',
+        'AgentRole',
+    ],
+    'schema_org': [
+        'CategoryCode',
+        'Enumeration',
+        'DefinedTerm',
+        'DefinedTermSet',
+        'QualitativeValue',
+        'Gender',
+        'Audience',
+        'BusinessFunction',
+        'ItemAvailability',
+        'PaymentMethod',
+        'DeliveryMethod',
+        'ProductGroup',
+        'OfferItemCondition',
+    ],
+    'wikidata': [
+        'Q43229',      # Category
+        'Q35120',      # Enumeration
+        'Q101352',     # Classifier
+        'Q41710',      # Gender
+        'Q48277',      # Language
+        'Q3455524',    # Demographic group
+        'Q6256',       # Country
+        'Q82794',      # Occupation
+        'Q618779',     # Type
+        'Q188',        # Language (alternate)
+        'Q185087',     # Administrative division
+        'Q2668072',    # Organizational role
+    ],
+}
+
+# Semantic types that should be excluded from categorical treatment (identifiers, codes, etc.)
+EXCLUDED_SEMANTIC_TYPES = {
+    'fibo': [],
+    'schema_org': [
+        'PostalCode',  # Numeric codes that are not categories
+    ],
+    'wikidata': [
+        'Q482980',     # Identifier - explicitly excluded
+    ],
+    'common': [
+        'Identifier',  # Any identifier type across schemas
+    ],
+}
+
 # SVG icons based on Feather Icons (MIT License - https://feathericons.com)
 # These are defined as reusable symbols, referenced via <use> for efficiency
 # Icon paths only - wrapped with <symbol> in get_svg_defs() for HTML embedding
@@ -402,7 +467,8 @@ class ExecutiveHTMLReporter:
         overview_charts = ''.join(viz_charts.get('overview', []))
 
         # Compute badge counts for section headers
-        ml_field_count = len(categorical_columns)  # Low-cardinality fields for ML
+        # ML field count: use len of predictive_ml charts as indicator of actual content
+        ml_field_count = len(viz_charts.get('predictive_ml', []))
         # Calculate anomaly count consistently with executive summary (using validated counts)
         if profile.ml_findings:
             numeric_outliers = profile.ml_findings.get('numeric_outliers', {})
@@ -426,14 +492,44 @@ class ExecutiveHTMLReporter:
             anomaly_count = total_field_outliers + total_combo_anomalies + total_cross_field + total_rare
         else:
             anomaly_count = 0
-        # profile.correlations can be a list or dict depending on version
-        if isinstance(profile.correlations, list):
-            correlation_count = len(profile.correlations)
-        elif isinstance(profile.correlations, dict):
-            correlation_count = len(profile.correlations.get('pairs', []))
+        # Compute correlation count - should match what _generate_correlations_section actually shows
+        # Check first for correlation_insights (new insight-driven format)
+        if profile.ml_findings and 'correlation_insights' in profile.ml_findings:
+            correlation_count = len(profile.ml_findings['correlation_insights'])
         else:
+            # Fallback: count all relationship sources used by _generate_correlations_section
             correlation_count = 0
+            # 1. Subgroups from context_store
+            if context_store:
+                correlation_count += len(context_store.get('subgroups', []))
+            # 2. Profile correlations (deduplicated in section, but count raw for badge)
+            if isinstance(profile.correlations, list):
+                correlation_count += len(profile.correlations)
+            elif isinstance(profile.correlations, dict):
+                correlation_count += len(profile.correlations.get('pairs', []))
+            # 3. Categorical analysis (Cramér's V and point-biserial)
+            if profile.categorical_analysis and profile.categorical_analysis.get('available'):
+                correlation_count += len(profile.categorical_analysis.get('cramers_v_associations', []))
+                correlation_count += len(profile.categorical_analysis.get('point_biserial_associations', []))
+
+        # Check for wide-format time series (dates as column names)
+        wide_format_time_series = None
+        if hasattr(profile, 'column_families') and profile.column_families and profile.column_families.get('is_wide'):
+            for family in profile.column_families.get('families', []):
+                # Handle both ColumnFamily objects and dict representations
+                pattern_type = family.pattern_type if hasattr(family, 'pattern_type') else family.get('pattern_type')
+                if pattern_type == 'date':
+                    wide_format_time_series = family
+                    break
+
+        # Add 1 for time series sequential correlation if wide-format detected
+        if wide_format_time_series:
+            correlation_count += 1
+
+        # Temporal count: long-format (column values) + wide-format (column names)
         temporal_count = len(temporal_columns)
+        if wide_format_time_series:
+            temporal_count += 1  # Count as 1 time series (not individual columns)
 
         html = f'''<!DOCTYPE html>
 <html lang="en">
@@ -443,6 +539,7 @@ class ExecutiveHTMLReporter:
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/wordcloud@1.2.2/src/wordcloud2.min.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
 
     <style>
 {self._get_css()}
@@ -627,7 +724,7 @@ class ExecutiveHTMLReporter:
                 </div>
             </div>
             <div class="section-accordion-content">
-                {self._generate_temporal_section_content(temporal_columns, temporal_charts) if temporal_columns else '<p style="color: var(--text-muted); padding: 20px;">No date/time columns detected in this dataset.</p>'}
+                {self._generate_temporal_section_content(temporal_columns, temporal_charts, wide_format_time_series) if (temporal_columns or wide_format_time_series) else '<p style="color: var(--text-muted); padding: 20px;">No date/time columns detected in this dataset.</p>'}
             </div>
         </div>
 
@@ -702,10 +799,13 @@ class ExecutiveHTMLReporter:
             </div>
             <div class="section-accordion-content">
                 <!-- Column Relationships / Correlations -->
-                {self._generate_correlations_section(profile.correlations, field_descriptions, context_store, profile.ml_findings, profile.categorical_analysis) if profile.correlations or profile.categorical_analysis else '<p style="color: var(--text-muted);">No significant correlations detected.</p>'}
+                {self._generate_correlations_section(profile.correlations, field_descriptions, context_store, profile.ml_findings, profile.categorical_analysis, wide_format_time_series) if profile.correlations or profile.categorical_analysis or wide_format_time_series else '<p style="color: var(--text-muted);">No significant correlations detected.</p>'}
 
                 <!-- Correlation Visualizations (relocated from Advanced Visualizations) -->
                 {correlation_charts}
+
+                <!-- PCA / 2D Embedding Visualization -->
+                {self._generate_pca_section(profile.pca_analysis) if hasattr(profile, 'pca_analysis') and profile.pca_analysis else ''}
             </div>
         </div>
 
@@ -3988,6 +4088,24 @@ class ExecutiveHTMLReporter:
             background: rgba(59, 130, 246, 0.25);
         }
 
+        .semantic-chip.wikidata {
+            background: rgba(217, 119, 6, 0.15);
+            border: 1px solid rgba(245, 158, 11, 0.3);
+        }
+
+        .semantic-chip.wikidata:hover {
+            background: rgba(217, 119, 6, 0.25);
+        }
+
+        .semantic-chip.science {
+            background: rgba(124, 58, 237, 0.15);
+            border: 1px solid rgba(139, 92, 246, 0.3);
+        }
+
+        .semantic-chip.science:hover {
+            background: rgba(124, 58, 237, 0.25);
+        }
+
         .semantic-chip .chip-icon {
             font-size: 1em;
         }
@@ -4028,6 +4146,16 @@ class ExecutiveHTMLReporter:
 
         .source-badge.schema {
             background: linear-gradient(135deg, #3b82f6 0%, #6366f1 100%);
+            color: white;
+        }
+
+        .source-badge.wikidata {
+            background: linear-gradient(135deg, #d97706 0%, #f59e0b 100%);
+            color: white;
+        }
+
+        .source-badge.science {
+            background: linear-gradient(135deg, #7c3aed 0%, #8b5cf6 100%);
             color: white;
         }
 
@@ -5851,9 +5979,9 @@ class ExecutiveHTMLReporter:
             </div>
         </section>'''
 
-    def _generate_correlations_section(self, correlations: List, field_descriptions: Dict = None, context_store: Dict = None, ml_findings: Dict = None, categorical_analysis: Dict = None) -> str:
+    def _generate_correlations_section(self, correlations: List, field_descriptions: Dict = None, context_store: Dict = None, ml_findings: Dict = None, categorical_analysis: Dict = None, wide_format_time_series=None) -> str:
         """Generate column correlations/associations section with insight-driven cards."""
-        if not correlations and not categorical_analysis:
+        if not correlations and not categorical_analysis and not wide_format_time_series:
             return ''
 
         correlations = correlations or []
@@ -5869,10 +5997,62 @@ class ExecutiveHTMLReporter:
         if ml_findings and 'correlation_insights' in ml_findings:
             correlation_insights = ml_findings['correlation_insights']
 
+        # Build time series correlation card if we have wide-format time series
+        time_series_card = ''
+        if wide_format_time_series:
+            wf = wide_format_time_series
+            # Handle both ColumnFamily objects and dict representations
+            wf_cols = getattr(wf, 'columns', None) if hasattr(wf, 'columns') else wf.get('columns', [])
+            wf_stats = getattr(wf, 'aggregate_stats', None) if hasattr(wf, 'aggregate_stats') else wf.get('aggregate_stats', {})
+            wf_stats = wf_stats or {}
+            wf_count = getattr(wf, 'count', None) if hasattr(wf, 'count') else wf.get('count', wf.get('column_count', len(wf_cols)))
+            wf_count = wf_count or len(wf_cols)
+
+            sorted_cols = sorted(wf_cols, key=str)
+            first_date = sorted_cols[0] if sorted_cols else 'N/A'
+            last_date = sorted_cols[-1] if sorted_cols else 'N/A'
+
+            time_series_card = f'''
+            <div class="relationship-card" style="background: linear-gradient(135deg, var(--card-bg), rgba(245, 158, 11, 0.05)); border-radius: 12px; padding: 20px; margin-bottom: 16px; border: 1px solid var(--border-color); border-left: 4px solid #f59e0b;">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+                    <h4 style="color: var(--text-primary); margin: 0; font-size: 1.1em;">
+                        <span style="color: #f59e0b;">📈</span> Time Series Sequential Correlation
+                    </h4>
+                    <span style="background: #10b98120; color: #10b981; padding: 4px 10px; border-radius: 6px; font-size: 0.8em; font-weight: 600;">Expected: Strong</span>
+                </div>
+
+                <div style="background: var(--surface-secondary); border-radius: 8px; padding: 12px; margin-bottom: 12px;">
+                    <div style="color: var(--text-primary); font-size: 0.95em;">
+                        <strong>Adjacent time periods are expected to strongly correlate</strong> in this {wf_count:,}-column wide-format time series ({first_date} → {last_date}).
+                        This is characteristic of cumulative time series data where values typically increase or stay consistent over time.
+                    </div>
+                </div>
+
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-top: 12px;">
+                    <div style="background: var(--card-bg); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color);">
+                        <div style="color: var(--text-secondary); font-size: 0.8em; margin-bottom: 4px;">Correlation Type</div>
+                        <div style="color: var(--text-primary); font-weight: 500;">Sequential / Temporal</div>
+                    </div>
+                    <div style="background: var(--card-bg); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color);">
+                        <div style="color: var(--text-secondary); font-size: 0.8em; margin-bottom: 4px;">Time Periods</div>
+                        <div style="color: var(--text-primary); font-weight: 500;">{wf_count:,} columns</div>
+                    </div>
+                    <div style="background: var(--card-bg); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color);">
+                        <div style="color: var(--text-secondary); font-size: 0.8em; margin-bottom: 4px;">Anomalous Periods</div>
+                        <div style="color: var(--text-primary); font-weight: 500;">{len(wf_stats.get("anomalous_columns", [])):,} detected</div>
+                    </div>
+                </div>
+
+                <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border-color); color: var(--text-secondary); font-size: 0.85em;">
+                    <strong>Note:</strong> Full correlation matrix ({wf_count:,} x {wf_count:,} = {wf_count**2:,} pairs) not computed to optimize performance.
+                    Adjacent periods in cumulative time series typically show r > 0.99.
+                </div>
+            </div>'''
+
         # If we have synthesized insights, use the new card layout
         if correlation_insights and len(correlation_insights) > 0:
             insight_html = self._generate_insight_cards_section(correlation_insights, field_descriptions, context_store)
-            return insight_html
+            return time_series_card + insight_html
 
         # Fallback to original implementation if no insights available
         # Get correlations used for context-aware validation
@@ -5908,6 +6088,9 @@ class ExecutiveHTMLReporter:
                                 categorical_analysis.get('point_biserial_associations')))
 
         if not unique_correlations and not has_categorical_data:
+            # Still return time series card if we have it
+            if time_series_card:
+                return time_series_card
             return ''
 
         # Build unified list of all relationships
@@ -6024,11 +6207,13 @@ class ExecutiveHTMLReporter:
         narrative_items = []
         for rel in top_relationships:
             tier_label, _, _ = get_strength_tier(rel['strength'])
-            if rel['type'] == 'categorical':
+            if rel['type'] in ('categorical', 'cramers_v'):
                 narrative_items.append(f"<strong>{rel['col1']}</strong> varies significantly by <strong>{rel['col2']}</strong>")
-            else:
+            elif 'correlation' in rel:
                 direction = "move together" if rel['correlation'] > 0 else "move inversely"
                 narrative_items.append(f"<strong>{rel['col1']}</strong> and <strong>{rel['col2']}</strong> {direction}")
+            else:
+                narrative_items.append(f"<strong>{rel['col1']}</strong> and <strong>{rel['col2']}</strong> are related")
 
         # Build relationship cards with dual-view (Plain English + Technical)
         relationship_cards = []
@@ -6195,9 +6380,28 @@ class ExecutiveHTMLReporter:
                 </p>
             </div>'''
 
+        # Limits warning if applicable (for wide datasets)
+        limits_warning = ''
+        if categorical_analysis and categorical_analysis.get('limits_applied'):
+            limits_items = []
+            for limit in categorical_analysis['limits_applied']:
+                limits_items.append(f"<li>{limit['reason']} ({limit['columns_analyzed']} analyzed, {limit['columns_skipped']} skipped)</li>")
+            limits_warning = f'''
+            <div style="background: linear-gradient(135deg, rgba(251, 191, 36, 0.1), rgba(245, 158, 11, 0.1)); border: 1px solid rgba(251, 191, 36, 0.3); border-radius: 8px; padding: 12px 16px; margin-bottom: 16px; display: flex; align-items: flex-start; gap: 10px;">
+                <svg style="width: 18px; height: 18px; flex-shrink: 0; margin-top: 2px;" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                <div style="font-size: 0.85em; color: var(--text-secondary);">
+                    <strong style="color: #f59e0b;">Wide Dataset - Analysis Limited</strong>
+                    <ul style="margin: 8px 0 0 0; padding-left: 20px;">
+                        {''.join(limits_items)}
+                    </ul>
+                </div>
+            </div>'''
+
         return f'''
+            {time_series_card}
             {summary_html}
             {context_notice}
+            {limits_warning}
             <div style="display: flex; flex-direction: column; gap: 0;">
                 {''.join(relationship_cards)}
             </div>
@@ -6716,6 +6920,291 @@ class ExecutiveHTMLReporter:
             </div>
         </section>'''
 
+    def _generate_pca_section(self, pca_analysis: Dict) -> str:
+        """Generate the PCA/2D embedding visualization section."""
+        if not pca_analysis:
+            return ''
+
+        # Check if PCA was available
+        if not pca_analysis.get('available'):
+            reason = pca_analysis.get('reason', 'Insufficient data for PCA')
+            return f'''
+        <div class="pca-section" style="margin: 16px 0; padding: 16px; background: rgba(139, 92, 246, 0.05); border-radius: 8px; border: 1px solid rgba(139, 92, 246, 0.15);">
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                <span style="font-size: 20px;">📊</span>
+                <h4 style="margin: 0; color: var(--text-primary);">2D Data Projection (PCA)</h4>
+            </div>
+            <p style="color: var(--text-muted); margin: 0; font-size: 0.9em;">
+                {reason}
+            </p>
+        </div>'''
+
+        # Get interpretation
+        interpretation = pca_analysis.get('interpretation', {})
+        plain_english = interpretation.get('plain_english', '')
+        technical = interpretation.get('technical', '')
+
+        # Get explained variance
+        explained_variance = pca_analysis.get('explained_variance', [])
+        total_variance = sum(explained_variance) * 100 if explained_variance else 0
+        pc1_var = explained_variance[0] * 100 if len(explained_variance) > 0 else 0
+        pc2_var = explained_variance[1] * 100 if len(explained_variance) > 1 else 0
+
+        # Get chart spec for Plotly
+        chart_spec = pca_analysis.get('chart_spec', {})
+        chart_id = f"pca-scatter-{id(pca_analysis)}"
+
+        # Get top contributors
+        top_contributors = pca_analysis.get('top_contributors', {})
+        pc1_contributors = top_contributors.get('PC1', [])[:3]
+        pc2_contributors = top_contributors.get('PC2', [])[:3] if 'PC2' in top_contributors else []
+
+        # Build contributors text
+        pc1_contrib_html = ''
+        if pc1_contributors:
+            contrib_items = [f'<span style="font-weight: 500;">{col}</span> ({val:+.2f})' for col, val in pc1_contributors]
+            pc1_contrib_html = f'<div style="font-size: 0.85em; color: var(--text-secondary); margin-top: 4px;">PC1 drivers: {", ".join(contrib_items)}</div>'
+
+        # Outlier info
+        outlier_separation = pca_analysis.get('outlier_separation')
+        outlier_html = ''
+        if outlier_separation:
+            n_outliers = outlier_separation.get('n_outliers', 0)
+            separated = outlier_separation.get('separated', False)
+            if separated:
+                outlier_html = f'<div style="margin-top: 8px; padding: 8px; background: rgba(239, 68, 68, 0.1); border-radius: 4px; font-size: 0.85em;"><span style="color: #ef4444;">⚠️</span> {n_outliers} outlier(s) are clearly separated in 2D space</div>'
+            elif n_outliers > 0:
+                outlier_html = f'<div style="margin-top: 8px; padding: 8px; background: rgba(234, 179, 8, 0.1); border-radius: 4px; font-size: 0.85em;"><span style="color: #eab308;">ℹ️</span> {n_outliers} outlier(s) are mixed with normal points in 2D</div>'
+
+        # Get sample count and columns used
+        n_samples = pca_analysis.get('n_samples', 0)
+        columns_used = pca_analysis.get('columns_used', [])
+
+        import json
+
+        # Convert Plotly traces to ECharts series format
+        echarts_series = []
+        legend_data = []
+
+        # Modern color palette
+        ECHARTS_COLORS = [
+            '#6366f1',  # Indigo
+            '#f43f5e',  # Rose
+            '#10b981',  # Emerald
+            '#8b5cf6',  # Violet
+            '#f59e0b',  # Amber
+            '#06b6d4',  # Cyan
+            '#ec4899',  # Pink
+            '#78716c',  # Stone
+        ]
+
+        if chart_spec and chart_spec.get('data'):
+            for i, trace in enumerate(chart_spec['data']):
+                series_name = trace.get('name', f'Series {i+1}')
+                legend_data.append(series_name)
+
+                # Get marker color - handle both string and dict formats
+                marker = trace.get('marker', {})
+                if isinstance(marker.get('color'), str):
+                    color = marker['color']
+                else:
+                    color = ECHARTS_COLORS[i % len(ECHARTS_COLORS)]
+
+                # Convert x,y arrays to [[x,y], ...] format for ECharts
+                x_data = trace.get('x', [])
+                y_data = trace.get('y', [])
+                scatter_data = [[x, y] for x, y in zip(x_data, y_data)]
+
+                echarts_series.append({
+                    'name': series_name,
+                    'type': 'scatter',
+                    'data': scatter_data,
+                    'symbolSize': 10,
+                    'itemStyle': {
+                        'color': color,
+                        'opacity': 0.75,
+                        'borderColor': '#fff',
+                        'borderWidth': 1
+                    },
+                    'emphasis': {
+                        'itemStyle': {
+                            'opacity': 1,
+                            'shadowBlur': 10,
+                            'shadowColor': 'rgba(0,0,0,0.3)'
+                        }
+                    }
+                })
+
+        # Get axis labels from layout
+        layout = chart_spec.get('layout', {}) if chart_spec else {}
+        x_axis_title = layout.get('xaxis', {}).get('title', {})
+        y_axis_title = layout.get('yaxis', {}).get('title', {})
+        x_label = x_axis_title.get('text', 'PC1') if isinstance(x_axis_title, dict) else str(x_axis_title) if x_axis_title else 'PC1'
+        y_label = y_axis_title.get('text', 'PC2') if isinstance(y_axis_title, dict) else str(y_axis_title) if y_axis_title else 'PC2'
+
+        echarts_option = {
+            'backgroundColor': 'transparent',
+            'animation': True,
+            'animationDuration': 800,
+            'animationEasing': 'cubicOut',
+            'grid': {
+                'left': '12%',
+                'right': '10%',
+                'top': '15%',
+                'bottom': '15%',
+                'containLabel': True
+            },
+            'tooltip': {
+                'trigger': 'item',
+                'backgroundColor': 'rgba(255, 255, 255, 0.95)',
+                'borderColor': '#e5e7eb',
+                'borderWidth': 1,
+                'padding': [8, 12],
+                'textStyle': {
+                    'color': '#374151',
+                    'fontSize': 12
+                },
+                'formatter': 'function(p){return p.seriesName+"<br/>PC1: "+p.value[0].toFixed(2)+"<br/>PC2: "+p.value[1].toFixed(2)}'
+            },
+            'legend': {
+                'show': len(legend_data) > 1,
+                'data': legend_data,
+                'top': 5,
+                'right': 10,
+                'orient': 'horizontal',
+                'textStyle': {
+                    'fontSize': 11,
+                    'color': '#6b7280'
+                },
+                'itemWidth': 12,
+                'itemHeight': 12,
+                'itemGap': 15
+            },
+            'xAxis': {
+                'type': 'value',
+                'name': x_label,
+                'nameLocation': 'middle',
+                'nameGap': 30,
+                'nameTextStyle': {
+                    'fontSize': 11,
+                    'color': '#6b7280',
+                    'fontWeight': 500
+                },
+                'axisLine': {
+                    'lineStyle': {'color': '#e5e7eb'}
+                },
+                'axisTick': {
+                    'lineStyle': {'color': '#e5e7eb'}
+                },
+                'axisLabel': {
+                    'color': '#9ca3af',
+                    'fontSize': 10
+                },
+                'splitLine': {
+                    'lineStyle': {
+                        'color': '#f3f4f6',
+                        'type': 'dashed'
+                    }
+                }
+            },
+            'yAxis': {
+                'type': 'value',
+                'name': y_label,
+                'nameLocation': 'middle',
+                'nameGap': 45,
+                'nameTextStyle': {
+                    'fontSize': 11,
+                    'color': '#6b7280',
+                    'fontWeight': 500
+                },
+                'axisLine': {
+                    'lineStyle': {'color': '#e5e7eb'}
+                },
+                'axisTick': {
+                    'lineStyle': {'color': '#e5e7eb'}
+                },
+                'axisLabel': {
+                    'color': '#9ca3af',
+                    'fontSize': 10
+                },
+                'splitLine': {
+                    'lineStyle': {
+                        'color': '#f3f4f6',
+                        'type': 'dashed'
+                    }
+                }
+            },
+            'series': echarts_series
+        }
+
+        echarts_json = json.dumps(echarts_option)
+
+        return f'''
+        <div class="pca-section" style="margin: 20px 0; padding: 20px; background: linear-gradient(135deg, rgba(139, 92, 246, 0.05) 0%, rgba(99, 102, 241, 0.05) 100%); border-radius: 12px; border: 1px solid rgba(139, 92, 246, 0.2);">
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 16px;">
+                <span style="font-size: 24px;">📊</span>
+                <div>
+                    <h4 style="margin: 0; color: var(--text-primary); font-size: 1.1em;">2D Data Projection (PCA)</h4>
+                    <p style="margin: 2px 0 0 0; color: var(--text-muted); font-size: 0.85em;">
+                        Principal Component Analysis reduces {len(columns_used)} features to 2D
+                    </p>
+                </div>
+                <div style="margin-left: auto; display: flex; gap: 12px;">
+                    <div style="text-align: center; padding: 6px 12px; background: rgba(139, 92, 246, 0.15); border-radius: 6px;">
+                        <div style="font-size: 1.2em; font-weight: 600; color: #8b5cf6;">{total_variance:.0f}%</div>
+                        <div style="font-size: 0.7em; color: var(--text-muted);">variance captured</div>
+                    </div>
+                    <div style="text-align: center; padding: 6px 12px; background: rgba(99, 102, 241, 0.15); border-radius: 6px;">
+                        <div style="font-size: 1.2em; font-weight: 600; color: #6366f1;">{n_samples:,}</div>
+                        <div style="font-size: 0.7em; color: var(--text-muted);">samples</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Plain English Interpretation -->
+            <div style="background: linear-gradient(135deg, rgba(139, 92, 246, 0.08) 0%, rgba(139, 92, 246, 0.03) 100%); padding: 14px 18px; border-radius: 10px; margin-bottom: 16px; border: 1px solid rgba(139, 92, 246, 0.15);">
+                <div style="display: flex; align-items: flex-start; gap: 10px;">
+                    <span style="font-size: 1.1em;">🧠</span>
+                    <div>
+                        <div style="font-weight: 600; color: #6d28d9; font-size: 0.8em; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">What It Means</div>
+                        <div style="color: var(--text-primary); font-size: 0.95em; line-height: 1.5;">{plain_english}</div>
+                        {pc1_contrib_html}
+                    </div>
+                </div>
+            </div>
+
+            <!-- PCA Scatter Plot (ECharts) -->
+            <div id="{chart_id}" style="width: 100%; height: 380px; background: #fafafa; border-radius: 10px; border: 1px solid rgba(0,0,0,0.08);"></div>
+
+            {outlier_html}
+
+            <!-- Technical Details (collapsible) -->
+            <details style="margin-top: 12px;">
+                <summary style="cursor: pointer; color: var(--text-secondary); font-size: 0.85em; padding: 6px 0;">
+                    <span style="margin-right: 4px;">🔧</span> Technical Details
+                </summary>
+                <div style="margin-top: 8px; padding: 12px; background: rgba(0, 0, 0, 0.03); border-radius: 6px; font-size: 0.85em; color: var(--text-secondary); font-family: var(--font-mono);">
+                    {technical}
+                </div>
+            </details>
+        </div>
+
+        <script>
+        (function() {{
+            if (typeof echarts !== 'undefined') {{
+                var chartDom = document.getElementById('{chart_id}');
+                var myChart = echarts.init(chartDom);
+                var option = {echarts_json};
+                // Convert formatter string to function
+                if (option.tooltip && option.tooltip.formatter) {{
+                    option.tooltip.formatter = new Function('p', 'return p.seriesName+"<br/>PC1: "+p.value[0].toFixed(2)+"<br/>PC2: "+p.value[1].toFixed(2)');
+                }}
+                myChart.setOption(option);
+                window.addEventListener('resize', function() {{ myChart.resize(); }});
+            }}
+        }})();
+        </script>'''
+
     def _generate_pii_section(self, pii_columns: List[Dict]) -> str:
         """Generate the PII risk section."""
         if not pii_columns:
@@ -7155,7 +7644,7 @@ class ExecutiveHTMLReporter:
                     <div style="display: flex; justify-content: space-between; align-items: center;">
                         <div>
                             <div style="font-weight: 600; font-size: 1.05em;">Outlier & Anomaly Analysis</div>
-                            <div style="font-size: 0.85em; opacity: 0.9;">Values that deviate significantly from expected patterns</div>
+                            <div style="font-size: 0.85em; opacity: 0.9;">Extreme values beyond 3×IQR from quartiles (conservative threshold to flag only severe outliers)</div>
                         </div>
                         <div style="background: rgba(255,255,255,0.2); padding: 4px 10px; border-radius: 4px; font-size: 0.8em; font-weight: 600;">{section_severity}</div>
                     </div>
@@ -7711,7 +8200,7 @@ These are individual field values that fall outside the typical range for their 
                         break
                     if isinstance(sample, dict):
                         val = sample.get(col_name, 'N/A')
-                        row_id = sample.get('PassengerId', sample.get('row_index', sample.get('index', '?')))
+                        row_id = sample.get('row_index', sample.get('index', sample.get('_row_id', '?')))
 
                         # Skip duplicates
                         if str(val) in seen_vals:
@@ -8212,7 +8701,7 @@ combinations that might indicate errors or special cases.''',
                 samples = data.get('sample_rows', [])
                 for sample in samples:
                     if isinstance(sample, dict):
-                        row_id = sample.get('PassengerId', sample.get('row_index', sample.get('index')))
+                        row_id = sample.get('row_index', sample.get('index', sample.get('_row_id')))
                         if row_id is not None:
                             field_outlier_rows.add(str(row_id))
 
@@ -8221,7 +8710,7 @@ combinations that might indicate errors or special cases.''',
             sample_records = autoencoder.get('sample_rows', autoencoder.get('sample_anomalies', []))
             for record in sample_records:
                 if isinstance(record, dict):
-                    row_id = record.get('PassengerId', record.get('row_index', record.get('index')))
+                    row_id = record.get('row_index', record.get('index', record.get('_row_id')))
                     if row_id is not None:
                         combo_outlier_rows.add(str(row_id))
 
@@ -8235,14 +8724,14 @@ combinations that might indicate errors or special cases.''',
                 overlap_count = 0
                 for record in sample_records[:10]:
                     if isinstance(record, dict):
-                        row_id = record.get('PassengerId', record.get('row_index', record.get('index')))
+                        row_id = record.get('row_index', record.get('index', record.get('_row_id')))
                         if row_id is not None and str(row_id) in overlap_rows:
                             # Find which field had the outlier
                             outlier_fields = []
                             for col_name, data in numeric_outliers.items():
                                 for sample in data.get('sample_rows', []):
                                     if isinstance(sample, dict):
-                                        sample_id = sample.get('PassengerId', sample.get('row_index', sample.get('index')))
+                                        sample_id = sample.get('row_index', sample.get('index', sample.get('_row_id')))
                                         if str(sample_id) == str(row_id):
                                             outlier_fields.append(get_friendly(col_name))
                                             break
@@ -8609,9 +9098,9 @@ seasonal slowdowns, system downtime, or natural pauses in activity.'''
 
             # Interpret what clusters might mean
             if n_clusters == 2:
-                cluster_interpretation = "binary segmentation (e.g., active/inactive, premium/standard)"
+                cluster_interpretation = "binary segmentation (two distinct groups)"
             elif n_clusters <= 4:
-                cluster_interpretation = "natural segments (e.g., customer tiers, product categories)"
+                cluster_interpretation = "natural groupings across key dimensions"
             else:
                 cluster_interpretation = "complex segmentation across multiple dimensions"
 
@@ -8718,71 +9207,145 @@ and may warrant individual review as potential anomalies.'''
         # ═══════════════════════════════════════════════════════════════
         missingness_impact = ml_findings.get('missingness_impact', {})
         if missingness_impact:
-            for target_col, analysis in list(missingness_impact.items())[:1]:  # Show first target only
-                biased_features = analysis.get('features_with_differential_missingness', [])
-                total_analyzed = analysis.get('total_features_analyzed', 0)
+            # Check for unsupervised mode (no target column detected)
+            unsupervised = missingness_impact.get('_unsupervised', {})
+            if unsupervised and unsupervised.get('mode') == 'unsupervised':
+                # Render unsupervised missingness analysis
+                cols_with_missing = unsupervised.get('columns_with_missing', [])
+                correlated_pairs = unsupervised.get('correlated_missingness', [])
+                interp = unsupervised.get('interpretation', '')
 
-                if not biased_features:
-                    continue
+                if cols_with_missing:
+                    # Build list of top missing columns
+                    top_missing = cols_with_missing[:3]
+                    affected_fields = [f"<strong>{get_friendly(c['column'])}</strong> ({c['missing_rate']:.1f}%)" for c in top_missing]
+                    field_list = ', '.join(affected_fields)
 
-                friendly_target = get_friendly(target_col)
-                # Build list of affected fields with friendly names
-                affected_fields = [f"<strong>{get_friendly(f.get('feature', ''))}</strong>" for f in biased_features[:3]]
-                field_list = ', '.join(affected_fields[:-1]) + ' and ' + affected_fields[-1] if len(affected_fields) > 1 else affected_fields[0] if affected_fields else ''
+                    if correlated_pairs:
+                        top_pair = correlated_pairs[0]
+                        plain_english = f'''Found {len(cols_with_missing)} column(s) with missing values: {field_list}.
+<strong>{len(correlated_pairs)} correlated pattern(s)</strong> detected where columns tend to be missing together.
+This suggests systematic data collection issues or structured missingness.'''
+                    else:
+                        plain_english = f'''Found {len(cols_with_missing)} column(s) with missing values: {field_list}.
+Missingness appears independent across columns (no correlated patterns detected).'''
 
-                plain_english = f'''Found {len(biased_features)} field(s) where missing values occur more often in some
+                    example_rows = ''
+                    if correlated_pairs:
+                        for pair in correlated_pairs[:5]:
+                            col_a = get_friendly(pair.get('column_a', ''))
+                            col_b = get_friendly(pair.get('column_b', ''))
+                            overlap = pair.get('overlap_ratio', 0) * 100
+                            both_missing = pair.get('both_missing', 0)
+
+                            severity = '<span class="severity-badge extreme">Strong</span>' if overlap >= 70 else (
+                                '<span class="severity-badge high">Moderate</span>' if overlap >= 50 else
+                                '<span class="severity-badge moderate">Weak</span>'
+                            )
+
+                            example_rows += f'''
+                            <tr>
+                                <td>{col_a}</td>
+                                <td>{col_b}</td>
+                                <td class="value-highlight">{overlap:.0f}%</td>
+                                <td>{severity}</td>
+                            </tr>'''
+
+                        widgets_html += self._build_insight_widget(
+                            icon="🕳️",
+                            title="Correlated Missingness",
+                            badge_text=f"{len(correlated_pairs)} patterns",
+                            badge_class="warning" if correlated_pairs else "good",
+                            plain_english=plain_english,
+                            table_headers=["Column A", "Column B", "Overlap", "Strength"],
+                            table_rows=example_rows,
+                            technical_items=f'''
+                                <div class="insight-technical-item">
+                                    <span class="insight-technical-item-label">Columns with Missing</span>
+                                    <span class="insight-technical-item-value">{len(cols_with_missing)}</span>
+                                </div>
+                                <div class="insight-technical-item">
+                                    <span class="insight-technical-item-label">Correlated Pairs</span>
+                                    <span class="insight-technical-item-value">{len(correlated_pairs)}</span>
+                                </div>
+                            ''',
+                            technical_context=[
+                                "Unsupervised analysis (no target column detected)",
+                                "Uses Jaccard similarity to detect correlated missingness",
+                                "Threshold: ≥30% overlap flags correlated patterns"
+                            ],
+                            ml_model="Unsupervised Missingness"
+                        )
+            else:
+                # Target-based differential missingness (original logic)
+                for target_col, analysis in list(missingness_impact.items())[:1]:  # Show first target only
+                    if target_col == '_unsupervised':
+                        continue
+
+                    biased_features = analysis.get('features_with_differential_missingness', [])
+                    total_analyzed = analysis.get('total_features_analyzed', 0)
+
+                    if not biased_features:
+                        continue
+
+                    friendly_target = get_friendly(target_col)
+                    # Build list of affected fields with friendly names
+                    affected_fields = [f"<strong>{get_friendly(f.get('feature', ''))}</strong>" for f in biased_features[:3]]
+                    field_list = ', '.join(affected_fields[:-1]) + ' and ' + affected_fields[-1] if len(affected_fields) > 1 else affected_fields[0] if affected_fields else ''
+
+                    plain_english = f'''Found {len(biased_features)} field(s) where missing values occur more often in some
 <strong>{friendly_target}</strong> groups than others. Affected: {field_list}.
 This non-random missingness could bias analyses if not handled carefully.'''
 
-                example_rows = ''
-                for feat in biased_features[:5]:
-                    feature_name = feat.get('feature', '')
-                    friendly_feature = get_friendly(feature_name)
-                    max_diff = feat.get('max_difference', 0)
-                    miss_by_target = feat.get('missingness_by_target', {})
-                    rates = [f"{k}: {v.get('rate', 0):.1f}%" for k, v in list(miss_by_target.items())[:2]]
+                    example_rows = ''
+                    for feat in biased_features[:5]:
+                        feature_name = feat.get('feature', '')
+                        friendly_feature = get_friendly(feature_name)
+                        max_diff = feat.get('max_difference', 0)
+                        miss_by_target = feat.get('missingness_by_target', {})
+                        rates = [f"{k}: {v.get('rate', 0):.1f}%" for k, v in list(miss_by_target.items())[:2]]
 
-                    # Severity based on difference
-                    if max_diff >= 20:
-                        severity = '<span class="severity-badge extreme">High bias</span>'
-                    elif max_diff >= 10:
-                        severity = '<span class="severity-badge high">Moderate</span>'
-                    else:
-                        severity = '<span class="severity-badge moderate">Low</span>'
+                        # Severity based on difference
+                        if max_diff >= 20:
+                            severity = '<span class="severity-badge extreme">High bias</span>'
+                        elif max_diff >= 10:
+                            severity = '<span class="severity-badge high">Moderate</span>'
+                        else:
+                            severity = '<span class="severity-badge moderate">Low</span>'
 
-                    example_rows += f'''
-                    <tr>
-                        <td>{friendly_feature}</td>
-                        <td class="value-highlight">{max_diff:.1f}%</td>
-                        <td style="font-size: 0.85em;">{', '.join(rates)}</td>
-                        <td>{severity}</td>
-                    </tr>'''
+                        example_rows += f'''
+                        <tr>
+                            <td>{friendly_feature}</td>
+                            <td class="value-highlight">{max_diff:.1f}%</td>
+                            <td style="font-size: 0.85em;">{', '.join(rates)}</td>
+                            <td>{severity}</td>
+                        </tr>'''
 
-                widgets_html += self._build_insight_widget(
-                    icon="🕳️",
-                    title=f"Missing Data Bias",
-                    badge_text=f"{len(biased_features)} fields",
-                    badge_class="warning" if biased_features else "good",
-                    plain_english=plain_english,
-                    table_headers=["Field", "Rate Diff", f"By {friendly_target}", "Severity"],
-                    table_rows=example_rows,
-                    technical_items=f'''
-                        <div class="insight-technical-item">
-                            <span class="insight-technical-item-label">Target Column</span>
-                            <span class="insight-technical-item-value">{friendly_target}</span>
-                        </div>
-                        <div class="insight-technical-item">
-                            <span class="insight-technical-item-label">Fields with Bias</span>
-                            <span class="insight-technical-item-value">{len(biased_features)} of {total_analyzed}</span>
-                        </div>
-                    ''',
-                    technical_context=[
-                        "Compares missing data rates across target classes",
-                        "Threshold: ≥5% difference flags potential non-random missingness",
-                        "Non-random missing data can bias ML models and statistical analyses"
-                    ],
-                    ml_model="Missingness Analysis"
-                )
+                    widgets_html += self._build_insight_widget(
+                        icon="🕳️",
+                        title=f"Missing Data Bias",
+                        badge_text=f"{len(biased_features)} fields",
+                        badge_class="warning" if biased_features else "good",
+                        plain_english=plain_english,
+                        table_headers=["Field", "Rate Diff", f"By {friendly_target}", "Severity"],
+                        table_rows=example_rows,
+                        technical_items=f'''
+                            <div class="insight-technical-item">
+                                <span class="insight-technical-item-label">Target Column</span>
+                                <span class="insight-technical-item-value">{friendly_target}</span>
+                            </div>
+                            <div class="insight-technical-item">
+                                <span class="insight-technical-item-label">Fields with Bias</span>
+                                <span class="insight-technical-item-value">{len(biased_features)} of {total_analyzed}</span>
+                            </div>
+                        ''',
+                        technical_context=[
+                            "Compares missing data rates across target classes",
+                            "Threshold: ≥5% difference flags potential non-random missingness",
+                            "Non-random missing data can bias ML models and statistical analyses"
+                        ],
+                        ml_model="Missingness Analysis"
+                    )
 
         # ═══════════════════════════════════════════════════════════════
         # INSIGHT 10: MIXED-TYPE CORRELATIONS
@@ -10073,12 +10636,15 @@ the largest difference between classes - a strong candidate for predictive model
                         else:
                             ml_status_items.append(('⚠', 'Weak signal'))
 
-                    if total >= 1000:
-                        ml_status_items.append(('✓', f'{total:,} rows'))
+                    # Sample size reasoning with explicit thresholds
+                    if total >= 10000:
+                        ml_status_items.append(('✓', f'{total:,} rows (excellent)'))
+                    elif total >= 1000:
+                        ml_status_items.append(('✓', f'{total:,} rows (adequate)'))
                     elif total >= 100:
-                        ml_status_items.append(('⚠', f'{total:,} rows'))
+                        ml_status_items.append(('⚠', f'{total:,} rows (may underfit)'))
                     else:
-                        ml_status_items.append(('✗', f'{total:,} rows'))
+                        ml_status_items.append(('✗', f'{total:,} rows (too few)'))
 
                     # Build compact status line
                     status_html = ' '.join([
@@ -10519,8 +11085,8 @@ the largest difference between classes - a strong candidate for predictive model
                             <div class="accordion-title-group">
                                 <div class="accordion-icon"><svg style="width:16px;height:16px;color:#64748b;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"/><path d="M12 22V12"/><polyline points="3.29 7 12 12 20.71 7"/></svg></div>
                                 <div>
-                                    <div class="accordion-title">Numeric Distribution Summary</div>
-                                    <div class="accordion-subtitle">Quartiles and outlier bounds at a glance</div>
+                                    <div class="accordion-title">Numeric Distribution Summary (IQR Method)</div>
+                                    <div class="accordion-subtitle">Box-plot outliers using Tukey's Fences (Q1/Q3 ± 1.5×IQR)</div>
                                 </div>
                             </div>
                             <div class="accordion-meta">
@@ -10611,12 +11177,34 @@ the largest difference between classes - a strong candidate for predictive model
 
         # Show fallback if no Benford analysis available
         if not benford_analysis:
-            # Build reason from ineligible columns or generic message
+            # Build a clean bullet list of reasons from ineligible columns
             if benford_ineligible:
-                ineligible_reasons = list(set(benford_ineligible.values()))[:3]
-                fallback_reason = f"No columns suitable for Benford analysis. Reasons: {'; '.join(ineligible_reasons)}"
+                # Deduplicate and categorize reasons
+                reason_set = set(benford_ineligible.values())
+                reason_bullets = []
+                for reason in list(reason_set)[:4]:
+                    # Clean up the reason text
+                    if 'identifier' in reason.lower() or 'code' in reason.lower():
+                        reason_bullets.append("Fields appear to be identifiers or codes (record locators)")
+                    elif 'bounded' in reason.lower() or 'demographic' in reason.lower():
+                        reason_bullets.append("Values are bounded/demographic (e.g., ages, ratings, percentages)")
+                    elif 'insufficient' in reason.lower() or 'values' in reason.lower():
+                        reason_bullets.append("Insufficient positive values for statistical analysis")
+                    elif 'range' in reason.lower() or 'narrow' in reason.lower():
+                        reason_bullets.append("Value ranges are too narrow (don't span enough orders of magnitude)")
+                    else:
+                        reason_bullets.append(reason)
+                # Deduplicate bullets
+                reason_bullets = list(dict.fromkeys(reason_bullets))[:3]
+                fallback_reason_html = '''
+                    <div style="text-align: left; max-width: 500px; margin: 0 auto;">
+                        <p style="color: var(--text-muted); margin: 0 0 8px 0;">No numeric fields met the criteria for Benford analysis. This usually happens when:</p>
+                        <ul style="color: var(--text-muted); margin: 0; padding-left: 20px; list-style-type: disc;">
+                            ''' + ''.join(f'<li style="margin-bottom: 4px;">{bullet}</li>' for bullet in reason_bullets) + '''
+                        </ul>
+                    </div>'''
             else:
-                fallback_reason = "No numeric columns with sufficient values for Benford's Law analysis."
+                fallback_reason_html = '<p style="color: var(--text-muted); margin: 0; max-width: 500px; margin: 0 auto;">No numeric columns with sufficient values for Benford\'s Law analysis.</p>'
 
             charts_by_section['anomalies'].append(f'''
                 <div class="accordion" data-accordion="viz-benford">
@@ -10637,9 +11225,7 @@ the largest difference between classes - a strong candidate for predictive model
                         <div style="padding: 24px; background: var(--bg-card); border-radius: 8px; text-align: center;">
                             <div style="font-size: 2em; margin-bottom: 12px;">📐</div>
                             <h4 style="margin: 0 0 8px 0; color: var(--text-primary);">Benford's Law Not Applicable</h4>
-                            <p style="color: var(--text-muted); margin: 0; max-width: 500px; margin: 0 auto;">
-                                {fallback_reason}
-                            </p>
+                            {fallback_reason_html}
                             <p style="color: var(--text-muted); font-size: 0.85em; margin-top: 12px;">
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;vertical-align:-2px;color:#f59e0b"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> <strong>Tip:</strong> Benford's Law works best with data spanning multiple orders of magnitude,
                                 such as financial transactions, population counts, or invoice amounts. Binary fields, identifiers,
@@ -10703,30 +11289,54 @@ the largest difference between classes - a strong candidate for predictive model
                 chi_sq_values = [data.get('chi_square', 0) for _, data in benford_analysis.items()]
                 avg_chi_sq = sum(chi_sq_values) / len(chi_sq_values) if chi_sq_values else 0
 
-                # Check if suspicious columns are pricing/monetary fields (semantic-aware)
+                # Check if columns are pricing/monetary or transactional fields (semantic-aware)
                 pricing_cols = []
+                transactional_cols = []
+                transactional_indicators = ['monetary', 'price', 'amount', 'cost', 'fee', 'fare', 'tariff',
+                                            'transaction', 'payment', 'invoice', 'revenue', 'sales', 'balance']
                 for col_name in benford_analysis.keys():
                     if columns:
                         col_obj = next((c for c in columns if c.name == col_name), None)
                         if col_obj and hasattr(col_obj, 'semantic_info') and col_obj.semantic_info:
                             resolved = col_obj.semantic_info.get('resolved', {})
-                            display_label = resolved.get('display_label', '').lower()
-                            if any(term in display_label for term in ['monetary', 'price', 'amount', 'cost', 'fee', 'fare', 'tariff']):
+                            display_label = (resolved.get('display_label') or '').lower()
+                            primary_type = (resolved.get('primary_type') or '').lower()
+                            # Check for pricing-specific fields (structured pricing is expected to deviate)
+                            if any(term in display_label for term in ['price', 'fee', 'fare', 'tariff', 'rate']):
                                 pricing_cols.append(col_name)
+                            # Check for transactional/financial fields (where Benford applies meaningfully)
+                            if any(term in display_label or term in primary_type for term in transactional_indicators):
+                                transactional_cols.append(col_name)
+                    # Also check column name directly for transactional patterns
+                    col_lower = col_name.lower()
+                    if any(term in col_lower for term in transactional_indicators):
+                        if col_name not in transactional_cols:
+                            transactional_cols.append(col_name)
+
+                # Determine if this is a transactional/financial dataset context
+                is_transactional_context = len(transactional_cols) >= len(benford_analysis) * 0.5
 
                 # Plain-English summary based on results (semantic-aware)
                 if suspicious_count > 0:
                     if pricing_cols and all(col in pricing_cols for col in [c for c, d in benford_analysis.items() if d.get('is_suspicious', False)]):
                         # All suspicious columns are pricing/monetary - this is expected
                         col_names = ', '.join(pricing_cols)
-                        plain_summary = f"First-digit frequencies deviate from the Benford distribution in {suspicious_count} of {len(benford_analysis)} columns. However, <strong>all deviating columns ({col_names}) are identified as pricing/monetary values</strong>, where deviation is expected due to structured pricing rather than natural variation. This is not a concern."
+                        plain_summary = f"First-digit frequencies deviate from the Benford distribution in {suspicious_count} of {len(benford_analysis)} columns. However, <strong>all deviating columns ({col_names}) are identified as pricing values</strong>, where deviation is expected due to structured pricing rather than natural variation. This is not a concern."
                     elif pricing_cols:
                         # Some suspicious are pricing
-                        plain_summary = f"First-digit frequencies deviate significantly from the Benford distribution in {suspicious_count} of {len(benford_analysis)} columns. Note: {', '.join(pricing_cols)} are pricing/monetary fields where deviation is normal."
+                        non_pricing_suspicious = [c for c, d in benford_analysis.items() if d.get('is_suspicious', False) and c not in pricing_cols]
+                        if non_pricing_suspicious and is_transactional_context:
+                            plain_summary = f"First-digit frequencies deviate from the Benford distribution in {suspicious_count} of {len(benford_analysis)} columns. Note: {', '.join(pricing_cols)} are pricing fields where deviation is normal. For the other deviating columns in this transactional dataset, this may warrant further investigation."
+                        else:
+                            plain_summary = f"First-digit frequencies deviate from the Benford distribution in {suspicious_count} of {len(benford_analysis)} columns. Note: {', '.join(pricing_cols)} are pricing fields where deviation is normal."
+                    elif is_transactional_context:
+                        # Transactional data - can mention anomaly detection more directly
+                        plain_summary = f"First-digit frequencies deviate from the Benford distribution in {suspicious_count} of {len(benford_analysis)} columns analyzed. In transactional or financial datasets, this pattern can sometimes indicate data that was manually entered or modified. However, this is only one heuristic and should be combined with other validation methods before drawing conclusions."
                     else:
-                        plain_summary = f"First-digit frequencies deviate significantly from the Benford distribution in {suspicious_count} of {len(benford_analysis)} columns analyzed. For naturally occurring transactional datasets this may indicate anomalies, but for pricing or tariff tables it can simply reflect business structure."
+                        # Non-transactional data - use neutral language, no fraud implications
+                        plain_summary = f"First-digit frequencies deviate from the Benford distribution in {suspicious_count} of {len(benford_analysis)} columns. This is common for datasets with bounded ranges, structured values, or demographic data. Benford's Law works best with values that span multiple orders of magnitude (like invoices or population counts). <strong>This deviation is likely structural rather than indicative of any data quality issue.</strong>"
                 else:
-                    plain_summary = f"All {len(benford_analysis)} number columns have first-digit patterns that match what we expect from naturally-occurring data. This is a good sign that values weren't artificially created or changed, though it's not proof by itself."
+                    plain_summary = f"All {len(benford_analysis)} number columns have first-digit patterns that match what we expect from naturally-occurring data. This suggests the values grew or were collected naturally rather than being manually assigned or rounded."
 
                 benford_dual_layer = self._build_dual_layer_explanation(
                     plain_english=plain_summary,
@@ -10854,9 +11464,9 @@ the largest difference between classes - a strong candidate for predictive model
                 },
                 technical_context=[
                     "Completeness: % of non-null values (40% weight)",
-                    "Validity: % matching expected type/format (30% weight)",
-                    "Consistency: Pattern uniformity across values (20% weight)",
-                    "Uniqueness: Cardinality relative to column type (10% weight)"
+                    "Validity: % matching expected type/format (35% weight)",
+                    "Consistency: Pattern uniformity across values (25% weight)",
+                    "Uniqueness: Cardinality (informational only, not in score)"
                 ]
             )
 
@@ -11044,8 +11654,8 @@ the largest difference between classes - a strong candidate for predictive model
                         <div class="accordion-title-group">
                             <div class="accordion-icon"><svg style="width:16px;height:16px;color:#64748b;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M7 16h8"/><path d="M7 11h12"/><path d="M7 6h3"/></svg></div>
                             <div>
-                                <div class="accordion-title">Outlier Comparison</div>
-                                <div class="accordion-subtitle">Compare outlier rates across numeric fields</div>
+                                <div class="accordion-title">Anomaly Comparison (ML-based)</div>
+                                <div class="accordion-subtitle">Isolation Forest anomaly detection across numeric fields</div>
                             </div>
                         </div>
                         <div class="accordion-meta">
@@ -11095,7 +11705,7 @@ the largest difference between classes - a strong candidate for predictive model
 
             # Plain-English summary based on distribution
             if all_zero_outliers:
-                plain_summary = f"Excellent! All {len(outlier_comparison)} numeric columns have no IQR outliers detected. This indicates well-behaved, consistent data without extreme values falling outside the expected range."
+                plain_summary = f"Excellent! All {len(outlier_comparison)} numeric columns have no anomalies detected by Isolation Forest. This indicates well-behaved, consistent data without extreme values."
             elif high_outlier_count > len(outlier_comparison) / 2:
                 plain_summary = f"Many columns ({high_outlier_count} of {len(outlier_comparison)}) have a lot of extreme values (>5%). '{max_outlier['col']}' has the most at {max_outlier['pct']:.2f}%. This pattern could mean data quality issues, measurement problems, or data coming from different sources."
             elif max_outlier['pct'] > 10:
@@ -11115,10 +11725,10 @@ the largest difference between classes - a strong candidate for predictive model
                     "High Rate (>5%)": f"{high_outlier_count} fields"
                 },
                 technical_context=[
-                    "Outlier detection uses IQR (Interquartile Range) method",
-                    "Lower bound: Q1 - 1.5 × IQR",
-                    "Upper bound: Q3 + 1.5 × IQR",
-                    "Red bars: >5% outliers, Yellow: 1-5%, Green: <1%"
+                    "Anomaly detection uses Isolation Forest algorithm",
+                    "Unsupervised ML method that isolates anomalies",
+                    "Contamination rate set to detect ~5% anomalies",
+                    "Red bars: >5% anomalies, Yellow: 1-5%, Green: <1%"
                 ]
             )
 
@@ -11130,12 +11740,12 @@ the largest difference between classes - a strong candidate for predictive model
                         <div class="accordion-title-group">
                             <div class="accordion-icon"><svg style="width:16px;height:16px;color:#64748b;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg></div>
                             <div>
-                                <div class="accordion-title">Outlier Comparison</div>
-                                <div class="accordion-subtitle">Compare outlier rates across numeric fields</div>
+                                <div class="accordion-title">Anomaly Comparison (ML-based)</div>
+                                <div class="accordion-subtitle">Isolation Forest anomaly detection across numeric fields</div>
                             </div>
                         </div>
                         <div class="accordion-meta">
-                            <span class="accordion-badge good">No Outliers</span>
+                            <span class="accordion-badge good">No Anomalies</span>
                             <span class="accordion-chevron"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><polyline points="6 9 12 15 18 9"/></svg></span>
                         </div>
                     </div>
@@ -11143,10 +11753,10 @@ the largest difference between classes - a strong candidate for predictive model
                         {outlier_dual_layer}
                         <div style="padding: 32px; background: var(--bg-card); border-radius: 8px; text-align: center; border: 2px solid rgba(34, 197, 94, 0.3);">
                             <div style="margin-bottom: 16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:56px;height:56px;color:#10b981"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div>
-                            <h4 style="margin: 0 0 12px 0; color: #22c55e; font-size: 1.2em;">No IQR Outliers Detected</h4>
+                            <h4 style="margin: 0 0 12px 0; color: #22c55e; font-size: 1.2em;">No ML Anomalies Detected</h4>
                             <p style="color: var(--text-muted); margin: 0; max-width: 500px; margin: 0 auto; line-height: 1.6;">
                                 All {len(outlier_comparison)} numeric columns have values within expected ranges.
-                                No data points fall outside the IQR bounds (Q1 - 1.5×IQR to Q3 + 1.5×IQR).
+                                No data points were flagged as anomalies by the Isolation Forest algorithm.
                             </p>
                             <div style="margin-top: 20px; display: flex; justify-content: center; gap: 24px; flex-wrap: wrap;">
                                 {' '.join([f'<span style="background: rgba(34, 197, 94, 0.1); padding: 6px 12px; border-radius: 6px; font-size: 0.85em; color: #22c55e;">{d["col"]}: 0%</span>' for d in outlier_comparison[:6]])}
@@ -11161,8 +11771,8 @@ the largest difference between classes - a strong candidate for predictive model
                         <div class="accordion-title-group">
                             <div class="accordion-icon"><svg style="width:16px;height:16px;color:#64748b;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M7 16h8"/><path d="M7 11h12"/><path d="M7 6h3"/></svg></div>
                             <div>
-                                <div class="accordion-title">Outlier Comparison</div>
-                                <div class="accordion-subtitle">Compare outlier rates across numeric fields</div>
+                                <div class="accordion-title">Anomaly Comparison (ML-based)</div>
+                                <div class="accordion-subtitle">Isolation Forest anomaly detection across numeric fields</div>
                             </div>
                         </div>
                         <div class="accordion-meta">
@@ -11313,23 +11923,37 @@ the largest difference between classes - a strong candidate for predictive model
         """
         columns = profile.columns
 
+        # Get family columns to exclude from unclassified list (wide dataset mode)
+        family_columns = set()
+        if hasattr(profile, 'column_families') and profile.column_families:
+            family_columns = set(profile.column_families.get('family_columns', []))
+
         # Collect semantic classifications from all columns
         schema_org_types = {}  # type -> list of column names
         fibo_types = {}        # type -> list of column names
+        wikidata_types = {}    # type -> list of column names
+        science_types = {}     # type -> list of column names (QUDT/ChEBI/UO)
         resolved_classifications = []  # (column_name, resolved_type, source, confidence)
 
         columns_with_semantics = 0
         fibo_matched = 0
         schema_org_matched = 0
+        wikidata_matched = 0
+        science_matched = 0
         unclassified_columns = []  # Columns with no strong semantic match
 
         for col in columns:
+            # Skip columns that belong to families (they're shown in the Column Families section)
+            if col.name in family_columns:
+                continue
             if not col.semantic_info:
                 continue
 
             resolved = col.semantic_info.get('resolved', {})
             schema_org = col.semantic_info.get('schema_org', {})
             fibo = col.semantic_info.get('fibo', {})
+            wikidata = col.semantic_info.get('wikidata', {})
+            science = col.semantic_info.get('science', {})
 
             primary_source = resolved.get('primary_source', 'none')
             primary_type = resolved.get('primary_type', '')
@@ -11338,6 +11962,10 @@ the largest difference between classes - a strong candidate for predictive model
             # Get confidence from the source-specific object
             if primary_source == 'fibo' and fibo:
                 confidence = fibo.get('confidence', 0)
+            elif primary_source == 'science' and science:
+                confidence = science.get('confidence', 0)
+            elif primary_source == 'wikidata' and wikidata:
+                confidence = wikidata.get('confidence', 0)
             elif primary_source == 'schema_org' and schema_org:
                 confidence = schema_org.get('confidence', 0)
             else:
@@ -11359,6 +11987,23 @@ the largest difference between classes - a strong candidate for predictive model
                     if category not in fibo_types:
                         fibo_types[category] = []
                     fibo_types[category].append(col.name)
+                elif primary_source == 'science':
+                    science_matched += 1
+                    # Extract ontology prefix from science type (e.g., 'chebi:Alcohol' -> 'chebi')
+                    if ':' in primary_type:
+                        category = primary_type.split(':')[0]
+                    else:
+                        category = 'science'
+                    if category not in science_types:
+                        science_types[category] = []
+                    science_types[category].append(col.name)
+                elif primary_source == 'wikidata':
+                    wikidata_matched += 1
+                    # Extract category from wikidata type (e.g., 'geo.country' -> 'geo')
+                    category = primary_type.split('.')[0] if '.' in primary_type else primary_type
+                    if category not in wikidata_types:
+                        wikidata_types[category] = []
+                    wikidata_types[category].append(col.name)
                 elif primary_source == 'schema_org':
                     schema_org_matched += 1
                     if primary_type not in schema_org_types:
@@ -11369,9 +12014,11 @@ the largest difference between classes - a strong candidate for predictive model
                 reasons = []
                 schema_conf = schema_org.get('confidence', 0) if schema_org else 0
                 fibo_conf = fibo.get('confidence', 0) if fibo else 0
+                wikidata_conf = wikidata.get('confidence', 0) if wikidata else 0
+                science_conf = science.get('confidence', 0) if science else 0
 
-                if schema_conf < 0.5 and fibo_conf < 0.5:
-                    reasons.append("No strong pattern match in either ontology")
+                if schema_conf < 0.5 and fibo_conf < 0.5 and wikidata_conf < 0.5 and science_conf < 0.5:
+                    reasons.append("No strong pattern match in any ontology")
                 if schema_org and schema_org.get('type', '').endswith(('Integer', 'Text', 'Number')):
                     reasons.append("Only generic type detected (no specific semantic meaning)")
 
@@ -11382,6 +12029,10 @@ the largest difference between classes - a strong candidate for predictive model
                     'schema_org_conf': schema_conf,
                     'fibo_tried': fibo.get('type', 'none') if fibo else 'none',
                     'fibo_conf': fibo_conf,
+                    'science_tried': science.get('type', 'none') if science else 'none',
+                    'science_conf': science_conf,
+                    'wikidata_tried': wikidata.get('type', 'none') if wikidata else 'none',
+                    'wikidata_conf': wikidata_conf,
                     'reasons': reasons or ["Column name/values don't match known patterns"]
                 })
 
@@ -11389,7 +12040,7 @@ the largest difference between classes - a strong candidate for predictive model
         if columns_with_semantics == 0:
             return ''
 
-        # Category icons for both ontologies
+        # Category icons for all ontologies
         category_icons = {
             # FIBO categories
             'money': '💰', 'identifier': '🔑', 'party': '👤', 'datetime': '📅',
@@ -11399,7 +12050,11 @@ the largest difference between classes - a strong candidate for predictive model
             'monetaryamount': '💰', 'contactpoint': '📧', 'datetime': '📅',
             'email': '📧', 'telephone': '📞', 'url': '🔗', 'text': '📝',
             'number': '🔢', 'integer': '🔢', 'boolean': '✓', 'date': '📅',
-            'quantitativevalue': '📊', 'propertyvalue': '📋', 'thing': '📦'
+            'quantitativevalue': '📊', 'propertyvalue': '📋', 'thing': '📦',
+            # Wikidata categories
+            'geo': '🌍', 'ref': '📚', 'entity': '🏛️', 'code': '🏷️', 'demo': '👥',
+            # Science categories (QUDT, ChEBI, UO, OBI)
+            'qudt': '⚗️', 'chebi': '🧪', 'uo': '📏', 'obi': '🔬', 'science': '🧬'
         }
 
         # Build FIBO chips
@@ -11426,11 +12081,55 @@ the largest difference between classes - a strong candidate for predictive model
                     <span class="chip-source">Schema.org</span>
                 </div>'''
 
+        # Build Wikidata chips
+        wikidata_chips = ''
+        wikidata_category_labels = {
+            'geo': 'Geographic', 'ref': 'Reference', 'entity': 'Entity',
+            'code': 'Standard Code', 'demo': 'Demographic'
+        }
+        for category, cols in sorted(wikidata_types.items(), key=lambda x: -len(x[1])):
+            cat_icon = category_icons.get(category.lower(), '📋')
+            cat_label = wikidata_category_labels.get(category, category.title())
+            wikidata_chips += f'''
+                <div class="semantic-chip wikidata" title="Wikidata: {cat_label} - {len(cols)} column(s)">
+                    <span class="chip-icon">{cat_icon}</span>
+                    <span class="chip-label">{cat_label}</span>
+                    <span class="chip-count">{len(cols)}</span>
+                    <span class="chip-source">Wikidata</span>
+                </div>'''
+
+        # Build Science chips (QUDT, ChEBI, UO, OBI)
+        science_chips = ''
+        science_category_labels = {
+            'qudt': 'Physical Quantities', 'chebi': 'Chemical Entities',
+            'uo': 'Measurement Units', 'obi': 'Biological Entities', 'science': 'Scientific'
+        }
+        for category, cols in sorted(science_types.items(), key=lambda x: -len(x[1])):
+            cat_icon = category_icons.get(category.lower(), '🧬')
+            cat_label = science_category_labels.get(category, category.upper())
+            science_chips += f'''
+                <div class="semantic-chip science" title="Science: {cat_label} - {len(cols)} column(s)">
+                    <span class="chip-icon">{cat_icon}</span>
+                    <span class="chip-label">{cat_label}</span>
+                    <span class="chip-count">{len(cols)}</span>
+                    <span class="chip-source">Science</span>
+                </div>'''
+
         # Build column mapping table
         table_rows = ''
         for item in sorted(resolved_classifications, key=lambda x: x['source']):
-            source_badge = 'fibo' if item['source'] == 'fibo' else 'schema'
-            source_label = 'FIBO' if item['source'] == 'fibo' else 'Schema.org'
+            if item['source'] == 'fibo':
+                source_badge = 'fibo'
+                source_label = 'FIBO'
+            elif item['source'] == 'science':
+                source_badge = 'science'
+                source_label = 'Science'
+            elif item['source'] == 'wikidata':
+                source_badge = 'wikidata'
+                source_label = 'Wikidata'
+            else:
+                source_badge = 'schema'
+                source_label = 'Schema.org'
             conf_pct = item['confidence'] * 100 if item['confidence'] <= 1 else item['confidence']
             table_rows += f'''
                 <tr>
@@ -11469,6 +12168,32 @@ the largest difference between classes - a strong candidate for predictive model
                 plain_english_parts.append(f"{schema_org_matched} columns match general patterns: {', '.join(schema_categories)}.")
             else:
                 plain_english_parts.append(f"{schema_org_matched} columns match general patterns including {', '.join(schema_categories[:3])}.")
+
+        # Describe Science matches
+        if science_matched > 0:
+            science_category_desc = {
+                'qudt': 'physical measurement', 'chebi': 'chemical compound',
+                'uo': 'measurement unit', 'obi': 'biological', 'science': 'scientific'
+            }
+            science_categories = list(science_types.keys())
+            category_descs = [science_category_desc.get(c, c) for c in science_categories[:3]]
+            if len(science_categories) == 1:
+                plain_english_parts.append(f"{science_matched} column(s) match {category_descs[0]} data patterns.")
+            else:
+                plain_english_parts.append(f"{science_matched} columns match scientific measurement patterns ({', '.join(category_descs)}).")
+
+        # Describe Wikidata matches
+        if wikidata_matched > 0:
+            wikidata_category_desc = {
+                'geo': 'geographic', 'ref': 'reference', 'entity': 'entity',
+                'code': 'standard code', 'demo': 'demographic'
+            }
+            wikidata_categories = list(wikidata_types.keys())
+            category_descs = [wikidata_category_desc.get(c, c) for c in wikidata_categories[:3]]
+            if len(wikidata_categories) == 1:
+                plain_english_parts.append(f"{wikidata_matched} column(s) match {category_descs[0]} data patterns.")
+            else:
+                plain_english_parts.append(f"{wikidata_matched} columns match reference data patterns ({', '.join(category_descs)}).")
 
         # Mention unclassified columns (extract column names from dict structure)
         unclassified_names = [c['column'] if isinstance(c, dict) else str(c) for c in unclassified_columns]
@@ -11517,6 +12242,8 @@ the largest difference between classes - a strong candidate for predictive model
                                 </div>
                                 {f'<div style="background: var(--bg-tertiary); padding: 12px 16px; border-radius: 8px; text-align: center;"><div style="font-size: 1.5em; font-weight: 700; color: #10b981;">{fibo_matched}</div><div style="font-size: 0.75em; color: var(--text-muted);">FIBO</div></div>' if fibo_matched > 0 else ''}
                                 {f'<div style="background: var(--bg-tertiary); padding: 12px 16px; border-radius: 8px; text-align: center;"><div style="font-size: 1.5em; font-weight: 700; color: #6366f1;">{schema_org_matched}</div><div style="font-size: 0.75em; color: var(--text-muted);">Schema.org</div></div>' if schema_org_matched > 0 else ''}
+                                {f'<div style="background: var(--bg-tertiary); padding: 12px 16px; border-radius: 8px; text-align: center;"><div style="font-size: 1.5em; font-weight: 700; color: #8b5cf6;">{science_matched}</div><div style="font-size: 0.75em; color: var(--text-muted);">Science</div></div>' if science_matched > 0 else ''}
+                                {f'<div style="background: var(--bg-tertiary); padding: 12px 16px; border-radius: 8px; text-align: center;"><div style="font-size: 1.5em; font-weight: 700; color: #f59e0b;">{wikidata_matched}</div><div style="font-size: 0.75em; color: var(--text-muted);">Wikidata</div></div>' if wikidata_matched > 0 else ''}
                                 {f'<div style="background: var(--bg-tertiary); padding: 12px 16px; border-radius: 8px; text-align: center;"><div style="font-size: 1.5em; font-weight: 700; color: var(--warning-color);">{unclassified_count}</div><div style="font-size: 0.75em; color: var(--text-muted);">Unclassified</div></div>' if unclassified_count > 0 else ''}
                             </div>
 
@@ -11550,6 +12277,26 @@ the largest difference between classes - a strong candidate for predictive model
                                         </div>
                                     </div>""" if schema_chips else ""}
 
+                                    {f"""<div style="margin-bottom: 16px;">
+                                        <div style="font-size: 0.8em; color: var(--text-muted); margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+                                            <span style="background: linear-gradient(135deg, #7c3aed 0%, #8b5cf6 100%); color: white; padding: 2px 8px; border-radius: 4px; font-weight: 600;">Science</span>
+                                            Scientific measurement patterns (QUDT/ChEBI/UO)
+                                        </div>
+                                        <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                                            {science_chips}
+                                        </div>
+                                    </div>""" if science_chips else ""}
+
+                                    {f"""<div style="margin-bottom: 16px;">
+                                        <div style="font-size: 0.8em; color: var(--text-muted); margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+                                            <span style="background: linear-gradient(135deg, #d97706 0%, #f59e0b 100%); color: white; padding: 2px 8px; border-radius: 4px; font-weight: 600;">Wikidata</span>
+                                            Reference data patterns
+                                        </div>
+                                        <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                                            {wikidata_chips}
+                                        </div>
+                                    </div>""" if wikidata_chips else ""}
+
                                     <!-- Column mappings table -->
                                     <div style="margin-top: 16px; overflow-x: auto;">
                                         <div style="font-size: 0.8em; color: var(--text-muted); margin-bottom: 8px;">{icon_key} Column Mappings</div>
@@ -11572,8 +12319,9 @@ the largest difference between classes - a strong candidate for predictive model
                                     <div class="dual-layer-technical-context" style="margin-top: 16px;">
                                         <ul>
                                             <li><strong>FIBO</strong> (Financial Industry Business Ontology) identifies financial domain patterns like accounts, transactions, and monetary values.</li>
+                                            <li><strong>Wikidata</strong> provides reference data validation for geographic entities (countries, regions), codes (airport, postal), and demographic data (age, gender).</li>
                                             <li><strong>Schema.org</strong> provides general web vocabulary for common types like Person, Organization, Email, and Address.</li>
-                                            <li>FIBO is checked first; if no strong financial match is found, Schema.org provides a general classification.</li>
+                                            <li>FIBO is checked first, then Wikidata for reference data; if no strong match is found, Schema.org provides a general classification.</li>
                                         </ul>
                                     </div>
                                 </div>
@@ -11688,11 +12436,11 @@ the largest difference between classes - a strong candidate for predictive model
                             </div>
                             <div class="dual-layer-technical-context">
                                 <ul>
-                                    <li><strong>Quality Score Formula:</strong> (0.4 × Completeness) + (0.3 × Validity) + (0.2 × Consistency) + (0.1 × Uniqueness)</li>
+                                    <li><strong>Quality Score Formula:</strong> (0.40 × Completeness) + (0.35 × Validity) + (0.25 × Consistency)</li>
                                     <li>Completeness (40% weight): Percentage of non-null values</li>
-                                    <li>Validity (30% weight): Values matching expected type/format</li>
-                                    <li>Consistency (20% weight): Pattern uniformity across column</li>
-                                    <li>Uniqueness (10% weight): Cardinality relative to column type</li>
+                                    <li>Validity (35% weight): Values matching expected type/format</li>
+                                    <li>Consistency (25% weight): Pattern uniformity across column</li>
+                                    <li><em>Note: Uniqueness is reported separately but excluded from quality score (it is context-dependent: identifiers should be unique, categories should not)</em></li>
                                 </ul>
                             </div>
                         </div>
@@ -11721,8 +12469,15 @@ the largest difference between classes - a strong candidate for predictive model
         if duplicate_analysis:
             exact_dups = duplicate_analysis.get('exact_duplicates', {})
             fuzzy_dups = duplicate_analysis.get('fuzzy_duplicates', {})
-            key_cols = duplicate_analysis.get('potential_key_columns', [])
+            key_cols_raw = duplicate_analysis.get('potential_key_columns', [])
             interpretation = duplicate_analysis.get('interpretation', '')
+
+            # Identify PII columns to show warnings (but don't filter them out)
+            pii_column_names = {
+                col.name for col in profile.columns
+                if col.pii_info and col.pii_info.get('detected')
+            }
+            key_cols = key_cols_raw  # Show all potential keys
             plain_english = duplicate_analysis.get('plain_english', '')
 
             exact_count = exact_dups.get('count', 0)
@@ -11742,14 +12497,31 @@ the largest difference between classes - a strong candidate for predictive model
                 status_icon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>'
                 status_text = f'{fuzzy_count} potential fuzzy duplicates'
 
-            # Key columns HTML
+            # Key columns HTML - show PII columns with warning styling
             key_cols_html = ''
             if key_cols:
-                key_items = ''.join(f'<span style="display: inline-block; padding: 2px 8px; background: rgba(59, 130, 246, 0.15); color: #3b82f6; border-radius: 4px; font-size: 0.75em; margin: 2px;">{k.get("column", "")}: {k.get("uniqueness", 0):.1f}%</span>' for k in key_cols[:5])
+                key_items = []
+                for k in key_cols[:5]:
+                    col_name = k.get("column", "")
+                    uniqueness = k.get("uniqueness", 0)
+                    is_pii = col_name in pii_column_names
+                    if is_pii:
+                        # PII column - show with warning style and icon
+                        key_items.append(f'<span style="display: inline-block; padding: 2px 8px; background: rgba(239, 68, 68, 0.15); color: #ef4444; border-radius: 4px; font-size: 0.75em; margin: 2px; border: 1px dashed #ef4444;" title="Contains PII - not recommended as key">⚠️ {col_name}: {uniqueness:.1f}%</span>')
+                    else:
+                        key_items.append(f'<span style="display: inline-block; padding: 2px 8px; background: rgba(59, 130, 246, 0.15); color: #3b82f6; border-radius: 4px; font-size: 0.75em; margin: 2px;">{col_name}: {uniqueness:.1f}%</span>')
+
+                # Add warning note if any PII columns found
+                pii_warning = ''
+                pii_keys = [k.get("column", "") for k in key_cols[:5] if k.get("column", "") in pii_column_names]
+                if pii_keys:
+                    pii_warning = f'<div style="font-size: 0.7em; color: #ef4444; margin-top: 4px;">⚠️ PII columns shown but not recommended as keys due to privacy concerns</div>'
+
                 key_cols_html = f'''
                 <div style="margin-top: 12px;">
                     <div style="font-size: 0.75em; color: var(--text-muted); margin-bottom: 4px;">Potential Key Columns:</div>
-                    <div style="display: flex; flex-wrap: wrap; gap: 4px;">{key_items}</div>
+                    <div style="display: flex; flex-wrap: wrap; gap: 4px;">{"".join(key_items)}</div>
+                    {pii_warning}
                 </div>'''
 
             sections.append(f'''
@@ -11992,18 +12764,231 @@ the largest difference between classes - a strong candidate for predictive model
                     }}
                 </style>'''
 
+    def _generate_column_families_section(self, column_families: Dict) -> str:
+        """Generate HTML section for wide dataset column families."""
+        if not column_families or not column_families.get('is_wide'):
+            return ''
+
+        families = column_families.get('families', [])
+        standalone_columns = column_families.get('standalone_columns', [])
+        total_columns = column_families.get('total_columns', 0)
+        family_columns_count = len(column_families.get('family_columns', []))
+
+        if not families:
+            return ''
+
+        # Build family cards
+        family_cards = ''
+        for family in families:
+            family_cards += self._generate_family_card(family)
+
+        # Summary text
+        family_count = len(families)
+        summary = f"This is a <strong>wide dataset</strong> with {total_columns:,} columns. "
+        summary += f"We detected {family_count} column {'family' if family_count == 1 else 'families'} containing {family_columns_count:,} related columns. "
+        if standalone_columns:
+            summary += f"{len(standalone_columns)} columns don't belong to any detected family and are shown individually below."
+
+        return f'''
+            <div class="column-families-section" style="margin-bottom: 24px; padding: 20px; background: linear-gradient(135deg, var(--bg-card) 0%, rgba(99, 102, 241, 0.05) 100%); border-radius: 12px; border: 1px solid rgba(99, 102, 241, 0.2); overflow: hidden; max-width: 100%; box-sizing: border-box;">
+                <div class="families-header" style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
+                    <div style="width: 40px; height: 40px; background: linear-gradient(135deg, #6366f1, #4f46e5); border-radius: 10px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" style="width: 20px; height: 20px;">
+                            <rect x="3" y="3" width="7" height="7"/>
+                            <rect x="14" y="3" width="7" height="7"/>
+                            <rect x="14" y="14" width="7" height="7"/>
+                            <rect x="3" y="14" width="7" height="7"/>
+                        </svg>
+                    </div>
+                    <div style="min-width: 0;">
+                        <h3 style="margin: 0; font-size: 1.1em; color: var(--text-primary);">Column Families Detected</h3>
+                        <p style="margin: 4px 0 0 0; font-size: 0.85em; color: var(--text-secondary);">{summary}</p>
+                    </div>
+                </div>
+                <div class="families-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); gap: 16px;">
+                    {family_cards}
+                </div>
+            </div>'''
+
+    def _generate_family_card(self, family: Dict) -> str:
+        """Generate a single column family card."""
+        name = family.get('name', 'Unknown Family')
+        pattern_type = family.get('pattern_type', 'unknown')
+        pattern_desc = family.get('pattern_description', '')
+        column_count = family.get('column_count', 0)
+        sample_columns = family.get('sample_columns', [])
+        aggregate_stats = family.get('aggregate_stats', {})
+
+        # Get pattern icon
+        pattern_icons = {
+            'date': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>',
+            'numeric_sequence': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/><line x1="10" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="14" y2="21"/></svg>',
+            'prefix': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><path d="M4 7V4h16v3"/><path d="M9 20h6"/><path d="M12 4v16"/></svg>',
+            'suffix': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><path d="M4 7V4h16v3"/><path d="M9 20h6"/><path d="M12 4v16"/></svg>',
+            'similar_dtype': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>'
+        }
+        pattern_icon = pattern_icons.get(pattern_type, pattern_icons['similar_dtype'])
+
+        # Pattern type badge colors
+        pattern_colors = {
+            'date': ('#f59e0b', 'rgba(245, 158, 11, 0.1)'),
+            'numeric_sequence': ('#3b82f6', 'rgba(59, 130, 246, 0.1)'),
+            'prefix': ('#8b5cf6', 'rgba(139, 92, 246, 0.1)'),
+            'suffix': ('#8b5cf6', 'rgba(139, 92, 246, 0.1)'),
+            'similar_dtype': ('#6b7280', 'rgba(107, 114, 128, 0.1)')
+        }
+        color, bg_color = pattern_colors.get(pattern_type, pattern_colors['similar_dtype'])
+
+        # Build stats section
+        stats_html = ''
+        value_stats = aggregate_stats.get('value_stats', {})
+        null_stats = aggregate_stats.get('null_stats', {})
+
+        # For date-pattern families (time series), show appropriate stats
+        # The values in these columns are typically numeric measurements, not dates
+        if value_stats:
+            if pattern_type == 'date':
+                # For time series date columns, show stats that make sense for the data values
+                # The column NAMES are dates, but VALUES are measurements (e.g., COVID case counts)
+                total_values = value_stats.get('total_values', 0)
+                min_val = value_stats.get('min', 0)
+                max_val = value_stats.get('max', 0)
+                mean_val = value_stats.get('mean', 0)
+
+                # Format large numbers with K/M suffixes
+                def format_num(n):
+                    if n >= 1_000_000:
+                        return f"{n/1_000_000:,.1f}M"
+                    elif n >= 1_000:
+                        return f"{n/1_000:,.1f}K"
+                    else:
+                        return f"{n:,.0f}"
+
+                stats_html += f'''
+                <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border-color);">
+                    <div style="font-size: 0.75em; color: var(--text-muted); margin-bottom: 8px;">
+                        📊 {column_count:,} date columns • Cell values are numeric (not dates)
+                    </div>
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;">
+                        <div style="text-align: center;">
+                            <div style="font-size: 0.7em; color: var(--text-muted); text-transform: uppercase;">Cell Range</div>
+                            <div style="font-size: 0.85em; font-weight: 600; color: var(--text-primary);">{format_num(min_val)} — {format_num(max_val)}</div>
+                        </div>
+                        <div style="text-align: center;">
+                            <div style="font-size: 0.7em; color: var(--text-muted); text-transform: uppercase;">Cell Average</div>
+                            <div style="font-size: 0.85em; font-weight: 600; color: var(--text-primary);">{format_num(mean_val)}</div>
+                        </div>
+                        <div style="text-align: center;">
+                            <div style="font-size: 0.7em; color: var(--text-muted); text-transform: uppercase;">Total Cells</div>
+                            <div style="font-size: 0.85em; font-weight: 600; color: var(--text-primary);">{total_values:,}</div>
+                        </div>
+                    </div>
+                </div>'''
+            else:
+                # For other pattern types, show standard min/mean/max
+                stats_html += f'''
+                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border-color);">
+                    <div style="text-align: center;">
+                        <div style="font-size: 0.7em; color: var(--text-muted); text-transform: uppercase;">Min</div>
+                        <div style="font-size: 0.9em; font-weight: 600; color: var(--text-primary);">{value_stats.get("min", "N/A"):,.2f}</div>
+                    </div>
+                    <div style="text-align: center;">
+                        <div style="font-size: 0.7em; color: var(--text-muted); text-transform: uppercase;">Mean</div>
+                        <div style="font-size: 0.9em; font-weight: 600; color: var(--text-primary);">{value_stats.get("mean", "N/A"):,.2f}</div>
+                    </div>
+                    <div style="text-align: center;">
+                        <div style="font-size: 0.7em; color: var(--text-muted); text-transform: uppercase;">Max</div>
+                        <div style="font-size: 0.9em; font-weight: 600; color: var(--text-primary);">{value_stats.get("max", "N/A"):,.2f}</div>
+                    </div>
+                </div>'''
+
+        if null_stats:
+            null_rate = null_stats.get('null_rate', 0) * 100
+            null_color = '#10b981' if null_rate < 5 else '#f59e0b' if null_rate < 20 else '#ef4444'
+            stats_html += f'''
+                <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.8em;">
+                    <span style="color: var(--text-muted);">Null Rate:</span>
+                    <span style="color: {null_color}; font-weight: 500;">{null_rate:.1f}%</span>
+                </div>'''
+
+        # Anomalous columns warning
+        anomalous = aggregate_stats.get('anomalous_columns', [])
+        anomaly_html = ''
+        if anomalous:
+            anomaly_html = f'''
+                <div style="margin-top: 8px; padding: 8px; background: rgba(239, 68, 68, 0.1); border-radius: 6px; font-size: 0.8em;">
+                    <span style="color: #ef4444;">Anomalous columns ({len(anomalous)}): {", ".join(anomalous[:3])}{"..." if len(anomalous) > 3 else ""}</span>
+                </div>'''
+
+        # Sample columns - use flexbox wrapping to handle overflow
+        sample_html = ''
+        if sample_columns:
+            # Show first and last column names to indicate range, limit total display
+            display_cols = sample_columns[:5]
+            sample_items = ' '.join(f'<code style="font-size: 0.7em; background: var(--bg-hover); padding: 2px 6px; border-radius: 4px; white-space: nowrap; display: inline-block; margin: 2px;">{col}</code>' for col in display_cols)
+            more_text = f'<span style="font-size: 0.7em; color: var(--text-muted);">+{len(sample_columns) - 5} more</span>' if len(sample_columns) > 5 else ''
+            sample_html = f'''
+                <div style="margin-top: 8px; font-size: 0.8em; color: var(--text-secondary);">
+                    <div style="font-weight: 500; margin-bottom: 4px;">Sample columns:</div>
+                    <div style="display: flex; flex-wrap: wrap; gap: 4px; align-items: center;">
+                        {sample_items}
+                        {more_text}
+                    </div>
+                </div>'''
+
+        return f'''
+            <div class="family-card" style="background: var(--bg-card); border-radius: 10px; padding: 16px; border: 1px solid var(--border-color); transition: all 0.2s;">
+                <div style="display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 8px;">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <div style="width: 32px; height: 32px; background: {bg_color}; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: {color};">
+                            {pattern_icon}
+                        </div>
+                        <div>
+                            <div style="font-weight: 600; font-size: 0.95em; color: var(--text-primary);">{name}</div>
+                            <div style="font-size: 0.75em; color: var(--text-muted);">{pattern_desc}</div>
+                        </div>
+                    </div>
+                    <div style="background: {bg_color}; color: {color}; padding: 4px 10px; border-radius: 12px; font-size: 0.8em; font-weight: 600;">
+                        {column_count:,} cols
+                    </div>
+                </div>
+                {stats_html}
+                {anomaly_html}
+                {sample_html}
+            </div>'''
+
     def _generate_column_explorer(self, profile: ProfileResult, field_descriptions: Dict = None) -> str:
         """Generate the column explorer accordion."""
         field_descriptions = field_descriptions or {}
 
+        # Check for column families (wide dataset mode)
+        column_families = getattr(profile, 'column_families', None)
+        is_wide_dataset = column_families and column_families.get('is_wide', False)
+        standalone_columns = set(column_families.get('standalone_columns', [])) if is_wide_dataset else set()
+
+        # Generate column families section for wide datasets
+        families_section = ''
+        if is_wide_dataset:
+            families_section = self._generate_column_families_section(column_families)
+
+        # For wide datasets, only show standalone columns individually
+        # For normal datasets, show all columns
+        columns_to_show = []
+        if is_wide_dataset and standalone_columns:
+            columns_to_show = [col for col in profile.columns if col.name in standalone_columns]
+        elif not is_wide_dataset:
+            columns_to_show = profile.columns
+
         column_rows = ''
-        for col in profile.columns:
+        for col in columns_to_show:
             column_rows += self._generate_column_row(col, field_descriptions)
 
         tagged_count = sum(1 for col in profile.columns if col.semantic_info or col.pii_info and col.pii_info.get('detected'))
 
-        # Generate heatmap
-        heatmap_html = self._generate_column_heatmap(profile)
+        # Generate heatmap (only for non-wide datasets or standalone columns)
+        heatmap_html = ''
+        if not is_wide_dataset:
+            heatmap_html = self._generate_column_heatmap(profile)
 
         # Generate search controls
         search_controls = self._generate_column_search_controls()
@@ -12013,16 +12998,36 @@ the largest difference between classes - a strong candidate for predictive model
         temporal_count = sum(1 for col in profile.columns if col.temporal_analysis and col.temporal_analysis.get('available'))
         low_quality_count = sum(1 for col in profile.columns if col.quality.overall_score < 70)
 
-        plain_english = f"Your dataset has {profile.column_count} columns. "
-        if pii_count > 0:
-            plain_english += f"{pii_count} column(s) appear to contain sensitive personal information that may need protection. "
-        if temporal_count > 0:
-            plain_english += f"{temporal_count} column(s) contain dates or timestamps for time-based analysis. "
-        if low_quality_count > 0:
-            plain_english += f"{low_quality_count} column(s) have quality concerns (below 70% score) that may need attention. "
+        # Customize plain English for wide datasets
+        if is_wide_dataset:
+            family_count = len(column_families.get('families', []))
+            standalone_count = len(standalone_columns)
+            plain_english = f"This is a <strong>wide dataset</strong> with {profile.column_count:,} columns. "
+            plain_english += f"We detected {family_count} column {'family' if family_count == 1 else 'families'} with similar patterns (shown above as aggregated summaries). "
+            if standalone_count > 0:
+                plain_english += f"{standalone_count} unique columns are shown individually below."
+            else:
+                plain_english += "All columns belong to detected families."
         else:
-            plain_english += "All columns have acceptable quality scores. "
-        plain_english += "Click any column in the list below for detailed statistics and patterns."
+            plain_english = f"Your dataset has {profile.column_count} columns. "
+            if pii_count > 0:
+                plain_english += f"{pii_count} column(s) appear to contain sensitive personal information that may need protection. "
+            if temporal_count > 0:
+                plain_english += f"{temporal_count} column(s) contain dates or timestamps for time-based analysis. "
+            if low_quality_count > 0:
+                plain_english += f"{low_quality_count} column(s) have quality concerns (below 70% score) that may need attention. "
+            else:
+                plain_english += "All columns have acceptable quality scores. "
+            plain_english += "Click any column in the list below for detailed statistics and patterns."
+
+        # For wide datasets with no standalone columns, hide the column list
+        column_list_html = ''
+        if columns_to_show:
+            column_list_html = f'''
+                            {search_controls}
+                            <div class="column-list" id="columnList">
+                                {column_rows}
+                            </div>'''
 
         return f'''
                 <!-- Column Quality Heatmap -->
@@ -12034,7 +13039,7 @@ the largest difference between classes - a strong candidate for predictive model
                             <div class="accordion-icon columns"><svg style="width:16px;height:16px;color:white;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg></div>
                             <div>
                                 <div class="accordion-title">Column Explorer</div>
-                                <div class="accordion-subtitle">{profile.column_count} columns with semantic analysis</div>
+                                <div class="accordion-subtitle">{profile.column_count} columns{'  (wide dataset mode)' if is_wide_dataset else ' with semantic analysis'}</div>
                             </div>
                         </div>
                         <div class="accordion-meta">
@@ -12081,10 +13086,8 @@ the largest difference between classes - a strong candidate for predictive model
                                     </div>
                                 </details>
                             </div>
-                            {search_controls}
-                            <div class="column-list" id="columnList">
-                                {column_rows}
-                            </div>
+                            {families_section}
+                            {column_list_html}
                         </div>
                     </div>
                 </div>'''
@@ -12233,7 +13236,7 @@ the largest difference between classes - a strong candidate for predictive model
                                         <div class="column-tags">
                                             {tags}
                                         </div>
-                                        <span class="column-quality-score {score_class}" title="Overall Quality Score: Combines completeness, validity, consistency, and uniqueness metrics">Quality {score:.0f}%</span>
+                                        <span class="column-quality-score {score_class}" title="Overall Quality Score: 40% completeness, 35% validity, 25% consistency">Quality {score:.0f}%</span>
                                     </div>
                                     <div class="column-details">
                                         <div class="column-details-content">
@@ -13049,9 +14052,9 @@ the largest difference between classes - a strong candidate for predictive model
         return f'''      - type: "{sugg.validation_type}"
         severity: "{sugg.severity}"{params_str if params_str else ""}'''
 
-    def _generate_temporal_section_content(self, temporal_columns: List[ColumnProfile], temporal_charts: str) -> str:
+    def _generate_temporal_section_content(self, temporal_columns: List[ColumnProfile], temporal_charts: str, wide_format_time_series=None) -> str:
         """Generate content for the Time Series section-accordion (moved from nested inside Distributions)."""
-        if not temporal_columns:
+        if not temporal_columns and not wide_format_time_series:
             return '<p style="color: var(--text-muted); padding: 20px;">No date/time columns detected in this dataset.</p>'
 
         # Build content for all temporal columns
@@ -13175,30 +14178,131 @@ the largest difference between classes - a strong candidate for predictive model
                     </div>
                 </div>'''
 
+        # Build wide-format time series card (if detected)
+        wide_format_card = ''
+        if wide_format_time_series:
+            wf = wide_format_time_series
+            # Handle both ColumnFamily objects and dict representations
+            def get_wf_attr(obj, attr, default=None):
+                return getattr(obj, attr, None) if hasattr(obj, attr) else obj.get(attr, default)
+
+            wf_stats = get_wf_attr(wf, 'aggregate_stats', {}) or {}
+            wf_columns = get_wf_attr(wf, 'columns', [])
+            wf_sample_columns = get_wf_attr(wf, 'sample_columns', [])
+            wf_count = get_wf_attr(wf, 'count', len(wf_columns)) or get_wf_attr(wf, 'column_count', len(wf_columns))
+            wf_pattern_desc = get_wf_attr(wf, 'pattern_description', '')
+
+            wf_sample = wf_sample_columns[:8] if wf_sample_columns else wf_columns[:8]
+            wf_sample_str = ', '.join(str(s) for s in wf_sample)
+            if len(wf_columns) > 8:
+                wf_sample_str += f', ... (+{len(wf_columns) - 8} more)'
+
+            # Extract date range from column names (first and last)
+            sorted_cols = sorted(wf_columns, key=str)
+            first_date = sorted_cols[0] if sorted_cols else 'N/A'
+            last_date = sorted_cols[-1] if sorted_cols else 'N/A'
+
+            # Value statistics from aggregate_stats
+            value_stats = wf_stats.get('value_stats', {})
+            null_stats = wf_stats.get('null_stats', {})
+
+            wide_format_card = f'''
+                <div class="temporal-column-card" style="background: linear-gradient(135deg, var(--card-bg), rgba(245, 158, 11, 0.05)); border-radius: 12px; padding: 20px; margin-bottom: 16px; border: 1px solid var(--border-color); border-left: 4px solid #f59e0b;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 8px;">
+                        <h4 style="color: var(--text-primary); margin: 0; font-size: 1.1em;">
+                            <span style="color: #f59e0b;">📊</span> Wide-Format Time Series
+                        </h4>
+                        <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                            <span style="background: #f59e0b20; color: #f59e0b; padding: 4px 10px; border-radius: 6px; font-size: 0.8em; font-weight: 600;">📆 Dates as Columns</span>
+                            <span class="accordion-badge good">{wf_count:,} time periods</span>
+                        </div>
+                    </div>
+
+                    <div style="background: var(--surface-secondary); border-radius: 8px; padding: 12px; margin-bottom: 16px;">
+                        <div style="color: var(--text-secondary); font-size: 0.85em; margin-bottom: 6px;">Data Format</div>
+                        <div style="color: var(--text-primary); font-size: 0.95em;">
+                            This dataset uses <strong>wide format</strong> where each time period is a separate column ({wf_pattern_desc}).
+                            This is common for time series data from spreadsheets and pivot tables.
+                        </div>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
+                        <div class="temporal-stat">
+                            <div style="color: var(--text-secondary); font-size: 0.85em; margin-bottom: 4px;">Time Range</div>
+                            <div style="color: var(--text-primary); font-weight: 500;">{first_date} → {last_date}</div>
+                            <div style="color: var(--text-tertiary); font-size: 0.8em;">{wf_count:,} time periods</div>
+                        </div>
+                        <div class="temporal-stat">
+                            <div style="color: var(--text-secondary); font-size: 0.85em; margin-bottom: 4px;">Cell Values</div>
+                            <div style="color: var(--text-primary); font-weight: 500;">{value_stats.get("min", 0):,.0f} — {value_stats.get("max", 0):,.0f}</div>
+                            <div style="color: var(--text-tertiary); font-size: 0.8em;">Avg: {value_stats.get("mean", 0):,.0f}</div>
+                        </div>
+                        <div class="temporal-stat">
+                            <div style="color: var(--text-secondary); font-size: 0.85em; margin-bottom: 4px;">Total Cells</div>
+                            <div style="color: var(--text-primary); font-weight: 500;">{value_stats.get("total_values", 0):,}</div>
+                            <div style="color: var(--text-tertiary); font-size: 0.8em;">Null rate: {null_stats.get("null_rate", 0)*100:.1f}%</div>
+                        </div>
+                        <div class="temporal-stat">
+                            <div style="color: var(--text-secondary); font-size: 0.85em; margin-bottom: 4px;">Anomalies</div>
+                            <div style="color: var(--text-primary); font-weight: 500;">{len(wf_stats.get("anomalous_columns", [])):,} columns</div>
+                            <div style="color: var(--text-tertiary); font-size: 0.8em;">{len(wf_stats.get("zero_columns", [])):,} all-zero</div>
+                        </div>
+                    </div>
+
+                    <div style="margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border-color);">
+                        <div style="color: var(--text-secondary); font-size: 0.85em; margin-bottom: 6px;">Sample Columns</div>
+                        <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+                            {" ".join(f'<span style="background: var(--surface-secondary); padding: 2px 8px; border-radius: 4px; font-size: 0.8em; color: var(--text-primary);">{col}</span>' for col in wf_sample[:8])}
+                            {f'<span style="color: var(--text-tertiary); font-size: 0.8em; padding: 2px 8px;">+{len(wf_columns) - 8} more</span>' if len(wf_columns) > 8 else ''}
+                        </div>
+                    </div>
+                </div>'''
+
         # Build plain-English summary
-        col_names = [col.name for col in temporal_columns]
+        col_names = [col.name for col in temporal_columns] if temporal_columns else []
         col_names_str = ', '.join(col_names[:3]) + ('...' if len(col_names) > 3 else '')
 
         total_gaps_sum = sum(
             (col.temporal_analysis or {}).get('gaps', {}).get('gap_count', 0)
             for col in temporal_columns
-        )
+        ) if temporal_columns else 0
+
         trends = [
             (col.temporal_analysis or {}).get('trend', {}).get('direction', 'unknown')
             for col in temporal_columns
-        ]
+        ] if temporal_columns else []
         increasing_count = trends.count('increasing')
         decreasing_count = trends.count('decreasing')
 
-        plain_english = f"Your data has {len(temporal_columns)} date/time column(s) ({col_names_str}). "
-        if total_gaps_sum > 0:
-            plain_english += "There are gaps where data appears to be missing. "
+        # Build summary text
+        # For plain_english, need to get count from wide_format_time_series using same helper approach
+        wf_count_summary = 0
+        if wide_format_time_series:
+            wf = wide_format_time_series
+            wf_cols = getattr(wf, 'columns', None) if hasattr(wf, 'columns') else wf.get('columns', [])
+            wf_count_summary = getattr(wf, 'count', None) if hasattr(wf, 'count') else wf.get('count', wf.get('column_count', len(wf_cols)))
+            wf_count_summary = wf_count_summary or len(wf_cols)
+
+        if wide_format_time_series and not temporal_columns:
+            # Only wide-format
+            plain_english = f"This dataset contains a <strong>wide-format time series</strong> with {wf_count_summary:,} date columns representing different time periods. "
+            plain_english += "Each row tracks values across time, with dates as column headers. Adjacent time periods are expected to correlate. "
+        elif wide_format_time_series and temporal_columns:
+            # Both
+            plain_english = f"Your data has {len(temporal_columns)} date/time column(s) ({col_names_str}) plus a wide-format time series with {wf_count_summary:,} date columns. "
         else:
-            plain_english += "Time coverage looks continuous. "
-        if increasing_count > 0:
-            plain_english += f"Activity trending up in {increasing_count} column(s). "
-        elif decreasing_count > 0:
-            plain_english += f"Activity trending down in {decreasing_count} column(s). "
+            # Only long-format
+            plain_english = f"Your data has {len(temporal_columns)} date/time column(s) ({col_names_str}). "
+
+        if temporal_columns:
+            if total_gaps_sum > 0:
+                plain_english += "There are gaps where data appears to be missing. "
+            else:
+                plain_english += "Time coverage looks continuous. "
+            if increasing_count > 0:
+                plain_english += f"Activity trending up in {increasing_count} column(s). "
+            elif decreasing_count > 0:
+                plain_english += f"Activity trending down in {decreasing_count} column(s). "
 
         return f'''
             <div class="dual-layer-explanation" style="margin-bottom: 20px;">
@@ -13207,6 +14311,7 @@ the largest difference between classes - a strong candidate for predictive model
                     <div class="dual-layer-summary-text">{plain_english}</div>
                 </div>
             </div>
+            {wide_format_card}
             {temporal_items}
             {temporal_charts if temporal_charts else ''}'''
 
@@ -13824,17 +14929,89 @@ the largest difference between classes - a strong candidate for predictive model
         return pii_cols
 
     def _get_categorical_columns(self, columns: List[ColumnProfile]) -> List[Dict]:
-        """Get categorical columns (low cardinality strings) for word cloud."""
+        """Get categorical columns based on semantic types from configuration or low cardinality strings.
+
+        Uses CATEGORICAL_SEMANTIC_TYPES and EXCLUDED_SEMANTIC_TYPES configuration dictionaries
+        to determine which semantic types indicate categorical columns.
+        """
         categorical = []
         for col in columns:
-            # Consider categorical if string type with low unique percentage or few unique values
-            if col.type_info.inferred_type in ['string', 'str', 'text']:
+            is_categorical = False
+            is_excluded = False
+
+            # First check if this column's semantic type is in the exclusion list
+            if col.semantic_info:
+                for schema_key in ['schema_org', 'fibo', 'wikidata', 'resolved']:
+                    schema = col.semantic_info.get(schema_key, {})
+                    if schema:
+                        schema_type = schema.get('type', '') or schema.get('primary_type', '')
+                        if not schema_type:
+                            continue
+
+                        # Check common exclusions (case-insensitive substring match)
+                        for excluded in EXCLUDED_SEMANTIC_TYPES.get('common', []):
+                            if excluded.lower() in schema_type.lower():
+                                is_excluded = True
+                                break
+
+                        # Check schema-specific exclusions (exact match)
+                        excluded_types = EXCLUDED_SEMANTIC_TYPES.get(schema_key, [])
+                        # Extract type name from full type string (e.g., 'schema:CategoryCode' -> 'CategoryCode')
+                        type_name = schema_type.split(':')[-1] if ':' in schema_type else schema_type
+                        if type_name in excluded_types:
+                            is_excluded = True
+
+                        if is_excluded:
+                            break
+
+            if is_excluded:
+                continue  # Skip excluded types (identifiers, etc.)
+
+            # Check semantic types against configuration
+            if col.semantic_info:
+                for schema_key in ['schema_org', 'fibo', 'wikidata']:
+                    schema = col.semantic_info.get(schema_key, {})
+                    if schema:
+                        schema_type = schema.get('type', '')
+                        if not schema_type:
+                            continue
+
+                        # Extract type name from full type string (e.g., 'schema:CategoryCode' -> 'CategoryCode')
+                        type_name = schema_type.split(':')[-1] if ':' in schema_type else schema_type
+
+                        # Check against configured categorical types for this schema
+                        categorical_types = CATEGORICAL_SEMANTIC_TYPES.get(schema_key, [])
+                        if type_name in categorical_types:
+                            is_categorical = True
+                            break
+
+                # Also check resolved primary_type
+                resolved = col.semantic_info.get('resolved', {})
+                if resolved and not is_categorical:
+                    primary_type = resolved.get('primary_type', '')
+                    if primary_type:
+                        type_name = primary_type.split(':')[-1] if ':' in primary_type else primary_type
+                        # Check all schemas for this resolved type
+                        for schema_key, categorical_types in CATEGORICAL_SEMANTIC_TYPES.items():
+                            if type_name in categorical_types:
+                                is_categorical = True
+                                break
+
+            # Check for string type with low cardinality (fallback heuristic)
+            if not is_categorical and col.type_info.inferred_type in ['string', 'str', 'text']:
                 if col.statistics.unique_count <= 100 or col.statistics.unique_percentage < 1:
-                    categorical.append({
-                        'name': col.name,
-                        'top_values': col.statistics.top_values,
-                        'unique_count': col.statistics.unique_count
-                    })
+                    is_categorical = True
+
+            # Check for explicit categorical type
+            if col.type_info.inferred_type in ['categorical', 'category']:
+                is_categorical = True
+
+            if is_categorical:
+                categorical.append({
+                    'name': col.name,
+                    'top_values': col.statistics.top_values,
+                    'unique_count': col.statistics.unique_count
+                })
         return sorted(categorical, key=lambda x: x['unique_count'])[:5]
 
     def _get_quality_status(self, score: float) -> Dict[str, str]:

@@ -1,0 +1,717 @@
+{
+  "metadata": {
+    "version": "1.0.0",
+    "description": "Scientific measurement semantic taxonomy for DataK9 profiler",
+    "sources": [
+      {
+        "name": "QUDT (Quantities, Units, Dimensions and Types)",
+        "url": "https://qudt.org/",
+        "license": "CC BY 4.0",
+        "license_url": "https://creativecommons.org/licenses/by/4.0/"
+      },
+      {
+        "name": "ChEBI (Chemical Entities of Biological Interest)",
+        "url": "https://www.ebi.ac.uk/chebi/",
+        "license": "CC BY 4.0",
+        "license_url": "https://creativecommons.org/licenses/by/4.0/"
+      },
+      {
+        "name": "UO (Units of Measurement Ontology)",
+        "url": "https://github.com/bio-ontology-research-group/unit-ontology",
+        "license": "CC BY 3.0",
+        "license_url": "https://creativecommons.org/licenses/by/3.0/"
+      }
+    ],
+    "created": "2025-12-07",
+    "note": "Patterns derived from QUDT/ChEBI/UO ontologies for offline use. No runtime API calls required."
+  },
+  "taxonomy": {
+    "chemistry": {
+      "description": "Chemical compounds, elements, and biochemistry",
+      "tags": {
+        "chebi:Alcohol": {
+          "chebi_id": "CHEBI:30879",
+          "definition": "Organic compound with hydroxyl functional group",
+          "display_label": "Alcohol content",
+          "patterns": [
+            "(?i)^alcohol$",
+            "(?i)^.*_alcohol$",
+            "(?i)^alcohol_.*$",
+            "(?i)^ethanol$",
+            "(?i)^.*ethanol.*$"
+          ],
+          "data_properties": {
+            "type": ["float", "decimal"],
+            "min_value": 0,
+            "max_value": 100
+          },
+          "unit_hint": "% v/v or g/L",
+          "priority": 85
+        },
+        "chebi:OrganicAcid": {
+          "chebi_id": "CHEBI:64709",
+          "definition": "Organic compound with acidic properties",
+          "display_label": "Organic acid",
+          "patterns": [
+            "(?i)^.*_acid$",
+            "(?i)^.*acid$",
+            "(?i)^malic_?acid$",
+            "(?i)^citric_?acid$",
+            "(?i)^acetic_?acid$",
+            "(?i)^lactic_?acid$",
+            "(?i)^tartaric_?acid$",
+            "(?i)^ascorbic_?acid$",
+            "(?i)^fatty_?acid.*$",
+            "(?i)^amino_?acid.*$",
+            "(?i)^acidity$",
+            "(?i)^.*_acidity$",
+            "(?i)^fixed_acidity$",
+            "(?i)^volatile_acidity$",
+            "(?i)^total_acidity$"
+          ],
+          "data_properties": {
+            "type": ["float", "decimal"],
+            "min_value": 0
+          },
+          "unit_hint": "g/L or mg/L",
+          "priority": 82
+        },
+        "chebi:Phenol": {
+          "chebi_id": "CHEBI:33853",
+          "definition": "Aromatic compound with hydroxyl group attached to benzene ring",
+          "display_label": "Phenolic compound",
+          "patterns": [
+            "(?i)^.*phenol.*$",
+            "(?i)^.*phenolic.*$",
+            "(?i)^total_phenols$",
+            "(?i)^polyphenols$"
+          ],
+          "data_properties": {
+            "type": ["float", "decimal"],
+            "min_value": 0
+          },
+          "unit_hint": "mg/L GAE",
+          "priority": 80
+        },
+        "chebi:Flavonoid": {
+          "chebi_id": "CHEBI:47159",
+          "definition": "Polyphenolic plant secondary metabolite",
+          "display_label": "Flavonoid",
+          "patterns": [
+            "(?i)^flavon.*$",
+            "(?i)^.*flavon.*$",
+            "(?i)^flavanoid.*$",
+            "(?i)^.*flavanoid.*$",
+            "(?i)^anthocyanin.*$",
+            "(?i)^.*anthocyanin.*$",
+            "(?i)^tannin.*$",
+            "(?i)^.*tannin.*$"
+          ],
+          "data_properties": {
+            "type": ["float", "decimal"],
+            "min_value": 0
+          },
+          "unit_hint": "mg/L",
+          "priority": 80
+        },
+        "chebi:Ash": {
+          "chebi_id": "CHEBI:46662",
+          "definition": "Inorgite mineral residue after combustion",
+          "display_label": "Ash content",
+          "patterns": [
+            "(?i)^ash$",
+            "(?i)^.*_ash$",
+            "(?i)^ash_.*$",
+            "(?i)^total_ash$",
+            "(?i)^alkalinity_of_ash$",
+            "(?i)^ash_alkalinity$"
+          ],
+          "data_properties": {
+            "type": ["float", "decimal"],
+            "min_value": 0
+          },
+          "unit_hint": "g/L or %",
+          "priority": 78
+        },
+        "chebi:Mineral": {
+          "chebi_id": "CHEBI:46662",
+          "definition": "Inorganic element or compound",
+          "display_label": "Mineral",
+          "patterns": [
+            "(?i)^magnesium$",
+            "(?i)^calcium$",
+            "(?i)^potassium$",
+            "(?i)^sodium$",
+            "(?i)^iron$",
+            "(?i)^zinc$",
+            "(?i)^copper$",
+            "(?i)^manganese$",
+            "(?i)^phosphorus$",
+            "(?i)^sulfur$",
+            "(?i)^chloride$",
+            "(?i)^.*_mg$",
+            "(?i)^.*_ca$",
+            "(?i)^.*_k$",
+            "(?i)^.*_na$",
+            "(?i)^.*_fe$"
+          ],
+          "data_properties": {
+            "type": ["float", "decimal", "integer"],
+            "min_value": 0
+          },
+          "unit_hint": "mg/L or ppm",
+          "priority": 75
+        },
+        "chebi:Sugar": {
+          "chebi_id": "CHEBI:16646",
+          "definition": "Carbohydrate compound",
+          "display_label": "Sugar content",
+          "patterns": [
+            "(?i)^sugar.*$",
+            "(?i)^.*sugar$",
+            "(?i)^.*_sugar$",
+            "(?i)^glucose$",
+            "(?i)^fructose$",
+            "(?i)^sucrose$",
+            "(?i)^lactose$",
+            "(?i)^residual_sugar$",
+            "(?i)^total_sugar.*$"
+          ],
+          "data_properties": {
+            "type": ["float", "decimal"],
+            "min_value": 0
+          },
+          "unit_hint": "g/L",
+          "priority": 78
+        },
+        "chebi:Protein": {
+          "chebi_id": "CHEBI:36080",
+          "definition": "Biological macromolecule composed of amino acids",
+          "display_label": "Protein",
+          "patterns": [
+            "(?i)^protein.*$",
+            "(?i)^.*protein$",
+            "(?i)^.*_protein$",
+            "(?i)^total_protein$",
+            "(?i)^albumin$",
+            "(?i)^globulin$"
+          ],
+          "data_properties": {
+            "type": ["float", "decimal"],
+            "min_value": 0
+          },
+          "unit_hint": "g/L or mg/dL",
+          "priority": 76
+        },
+        "chebi:Lipid": {
+          "chebi_id": "CHEBI:18059",
+          "definition": "Hydrophobic biomolecule",
+          "display_label": "Lipid/Fat",
+          "patterns": [
+            "(?i)^fat$",
+            "(?i)^.*_fat$",
+            "(?i)^lipid.*$",
+            "(?i)^.*lipid$",
+            "(?i)^cholesterol$",
+            "(?i)^triglyceride.*$",
+            "(?i)^saturated_fat$",
+            "(?i)^unsaturated_fat$",
+            "(?i)^trans_fat$"
+          ],
+          "data_properties": {
+            "type": ["float", "decimal"],
+            "min_value": 0
+          },
+          "unit_hint": "g or mg/dL",
+          "priority": 76
+        },
+        "chebi:Sulfite": {
+          "chebi_id": "CHEBI:26836",
+          "definition": "Sulfur dioxide and related compounds",
+          "display_label": "Sulfite",
+          "patterns": [
+            "(?i)^.*sulfite.*$",
+            "(?i)^.*sulphite.*$",
+            "(?i)^so2$",
+            "(?i)^.*_so2$",
+            "(?i)^free_sulfur.*$",
+            "(?i)^total_sulfur.*$",
+            "(?i)^sulfur_dioxide$",
+            "(?i)^sulphur_dioxide$"
+          ],
+          "data_properties": {
+            "type": ["float", "decimal", "integer"],
+            "min_value": 0
+          },
+          "unit_hint": "mg/L or ppm",
+          "priority": 77
+        },
+        "chebi:Proline": {
+          "chebi_id": "CHEBI:26271",
+          "definition": "Amino acid found in proteins",
+          "display_label": "Proline",
+          "patterns": [
+            "(?i)^proline$",
+            "(?i)^.*_proline$"
+          ],
+          "data_properties": {
+            "type": ["float", "decimal", "integer"],
+            "min_value": 0
+          },
+          "unit_hint": "mg/L",
+          "priority": 80
+        }
+      }
+    },
+    "physical_properties": {
+      "description": "Physical measurements and properties",
+      "tags": {
+        "qudt:Density": {
+          "qudt_id": "qudt:Density",
+          "definition": "Mass per unit volume",
+          "display_label": "Density",
+          "patterns": [
+            "(?i)^density$",
+            "(?i)^.*_density$",
+            "(?i)^specific_gravity$",
+            "(?i)^sg$"
+          ],
+          "data_properties": {
+            "type": ["float", "decimal"],
+            "min_value": 0
+          },
+          "unit_hint": "g/mL or kg/m³",
+          "priority": 80
+        },
+        "qudt:pH": {
+          "qudt_id": "qudt:PH",
+          "definition": "Measure of acidity or basicity",
+          "display_label": "pH",
+          "patterns": [
+            "(?i)^ph$",
+            "(?i)^.*_ph$",
+            "(?i)^ph_.*$",
+            "(?i)^acidity_ph$"
+          ],
+          "data_properties": {
+            "type": ["float", "decimal"],
+            "min_value": 0,
+            "max_value": 14
+          },
+          "unit_hint": "dimensionless (0-14)",
+          "priority": 90
+        },
+        "qudt:Temperature": {
+          "qudt_id": "qudt:Temperature",
+          "definition": "Measure of thermal energy",
+          "display_label": "Temperature",
+          "patterns": [
+            "(?i)^temp$",
+            "(?i)^temperature$",
+            "(?i)^.*_temp$",
+            "(?i)^.*_temperature$",
+            "(?i)^ambient_temp.*$",
+            "(?i)^body_temp.*$"
+          ],
+          "data_properties": {
+            "type": ["float", "decimal", "integer"]
+          },
+          "unit_hint": "°C, °F, or K",
+          "priority": 85
+        },
+        "qudt:Pressure": {
+          "qudt_id": "qudt:Pressure",
+          "definition": "Force per unit area",
+          "display_label": "Pressure",
+          "patterns": [
+            "(?i)^pressure$",
+            "(?i)^.*_pressure$",
+            "(?i)^.*pressure$",
+            "(?i)^bp$",
+            "(?i)^systolic.*$",
+            "(?i)^diastolic.*$",
+            "(?i)^blood_pressure.*$",
+            "(?i)^atmospheric_pressure$",
+            "(?i)^bar$",
+            "(?i)^psi$"
+          ],
+          "data_properties": {
+            "type": ["float", "decimal", "integer"],
+            "min_value": 0
+          },
+          "unit_hint": "Pa, bar, mmHg, or psi",
+          "priority": 82
+        },
+        "qudt:Concentration": {
+          "qudt_id": "qudt:MassConcentration",
+          "definition": "Amount of substance per unit volume",
+          "display_label": "Concentration",
+          "patterns": [
+            "(?i)^.*concentration$",
+            "(?i)^.*_conc$",
+            "(?i)^conc_.*$",
+            "(?i)^.*_level$",
+            "(?i)^.*_content$"
+          ],
+          "data_properties": {
+            "type": ["float", "decimal"],
+            "min_value": 0
+          },
+          "unit_hint": "mg/L, g/L, mol/L, or ppm",
+          "priority": 75
+        },
+        "qudt:Absorbance": {
+          "qudt_id": "qudt:Absorbance",
+          "definition": "Measure of light absorption",
+          "display_label": "Color/Absorbance",
+          "patterns": [
+            "(?i)^color$",
+            "(?i)^colour$",
+            "(?i)^.*_color$",
+            "(?i)^.*_colour$",
+            "(?i)^color_intensity$",
+            "(?i)^colour_intensity$",
+            "(?i)^absorbance$",
+            "(?i)^optical_density$",
+            "(?i)^od$",
+            "(?i)^od_.*$",
+            "(?i)^hue$"
+          ],
+          "data_properties": {
+            "type": ["float", "decimal"],
+            "min_value": 0
+          },
+          "unit_hint": "AU or dimensionless",
+          "priority": 78
+        },
+        "qudt:Turbidity": {
+          "qudt_id": "qudt:Turbidity",
+          "definition": "Cloudiness or haziness of fluid",
+          "display_label": "Turbidity",
+          "patterns": [
+            "(?i)^turbidity$",
+            "(?i)^.*_turbidity$",
+            "(?i)^clarity$",
+            "(?i)^haze$",
+            "(?i)^ntu$"
+          ],
+          "data_properties": {
+            "type": ["float", "decimal"],
+            "min_value": 0
+          },
+          "unit_hint": "NTU or FNU",
+          "priority": 75
+        },
+        "qudt:Viscosity": {
+          "qudt_id": "qudt:Viscosity",
+          "definition": "Resistance to flow",
+          "display_label": "Viscosity",
+          "patterns": [
+            "(?i)^viscosity$",
+            "(?i)^.*_viscosity$",
+            "(?i)^kinematic_viscosity$",
+            "(?i)^dynamic_viscosity$"
+          ],
+          "data_properties": {
+            "type": ["float", "decimal"],
+            "min_value": 0
+          },
+          "unit_hint": "Pa·s or cP",
+          "priority": 75
+        },
+        "qudt:Conductivity": {
+          "qudt_id": "qudt:ElectricConductivity",
+          "definition": "Ability to conduct electric current",
+          "display_label": "Conductivity",
+          "patterns": [
+            "(?i)^conductivity$",
+            "(?i)^.*_conductivity$",
+            "(?i)^electrical_conductivity$",
+            "(?i)^ec$"
+          ],
+          "data_properties": {
+            "type": ["float", "decimal"],
+            "min_value": 0
+          },
+          "unit_hint": "S/m or µS/cm",
+          "priority": 75
+        }
+      }
+    },
+    "biology": {
+      "description": "Biological measurements and biomarkers",
+      "tags": {
+        "obi:CellCount": {
+          "obi_id": "OBI:0000070",
+          "definition": "Number of cells per unit volume",
+          "display_label": "Cell count",
+          "patterns": [
+            "(?i)^.*cell_count$",
+            "(?i)^.*_cells$",
+            "(?i)^cell_.*$",
+            "(?i)^wbc$",
+            "(?i)^rbc$",
+            "(?i)^platelet.*$",
+            "(?i)^white_blood.*$",
+            "(?i)^red_blood.*$",
+            "(?i)^lymphocyte.*$",
+            "(?i)^neutrophil.*$"
+          ],
+          "data_properties": {
+            "type": ["float", "decimal", "integer"],
+            "min_value": 0
+          },
+          "unit_hint": "cells/µL or 10^9/L",
+          "priority": 78
+        },
+        "obi:Enzyme": {
+          "obi_id": "OBI:0000427",
+          "definition": "Biological catalyst measurement",
+          "display_label": "Enzyme level",
+          "patterns": [
+            "(?i)^.*ase$",
+            "(?i)^enzyme.*$",
+            "(?i)^.*_enzyme$",
+            "(?i)^alt$",
+            "(?i)^ast$",
+            "(?i)^ldh$",
+            "(?i)^amylase$",
+            "(?i)^lipase$",
+            "(?i)^protease$"
+          ],
+          "data_properties": {
+            "type": ["float", "decimal", "integer"],
+            "min_value": 0
+          },
+          "unit_hint": "U/L or IU/L",
+          "priority": 76
+        },
+        "obi:Hormone": {
+          "obi_id": "OBI:0000968",
+          "definition": "Hormone level measurement",
+          "display_label": "Hormone",
+          "patterns": [
+            "(?i)^.*hormone.*$",
+            "(?i)^insulin$",
+            "(?i)^cortisol$",
+            "(?i)^testosterone$",
+            "(?i)^estrogen$",
+            "(?i)^progesterone$",
+            "(?i)^thyroid.*$",
+            "(?i)^tsh$",
+            "(?i)^t3$",
+            "(?i)^t4$"
+          ],
+          "data_properties": {
+            "type": ["float", "decimal"],
+            "min_value": 0
+          },
+          "unit_hint": "ng/mL or pmol/L",
+          "priority": 77
+        },
+        "obi:GlucoseLevel": {
+          "obi_id": "OBI:0000445",
+          "definition": "Blood glucose concentration",
+          "display_label": "Glucose",
+          "patterns": [
+            "(?i)^glucose$",
+            "(?i)^.*_glucose$",
+            "(?i)^blood_sugar$",
+            "(?i)^fasting_glucose$",
+            "(?i)^hba1c$",
+            "(?i)^a1c$"
+          ],
+          "data_properties": {
+            "type": ["float", "decimal", "integer"],
+            "min_value": 0
+          },
+          "unit_hint": "mg/dL or mmol/L",
+          "priority": 80
+        },
+        "obi:BMI": {
+          "obi_id": "OBI:0001938",
+          "definition": "Body mass index",
+          "display_label": "BMI",
+          "patterns": [
+            "(?i)^bmi$",
+            "(?i)^body_mass_index$"
+          ],
+          "data_properties": {
+            "type": ["float", "decimal"],
+            "min_value": 10,
+            "max_value": 60
+          },
+          "unit_hint": "kg/m²",
+          "priority": 88
+        }
+      }
+    },
+    "morphology": {
+      "description": "Physical dimensions and morphological measurements",
+      "tags": {
+        "qudt:Length": {
+          "qudt_id": "qudt:Length",
+          "definition": "Linear extent measurement",
+          "display_label": "Length",
+          "patterns": [
+            "(?i)^.*length.*$",
+            "(?i)^.*_len$",
+            "(?i)^len_.*$",
+            "(?i)^height$",
+            "(?i)^.*_height$",
+            "(?i)^width$",
+            "(?i)^.*_width$",
+            "(?i)^depth$",
+            "(?i)^.*_depth$",
+            "(?i)^diameter$",
+            "(?i)^.*_diameter$",
+            "(?i)^radius$",
+            "(?i)^.*_radius$",
+            "(?i)^sepal_length$",
+            "(?i)^petal_length$",
+            "(?i)^sepal_width$",
+            "(?i)^petal_width$"
+          ],
+          "data_properties": {
+            "type": ["float", "decimal"],
+            "min_value": 0
+          },
+          "unit_hint": "cm, mm, m, or in",
+          "priority": 82
+        },
+        "qudt:Area": {
+          "qudt_id": "qudt:Area",
+          "definition": "Two-dimensional extent",
+          "display_label": "Area",
+          "patterns": [
+            "(?i)^area$",
+            "(?i)^.*_area$",
+            "(?i)^surface_area$",
+            "(?i)^cross_section.*$"
+          ],
+          "data_properties": {
+            "type": ["float", "decimal"],
+            "min_value": 0
+          },
+          "unit_hint": "cm², m², or mm²",
+          "priority": 78
+        },
+        "qudt:Volume": {
+          "qudt_id": "qudt:Volume",
+          "definition": "Three-dimensional extent",
+          "display_label": "Volume",
+          "patterns": [
+            "(?i)^volume$",
+            "(?i)^.*_volume$",
+            "(?i)^vol$",
+            "(?i)^.*_vol$"
+          ],
+          "data_properties": {
+            "type": ["float", "decimal"],
+            "min_value": 0
+          },
+          "unit_hint": "mL, L, or cm³",
+          "priority": 78
+        },
+        "qudt:Mass": {
+          "qudt_id": "qudt:Mass",
+          "definition": "Amount of matter",
+          "display_label": "Mass/Weight",
+          "patterns": [
+            "(?i)^mass$",
+            "(?i)^.*_mass$",
+            "(?i)^weight$",
+            "(?i)^.*_weight$",
+            "(?i)^wt$",
+            "(?i)^.*_wt$"
+          ],
+          "data_properties": {
+            "type": ["float", "decimal"],
+            "min_value": 0
+          },
+          "unit_hint": "g, kg, or mg",
+          "priority": 80
+        }
+      }
+    },
+    "ratios_and_indices": {
+      "description": "Computed ratios and dimensionless indices",
+      "tags": {
+        "qudt:Ratio": {
+          "qudt_id": "qudt:DimensionlessRatio",
+          "definition": "Ratio between two quantities",
+          "display_label": "Ratio",
+          "patterns": [
+            "(?i)^.*ratio$",
+            "(?i)^.*_ratio$",
+            "(?i)^od280_od315.*$",
+            "(?i)^od_ratio$"
+          ],
+          "data_properties": {
+            "type": ["float", "decimal"],
+            "min_value": 0
+          },
+          "unit_hint": "dimensionless",
+          "priority": 72
+        },
+        "qudt:Percentage": {
+          "qudt_id": "qudt:Percent",
+          "definition": "Fraction expressed as parts per hundred",
+          "display_label": "Percentage",
+          "patterns": [
+            "(?i)^.*_pct$",
+            "(?i)^.*_percent$",
+            "(?i)^.*percentage$",
+            "(?i)^pct_.*$",
+            "(?i)^percent_.*$"
+          ],
+          "data_properties": {
+            "type": ["float", "decimal"],
+            "min_value": 0,
+            "max_value": 100
+          },
+          "unit_hint": "%",
+          "priority": 75
+        },
+        "qudt:Index": {
+          "qudt_id": "qudt:DimensionlessRatio",
+          "definition": "Computed index or score",
+          "display_label": "Index/Score",
+          "patterns": [
+            "(?i)^.*_index$",
+            "(?i)^.*index$",
+            "(?i)^.*_score$",
+            "(?i)^.*score$",
+            "(?i)^.*_coefficient$"
+          ],
+          "data_properties": {
+            "type": ["float", "decimal"]
+          },
+          "unit_hint": "dimensionless",
+          "priority": 70
+        }
+      }
+    },
+    "dilution": {
+      "description": "Dilution and solution preparation",
+      "tags": {
+        "qudt:Dilution": {
+          "qudt_id": "qudt:DilutionRatio",
+          "definition": "Dilution factor or concentration after dilution",
+          "display_label": "Dilution",
+          "patterns": [
+            "(?i)^.*dilut.*$",
+            "(?i)^nondiluted.*$",
+            "(?i)^od280_od315_of_diluted_wines$"
+          ],
+          "data_properties": {
+            "type": ["float", "decimal"],
+            "min_value": 0
+          },
+          "unit_hint": "dimensionless or ratio",
+          "priority": 70
+        }
+      }
+    }
+  }
+}

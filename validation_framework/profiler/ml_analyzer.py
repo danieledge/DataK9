@@ -170,11 +170,23 @@ class ChunkedMLAccumulator:
         Returns:
             Dict mapping column names to detection info {reasons, is_binary, cardinality}
         """
-        # Generic target keywords (domain-agnostic, no hardcoded field names)
+        # Target keywords - focused on explicit target/outcome indicators
+        # Removed overly generic terms (type, grade, rating, level, tier, category, segment)
+        # that match too many non-target categoricals
+        # Target keywords - based on common ML dataset naming conventions
+        # Sources: sklearn datasets, UCI ML Repository, Kaggle competitions
         generic_keywords = [
-            'target', 'label', 'class', 'outcome', 'response', 'y',
-            'status', 'result', 'decision', 'category', 'segment',
-            'type', 'grade', 'rating', 'level', 'tier'
+            # Generic ML terms (sklearn/standard)
+            'target', 'label', 'class', 'y', 'output', 'response',
+            # Outcome/result indicators
+            'outcome', 'result', 'decision', 'prediction', 'predicted',
+            # Binary classification (common Kaggle patterns)
+            'survived', 'default', 'churn', 'churned', 'fraud', 'spam',
+            'approved', 'accepted', 'rejected', 'converted',
+            # Classification (UCI/academic datasets)
+            'species', 'diagnosis', 'quality',
+            # Risk/financial (German Credit, etc.)
+            'risk', 'creditrisk', 'credit_risk',
         ]
         prefix_patterns = ['is_', 'has_', 'was_', 'did_', 'will_']
         suffix_patterns = ['_flag', '_indicator', '_label', '_target', '_class', '_outcome', '_status', '_type', '_category']
@@ -1696,11 +1708,23 @@ class MLAnalyzer:
         Returns:
             Dict mapping column names to detection info {reasons, is_binary, cardinality}
         """
-        # Generic target keywords (domain-agnostic, no hardcoded field names)
+        # Target keywords - focused on explicit target/outcome indicators
+        # Removed overly generic terms (type, grade, rating, level, tier, category, segment)
+        # that match too many non-target categoricals
+        # Target keywords - based on common ML dataset naming conventions
+        # Sources: sklearn datasets, UCI ML Repository, Kaggle competitions
         generic_keywords = [
-            'target', 'label', 'class', 'outcome', 'response', 'y',
-            'status', 'result', 'decision', 'category', 'segment',
-            'type', 'grade', 'rating', 'level', 'tier'
+            # Generic ML terms (sklearn/standard)
+            'target', 'label', 'class', 'y', 'output', 'response',
+            # Outcome/result indicators
+            'outcome', 'result', 'decision', 'prediction', 'predicted',
+            # Binary classification (common Kaggle patterns)
+            'survived', 'default', 'churn', 'churned', 'fraud', 'spam',
+            'approved', 'accepted', 'rejected', 'converted',
+            # Classification (UCI/academic datasets)
+            'species', 'diagnosis', 'quality',
+            # Risk/financial (German Credit, etc.)
+            'risk', 'creditrisk', 'credit_risk',
         ]
         prefix_patterns = ['is_', 'has_', 'was_', 'did_', 'will_']
         suffix_patterns = ['_flag', '_indicator', '_label', '_target', '_class', '_outcome', '_status', '_type', '_category']
@@ -1958,6 +1982,103 @@ class MLAnalyzer:
 
         return results
 
+    def _compute_missingness_unsupervised(self, df: pd.DataFrame) -> Dict[str, Any]:
+        """
+        Compute unsupervised missingness analysis when no target column is detected.
+
+        Analyzes:
+        1. Correlated missingness - which columns tend to be missing together
+        2. Overall missingness patterns - columns with unusual missing rates
+        3. Systematic missingness indicators - columns that predict missingness in others
+
+        Args:
+            df: DataFrame to analyze
+
+        Returns:
+            Dictionary with unsupervised missingness analysis
+        """
+        result = {
+            "mode": "unsupervised",
+            "columns_with_missing": [],
+            "correlated_missingness": [],
+            "interpretation": ""
+        }
+
+        # Find columns with missing values
+        missing_cols = []
+        for col in df.columns:
+            missing_count = df[col].isna().sum()
+            if missing_count > 0:
+                missing_rate = (missing_count / len(df)) * 100
+                missing_cols.append({
+                    "column": col,
+                    "missing_count": int(missing_count),
+                    "missing_rate": round(missing_rate, 2)
+                })
+
+        if not missing_cols:
+            result["interpretation"] = "No missing values found in the dataset."
+            return result
+
+        result["columns_with_missing"] = sorted(missing_cols, key=lambda x: x["missing_rate"], reverse=True)
+
+        # Analyze correlated missingness patterns
+        if len(missing_cols) >= 2:
+            # Create missingness indicator matrix
+            missing_indicators = pd.DataFrame()
+            for col_info in missing_cols[:20]:  # Limit to top 20 for performance
+                col = col_info["column"]
+                missing_indicators[col] = df[col].isna().astype(int)
+
+            # Calculate correlations between missingness patterns
+            correlated_pairs = []
+            cols = missing_indicators.columns.tolist()
+            for i in range(len(cols)):
+                for j in range(i + 1, len(cols)):
+                    col_a, col_b = cols[i], cols[j]
+                    # Calculate correlation between missingness indicators
+                    both_missing = ((missing_indicators[col_a] == 1) & (missing_indicators[col_b] == 1)).sum()
+                    a_missing = missing_indicators[col_a].sum()
+                    b_missing = missing_indicators[col_b].sum()
+
+                    if a_missing > 0 and b_missing > 0:
+                        # Jaccard similarity for correlated missingness
+                        either_missing = ((missing_indicators[col_a] == 1) | (missing_indicators[col_b] == 1)).sum()
+                        if either_missing > 0:
+                            jaccard = both_missing / either_missing
+                            if jaccard >= 0.3:  # At least 30% overlap
+                                correlated_pairs.append({
+                                    "column_a": col_a,
+                                    "column_b": col_b,
+                                    "both_missing": int(both_missing),
+                                    "overlap_ratio": round(jaccard, 3),
+                                    "interpretation": f"When '{col_a}' is missing, '{col_b}' is also often missing ({jaccard*100:.0f}% overlap)"
+                                })
+
+            # Sort by overlap ratio and take top pairs
+            correlated_pairs.sort(key=lambda x: x["overlap_ratio"], reverse=True)
+            result["correlated_missingness"] = correlated_pairs[:10]
+
+        # Generate interpretation
+        n_missing_cols = len(missing_cols)
+        n_correlated = len(result["correlated_missingness"])
+
+        if n_correlated > 0:
+            top_pair = result["correlated_missingness"][0]
+            result["interpretation"] = (
+                f"Found {n_missing_cols} column(s) with missing values. "
+                f"{n_correlated} pair(s) show correlated missingness patterns. "
+                f"'{top_pair['column_a']}' and '{top_pair['column_b']}' have {top_pair['overlap_ratio']*100:.0f}% "
+                "overlap in their missing values, suggesting they may come from the same source or process."
+            )
+        else:
+            result["interpretation"] = (
+                f"Found {n_missing_cols} column(s) with missing values. "
+                "Missingness patterns appear independent across columns (no strong correlations detected)."
+            )
+
+        return result
+
     def _recommend_targets_mi(self, df: pd.DataFrame, max_targets: int = 3, sample_size: int = 1000) -> List[Dict[str, Any]]:
         """
         Data-driven ML target recommendation using Cramér's V (fast).
@@ -2160,13 +2281,28 @@ class MLAnalyzer:
         except ImportError:
             return 0.0, []
 
-        # Skip high-cardinality and ID-like columns as features
+        # Skip high-cardinality, ID-like, and leakage-prone columns as features
+        # ID-like column name patterns (case-insensitive)
+        id_patterns = {'id', 'uuid', 'guid', 'key', 'index', 'num', 'number', 'code', 'ticket', 'cabin'}
+
         feature_cols = []
+        n_rows = len(df)
         for c in df.columns:
             if c == target_col:
                 continue
+
+            # Check column name for ID-like patterns
+            col_lower = c.lower()
+            col_parts = set(col_lower.replace('_', ' ').replace('-', ' ').split())
+            if col_parts & id_patterns or col_lower.endswith('id') or col_lower.endswith('_id'):
+                continue
+
             n_unique = df[c].nunique()
-            if n_unique > 50 or n_unique == len(df):  # Skip high-cardinality
+
+            # Skip high-cardinality columns (>50 unique OR >90% unique values)
+            # High uniqueness ratio indicates identifier-like behavior
+            uniqueness_ratio = n_unique / n_rows if n_rows > 0 else 0
+            if n_unique > 50 or uniqueness_ratio > 0.9:
                 continue
             feature_cols.append(c)
             if len(feature_cols) >= 8:  # Limit features for speed
@@ -2251,9 +2387,24 @@ class MLAnalyzer:
                     "percentage": round(count / total * 100, 2)
                 }
 
+            # ID-like column name patterns to skip (leakage-prone)
+            id_patterns = {'id', 'uuid', 'guid', 'key', 'index', 'num', 'number', 'code', 'ticket', 'cabin'}
+
             # Analyze each feature
             for col in df.columns:
                 if col == target_col:
+                    continue
+
+                # Skip ID-like columns by name pattern
+                col_lower = col.lower()
+                col_parts = set(col_lower.replace('_', ' ').replace('-', ' ').split())
+                if col_parts & id_patterns or col_lower.endswith('id') or col_lower.endswith('_id'):
+                    continue
+
+                # Skip high-uniqueness columns (>90% unique = identifier-like)
+                n_unique = df[col].nunique()
+                uniqueness_ratio = n_unique / len(df) if len(df) > 0 else 0
+                if uniqueness_ratio > 0.9:
                     continue
 
                 try:
@@ -2560,11 +2711,16 @@ class MLAnalyzer:
                 if dist_result and dist_result.get("best_fit"):
                     findings["distribution_analysis"][col] = dist_result
 
-        # 14. Missingness Impact Analysis (target-based differential missingness)
+        # 14. Missingness Impact Analysis (target-based or unsupervised fallback)
         if self.detected_targets:
             missingness_result = self._compute_missingness_impact_direct(df)
             if missingness_result:
                 findings["missingness_impact"] = missingness_result
+        else:
+            # Unsupervised fallback: analyze correlated missingness patterns
+            unsupervised_result = self._compute_missingness_unsupervised(df)
+            if unsupervised_result and unsupervised_result.get("columns_with_missing"):
+                findings["missingness_impact"] = {"_unsupervised": unsupervised_result}
 
         # 15. Target-Feature Analysis (feature importance for detected targets)
         if self.detected_targets:
@@ -4128,6 +4284,11 @@ class MLAnalyzer:
         # Binary/flag indicators
         if col_lower.startswith(('is_', 'has_', 'was_', 'can_')) or col_lower.endswith(('_flag', '_indicator')):
             return "Column appears to be a binary flag"
+
+        # Averaged/engineered/derived metrics (don't naturally follow Benford)
+        engineered_keywords = ['avg', 'ave', 'mean', 'ratio', 'median', 'mode']
+        if any(kw in col_lower for kw in engineered_keywords):
+            return "Column appears to be an averaged or derived metric (not suitable for Benford)"
 
         # Check numeric properties
         if values is not None and len(values) > 0:

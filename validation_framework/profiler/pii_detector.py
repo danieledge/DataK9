@@ -284,6 +284,24 @@ class PIIDetector:
                 # Calculate confidence based on match percentage
                 confidence = match_count / len(samples)
 
+                # CRITICAL FIX: Postal code validation - prevent float values from matching
+                # Values like 0.04781 contain "04781" which matches 5-digit pattern
+                # Real postal codes are whole numbers, not decimal values
+                if pii_type in ('postal_code_us', 'postal_code_uk', 'postal_code_ca'):
+                    # Check if values contain decimal points - if so, NOT postal codes
+                    contains_decimal = any(
+                        '.' in str(v) or 'e' in str(v).lower() or 'E' in str(v)
+                        for v in all_matched_values[:100]
+                    )
+
+                    if contains_decimal:
+                        # Contains decimal points - these are float values, not postal codes
+                        logger.debug(
+                            f"Postal code detection rejected: values contain decimals "
+                            f"(e.g., {all_matched_values[0] if all_matched_values else 'N/A'})"
+                        )
+                        continue
+
                 # CRITICAL FIX: Enhanced credit card validation (Luhn algorithm on large sample)
                 # Addresses ChatGPT review: Sample 100+ values, require 80%+ Luhn pass rate
                 if pii_type == 'credit_card':

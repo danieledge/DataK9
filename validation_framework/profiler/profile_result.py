@@ -453,6 +453,8 @@ class ProfileResult:
     data_lineage: Optional[DataLineage] = None  # Data lineage and provenance tracking
     csv_format_issues: Optional[Dict[str, Any]] = None  # CSV structural issues detected
     categorical_analysis: Optional[Dict[str, Any]] = None  # Categorical association analysis
+    column_families: Optional[Dict[str, Any]] = None  # Column family groupings for wide datasets
+    pca_analysis: Optional[Dict[str, Any]] = None  # PCA/dimensionality reduction analysis
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary representation."""
@@ -496,5 +498,13 @@ class ProfileResult:
         # Add categorical analysis if present
         if self.categorical_analysis:
             result["categorical_analysis"] = convert_numpy_types(self.categorical_analysis)
+
+        # Add column families for wide datasets
+        if self.column_families:
+            result["column_families"] = convert_numpy_types(self.column_families)
+
+        # Add PCA/dimensionality reduction analysis
+        if self.pca_analysis:
+            result["pca_analysis"] = convert_numpy_types(self.pca_analysis)
 
         return result
