@@ -573,6 +573,29 @@ Disable enhanced multi-method correlation analysis.
 python3 -m validation_framework.cli profile data.csv --disable-correlation
 ```
 
+#### `--correlation-threshold`
+
+Set the minimum absolute correlation coefficient to report. Default is 0.3 (Cohen's medium effect size). Only correlations with |r| > threshold are included in reports.
+
+```bash
+# Only report strong correlations (|r| > 0.7)
+python3 -m validation_framework.cli profile data.csv --correlation-threshold 0.7
+
+# Report all detectable correlations (|r| > 0.1)
+python3 -m validation_framework.cli profile data.csv --correlation-threshold 0.1
+```
+
+**Correlation Strength Thresholds:**
+
+| Range | Label |
+|-------|-------|
+| 0.9+ | Very Strong |
+| 0.7 - 0.9 | Strong |
+| 0.5 - 0.7 | Moderate |
+| 0.3 - 0.5 | Weak |
+
+**Note:** Can also be set via context file (see `--field-descriptions`). CLI value takes precedence over context file.
+
 #### `--disable-all-enhancements`
 
 Minimal profiling mode - disables temporal, PII, and correlation analysis.
@@ -646,6 +669,12 @@ field_descriptions:
   Parch:
     friendly_name: "Parents/Children"
     description: "Number of parents and children aboard"
+
+# Profiler settings (optional)
+profiler_settings:
+  # Minimum correlation coefficient to report (default: 0.3)
+  # CLI --correlation-threshold overrides this value
+  correlation_threshold: 0.3
 ```
 
 **How It Improves Reports:**

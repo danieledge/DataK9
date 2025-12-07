@@ -169,6 +169,12 @@ def should_apply_benford_generic(
     if col_lower.startswith(('is_', 'has_', 'was_', 'can_')) or col_lower.endswith(('_flag', '_indicator')):
         return False, "Column appears to be a binary flag"
 
+    # Exclude averaged/engineered/derived features (Benford assumes naturally occurring data)
+    # Averages and ratios are mathematically derived and don't follow Benford's Law naturally
+    engineered_patterns = ['avg', 'ave', 'mean', 'ratio', 'pct', 'percent', 'rate', 'median', 'mode']
+    if any(pattern in col_lower for pattern in engineered_patterns):
+        return False, "Column appears to be an averaged or derived metric (not suitable for Benford)"
+
     return True, "Column is suitable for Benford's Law analysis"
 
 

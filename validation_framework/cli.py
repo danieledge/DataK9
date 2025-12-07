@@ -497,8 +497,9 @@ def version():
 @click.option('--full-analysis', is_flag=True, help='Disable internal sampling - analyze full dataset (slower but more accurate for ML analysis)')
 @click.option('--analysis-sample-size', type=int, default=100000, help='Sample size for analysis when file exceeds this many rows (default: 100000). Files <= this size are analyzed fully.')
 @click.option('--field-descriptions', type=click.Path(exists=True), help='YAML file with friendly field names and descriptions for better anomaly explanations')
+@click.option('--correlation-threshold', type=float, default=None, help='Minimum absolute correlation to report (default: 0.3, Cohen\'s medium effect). Range: 0.0-1.0')
 def profile(file_path, format, delimiter, database, table, query, html_output, json_output, config_output, chunk_size, sample, no_memory_check, log_level,
-            disable_temporal, disable_pii, disable_correlation, disable_all_enhancements, no_ml, full_analysis, analysis_sample_size, field_descriptions):
+            disable_temporal, disable_pii, disable_correlation, disable_all_enhancements, no_ml, full_analysis, analysis_sample_size, field_descriptions, correlation_threshold):
     """
     Profile a data file or database table to understand its structure and quality.
 
@@ -578,20 +579,42 @@ def profile(file_path, format, delimiter, database, table, query, html_output, j
             disable_pii = True
             disable_correlation = True
 
-        # Load field descriptions if provided
+        # Load field descriptions and profiler settings from context file if provided
         field_desc_dict = None
+        context_config = {}
         if field_descriptions:
             try:
                 from validation_framework.profiler.context_discovery import load_field_descriptions
-                field_desc_dict = load_field_descriptions(field_descriptions)
+                import yaml
+                # Load full config to get profiler settings
+                with open(field_descriptions, 'r') as f:
+                    context_config = yaml.safe_load(f) or {}
+                field_desc_dict = context_config.get('field_descriptions', {})
                 if field_desc_dict:
                     po.info(f"Loaded {len(field_desc_dict)} field descriptions")
             except Exception as e:
                 logger.warning(f"Could not load field descriptions: {e}")
 
+        # Determine correlation threshold: CLI overrides context file, else use default
+        # Priority: CLI > context file > default (0.3)
+        effective_correlation_threshold = 0.3  # Default
+        if 'profiler_settings' in context_config and 'correlation_threshold' in context_config['profiler_settings']:
+            effective_correlation_threshold = float(context_config['profiler_settings']['correlation_threshold'])
+            logger.debug(f"Using correlation_threshold from context file: {effective_correlation_threshold}")
+        if correlation_threshold is not None:
+            # CLI always overrides
+            effective_correlation_threshold = correlation_threshold
+            logger.debug(f"CLI override for correlation_threshold: {effective_correlation_threshold}")
+
+        # Validate threshold range
+        if not 0.0 <= effective_correlation_threshold <= 1.0:
+            click.echo(f"⚠️ Warning: correlation_threshold {effective_correlation_threshold} outside valid range [0.0, 1.0], using 0.3", err=True)
+            effective_correlation_threshold = 0.3
+
         # Initialize profiler with enhancements (enabled by default, disabled if flag set)
         profiler = DataProfiler(
             chunk_size=chunk_size,
+            correlation_threshold=effective_correlation_threshold,
             enable_temporal_analysis=not disable_temporal,
             enable_pii_detection=not disable_pii,
             enable_enhanced_correlation=not disable_correlation,

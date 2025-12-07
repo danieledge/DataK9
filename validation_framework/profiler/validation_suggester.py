@@ -157,6 +157,9 @@ class ValidationSuggestionGenerator:
             # Semantic-based suggestions (FIBO)
             suggestions.extend(self._generate_fibo_semantic_validations(col))
 
+            # Wikidata semantic suggestions (general knowledge types)
+            suggestions.extend(self._generate_wikidata_semantic_validations(col))
+
             # Schema.org semantic suggestions
             suggestions.extend(self._generate_semantic_type_validations(col))
 
@@ -234,7 +237,8 @@ class ValidationSuggestionGenerator:
                         schema_org_type = col.semantic_info.get('schema_org', {}).get('type', '')
 
                     min_val, max_val, reason = self._calculate_smart_range(
-                        col.name, col.statistics.min_value, col.statistics.max_value, schema_org_type
+                        col.name, col.statistics.min_value, col.statistics.max_value,
+                        schema_org_type, col.semantic_info
                     )
 
                     suggestions.append(ValidationSuggestion(
@@ -383,15 +387,50 @@ class ValidationSuggestionGenerator:
         # Default: suggest range check for numeric fields
         return True
 
+    # Semantic type to domain-appropriate range mappings
+    # These are domain-correct bounds, NOT observed data bounds
+    SEMANTIC_RANGE_MAPPINGS = {
+        # Schema.org types
+        'schema:Age': (0, 120, "Human age: 0-120 years"),
+        'schema:Percentage': (0, 100, "Percentage: 0-100%"),
+        'schema:Rating': (0, 10, "Rating scale: 0-10"),
+        'schema:Price': (0, None, "Price: must be non-negative"),
+        'schema:MonetaryAmount': (0, None, "Monetary amount: must be non-negative"),
+        # Wikidata types
+        'demo.age': (0, 120, "Human age: 0-120 years"),
+        'geo.latitude': (-90, 90, "Latitude: -90 to 90 degrees"),
+        'geo.longitude': (-180, 180, "Longitude: -180 to 180 degrees"),
+        # Science/QUDT types
+        'qudt:Temperature': (-273.15, None, "Temperature: above absolute zero"),
+        'qudt:pH': (0, 14, "pH scale: 0-14"),
+        'qudt:Concentration': (0, None, "Concentration: must be non-negative"),
+        'qudt:Density': (0, None, "Density: must be non-negative"),
+        'qudt:Absorbance': (0, None, "Absorbance: must be non-negative"),
+        # ChEBI chemical types - typically concentrations/measurements
+        'chebi:Alcohol': (0, 100, "Alcohol content: 0-100%"),
+        'chebi:Phenol': (0, None, "Phenol concentration: non-negative"),
+        'chebi:Flavonoid': (0, None, "Flavonoid concentration: non-negative"),
+        'chebi:OrganicAcid': (0, None, "Organic acid concentration: non-negative"),
+        'chebi:Mineral': (0, None, "Mineral concentration: non-negative"),
+        # General measurement patterns
+        'uo:Length': (0, None, "Length: must be non-negative"),
+        'uo:Mass': (0, None, "Mass: must be non-negative"),
+        'uo:Volume': (0, None, "Volume: must be non-negative"),
+    }
+
     def _calculate_smart_range(
         self,
         col_name: str,
         min_val: float,
         max_val: float,
-        schema_org_type: Optional[str] = None
+        schema_org_type: Optional[str] = None,
+        semantic_info: Optional[Dict] = None
     ) -> Tuple[float, float, str]:
         """
         Calculate smart range bounds with semantic awareness.
+
+        Uses domain-appropriate bounds from semantic types rather than
+        just expanding observed data ranges.
 
         Returns:
             Tuple of (min_bound, max_bound, reason)
@@ -399,27 +438,60 @@ class ValidationSuggestionGenerator:
         value_range = max_val - min_val
         col_lower = col_name.lower()
 
-        # Semantic-aware adjustments
+        # Check for semantic type mappings (priority: Science > Schema.org > name-based)
+        if semantic_info:
+            # Check Science types first (QUDT, ChEBI, UO)
+            science_info = semantic_info.get('science', {})
+            if science_info and science_info.get('type'):
+                science_type = science_info.get('type', '')
+                confidence = science_info.get('confidence', 0)
+                if confidence >= 0.6 and science_type in self.SEMANTIC_RANGE_MAPPINGS:
+                    bounds = self.SEMANTIC_RANGE_MAPPINGS[science_type]
+                    return bounds
+
+            # Check Wikidata types
+            wikidata_info = semantic_info.get('wikidata', {})
+            if wikidata_info and wikidata_info.get('type'):
+                wikidata_type = wikidata_info.get('type', '')
+                confidence = wikidata_info.get('confidence', 0)
+                if confidence >= 0.6 and wikidata_type in self.SEMANTIC_RANGE_MAPPINGS:
+                    bounds = self.SEMANTIC_RANGE_MAPPINGS[wikidata_type]
+                    return bounds
+
+        # Schema.org semantic-aware adjustments
         if schema_org_type:
+            # Check for direct mapping
+            if schema_org_type in self.SEMANTIC_RANGE_MAPPINGS:
+                return self.SEMANTIC_RANGE_MAPPINGS[schema_org_type]
+
             if 'Price' in schema_org_type or 'MonetaryAmount' in schema_org_type:
-                # Prices/amounts can't be negative, but NO upper bound (amounts can grow)
-                return (0, None, f"Price/amount field: must be non-negative")
+                return (0, None, "Price/amount field: must be non-negative")
 
             if 'Percentage' in schema_org_type:
                 return (0, 100, "Percentage field: 0-100%")
 
             if 'Rating' in schema_org_type:
-                # Common rating scales
+                # Infer rating scale from data
                 if max_val <= 5:
                     return (0, 5, "Rating field: 0-5 scale")
                 elif max_val <= 10:
                     return (0, 10, "Rating field: 0-10 scale")
+                else:
+                    return (0, 100, "Rating field: 0-100 scale")
 
-        # Name-based detection for amounts (financial values are unbounded upward)
-        # These fields should only have non-negative constraint, not upper bound
-        amount_patterns = ['amount', 'price', 'cost', 'value', 'total', 'payment', 'balance']
+        # Name-based detection for common semantic patterns
+        # Age detection
+        if 'age' in col_lower and 'age' not in ['page', 'stage', 'average', 'storage']:
+            return (0, 120, "Age field: 0-120 years (human lifespan)")
+
+        # Percentage detection
+        if any(p in col_lower for p in ['percent', 'pct', 'ratio', 'rate']) and max_val <= 100:
+            return (0, 100, "Percentage/ratio field: 0-100%")
+
+        # Financial amounts (financial values are unbounded upward)
+        amount_patterns = ['amount', 'price', 'cost', 'value', 'total', 'payment', 'balance', 'fee', 'charge']
         if any(p in col_lower for p in amount_patterns):
-            return (0, None, f"Financial amount field: must be non-negative")
+            return (0, None, "Financial amount field: must be non-negative")
 
         # Default: expand range by 20%
         buffer = value_range * 0.2 if value_range > 0 else abs(max_val) * 0.2
@@ -428,7 +500,7 @@ class ValidationSuggestionGenerator:
         suggested_max = max_val + buffer
 
         # Don't allow negative for likely-positive fields
-        if any(p in col_lower for p in ['count', 'quantity', 'qty', 'age', 'size']):
+        if any(p in col_lower for p in ['count', 'quantity', 'qty', 'size', 'length', 'width', 'height', 'weight']):
             suggested_min = max(0, suggested_min)
 
         return (
@@ -485,6 +557,185 @@ class ValidationSuggestionGenerator:
                 reason=f"FIBO: Date field should have consistent format ({fibo_tag})",
                 confidence=confidence * 0.9
             ))
+
+        return suggestions
+
+    def _generate_wikidata_semantic_validations(self, col: ColumnProfile) -> List[ValidationSuggestion]:
+        """Generate validations based on Wikidata semantic types.
+
+        Wikidata provides general knowledge types like geographic locations,
+        reference data (languages, currencies), and entity types that benefit
+        from reference validation against known valid values.
+        """
+        suggestions = []
+
+        if not col.semantic_info:
+            return suggestions
+
+        wikidata_info = col.semantic_info.get('wikidata', {})
+        if not wikidata_info or not wikidata_info.get('type'):
+            return suggestions
+
+        wikidata_type = wikidata_info.get('type', '')
+        confidence = wikidata_info.get('confidence', 0)
+        validation_rules = wikidata_info.get('validation_rules', [])
+        reference_source = wikidata_info.get('reference_source', {})
+
+        # Only suggest validations for high-confidence semantic matches
+        if confidence < 0.6:
+            return suggestions
+
+        # Geographic validations
+        if wikidata_type.startswith('geo.'):
+            if wikidata_type == 'geo.country':
+                if 'ValidValuesCheck' in validation_rules:
+                    suggestions.append(ValidationSuggestion(
+                        validation_type="ValidValuesCheck",
+                        severity="WARNING",
+                        params={
+                            "field": col.name,
+                            "reference": reference_source.get('standard', 'Wikidata Q6256')
+                        },
+                        reason=f"Wikidata: Country names should match known countries ({wikidata_type})",
+                        confidence=confidence * 100
+                    ))
+
+            elif wikidata_type == 'geo.country_code':
+                if 'StringLengthCheck' in validation_rules:
+                    suggestions.append(ValidationSuggestion(
+                        validation_type="StringLengthCheck",
+                        severity="ERROR",
+                        params={
+                            "field": col.name,
+                            "min_length": 2,
+                            "max_length": 3
+                        },
+                        reason=f"Wikidata: ISO country codes must be 2-3 characters ({wikidata_type})",
+                        confidence=confidence * 100
+                    ))
+                if 'ValidValuesCheck' in validation_rules:
+                    suggestions.append(ValidationSuggestion(
+                        validation_type="ValidValuesCheck",
+                        severity="WARNING",
+                        params={
+                            "field": col.name,
+                            "reference": reference_source.get('standard', 'ISO 3166-1')
+                        },
+                        reason=f"Wikidata: Country codes should match ISO 3166-1 ({wikidata_type})",
+                        confidence=confidence * 100
+                    ))
+
+            elif wikidata_type in ('geo.latitude', 'geo.longitude'):
+                if wikidata_type == 'geo.latitude':
+                    suggestions.append(ValidationSuggestion(
+                        validation_type="NumericRangeCheck",
+                        severity="ERROR",
+                        params={
+                            "field": col.name,
+                            "min_value": -90.0,
+                            "max_value": 90.0
+                        },
+                        reason=f"Wikidata: Latitude must be between -90 and 90 ({wikidata_type})",
+                        confidence=confidence * 100
+                    ))
+                else:  # longitude
+                    suggestions.append(ValidationSuggestion(
+                        validation_type="NumericRangeCheck",
+                        severity="ERROR",
+                        params={
+                            "field": col.name,
+                            "min_value": -180.0,
+                            "max_value": 180.0
+                        },
+                        reason=f"Wikidata: Longitude must be between -180 and 180 ({wikidata_type})",
+                        confidence=confidence * 100
+                    ))
+
+        # Reference data validations
+        elif wikidata_type.startswith('ref.'):
+            if wikidata_type == 'ref.language_code':
+                if 'StringLengthCheck' in validation_rules:
+                    suggestions.append(ValidationSuggestion(
+                        validation_type="StringLengthCheck",
+                        severity="ERROR",
+                        params={
+                            "field": col.name,
+                            "min_length": 2,
+                            "max_length": 3
+                        },
+                        reason=f"Wikidata: ISO language codes must be 2-3 characters ({wikidata_type})",
+                        confidence=confidence * 100
+                    ))
+
+            elif wikidata_type == 'ref.timezone':
+                if 'ValidValuesCheck' in validation_rules:
+                    suggestions.append(ValidationSuggestion(
+                        validation_type="ValidValuesCheck",
+                        severity="WARNING",
+                        params={
+                            "field": col.name,
+                            "reference": "IANA Time Zone Database"
+                        },
+                        reason=f"Wikidata: Timezone should match IANA database ({wikidata_type})",
+                        confidence=confidence * 100
+                    ))
+
+        # Standard code validations
+        elif wikidata_type.startswith('code.'):
+            if wikidata_type == 'code.airport':
+                if 'StringLengthCheck' in validation_rules:
+                    suggestions.append(ValidationSuggestion(
+                        validation_type="StringLengthCheck",
+                        severity="ERROR",
+                        params={
+                            "field": col.name,
+                            "min_length": 3,
+                            "max_length": 4
+                        },
+                        reason=f"Wikidata: Airport codes must be 3-4 characters (IATA/ICAO) ({wikidata_type})",
+                        confidence=confidence * 100
+                    ))
+
+            elif wikidata_type == 'code.postal':
+                if 'RegexPatternCheck' in validation_rules:
+                    suggestions.append(ValidationSuggestion(
+                        validation_type="RegexPatternCheck",
+                        severity="WARNING",
+                        params={
+                            "field": col.name,
+                            "pattern": r"^[A-Z0-9 -]{3,10}$"
+                        },
+                        reason=f"Wikidata: Postal codes have specific formats ({wikidata_type})",
+                        confidence=confidence * 100 * 0.8  # Lower confidence due to country variation
+                    ))
+
+        # Demographic validations
+        elif wikidata_type.startswith('demo.'):
+            if wikidata_type == 'demo.gender':
+                if 'ValidValuesCheck' in validation_rules:
+                    suggestions.append(ValidationSuggestion(
+                        validation_type="ValidValuesCheck",
+                        severity="INFO",
+                        params={
+                            "field": col.name,
+                            "reference": "Common gender values"
+                        },
+                        reason=f"Wikidata: Gender values should be consistent ({wikidata_type})",
+                        confidence=confidence * 100
+                    ))
+
+            elif wikidata_type == 'demo.age':
+                suggestions.append(ValidationSuggestion(
+                    validation_type="NumericRangeCheck",
+                    severity="WARNING",
+                    params={
+                        "field": col.name,
+                        "min_value": 0,
+                        "max_value": 150
+                    },
+                    reason=f"Wikidata: Age should be within reasonable human range ({wikidata_type})",
+                    confidence=confidence * 100
+                ))
 
         return suggestions
 

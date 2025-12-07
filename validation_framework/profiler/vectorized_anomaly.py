@@ -326,12 +326,19 @@ class VectorizedAnomalyDetector(BackendAwareProfiler):
                     Options: 'zscore', 'iqr', 'isolation_forest'
 
         Returns:
-            Dict with results from all methods
+            Dict with results from all methods and unified summary
         """
         if methods is None:
             methods = ['zscore', 'iqr']
             if SKLEARN_AVAILABLE:
                 methods.append('isolation_forest')
+
+        # Method descriptions for clear reporting
+        method_descriptions = {
+            'zscore': 'Statistical (>3 std dev from mean)',
+            'iqr': 'Box-plot rule (>1.5×IQR from quartiles)',
+            'isolation_forest': 'ML-based pattern detection'
+        }
 
         results = {}
 
@@ -344,16 +351,40 @@ class VectorizedAnomalyDetector(BackendAwareProfiler):
         if 'isolation_forest' in methods and SKLEARN_AVAILABLE:
             results['isolation_forest'] = self.detect_outliers_isolation_forest(series)
 
-        # Determine consensus
-        counts = [r.get('count', 0) for r in results.values()]
+        # Determine consensus and provide unified reporting
+        method_results = [(k, v) for k, v in results.items() if k != 'summary']
+        counts = [r.get('count', 0) for _, r in method_results]
+        percentages = [r.get('percentage', 0) for _, r in method_results]
+
         avg_count = sum(counts) / len(counts) if counts else 0
+        avg_pct = sum(percentages) / len(percentages) if percentages else 0
+
+        # Use IQR as primary method (most standard) if available, else zscore
+        primary_method = 'iqr' if 'iqr' in results else 'zscore' if 'zscore' in results else None
+        primary_result = results.get(primary_method, {}) if primary_method else {}
+
+        # Calculate agreement level
+        if counts:
+            count_range = max(counts) - min(counts)
+            if avg_count > 0:
+                agreement = 'high' if count_range < avg_count * 0.3 else 'moderate' if count_range < avg_count * 0.6 else 'low'
+            else:
+                agreement = 'high'  # All agree on 0 outliers
+        else:
+            agreement = 'none'
 
         results['summary'] = {
-            'methods_used': list(results.keys()),
+            'methods_used': [k for k, _ in method_results],
+            'method_descriptions': {k: method_descriptions.get(k, k) for k, _ in method_results},
+            'primary_method': primary_method,
+            'primary_count': primary_result.get('count', 0),
+            'primary_percentage': primary_result.get('percentage', 0),
             'average_outlier_count': int(avg_count),
+            'average_outlier_percentage': round(avg_pct, 2),
             'max_outlier_count': max(counts) if counts else 0,
             'min_outlier_count': min(counts) if counts else 0,
-            'agreement': 'high' if max(counts) - min(counts) < avg_count * 0.2 else 'low' if counts else 'none'
+            'agreement': agreement,
+            'note': 'IQR (box-plot rule) is the primary method; ML methods may detect different patterns'
         }
 
         return results

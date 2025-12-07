@@ -37,7 +37,8 @@ class CategoricalAnalyzer:
         self,
         min_association_threshold: float = 0.2,
         max_categories_for_analysis: int = 20,
-        binary_detection_threshold: float = 0.95
+        binary_detection_threshold: float = 0.95,
+        max_columns_for_pairwise: int = 50
     ):
         """
         Initialize categorical analyzer.
@@ -46,10 +47,13 @@ class CategoricalAnalyzer:
             min_association_threshold: Minimum association strength to report (default: 0.2)
             max_categories_for_analysis: Max unique values to consider categorical (default: 20)
             binary_detection_threshold: Min proportion of binary values to detect as binary (default: 0.95)
+            max_columns_for_pairwise: Max columns to include in pairwise analysis (default: 50)
+                                      Prevents memory explosion with wide datasets (1000+ columns)
         """
         self.min_association_threshold = min_association_threshold
         self.max_categories_for_analysis = max_categories_for_analysis
         self.binary_detection_threshold = binary_detection_threshold
+        self.max_columns_for_pairwise = max_columns_for_pairwise
 
     def analyze_categorical_associations(
         self,
@@ -77,7 +81,8 @@ class CategoricalAnalyzer:
             "missing_patterns": [],
             "categorical_columns": [],
             "binary_columns": [],
-            "potential_outcomes": []
+            "potential_outcomes": [],
+            "limits_applied": []
         }
 
         if not SCIPY_AVAILABLE:
@@ -97,6 +102,14 @@ class CategoricalAnalyzer:
 
         # Calculate Cramér's V for categorical pairs
         if len(categorical_cols) >= 2:
+            # Check if limit will be applied
+            if len(categorical_cols) > self.max_columns_for_pairwise:
+                result["limits_applied"].append({
+                    "analysis": "cramers_v",
+                    "reason": f"Dataset has {len(categorical_cols)} categorical columns, exceeding the {self.max_columns_for_pairwise} column limit for pairwise analysis",
+                    "columns_analyzed": self.max_columns_for_pairwise,
+                    "columns_skipped": len(categorical_cols) - self.max_columns_for_pairwise
+                })
             result["cramers_v_associations"] = self._calculate_cramers_v(
                 df, categorical_cols
             )
@@ -108,12 +121,22 @@ class CategoricalAnalyzer:
             )
 
         # Analyze missing data patterns
+        missing_cols_count = sum(1 for col in df.columns if df[col].isna().any())
+        if missing_cols_count > self.max_columns_for_pairwise:
+            result["limits_applied"].append({
+                "analysis": "missing_patterns",
+                "reason": f"Dataset has {missing_cols_count} columns with missing data, exceeding the {self.max_columns_for_pairwise} column limit for pattern analysis",
+                "columns_analyzed": self.max_columns_for_pairwise,
+                "columns_skipped": missing_cols_count - self.max_columns_for_pairwise
+            })
         result["missing_patterns"] = self._analyze_missing_patterns(df)
 
-        # Detect potential outcome columns by name pattern (past-tense verbs)
-        # Pass point-biserial associations to score by correlated features
+        # Detect potential outcome columns using multiple strategies:
+        # 1. Past-tense verb patterns (e.g., Survived)
+        # 2. Keyword matching (e.g., species, diagnosis, class)
+        # 3. Suffix patterns (e.g., _class, _target)
         result["potential_outcomes"] = self._detect_potential_outcomes(
-            df, binary_cols, result.get("point_biserial_associations", [])
+            df, binary_cols, result.get("point_biserial_associations", []), categorical_cols
         )
 
         return result
@@ -169,80 +192,263 @@ class CategoricalAnalyzer:
         self,
         df: pd.DataFrame,
         binary_cols: List[str],
-        point_biserial_associations: List[Dict] = None
+        point_biserial_associations: List[Dict] = None,
+        categorical_cols: List[str] = None
     ) -> List[Dict[str, Any]]:
         """
-        Detect potential outcome/target columns using linguistic patterns.
+        Detect potential outcome/target columns using multiple detection strategies.
 
-        Looks for past-tense verb patterns (-ed, -en endings) in column names,
-        which often indicate outcome variables (e.g., Survived, Passed, Chosen).
-        Only considers binary columns as candidates.
+        Detection strategies:
+        1. Past-tense verb patterns (-ed, -en endings) for binary columns
+        2. Keyword matching for common ML target column names (works with any cardinality)
+        3. Suffix patterns (_class, _target, _label, etc.)
 
         Ranks by ML target potential based on:
         - Class balance (closer to 50/50 is better for ML)
         - Number of correlated features (more correlations = more predictive signal)
         - Completeness (fewer nulls = better)
+        - Low cardinality bonus (fewer classes = easier classification)
         """
         # Pattern: word ending in -ed or -en (past tense/past participle)
         past_tense_pattern = re.compile(r'(?i)\b\w+(ed|en)\b')
 
-        potential_outcomes = []
+        # Common ML target keywords (from sklearn, UCI, Kaggle conventions)
+        target_keywords = [
+            'target', 'label', 'class', 'y', 'output', 'response',
+            'outcome', 'result', 'decision', 'prediction', 'predicted',
+            'survived', 'default', 'churn', 'churned', 'fraud', 'spam',
+            'approved', 'accepted', 'rejected', 'converted',
+            'species', 'diagnosis', 'quality', 'digit', 'category',
+            'risk', 'creditrisk', 'credit_risk',
+        ]
 
+        # Suffix patterns that indicate target columns
+        suffix_patterns = ['_class', '_target', '_label', '_outcome', '_category', '_type']
+
+        # Regression target keywords (continuous numeric targets)
+        regression_keywords = [
+            'price', 'value', 'amount', 'cost', 'revenue', 'income', 'salary',
+            'rate', 'score', 'rating', 'count', 'total', 'sum', 'avg', 'mean',
+            'progression', 'change', 'growth', 'return', 'profit', 'loss',
+            'duration', 'time', 'age', 'weight', 'height', 'distance', 'size',
+            'medv', 'median_house_value', 'saleprice', 'sale_price',
+        ]
+
+        potential_outcomes = []
+        seen_columns = set()
+
+        def _calculate_target_score(col: str, reason: str, match_info: str) -> Dict[str, Any]:
+            """Calculate ML target score for a column."""
+            non_null = df[col].dropna()
+            if len(non_null) == 0:
+                return None
+
+            unique_vals = list(non_null.unique())
+            value_counts = non_null.value_counts()
+            n_classes = len(unique_vals)
+
+            # Calculate ML target score (0-100)
+            score = 0
+            score_factors = []
+
+            # Factor 1: Class balance (max 30 points for binary, 25 for multi-class)
+            if len(value_counts) >= 2:
+                minority_ratio = value_counts.iloc[-1] / len(non_null)
+                balance_score = min(minority_ratio, 1 - minority_ratio) * 2  # 0 to 1 scale
+                max_balance_points = 30 if n_classes == 2 else 25
+                balance_points = balance_score * max_balance_points
+                score += balance_points
+                balance_pct = round(minority_ratio * 100, 1)
+                score_factors.append(f"Class balance: {balance_pct}% minority")
+
+            # Factor 2: Correlated features (max 30 points)
+            correlated_count = 0
+            if point_biserial_associations and col in binary_cols:
+                for assoc in point_biserial_associations:
+                    if assoc.get('binary_column') == col and assoc.get('is_significant'):
+                        correlated_count += 1
+            correlation_points = min(correlated_count / 10, 1) * 30
+            score += correlation_points
+            if correlated_count > 0:
+                score_factors.append(f"{correlated_count} correlated feature{'s' if correlated_count > 1 else ''}")
+
+            # Factor 3: Completeness (max 20 points)
+            completeness = len(non_null) / len(df)
+            completeness_points = completeness * 20
+            score += completeness_points
+            if completeness < 1.0:
+                score_factors.append(f"{round(completeness * 100, 1)}% complete")
+
+            # Factor 4: Low cardinality bonus (max 20 points)
+            # Binary = 20, 3-5 classes = 15, 6-10 = 10, 11-20 = 5, >20 = 0
+            if n_classes == 2:
+                cardinality_points = 20
+                score_factors.append("Binary target")
+            elif n_classes <= 5:
+                cardinality_points = 15
+                score_factors.append(f"{n_classes}-class target")
+            elif n_classes <= 10:
+                cardinality_points = 10
+                score_factors.append(f"{n_classes}-class target")
+            elif n_classes <= 20:
+                cardinality_points = 5
+                score_factors.append(f"{n_classes}-class target")
+            else:
+                cardinality_points = 0
+                score_factors.append(f"High cardinality ({n_classes} classes)")
+            score += cardinality_points
+
+            return {
+                "column": col,
+                "reason": reason,
+                "pattern_matched": match_info,
+                "unique_values": unique_vals[:10],
+                "value_counts": value_counts.head(10).to_dict(),
+                "ml_target_score": round(score, 1),
+                "score_factors": score_factors,
+                "correlated_features": correlated_count,
+                "n_classes": n_classes,
+                "class_balance": round(min(value_counts.iloc[-1] / len(non_null),
+                                           value_counts.iloc[0] / len(non_null)) * 100, 1) if len(value_counts) >= 2 else 0,
+                "interpretation": f"'{col}' detected as potential target ({reason}: {match_info})"
+            }
+
+        # Strategy 1: Past-tense verb patterns (binary columns only)
         for col in binary_cols:
+            if col in seen_columns:
+                continue
             match = past_tense_pattern.search(col)
             if match:
-                # Get column stats
-                non_null = df[col].dropna()
-                unique_vals = list(non_null.unique())
-                value_counts = non_null.value_counts()
+                result = _calculate_target_score(col, "past_tense_verb", match.group())
+                if result:
+                    potential_outcomes.append(result)
+                    seen_columns.add(col)
 
-                # Calculate ML target score (0-100)
-                score = 0
-                score_factors = []
+        # Strategy 2: Keyword matching (any categorical or low-cardinality column)
+        all_candidate_cols = set(binary_cols)
+        if categorical_cols:
+            all_candidate_cols.update(categorical_cols)
 
-                # Factor 1: Class balance (max 40 points)
-                # Perfect balance (50/50) = 40 points, highly imbalanced = 0
-                if len(value_counts) >= 2:
-                    minority_ratio = value_counts.iloc[-1] / len(non_null)
-                    balance_score = min(minority_ratio, 1 - minority_ratio) * 2  # 0 to 1 scale
-                    balance_points = balance_score * 40
-                    score += balance_points
-                    balance_pct = round(minority_ratio * 100, 1)
-                    score_factors.append(f"Class balance: {balance_pct}% minority")
+        # Also consider columns with <= 20 unique values
+        for col in df.columns:
+            if col is None:
+                continue
+            try:
+                if df[col].nunique() <= 20:
+                    all_candidate_cols.add(col)
+            except Exception:
+                pass
 
-                # Factor 2: Correlated features (max 40 points)
-                # More point-biserial correlations = more predictive features
-                correlated_count = 0
-                if point_biserial_associations:
-                    for assoc in point_biserial_associations:
-                        if assoc.get('binary_column') == col and assoc.get('is_significant'):
-                            correlated_count += 1
-                # Cap at 10 correlations for max points
-                correlation_points = min(correlated_count / 10, 1) * 40
-                score += correlation_points
-                if correlated_count > 0:
-                    score_factors.append(f"{correlated_count} correlated feature{'s' if correlated_count > 1 else ''}")
+        for col in all_candidate_cols:
+            if col is None or col in seen_columns:
+                continue
+            col_lower = str(col).lower().strip()
 
-                # Factor 3: Completeness (max 20 points)
-                completeness = len(non_null) / len(df)
-                completeness_points = completeness * 20
-                score += completeness_points
-                if completeness < 1.0:
-                    score_factors.append(f"{round(completeness * 100, 1)}% complete")
+            # Check keyword match
+            for keyword in target_keywords:
+                if col_lower == keyword or f'_{keyword}' in col_lower or f'{keyword}_' in col_lower:
+                    result = _calculate_target_score(col, "keyword_match", keyword)
+                    if result:
+                        potential_outcomes.append(result)
+                        seen_columns.add(col)
+                    break
 
-                potential_outcomes.append({
-                    "column": col,
-                    "reason": "past_tense_verb",
-                    "pattern_matched": match.group(),
-                    "unique_values": unique_vals[:5],
-                    "value_counts": value_counts.head(5).to_dict(),
-                    "ml_target_score": round(score, 1),
-                    "score_factors": score_factors,
-                    "correlated_features": correlated_count,
-                    "class_balance": round(min(value_counts.iloc[-1] / len(non_null),
-                                               value_counts.iloc[0] / len(non_null)) * 100, 1) if len(value_counts) >= 2 else 0,
-                    "interpretation": f"'{col}' matches past-tense pattern '{match.group()}'"
-                })
+        # Strategy 3: Suffix pattern matching
+        for col in all_candidate_cols:
+            if col is None or col in seen_columns:
+                continue
+            col_lower = str(col).lower().strip()
+
+            for suffix in suffix_patterns:
+                if col_lower.endswith(suffix):
+                    result = _calculate_target_score(col, "suffix_pattern", suffix)
+                    if result:
+                        potential_outcomes.append(result)
+                        seen_columns.add(col)
+                    break
+
+        # Strategy 4: Regression target detection (continuous numeric columns)
+        def _calculate_regression_score(col: str, reason: str, match_info: str) -> Dict[str, Any]:
+            """Calculate ML regression target score for a numeric column."""
+            if df[col].dtype not in ('int64', 'float64', 'int32', 'float32'):
+                return None
+
+            non_null = df[col].dropna()
+            if len(non_null) == 0:
+                return None
+
+            n_unique = non_null.nunique()
+
+            # Must have high cardinality (continuous) to be regression target
+            if n_unique < 20:
+                return None
+
+            # Calculate regression target score (0-100)
+            score = 0
+            score_factors = []
+
+            # Factor 1: High cardinality is good for regression (max 25 points)
+            cardinality_ratio = n_unique / len(non_null)
+            cardinality_points = min(cardinality_ratio * 50, 25)
+            score += cardinality_points
+            score_factors.append(f"{n_unique} unique values ({round(cardinality_ratio * 100, 1)}% unique)")
+
+            # Factor 2: Distribution characteristics (max 25 points)
+            # Check if roughly normal-ish (good for regression)
+            try:
+                col_std = non_null.std()
+                col_mean = non_null.mean()
+                if col_std > 0:
+                    # Check coefficient of variation (reasonable spread)
+                    cv = col_std / abs(col_mean) if col_mean != 0 else 0
+                    if 0.1 <= cv <= 2.0:  # Reasonable spread
+                        score += 20
+                        score_factors.append(f"Good variance (CV={round(cv, 2)})")
+                    elif cv > 0:
+                        score += 10
+                        score_factors.append(f"Some variance (CV={round(cv, 2)})")
+            except Exception:
+                pass
+
+            # Factor 3: Completeness (max 25 points)
+            completeness = len(non_null) / len(df)
+            completeness_points = completeness * 25
+            score += completeness_points
+            if completeness < 1.0:
+                score_factors.append(f"{round(completeness * 100, 1)}% complete")
+
+            # Factor 4: Column name match bonus (max 25 points)
+            score += 25  # Already matched keyword
+            score_factors.append(f"Keyword match: '{match_info}'")
+
+            return {
+                "column": col,
+                "reason": reason,
+                "pattern_matched": match_info,
+                "unique_values": [f"min={round(non_null.min(), 2)}", f"max={round(non_null.max(), 2)}", f"mean={round(non_null.mean(), 2)}"],
+                "value_counts": {"min": float(non_null.min()), "max": float(non_null.max()), "mean": float(non_null.mean()), "std": float(non_null.std())},
+                "ml_target_score": round(score, 1),
+                "score_factors": score_factors,
+                "correlated_features": 0,  # Not calculated for regression
+                "n_classes": n_unique,
+                "class_balance": 0,  # Not applicable for regression
+                "target_type": "regression",
+                "interpretation": f"'{col}' detected as potential regression target ({reason}: {match_info})"
+            }
+
+        for col in df.columns:
+            if col is None or col in seen_columns:
+                continue
+            col_lower = str(col).lower().strip()
+
+            # Check regression keyword match
+            for keyword in regression_keywords:
+                if col_lower == keyword or f'_{keyword}' in col_lower or f'{keyword}_' in col_lower or keyword in col_lower:
+                    result = _calculate_regression_score(col, "regression_keyword", keyword)
+                    if result:
+                        potential_outcomes.append(result)
+                        seen_columns.add(col)
+                    break
 
         # Sort by ML target score (highest first)
         potential_outcomes.sort(key=lambda x: x['ml_target_score'], reverse=True)
@@ -280,8 +486,17 @@ class CategoricalAnalyzer:
         """
         associations = []
 
-        for i, col1 in enumerate(categorical_cols):
-            for col2 in categorical_cols[i+1:]:
+        # Apply column limit to prevent memory explosion with wide datasets
+        cols_to_analyze = categorical_cols
+        if len(categorical_cols) > self.max_columns_for_pairwise:
+            logger.warning(
+                f"Too many categorical columns ({len(categorical_cols)}) for pairwise analysis. "
+                f"Limiting to first {self.max_columns_for_pairwise} columns."
+            )
+            cols_to_analyze = categorical_cols[:self.max_columns_for_pairwise]
+
+        for i, col1 in enumerate(cols_to_analyze):
+            for col2 in cols_to_analyze[i+1:]:
                 try:
                     # Create contingency table
                     contingency = pd.crosstab(df[col1], df[col2])
@@ -410,7 +625,18 @@ class CategoricalAnalyzer:
         if not missing_cols:
             return patterns
 
-        for missing_col in missing_cols:
+        # Limit columns to analyze to prevent memory explosion with wide datasets
+        max_missing_cols = min(len(missing_cols), self.max_columns_for_pairwise)
+        max_other_cols = self.max_columns_for_pairwise
+        other_cols_to_check = list(df.columns)[:max_other_cols]
+
+        if len(missing_cols) > max_missing_cols:
+            logger.warning(
+                f"Too many columns with missing data ({len(missing_cols)}) for pattern analysis. "
+                f"Limiting to first {max_missing_cols} columns."
+            )
+
+        for missing_col in missing_cols[:max_missing_cols]:
             missing_rate = df[missing_col].isna().mean()
 
             if missing_rate < 0.01 or missing_rate > 0.99:

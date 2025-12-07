@@ -19,3 +19,40 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+---
+
+THIRD-PARTY DATA ATTRIBUTION
+
+This software includes semantic taxonomies derived from the following
+open-source ontologies and knowledge bases:
+
+QUDT (Quantities, Units, Dimensions and Types)
+  - Website: https://qudt.org
+  - License: Creative Commons Attribution 4.0 (CC BY 4.0)
+  - Used for: Physical quantities and measurement units
+
+ChEBI (Chemical Entities of Biological Interest)
+  - Website: https://www.ebi.ac.uk/chebi
+  - License: Creative Commons Attribution 4.0 (CC BY 4.0)
+  - Used for: Chemical compound classifications
+
+UO (Units of Measurement Ontology)
+  - Website: https://github.com/bio-ontology-research-group/unit-ontology
+  - License: Creative Commons Attribution 3.0 (CC BY 3.0)
+  - Used for: Scientific measurement units
+
+Wikidata
+  - Website: https://www.wikidata.org
+  - License: Creative Commons Zero (CC0) - Public Domain
+  - Used for: General knowledge entity types
+
+Schema.org
+  - Website: https://schema.org
+  - License: Creative Commons Attribution-ShareAlike 3.0 (CC BY-SA 3.0)
+  - Used for: Web vocabulary and general semantic types
+
+FIBO (Financial Industry Business Ontology)
+  - Website: https://spec.edmcouncil.org/fibo
+  - License: MIT License
+  - Used for: Financial domain semantics

@@ -366,11 +366,12 @@ class TestQualityMetrics:
             profile_data, type_info, stats, total_rows=100
         )
 
-        # Overall = 0.3*completeness + 0.3*validity + 0.2*uniqueness + 0.2*consistency
+        # Overall = 0.40*completeness + 0.35*validity + 0.25*consistency
+        # NOTE: Uniqueness excluded from quality score - it's context-dependent
         # For numeric types, validity is always 100% (integer/float compatibility)
-        # = 0.3*90 + 0.3*100 + 0.2*50 + 0.2*100
-        # = 27 + 30 + 10 + 20 = 87.0
-        assert 86.0 <= quality.overall_score <= 88.0
+        # = 0.40*90 + 0.35*100 + 0.25*100
+        # = 36 + 35 + 25 = 96.0
+        assert 95.0 <= quality.overall_score <= 97.0
 
 
 class TestTypeInference:

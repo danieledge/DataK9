@@ -18,11 +18,13 @@
           "fibo_class": "fibo-fnd-acc-cur:MonetaryAmount",
           "definition": "A monetary measure, expressed in some currency",
           "patterns": [
-            "(?i).*(amount|amt|value|total|sum).*",
+            "(?i).*(amount|amt).*",
             "(?i).*(price|cost|charge|fee).*",
             "(?i).*(revenue|sales|income).*",
-            "(?i).*(balance|principal|interest).*"
+            "(?i).*(balance|principal|interest).*",
+            "(?i).*(total_cost|total_price|total_amount|total_payment|total_fee|sum_amount).*"
           ],
+          "_notes": "Removed 'total', 'sum', 'value' which caused false positives on scientific columns like 'total_phenols'. Generic 'total_*' now requires explicit money context.",
           "data_properties": {
             "type": [
               "float",

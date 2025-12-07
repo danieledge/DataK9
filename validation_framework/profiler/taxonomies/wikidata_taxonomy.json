@@ -1,0 +1,793 @@
+{
+  "metadata": {
+    "version": "1.0.0",
+    "description": "General knowledge semantic taxonomy for DataK9 profiler",
+    "source": "Derived from Wikidata (wikidata.org)",
+    "wikidata_license": "CC0 (Public Domain)",
+    "wikidata_url": "https://www.wikidata.org/",
+    "created": "2025-12-06",
+    "note": "This taxonomy extracts and adapts concepts from Wikidata for DataK9's semantic tagging system. Wikidata is a free knowledge base that can be read and edited by both humans and machines, licensed under CC0. No attribution required, but Wikidata is acknowledged as the data source."
+  },
+  "taxonomy": {
+    "geographic": {
+      "description": "Geographic locations, coordinates, and administrative divisions",
+      "wikidata_class": "Q82794 (geographic region)",
+      "tags": {
+        "geo.country": {
+          "wikidata_class": "Q6256",
+          "definition": "A sovereign state or nation",
+          "patterns": [
+            "(?i)^country$",
+            "(?i).*(country|nation|state)(?!.*code).*",
+            "(?i)^(home.*country|birth.*country|citizenship)$"
+          ],
+          "data_properties": {
+            "type": [
+              "string",
+              "object"
+            ],
+            "cardinality_max": 0.15
+          },
+          "validation_rules": [
+            "ValidValuesCheck"
+          ],
+          "reference_source": {
+            "loader": "WikidataReferenceLoader",
+            "method": "get_country_names",
+            "standard": "Wikidata Q6256"
+          },
+          "ml_rare_behavior": "reference_validate",
+          "ml_rare_reason": "Validate against known country names from Wikidata"
+        },
+        "geo.country_code": {
+          "wikidata_class": "P297/P298",
+          "definition": "ISO 3166-1 alpha-2 or alpha-3 country code",
+          "patterns": [
+            "(?i).*(country.*code|iso.*country|country.*iso).*",
+            "(?i)^(country_cd|cntry_cd|ctry)$"
+          ],
+          "data_properties": {
+            "type": [
+              "string",
+              "object"
+            ],
+            "string_length": [
+              2,
+              3
+            ],
+            "cardinality_max": 0.05
+          },
+          "validation_rules": [
+            "StringLengthCheck",
+            "ValidValuesCheck"
+          ],
+          "reference_source": {
+            "loader": "WikidataReferenceLoader",
+            "method": "get_country_codes",
+            "standard": "ISO 3166-1"
+          },
+          "ml_rare_behavior": "reference_validate",
+          "ml_rare_reason": "ISO country codes have fixed valid values"
+        },
+        "geo.city": {
+          "wikidata_class": "Q515",
+          "definition": "A large human settlement (city, town, municipality)",
+          "patterns": [
+            "(?i)^city$",
+            "(?i).*(city|town|municipality|metro).*",
+            "(?i)^(home.*city|birth.*city|location.*city)$"
+          ],
+          "data_properties": {
+            "type": [
+              "string",
+              "object"
+            ],
+            "cardinality_min": 0.01
+          },
+          "validation_rules": [],
+          "ml_rare_behavior": "skip",
+          "ml_rare_reason": "City names have high cardinality; rare cities are valid"
+        },
+        "geo.state_province": {
+          "wikidata_class": "Q7275",
+          "definition": "A first-level administrative division (state, province, region)",
+          "patterns": [
+            "(?i).*(state|province|region|territory|prefecture|oblast).*",
+            "(?i)^(state_cd|prov_cd|region_cd)$"
+          ],
+          "data_properties": {
+            "type": [
+              "string",
+              "object"
+            ]
+          },
+          "validation_rules": [],
+          "ml_rare_behavior": "skip",
+          "ml_rare_reason": "State/province values vary by country; cardinality can be high"
+        },
+        "geo.continent": {
+          "wikidata_class": "Q5107",
+          "definition": "One of the seven large landmasses on Earth",
+          "patterns": [
+            "(?i)^continent$",
+            "(?i).*(continent|world.*region).*"
+          ],
+          "data_properties": {
+            "type": [
+              "string",
+              "object"
+            ],
+            "cardinality_max": 0.005
+          },
+          "validation_rules": [
+            "ValidValuesCheck"
+          ],
+          "expected_values": [
+            "Africa",
+            "Antarctica",
+            "Asia",
+            "Australia",
+            "Europe",
+            "North America",
+            "South America",
+            "Oceania"
+          ],
+          "ml_rare_behavior": "reference_validate",
+          "ml_rare_reason": "Only 7-8 valid continent values"
+        },
+        "geo.latitude": {
+          "wikidata_class": "P625 (latitude)",
+          "definition": "Geographic latitude coordinate (-90 to 90 degrees)",
+          "patterns": [
+            "(?i)^(lat|latitude)$",
+            "(?i).*(latitude|lat_coord|geo_lat).*"
+          ],
+          "data_properties": {
+            "type": [
+              "float",
+              "decimal"
+            ],
+            "min_value": -90,
+            "max_value": 90
+          },
+          "validation_rules": [
+            "RangeCheck"
+          ],
+          "ml_rare_behavior": "skip",
+          "ml_rare_reason": "Coordinates are continuous values"
+        },
+        "geo.longitude": {
+          "wikidata_class": "P625 (longitude)",
+          "definition": "Geographic longitude coordinate (-180 to 180 degrees)",
+          "patterns": [
+            "(?i)^(lon|long|longitude)$",
+            "(?i).*(longitude|lon_coord|geo_lon).*"
+          ],
+          "data_properties": {
+            "type": [
+              "float",
+              "decimal"
+            ],
+            "min_value": -180,
+            "max_value": 180
+          },
+          "validation_rules": [
+            "RangeCheck"
+          ],
+          "ml_rare_behavior": "skip",
+          "ml_rare_reason": "Coordinates are continuous values"
+        },
+        "geo.postal_code": {
+          "wikidata_class": "P281",
+          "definition": "A postal code or ZIP code for mail delivery",
+          "patterns": [
+            "(?i).*(zip|postal|post.*code).*",
+            "(?i)^(zip_cd|zipcode|postcode)$"
+          ],
+          "data_properties": {
+            "type": [
+              "string",
+              "integer",
+              "object"
+            ],
+            "string_length": [
+              3,
+              10
+            ]
+          },
+          "validation_rules": [
+            "PatternCheck"
+          ],
+          "ml_rare_behavior": "skip",
+          "ml_rare_reason": "Postal codes have high cardinality by design"
+        },
+        "geo.airport_code": {
+          "wikidata_class": "P238/P239",
+          "definition": "IATA or ICAO airport identifier code",
+          "patterns": [
+            "(?i).*(airport|iata|icao).*code.*",
+            "(?i)^(airport|origin|dest|departure|arrival)$"
+          ],
+          "data_properties": {
+            "type": [
+              "string",
+              "object"
+            ],
+            "string_length": [
+              3,
+              4
+            ],
+            "cardinality_max": 0.1
+          },
+          "validation_rules": [
+            "StringLengthCheck",
+            "ValidValuesCheck"
+          ],
+          "reference_source": {
+            "loader": "WikidataReferenceLoader",
+            "method": "get_airport_codes",
+            "standard": "IATA/ICAO"
+          },
+          "ml_rare_behavior": "reference_validate",
+          "ml_rare_reason": "Airport codes have fixed valid values"
+        },
+        "geo.port_code": {
+          "wikidata_class": "P1579",
+          "definition": "UN/LOCODE port identifier",
+          "patterns": [
+            "(?i).*(port|harbor|locode).*code.*",
+            "(?i)^(port|embark|disembark)$"
+          ],
+          "data_properties": {
+            "type": [
+              "string",
+              "object"
+            ],
+            "string_length": [
+              2,
+              5
+            ],
+            "cardinality_max": 0.1
+          },
+          "validation_rules": [
+            "StringLengthCheck"
+          ],
+          "ml_rare_behavior": "reference_validate",
+          "ml_rare_reason": "Port codes have limited valid values"
+        }
+      }
+    },
+    "reference": {
+      "description": "Standard reference data (languages, currencies, units)",
+      "wikidata_class": "Various",
+      "tags": {
+        "ref.language": {
+          "wikidata_class": "Q34770",
+          "definition": "A human language for communication",
+          "patterns": [
+            "(?i)^language$",
+            "(?i).*(language|lang|locale)(?!.*code).*",
+            "(?i)^(native.*lang|primary.*lang|spoken.*lang)$"
+          ],
+          "data_properties": {
+            "type": [
+              "string",
+              "object"
+            ],
+            "cardinality_max": 0.1
+          },
+          "validation_rules": [
+            "ValidValuesCheck"
+          ],
+          "reference_source": {
+            "loader": "WikidataReferenceLoader",
+            "method": "get_language_names",
+            "standard": "Wikidata Q34770"
+          },
+          "ml_rare_behavior": "reference_validate",
+          "ml_rare_reason": "Validate against known languages"
+        },
+        "ref.language_code": {
+          "wikidata_class": "P218/P219",
+          "definition": "ISO 639-1 or 639-2 language code",
+          "patterns": [
+            "(?i).*(language.*code|lang.*cd|iso.*lang).*",
+            "(?i)^(lang_cd|language_cd|locale_cd)$"
+          ],
+          "data_properties": {
+            "type": [
+              "string",
+              "object"
+            ],
+            "string_length": [
+              2,
+              3
+            ],
+            "cardinality_max": 0.05
+          },
+          "validation_rules": [
+            "StringLengthCheck",
+            "ValidValuesCheck"
+          ],
+          "reference_source": {
+            "loader": "WikidataReferenceLoader",
+            "method": "get_language_codes",
+            "standard": "ISO 639"
+          },
+          "ml_rare_behavior": "reference_validate",
+          "ml_rare_reason": "ISO language codes have fixed valid values"
+        },
+        "ref.timezone": {
+          "wikidata_class": "Q12143",
+          "definition": "A time zone identifier (e.g., UTC, America/New_York)",
+          "patterns": [
+            "(?i)^(timezone|tz|time_zone)$",
+            "(?i).*(timezone|time.*zone|tz_).*"
+          ],
+          "data_properties": {
+            "type": [
+              "string",
+              "object"
+            ],
+            "cardinality_max": 0.1
+          },
+          "validation_rules": [
+            "ValidValuesCheck"
+          ],
+          "reference_source": {
+            "loader": "WikidataReferenceLoader",
+            "method": "get_timezones",
+            "standard": "IANA Time Zone Database"
+          },
+          "ml_rare_behavior": "reference_validate",
+          "ml_rare_reason": "Timezone identifiers have fixed valid values"
+        },
+        "ref.unit": {
+          "wikidata_class": "Q47574",
+          "definition": "A unit of measurement",
+          "patterns": [
+            "(?i)^(unit|uom|unit_of_measure)$",
+            "(?i).*(unit|uom|measure.*unit).*"
+          ],
+          "data_properties": {
+            "type": [
+              "string",
+              "object"
+            ],
+            "cardinality_max": 0.05
+          },
+          "validation_rules": [],
+          "ml_rare_behavior": "skip",
+          "ml_rare_reason": "Units vary by domain"
+        },
+        "ref.nationality": {
+          "wikidata_class": "Q231002",
+          "definition": "A nationality or citizenship status",
+          "patterns": [
+            "(?i)^(nationality|citizenship)$",
+            "(?i).*(nationality|citizenship|national).*"
+          ],
+          "data_properties": {
+            "type": [
+              "string",
+              "object"
+            ],
+            "cardinality_max": 0.15
+          },
+          "validation_rules": [
+            "ValidValuesCheck"
+          ],
+          "reference_source": {
+            "loader": "WikidataReferenceLoader",
+            "method": "get_nationalities",
+            "standard": "Wikidata Q231002"
+          },
+          "ml_rare_behavior": "reference_validate",
+          "ml_rare_reason": "Validate against known nationalities"
+        },
+        "ref.religion": {
+          "wikidata_class": "Q9174",
+          "definition": "A religious affiliation or belief system",
+          "patterns": [
+            "(?i)^(religion|faith|religious)$",
+            "(?i).*(religion|faith|religious.*affiliation).*"
+          ],
+          "data_properties": {
+            "type": [
+              "string",
+              "object"
+            ],
+            "cardinality_max": 0.1
+          },
+          "validation_rules": [],
+          "ml_rare_behavior": "skip",
+          "ml_rare_reason": "Religious affiliations are sensitive data"
+        },
+        "ref.ethnicity": {
+          "wikidata_class": "Q41710",
+          "definition": "An ethnic group or ancestry",
+          "patterns": [
+            "(?i)^(ethnicity|race|ethnic.*group)$",
+            "(?i).*(ethnicity|ethnic|ancestry).*"
+          ],
+          "data_properties": {
+            "type": [
+              "string",
+              "object"
+            ],
+            "cardinality_max": 0.15
+          },
+          "validation_rules": [],
+          "ml_rare_behavior": "skip",
+          "ml_rare_reason": "Ethnicity data is sensitive; rare values may be valid"
+        }
+      }
+    },
+    "entity": {
+      "description": "Named entities (organizations, people, species)",
+      "wikidata_class": "Various",
+      "tags": {
+        "entity.company": {
+          "wikidata_class": "Q4830453",
+          "definition": "A business organization or corporation",
+          "patterns": [
+            "(?i).*(company|corp|corporation|firm|business|enterprise).*name.*",
+            "(?i)^(company|employer|organization)$"
+          ],
+          "data_properties": {
+            "type": [
+              "string",
+              "object"
+            ],
+            "cardinality_min": 0.01
+          },
+          "validation_rules": [],
+          "ml_rare_behavior": "skip",
+          "ml_rare_reason": "Company names have high cardinality; rare companies are valid"
+        },
+        "entity.university": {
+          "wikidata_class": "Q3918",
+          "definition": "A higher education institution",
+          "patterns": [
+            "(?i).*(university|college|institute|school|academy).*",
+            "(?i)^(alma.*mater|education.*institution)$"
+          ],
+          "data_properties": {
+            "type": [
+              "string",
+              "object"
+            ],
+            "cardinality_min": 0.001
+          },
+          "validation_rules": [],
+          "ml_rare_behavior": "skip",
+          "ml_rare_reason": "Educational institutions have high cardinality"
+        },
+        "entity.brand": {
+          "wikidata_class": "Q431289",
+          "definition": "A brand or trademark name",
+          "patterns": [
+            "(?i).*(brand|make|manufacturer).*",
+            "(?i)^(brand|make|label)$"
+          ],
+          "data_properties": {
+            "type": [
+              "string",
+              "object"
+            ],
+            "cardinality_min": 0.001
+          },
+          "validation_rules": [],
+          "ml_rare_behavior": "skip",
+          "ml_rare_reason": "Brand names have high cardinality"
+        },
+        "entity.species": {
+          "wikidata_class": "Q7432",
+          "definition": "A biological species name",
+          "patterns": [
+            "(?i).*(species|organism|taxon|genus).*",
+            "(?i)^(species|scientific.*name)$"
+          ],
+          "data_properties": {
+            "type": [
+              "string",
+              "object"
+            ],
+            "cardinality_min": 0.001
+          },
+          "validation_rules": [],
+          "ml_rare_behavior": "skip",
+          "ml_rare_reason": "Species names are highly variable"
+        },
+        "entity.occupation": {
+          "wikidata_class": "Q12737077",
+          "definition": "A job, profession, or occupation",
+          "patterns": [
+            "(?i)^(occupation|job|profession|career)$",
+            "(?i).*(occupation|job.*title|profession|career).*"
+          ],
+          "data_properties": {
+            "type": [
+              "string",
+              "object"
+            ],
+            "cardinality_max": 0.2
+          },
+          "validation_rules": [],
+          "ml_rare_behavior": "skip",
+          "ml_rare_reason": "Occupation names vary widely"
+        },
+        "entity.industry": {
+          "wikidata_class": "Q8148",
+          "definition": "An industry sector or classification",
+          "patterns": [
+            "(?i)^(industry|sector|vertical)$",
+            "(?i).*(industry|sector|business.*type).*"
+          ],
+          "data_properties": {
+            "type": [
+              "string",
+              "object"
+            ],
+            "cardinality_max": 0.15
+          },
+          "validation_rules": [],
+          "reference_source": {
+            "loader": "WikidataReferenceLoader",
+            "method": "get_industry_sectors",
+            "standard": "NAICS/SIC"
+          },
+          "ml_rare_behavior": "reference_validate",
+          "ml_rare_reason": "Industry classifications have standard codes"
+        }
+      }
+    },
+    "standard_codes": {
+      "description": "Standardized classification codes",
+      "wikidata_class": "Various",
+      "tags": {
+        "code.naics": {
+          "wikidata_class": "P1835",
+          "definition": "North American Industry Classification System code",
+          "patterns": [
+            "(?i).*(naics|industry.*code).*",
+            "(?i)^naics.*$"
+          ],
+          "data_properties": {
+            "type": [
+              "string",
+              "integer",
+              "object"
+            ],
+            "string_length": [
+              2,
+              6
+            ]
+          },
+          "validation_rules": [
+            "PatternCheck"
+          ],
+          "ml_rare_behavior": "reference_validate",
+          "ml_rare_reason": "NAICS codes have fixed valid values"
+        },
+        "code.sic": {
+          "wikidata_class": "P1356",
+          "definition": "Standard Industrial Classification code",
+          "patterns": [
+            "(?i).*(sic|sic.*code).*",
+            "(?i)^sic.*$"
+          ],
+          "data_properties": {
+            "type": [
+              "string",
+              "integer",
+              "object"
+            ],
+            "string_length": [
+              2,
+              4
+            ]
+          },
+          "validation_rules": [
+            "PatternCheck"
+          ],
+          "ml_rare_behavior": "reference_validate",
+          "ml_rare_reason": "SIC codes have fixed valid values"
+        },
+        "code.hs": {
+          "wikidata_class": "P1936",
+          "definition": "Harmonized System (HS) tariff code for products",
+          "patterns": [
+            "(?i).*(hs.*code|tariff.*code|commodity.*code).*",
+            "(?i)^hs.*$"
+          ],
+          "data_properties": {
+            "type": [
+              "string",
+              "integer",
+              "object"
+            ],
+            "string_length": [
+              4,
+              10
+            ]
+          },
+          "validation_rules": [
+            "PatternCheck"
+          ],
+          "ml_rare_behavior": "reference_validate",
+          "ml_rare_reason": "HS codes have fixed valid values"
+        },
+        "code.icd": {
+          "wikidata_class": "P493",
+          "definition": "International Classification of Diseases code",
+          "patterns": [
+            "(?i).*(icd|diagnosis.*code|disease.*code).*",
+            "(?i)^(icd_9|icd_10|icd10|icd9).*$"
+          ],
+          "data_properties": {
+            "type": [
+              "string",
+              "object"
+            ],
+            "string_length": [
+              3,
+              10
+            ]
+          },
+          "validation_rules": [
+            "PatternCheck"
+          ],
+          "ml_rare_behavior": "reference_validate",
+          "ml_rare_reason": "ICD codes have fixed valid values"
+        },
+        "code.isbn": {
+          "wikidata_class": "P212",
+          "definition": "International Standard Book Number",
+          "patterns": [
+            "(?i).*(isbn).*",
+            "(?i)^isbn.*$"
+          ],
+          "data_properties": {
+            "type": [
+              "string",
+              "object"
+            ],
+            "string_length": [
+              10,
+              17
+            ]
+          },
+          "validation_rules": [
+            "PatternCheck",
+            "ChecksumCheck"
+          ],
+          "ml_rare_behavior": "skip",
+          "ml_rare_reason": "ISBNs are unique identifiers"
+        },
+        "code.doi": {
+          "wikidata_class": "P356",
+          "definition": "Digital Object Identifier for publications",
+          "patterns": [
+            "(?i).*(doi).*",
+            "(?i)^doi.*$"
+          ],
+          "data_properties": {
+            "type": [
+              "string",
+              "object"
+            ]
+          },
+          "validation_rules": [
+            "PatternCheck"
+          ],
+          "value_patterns": [
+            "^10\\.\\d{4,}"
+          ],
+          "ml_rare_behavior": "skip",
+          "ml_rare_reason": "DOIs are unique identifiers"
+        }
+      }
+    },
+    "demographics": {
+      "description": "Demographic attributes",
+      "wikidata_class": "Various",
+      "tags": {
+        "demo.gender": {
+          "wikidata_class": "Q48277",
+          "definition": "Gender identity or biological sex",
+          "patterns": [
+            "(?i)^(gender|sex)$",
+            "(?i).*(gender|sex)(?!.*ual).*"
+          ],
+          "data_properties": {
+            "type": [
+              "string",
+              "object"
+            ],
+            "cardinality_max": 0.02
+          },
+          "validation_rules": [
+            "ValidValuesCheck"
+          ],
+          "expected_values": [
+            "Male",
+            "Female",
+            "M",
+            "F",
+            "Other",
+            "Non-binary",
+            "Prefer not to say"
+          ],
+          "ml_rare_behavior": "reference_validate",
+          "ml_rare_reason": "Gender has limited valid values"
+        },
+        "demo.age_group": {
+          "wikidata_class": "Q185196",
+          "definition": "An age cohort or demographic group",
+          "patterns": [
+            "(?i).*(age.*group|age.*band|age.*bracket|cohort).*",
+            "(?i)^(age_grp|ageband)$"
+          ],
+          "data_properties": {
+            "type": [
+              "string",
+              "object"
+            ],
+            "cardinality_max": 0.1
+          },
+          "validation_rules": [],
+          "ml_rare_behavior": "skip",
+          "ml_rare_reason": "Age groups vary by definition"
+        },
+        "demo.marital_status": {
+          "wikidata_class": "Q8453",
+          "definition": "Marital or relationship status",
+          "patterns": [
+            "(?i).*(marital|marriage|married|relationship.*status).*",
+            "(?i)^(marital_st|married)$"
+          ],
+          "data_properties": {
+            "type": [
+              "string",
+              "object"
+            ],
+            "cardinality_max": 0.05
+          },
+          "validation_rules": [
+            "ValidValuesCheck"
+          ],
+          "expected_values": [
+            "Single",
+            "Married",
+            "Divorced",
+            "Widowed",
+            "Separated",
+            "Partnered",
+            "Unknown"
+          ],
+          "ml_rare_behavior": "reference_validate",
+          "ml_rare_reason": "Marital status has limited valid values"
+        },
+        "demo.education_level": {
+          "wikidata_class": "Q36442",
+          "definition": "Highest level of education attained",
+          "patterns": [
+            "(?i).*(education|degree|qualification|academic).*level.*",
+            "(?i)^(education|degree|educ_level)$"
+          ],
+          "data_properties": {
+            "type": [
+              "string",
+              "object"
+            ],
+            "cardinality_max": 0.1
+          },
+          "validation_rules": [],
+          "ml_rare_behavior": "skip",
+          "ml_rare_reason": "Education levels vary by country"
+        }
+      }
+    }
+  }
+}

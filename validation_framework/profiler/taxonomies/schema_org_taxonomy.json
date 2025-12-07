@@ -141,14 +141,16 @@
           "definition": "A monetary value or range",
           "display_label": "Monetary amount",
           "patterns": [
-            "(?i)^.*(amount|price|cost|fee|charge|payment|balance|total|sum|revenue|income|expense|salary|wage|fare|rate|premium|value).*$",
-            "(?i)^.*(usd|eur|gbp|jpy|cny|inr|aud|cad|chf).*$"
+            "(?i)^.*(amount|price|cost|fee|charge|payment|balance|revenue|income|expense|salary|wage|fare|premium).*$",
+            "(?i)^.*(usd|eur|gbp|jpy|cny|inr|aud|cad|chf).*$",
+            "(?i)^.*(total_cost|total_price|total_amount|total_payment|total_fee|total_charge|sum_amount|sum_payment).*$"
           ],
           "data_properties": {
             "type": ["float", "decimal", "integer"],
             "min_value": 0
           },
-          "priority": 85
+          "priority": 85,
+          "_notes": "Removed 'total', 'sum', 'rate', 'value' which caused false positives on scientific/measurement columns like 'total_phenols'. Monetary patterns now require more explicit money-related keywords. Generic 'total_*' falls through to QuantitativeValue."
         },
         "schema:QuantitativeValue": {
           "schema_class": "schema:QuantitativeValue",
@@ -274,13 +276,15 @@
           "definition": "Quantity of time or a particular time interval",
           "display_label": "Duration",
           "patterns": [
-            "(?i)^.*(duration|elapsed|period|span|length|interval).*$",
-            "(?i)^.*(hours|minutes|seconds|days|weeks|months|years)$"
+            "(?i)^.*(duration|elapsed|period|time_span|timespan).*$",
+            "(?i)^.*(hours|minutes|seconds|days|weeks|months|years)$",
+            "(?i)^.*(wait_time|response_time|processing_time|latency|uptime|downtime).*$"
           ],
           "data_properties": {
             "type": ["integer", "float", "string"]
           },
-          "priority": 78
+          "priority": 78,
+          "_notes": "Removed 'length|span|interval' which caused false positives on physical measurements like sepal_length. Duration should only match time-related patterns."
         }
       }
     },

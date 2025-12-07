@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Dict, List, Any, Optional, Tuple, Set
 
 from validation_framework.profiler.semantic_info import SemanticInfo
+from validation_framework.profiler.semantic_config import get_semantic_config
 from validation_framework.reference_data import ReferenceDataLoader
 
 logger = logging.getLogger(__name__)
@@ -35,15 +36,22 @@ class SemanticTagger:
     4. Data properties (range, cardinality, distribution)
     """
 
-    def __init__(self, taxonomy_path: Optional[str] = None):
+    # Minimum confidence threshold for semantic type assignments
+    # Tags below this threshold are excluded from results
+    MIN_CONFIDENCE_THRESHOLD = 0.60
+
+    def __init__(self, taxonomy_path: Optional[str] = None, min_confidence: float = None):
         """
         Initialize semantic tagger.
 
         Args:
             taxonomy_path: Path to finance_taxonomy.json (default: auto-detect)
+            min_confidence: Minimum confidence threshold (default: 0.60)
         """
         self.taxonomy = self._load_taxonomy(taxonomy_path)
         self.tag_definitions = self._flatten_taxonomy()
+        self.min_confidence = min_confidence if min_confidence is not None else self.MIN_CONFIDENCE_THRESHOLD
+        self.semantic_config = get_semantic_config()
         logger.info(f"Loaded {len(self.tag_definitions)} semantic tag definitions from FIBO taxonomy")
 
     def _load_taxonomy(self, taxonomy_path: Optional[str] = None) -> Dict[str, Any]:
@@ -125,12 +133,16 @@ class SemanticTagger:
             quality
         )
 
+        # Filter out low-confidence FIBO matches
         for match in fibo_matches:
-            tags.append(match['tag'])
-            confidence_scores.append(match['confidence'])
-            evidence['fibo_match'] = match['tag']
-            evidence['fibo_class'] = match.get('fibo_class')
-            logger.debug(f"Column '{column_name}': FIBO matched {match['tag']} (confidence: {match['confidence']:.2f})")
+            if match['confidence'] >= self.min_confidence:
+                tags.append(match['tag'])
+                confidence_scores.append(match['confidence'])
+                evidence['fibo_match'] = match['tag']
+                evidence['fibo_class'] = match.get('fibo_class')
+                logger.debug(f"Column '{column_name}': FIBO matched {match['tag']} (confidence: {match['confidence']:.2f})")
+            else:
+                logger.debug(f"Column '{column_name}': FIBO match {match['tag']} rejected (confidence {match['confidence']:.2f} < {self.min_confidence})")
 
         # Stage 3: Data property refinement
         refined_tags = self._refine_with_data_properties(
@@ -140,6 +152,24 @@ class SemanticTagger:
             statistics,
             quality
         )
+
+        # Stage 4: High-cardinality text detection (semi-structured noise)
+        # High-cardinality string columns that don't have specific patterns
+        # are likely operational/transactional codes rather than meaningful identifiers
+        cardinality = getattr(statistics, 'cardinality', 0) if statistics else 0
+        unique_count = getattr(statistics, 'unique_count', 0) if statistics else 0
+        is_high_cardinality_text = (
+            inferred_type == 'string' and
+            cardinality > 0.5 and  # >50% unique values
+            unique_count > 20 and   # More than 20 unique values
+            not any(tag.startswith(('contact.', 'pii.', 'identifier.uuid', 'identifier.url')) for tag in tags)
+        )
+
+        if is_high_cardinality_text:
+            # Flag as semi-structured (useful for ML filtering)
+            refined_tags.append('semi_structured')
+            evidence['semi_structured_reason'] = f"High cardinality text ({cardinality:.0%} unique)"
+            logger.debug(f"Column '{column_name}': Flagged as semi-structured (cardinality: {cardinality:.2%})")
 
         # Combine all tags and deduplicate
         all_tags = list(dict.fromkeys(tags + refined_tags))
@@ -204,12 +234,27 @@ class SemanticTagger:
         """
         Match column against FIBO taxonomy patterns.
 
+        Uses configurable negative patterns to filter out false positives
+        (e.g., scientific measurements incorrectly matched as monetary).
+
         Returns:
             List of matches with confidence scores
         """
         matches = []
 
         for tag_name, tag_def in self.tag_definitions.items():
+            # Get semantic category for negative pattern lookup
+            category = tag_def.get('category', '')
+
+            # Check global negative patterns first (from semantic_config.yaml)
+            # This prevents false positives like "total_phenols" being tagged as monetary
+            if self.semantic_config.matches_negative_pattern(category, column_name):
+                logger.debug(
+                    f"Column '{column_name}': Excluded from {tag_name} "
+                    f"by global negative pattern for category '{category}'"
+                )
+                continue
+
             # Check if column name matches any patterns
             patterns = tag_def.get('patterns', [])
             pattern_match = False

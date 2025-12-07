@@ -14,6 +14,9 @@ import re
 
 logger = logging.getLogger(__name__)
 
+# Threshold below which correlations are considered "weak"
+WEAK_CORRELATION_THRESHOLD = 0.3
+
 
 @dataclass
 class InsightResult:
@@ -41,17 +44,26 @@ class CorrelationInsightSynthesizer:
     - Confidence indicators and edge case warnings
     """
 
-    def __init__(self, df: pd.DataFrame, field_descriptions: Dict = None):
+    def __init__(self, df: pd.DataFrame, field_descriptions: Dict = None,
+                 column_profiles: List = None):
         """
         Initialize synthesizer with data.
 
         Args:
             df: DataFrame with the actual data for extracting values
             field_descriptions: Optional mapping of column names to friendly names
+            column_profiles: Optional list of ColumnProfile objects with semantic_info
         """
         self.df = df
         self.field_descriptions = field_descriptions or {}
+        self.column_profiles = column_profiles or []
         self.insights: List[InsightResult] = []
+
+        # Build lookup for semantic info
+        self._semantic_cache = {}
+        for col_profile in self.column_profiles:
+            if hasattr(col_profile, 'name') and hasattr(col_profile, 'semantic_info'):
+                self._semantic_cache[col_profile.name] = col_profile.semantic_info
 
     def get_friendly_name(self, col: str) -> str:
         """Get friendly name for a column."""
@@ -70,6 +82,37 @@ class CorrelationInsightSynthesizer:
             if str_val in value_labels:
                 return value_labels[str_val]
         return str(value)
+
+    def _is_identifier_column(self, col: str) -> bool:
+        """
+        Check if column is an identifier based on existing semantic metadata.
+
+        Uses the semantic detection system's classification - no redundant
+        pattern matching here.
+        """
+        if col not in self._semantic_cache:
+            return False
+
+        semantic_info = self._semantic_cache.get(col)
+        if not semantic_info:
+            return False
+
+        # Check resolved semantic type from existing detection
+        resolved = semantic_info.get('resolved', {})
+        primary_type = (resolved.get('primary_type') or '').lower()
+
+        # Check if semantic system classified this as an identifier
+        if 'identifier' in primary_type or 'id' in primary_type:
+            return True
+
+        # Check semantic tags from existing detection
+        tags = semantic_info.get('semantic_tags', [])
+        for tag in tags:
+            tag_lower = tag.lower() if isinstance(tag, str) else ''
+            if 'identifier' in tag_lower:
+                return True
+
+        return False
 
     def synthesize_all(
         self,
@@ -99,6 +142,12 @@ class CorrelationInsightSynthesizer:
                 if pair_key in seen_pairs:
                     continue
 
+                # Skip correlations involving identifier columns
+                # (they are record locators, not meaningful predictive features)
+                if self._is_identifier_column(col1) or self._is_identifier_column(col2):
+                    logger.debug(f"Skipping identifier-based correlation: {col1} vs {col2}")
+                    continue
+
                 insight = self._synthesize_numeric_correlation(corr)
                 if insight:
                     self.insights.append(insight)
@@ -115,6 +164,11 @@ class CorrelationInsightSynthesizer:
                     pair_key = tuple(sorted([seg_col, val_col]))
 
                     if pair_key in seen_pairs:
+                        continue
+
+                    # Skip groupings involving identifier columns
+                    if self._is_identifier_column(seg_col) or self._is_identifier_column(val_col):
+                        logger.debug(f"Skipping identifier-based grouping: {seg_col} vs {val_col}")
                         continue
 
                     insight = self._synthesize_categorical_grouping(sg)
@@ -242,11 +296,19 @@ class CorrelationInsightSynthesizer:
                 higher_rate = lower_rate_val = 0
 
             # Generate headline for binary outcome
+            # Use softer language for weak correlations (|r| < 0.3)
+            is_weak = abs(r) < WEAK_CORRELATION_THRESHOLD
             if ratio and ratio > 1.2:
-                headline = f"Passengers with {higher_label} have <span class=\"highlight-value\">{ratio:.1f}x</span> the {friendly2} rate"
+                if is_weak:
+                    headline = f"Records with {higher_label} show a slightly higher {friendly2} rate ({ratio:.1f}x)"
+                else:
+                    headline = f"Records with {higher_label} have <span class=\"highlight-value\">{ratio:.1f}x</span> the {friendly2} rate"
             else:
                 direction = "higher" if r > 0 else "lower"
-                headline = f"Higher {friendly1} associated with {direction} {friendly2} rate"
+                if is_weak:
+                    headline = f"Weak relationship: {friendly1} shows slight tendency toward {direction} {friendly2} rate"
+                else:
+                    headline = f"Higher {friendly1} associated with {direction} {friendly2} rate"
 
             # Build comparison bars showing rates
             comparison_data = []
@@ -322,10 +384,18 @@ class CorrelationInsightSynthesizer:
                 headline = f"{low_label}: {high_val_fmt if low_median > high_median else low_val_fmt} {friendly2} vs {high_label}: {low_val_fmt if low_median > high_median else high_val_fmt}"
 
             # Simplified headline showing the relationship direction
+            # Use softer language for weak correlations (|r| < 0.3)
+            is_weak = abs(r) < WEAK_CORRELATION_THRESHOLD
             if high_median > low_median:
-                headline = f"Passengers with {high_label} have higher {friendly2} ({high_val_fmt} vs {low_val_fmt})"
+                if is_weak:
+                    headline = f"Weak relationship: records with {high_label} tend to have slightly higher {friendly2} ({high_val_fmt} vs {low_val_fmt})"
+                else:
+                    headline = f"Records with {high_label} have higher {friendly2} ({high_val_fmt} vs {low_val_fmt})"
             else:
-                headline = f"Passengers with {low_label} have higher {friendly2} ({low_val_fmt} vs {high_val_fmt})"
+                if is_weak:
+                    headline = f"Weak relationship: records with {low_label} tend to have slightly higher {friendly2} ({low_val_fmt} vs {high_val_fmt})"
+                else:
+                    headline = f"Records with {low_label} have higher {friendly2} ({low_val_fmt} vs {high_val_fmt})"
 
             # Build comparison bars - show even when ratio can't be computed
             comparison_data = []
@@ -442,17 +512,31 @@ class CorrelationInsightSynthesizer:
         lowest_label = self.get_value_label(seg_col, lowest_group)
 
         # Generate headline
+        # Consider relationship weak if variance explained is low (< 10%)
+        is_weak = var_explained < 0.10
         if val_is_binary:
             # Binary outcome - use rate language
             if ratio and ratio > 1.5:
-                headline = f"{highest_label} have <span class=\"highlight-value\">{ratio:.1f}x</span> the {friendly_val} rate vs {lowest_label}"
+                if is_weak:
+                    headline = f"{highest_label} show a somewhat higher {friendly_val} rate ({ratio:.1f}x) vs {lowest_label}"
+                else:
+                    headline = f"{highest_label} have <span class=\"highlight-value\">{ratio:.1f}x</span> the {friendly_val} rate vs {lowest_label}"
             else:
-                headline = f"{friendly_val} rate: {highest_label} ({highest_rate:.0f}%) vs {lowest_label} ({lowest_rate:.0f}%)"
+                if is_weak:
+                    headline = f"Small difference in {friendly_val} rate: {highest_label} ({highest_rate:.0f}%) vs {lowest_label} ({lowest_rate:.0f}%)"
+                else:
+                    headline = f"{friendly_val} rate: {highest_label} ({highest_rate:.0f}%) vs {lowest_label} ({lowest_rate:.0f}%)"
         else:
             if ratio and ratio > 1.5:
-                headline = f"{highest_label} shows <span class=\"highlight-value\">{ratio:.1f}x higher</span> {friendly_val} than {lowest_label}"
+                if is_weak:
+                    headline = f"{highest_label} shows somewhat higher {friendly_val} ({ratio:.1f}x) than {lowest_label}"
+                else:
+                    headline = f"{highest_label} shows <span class=\"highlight-value\">{ratio:.1f}x higher</span> {friendly_val} than {lowest_label}"
             else:
-                headline = f"{friendly_val} varies significantly by {friendly_seg}"
+                if is_weak:
+                    headline = f"{friendly_val} shows minor variation by {friendly_seg}"
+                else:
+                    headline = f"{friendly_val} varies by {friendly_seg}"
 
         # Build comparison data for all groups - use value_labels if configured
         comparison_data = []

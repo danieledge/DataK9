@@ -104,15 +104,9 @@ class EnhancedCorrelationAnalyzer(BackendAwareProfiler):
         logger.info(f"Calculating correlations for {len(numeric_columns)} columns using methods: {methods}")
 
         # Create DataFrame for correlation
-        df_dict = {}
-        for col in numeric_columns:
-            # Ensure same length by padding/truncating
-            values = numeric_data[col][:row_count]
-            if len(values) < row_count:
-                values.extend([np.nan] * (row_count - len(values)))
-            df_dict[col] = values
-
-        df = pd.DataFrame(df_dict)
+        # Values should already have equal length with NaN preserved from source data
+        # This enables proper pairwise deletion during correlation
+        df = pd.DataFrame({col: numeric_data[col] for col in numeric_columns})
 
         # Use pairwise deletion instead of listwise deletion
         # This allows correlations to be calculated for columns with missing values
@@ -129,6 +123,25 @@ class EnhancedCorrelationAnalyzer(BackendAwareProfiler):
 
         # Keep original df for pairwise correlation (don't use dropna)
         df_clean = df
+
+        # Filter out constant columns (zero standard deviation) to avoid divide-by-zero warnings
+        # This happens when a column has the same value in all rows
+        constant_cols = []
+        for col in df_clean.columns:
+            col_std = df_clean[col].std()
+            if col_std == 0 or pd.isna(col_std):
+                constant_cols.append(col)
+
+        if constant_cols:
+            logger.debug(f"Excluding {len(constant_cols)} constant columns from correlation: {constant_cols}")
+            df_clean = df_clean.drop(columns=constant_cols)
+            numeric_columns = [c for c in numeric_columns if c not in constant_cols]
+
+            if len(numeric_columns) < 2:
+                return {
+                    "available": False,
+                    "reason": "Less than 2 non-constant numeric columns available"
+                }
 
         result = {
             "available": True,

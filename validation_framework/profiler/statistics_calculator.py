@@ -18,7 +18,7 @@ Design Decisions:
     - Extreme value filtering: Values beyond 1e100 are filtered as data corruption
     - At least 50% of values must be reasonable to report numeric stats
     - Quality score is weighted: 30% completeness, 30% validity, 20% uniqueness, 20% consistency
-    - Correlations only reported when |r| > 0.5 (moderate to strong)
+    - Correlations only reported when |r| > 0.3 (Cohen's medium effect size)
     - Top 10 values/patterns reported to balance detail vs. report size
 
 Usage:
@@ -66,23 +66,27 @@ class StatisticsCalculator:
     Attributes:
         max_correlation_columns: Maximum columns to include in correlation analysis.
             Limited to prevent O(n²) explosion with many columns.
+        correlation_threshold: Minimum absolute correlation to report (default 0.3,
+            Cohen's medium effect size).
 
     Example:
-        >>> calculator = StatisticsCalculator(max_correlation_columns=20)
+        >>> calculator = StatisticsCalculator(max_correlation_columns=20, correlation_threshold=0.3)
         >>> stats = calculator.calculate_statistics(profile_data, total_rows=1000)
         >>> print(f"Mean: {stats.mean}, Median: {stats.median}")
         >>> quality = calculator.calculate_quality_metrics(profile_data, type_info, stats, 1000)
         >>> print(f"Overall quality score: {quality.overall_score:.1f}%")
     """
 
-    def __init__(self, max_correlation_columns: int = 20):
+    def __init__(self, max_correlation_columns: int = 20, correlation_threshold: float = 0.3):
         """
         Initialize the statistics calculator.
 
         Args:
             max_correlation_columns: Maximum columns for correlation analysis
+            correlation_threshold: Minimum absolute correlation to report (default 0.3)
         """
         self.max_correlation_columns = max_correlation_columns
+        self.correlation_threshold = correlation_threshold
 
     def calculate_statistics(
         self,
@@ -340,7 +344,9 @@ class StatisticsCalculator:
         if quality.validity < 95:
             issues.append(f"Type inconsistency: {quality.validity:.1f}% match inferred type")
 
-        # Uniqueness: cardinality
+        # Uniqueness: cardinality (informational only - NOT included in quality score)
+        # Uniqueness is context-dependent: identifiers SHOULD be 100% unique,
+        # categoricals SHOULD have low uniqueness. Neither is a quality issue.
         quality.uniqueness = statistics.cardinality * 100
         if statistics.cardinality == 1.0 and total_rows > 1:
             observations.append("All values are unique (potential key field)")
@@ -359,11 +365,12 @@ class StatisticsCalculator:
             quality.consistency = 100.0
 
         # Overall score (weighted average)
+        # NOTE: Uniqueness excluded from quality score - it's context-dependent, not a quality indicator
+        # Identifiers should be unique, categoricals should not - neither is "better" or "worse"
         quality.overall_score = (
-            0.3 * quality.completeness +
-            0.3 * quality.validity +
-            0.2 * quality.uniqueness +
-            0.2 * quality.consistency
+            0.40 * quality.completeness +
+            0.35 * quality.validity +
+            0.25 * quality.consistency
         )
 
         quality.issues = issues
@@ -395,33 +402,35 @@ class StatisticsCalculator:
             return correlations
 
         try:
-            # Create DataFrame for correlation using sampled data
-            max_sample_length = max(len(numeric_data[col]) for col in numeric_columns) if numeric_columns else 0
-
-            df_dict = {}
-            for col in numeric_columns:
-                # Ensure same length by padding/truncating to max_sample_length
-                values = numeric_data[col][:max_sample_length]
-                if len(values) < max_sample_length:
-                    values = values + [np.nan] * (max_sample_length - len(values))
-                df_dict[col] = values
-
-            df = pd.DataFrame(df_dict)
+            # Create DataFrame for correlation
+            # Values should already have equal length with NaN preserved from source data
+            # This enables proper pairwise deletion during correlation
+            df = pd.DataFrame(numeric_data)
 
             # Calculate correlation matrix
             corr_matrix = df.corr()
 
-            # Extract significant correlations (|r| > 0.5)
+            # Extract significant correlations (|r| > threshold, default 0.3 = Cohen's medium effect size)
             for i, col1 in enumerate(numeric_columns):
                 for col2 in numeric_columns[i+1:]:
                     try:
                         corr_value = corr_matrix.loc[col1, col2]
-                        if pd.notna(corr_value) and abs(corr_value) > 0.5:
+                        if pd.notna(corr_value) and abs(corr_value) > self.correlation_threshold:
+                            # Standardized strength labels matching enhanced_correlation.py
+                            abs_corr = abs(corr_value)
+                            if abs_corr >= 0.9:
+                                strength = "very_strong"
+                            elif abs_corr >= 0.7:
+                                strength = "strong"
+                            elif abs_corr >= 0.5:
+                                strength = "moderate"
+                            else:
+                                strength = "weak"
                             correlations.append(CorrelationResult(
                                 column1=col1,
                                 column2=col2,
                                 correlation=round(float(corr_value), 3),
-                                strength="high" if abs(corr_value) > 0.8 else "moderate"
+                                strength=strength
                             ))
                     except KeyError:
                         continue
