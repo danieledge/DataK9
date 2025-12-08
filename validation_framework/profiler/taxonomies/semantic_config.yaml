@@ -97,6 +97,18 @@ global_negative_patterns:
     - "(?i)^flavanoids$"
     - "(?i)^nonflavanoid"
     - "(?i)^proanthocyanins$"
+    # Rate/ratio/index columns - not monetary
+    - "(?i)_rate$"
+    - "(?i)_ratio$"
+    - "(?i)^rate_"
+    - "(?i)^ratio_"
+    - "(?i)reproduction"
+    - "(?i)^r_?[0-9]+$"
+    - "(?i)_index$"
+    - "(?i)^index_"
+    - "(?i)_coefficient$"
+    - "(?i)_factor$"
+    - "(?i)_multiplier$"
 
   # Prevent identifier detection on counts/quantities
   identifier:
@@ -339,6 +351,11 @@ name_tokens:
       - percent
       - pct
       - ratio
+      - rate
+      - index
+      - coefficient
+      - factor
+      - multiplier
       - score
       - rating
       - phenol

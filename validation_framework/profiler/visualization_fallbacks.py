@@ -170,10 +170,34 @@ def should_apply_benford_generic(
         return False, "Column appears to be a binary flag"
 
     # Exclude averaged/engineered/derived features (Benford assumes naturally occurring data)
-    # Averages and ratios are mathematically derived and don't follow Benford's Law naturally
-    engineered_patterns = ['avg', 'ave', 'mean', 'ratio', 'pct', 'percent', 'rate', 'median', 'mode']
+    # Averages, ratios, and engineered features are mathematically derived
+    # and don't follow Benford's Law naturally - deviation is expected, not suspicious
+    engineered_patterns = [
+        'avg', 'ave', 'mean', 'ratio', 'pct', 'percent', 'rate', 'median', 'mode',
+        'per_', '_per', 'proportion', 'share', 'fraction', 'normalized', 'scaled',
+        'index', 'score', 'coefficient', 'factor', 'multiplier', 'weight',
+        'occupancy', 'occup', 'density', 'intensity', 'frequency'
+    ]
     if any(pattern in col_lower for pattern in engineered_patterns):
-        return False, "Column appears to be an averaged or derived metric (not suitable for Benford)"
+        return False, "Column appears to be an averaged, derived, or engineered metric (not suitable for Benford)"
+
+    # Check for bounded data patterns (0-1 ratios, percentages, demographic bounds)
+    min_val = np.min(positive_values)
+    max_val = np.max(positive_values)
+
+    # Percentage-like bounded data (0-1 or 0-100)
+    if (0 <= min_val <= 1 and 0 < max_val <= 1) or (0 <= min_val <= 100 and 0 < max_val <= 100):
+        # Check if values cluster like a percentage (many near boundaries)
+        if max_val <= 1:
+            return False, "Values appear to be proportions/percentages (0-1 range)"
+        elif max_val <= 100 and (np.mean(positive_values) < 100 and np.percentile(positive_values, 90) <= 100):
+            return False, "Values appear to be percentages or bounded demographic data (0-100 range)"
+
+    # Demographic bounds check (age-like fields)
+    age_patterns = ['age', 'year', 'years', 'month', 'months']
+    if any(pattern in col_lower for pattern in age_patterns):
+        if 0 <= min_val and max_val <= 150:  # Reasonable human age/year bound
+            return False, "Column appears to be age or duration data (bounded range)"
 
     return True, "Column is suitable for Benford's Law analysis"
 

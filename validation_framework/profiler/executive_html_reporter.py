@@ -6245,8 +6245,22 @@ class ExecutiveHTMLReporter:
             elif rel['type'] == 'cramers_v':
                 v_value = rel.get('cramers_v', 0)
                 p_value = rel.get('p_value', 0)
+                is_significant = rel.get('is_significant', p_value < 0.05)
                 rel_title = f"{rel['col1']} ↔ {rel['col2']}"
-                plain_text = f"Knowing the value of <strong>{rel['col1']}</strong> helps predict <strong>{rel['col2']}</strong> (and vice versa). These categorical columns are associated."
+                # Calibrate language based on effect size (strength = V²) to match tier labels
+                # Thresholds aligned with get_strength_tier: 0.50=VeryStrong, 0.30=Strong, 0.15=Moderate, 0.05=Weak
+                if strength >= 0.50 and is_significant:
+                    plain_text = f"<strong>{rel['col1']}</strong> and <strong>{rel['col2']}</strong> are very strongly associated. Knowing one reliably informs the other."
+                elif strength >= 0.30 and is_significant:
+                    plain_text = f"<strong>{rel['col1']}</strong> and <strong>{rel['col2']}</strong> are strongly associated. Knowing one provides useful information about the other."
+                elif strength >= 0.15 and is_significant:
+                    plain_text = f"<strong>{rel['col1']}</strong> and <strong>{rel['col2']}</strong> are moderately associated."
+                elif strength >= 0.05 and is_significant:
+                    plain_text = f"<strong>{rel['col1']}</strong> and <strong>{rel['col2']}</strong> show a weak but statistically significant association."
+                elif is_significant:
+                    plain_text = f"<strong>{rel['col1']}</strong> and <strong>{rel['col2']}</strong> show a minimal association."
+                else:
+                    plain_text = f"<strong>{rel['col1']}</strong> and <strong>{rel['col2']}</strong> may be associated, but this finding is not statistically significant (p={p_value:.3f})."
                 implication = rel.get('interpretation', "These categorical columns tend to vary together.")
                 sig_text = "statistically significant" if rel.get('is_significant') else "not statistically significant"
                 tech_details = f'''
@@ -6259,10 +6273,24 @@ class ExecutiveHTMLReporter:
             elif rel['type'] == 'point_biserial':
                 corr_val = rel.get('correlation', 0)
                 p_value = rel.get('p_value', 0)
+                is_significant = rel.get('is_significant', p_value < 0.05)
                 direction = rel.get('direction', 'positive')
                 rel_title = f"{rel['col1']} → {rel['col2']}"
                 direction_word = "higher" if direction == 'positive' else "lower"
-                plain_text = f"When <strong>{rel['col1']}</strong> is true/1, <strong>{rel['col2']}</strong> tends to be {direction_word}."
+                # Calibrate language based on effect size (strength = r²) to match tier labels
+                # Thresholds aligned with get_strength_tier: 0.50=VeryStrong, 0.30=Strong, 0.15=Moderate, 0.05=Weak
+                if strength >= 0.50 and is_significant:
+                    plain_text = f"When <strong>{rel['col1']}</strong> is true/1, <strong>{rel['col2']}</strong> is reliably {direction_word}."
+                elif strength >= 0.30 and is_significant:
+                    plain_text = f"When <strong>{rel['col1']}</strong> is true/1, <strong>{rel['col2']}</strong> tends to be {direction_word}."
+                elif strength >= 0.15 and is_significant:
+                    plain_text = f"<strong>{rel['col1']}</strong> is moderately associated with <strong>{rel['col2']}</strong> (tends {direction_word})."
+                elif strength >= 0.05 and is_significant:
+                    plain_text = f"<strong>{rel['col1']}</strong> shows a weak but statistically significant relationship with <strong>{rel['col2']}</strong> (tends {direction_word})."
+                elif is_significant:
+                    plain_text = f"<strong>{rel['col1']}</strong> shows a minimal association with <strong>{rel['col2']}</strong>."
+                else:
+                    plain_text = f"<strong>{rel['col1']}</strong> may be associated with {direction_word} <strong>{rel['col2']}</strong>, but this is not statistically significant (p={p_value:.3f})."
                 implication = rel.get('interpretation', "This binary flag is associated with differences in the numeric column.")
                 sig_text = "statistically significant" if rel.get('is_significant') else "not statistically significant"
                 tech_details = f'''
@@ -6275,9 +6303,20 @@ class ExecutiveHTMLReporter:
             else:
                 corr_val = rel.get('correlation', 0)
                 r_squared = rel['strength']
-                direction_word = "decreases" if corr_val < 0 else "increases"
+                direction_word = "down" if corr_val < 0 else "up"
                 rel_title = f"{rel['col1']} ↔ {rel['col2']}"
-                plain_text = f"When <strong>{rel['col1']}</strong> goes up, <strong>{rel['col2']}</strong> tends to go {'down' if corr_val < 0 else 'up'} (and vice versa)."
+                # Calibrate language based on effect size (strength = r²) to match tier labels
+                # Thresholds aligned with get_strength_tier: 0.50=VeryStrong, 0.30=Strong, 0.15=Moderate, 0.05=Weak
+                if r_squared >= 0.50:
+                    plain_text = f"<strong>{rel['col1']}</strong> and <strong>{rel['col2']}</strong> are very strongly correlated. When one goes {direction_word}, the other reliably follows."
+                elif r_squared >= 0.30:
+                    plain_text = f"<strong>{rel['col1']}</strong> and <strong>{rel['col2']}</strong> are strongly correlated. When one goes {direction_word}, the other tends to follow."
+                elif r_squared >= 0.15:
+                    plain_text = f"When <strong>{rel['col1']}</strong> goes up, <strong>{rel['col2']}</strong> tends to go {direction_word} (and vice versa)."
+                elif r_squared >= 0.05:
+                    plain_text = f"<strong>{rel['col1']}</strong> and <strong>{rel['col2']}</strong> show a weak correlation (r={corr_val:+.2f})."
+                else:
+                    plain_text = f"<strong>{rel['col1']}</strong> and <strong>{rel['col2']}</strong> show a minimal correlation (r={corr_val:+.2f})."
                 implication = "These columns are linked — changes in one are associated with changes in the other."
                 method_name = rel.get('method', 'pearson').title()
                 tech_details = f'''
@@ -11213,7 +11252,7 @@ the largest difference between classes - a strong candidate for predictive model
                             <div class="accordion-icon"><svg style="width:16px;height:16px;color:#64748b;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z"/><path d="M2 12a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 12"/></svg></div>
                             <div>
                                 <div class="accordion-title">Benford's Law Analysis</div>
-                                <div class="accordion-subtitle">Detect potential data fabrication in numeric columns</div>
+                                <div class="accordion-subtitle">Check digit distribution patterns in numeric columns</div>
                             </div>
                         </div>
                         <div class="accordion-meta">
@@ -11236,6 +11275,33 @@ the largest difference between classes - a strong candidate for predictive model
                 </div>''')
 
         elif benford_analysis:
+            # First, identify pricing/monetary/transactional columns for severity calibration
+            pricing_cols = []
+            transactional_cols = []
+            transactional_indicators = ['monetary', 'price', 'amount', 'cost', 'fee', 'fare', 'tariff',
+                                        'transaction', 'payment', 'invoice', 'revenue', 'sales', 'balance']
+            for col_name in benford_analysis.keys():
+                if columns:
+                    col_obj = next((c for c in columns if c.name == col_name), None)
+                    if col_obj and hasattr(col_obj, 'semantic_info') and col_obj.semantic_info:
+                        resolved = col_obj.semantic_info.get('resolved', {})
+                        display_label = (resolved.get('display_label') or '').lower()
+                        primary_type = (resolved.get('primary_type') or '').lower()
+                        # Check for pricing-specific fields (structured pricing is expected to deviate)
+                        if any(term in display_label for term in ['price', 'fee', 'fare', 'tariff', 'rate']):
+                            pricing_cols.append(col_name)
+                        # Check for transactional/financial fields (where Benford applies meaningfully)
+                        if any(term in display_label or term in primary_type for term in transactional_indicators):
+                            transactional_cols.append(col_name)
+                # Also check column name directly for transactional patterns
+                col_lower = col_name.lower()
+                if any(term in col_lower for term in transactional_indicators):
+                    if col_name not in transactional_cols:
+                        transactional_cols.append(col_name)
+
+            # Determine if this is a transactional/financial dataset context
+            is_transactional_context = len(transactional_cols) >= len(benford_analysis) * 0.5
+
             benford_charts = []
             benford_scripts = []
             for idx, (col, data) in enumerate(list(benford_analysis.items())[:4]):
@@ -11259,8 +11325,34 @@ the largest difference between classes - a strong candidate for predictive model
                 chi_sq = data.get('chi_square', 0)
                 confidence = data.get('confidence', 'Unknown')
 
-                status_badge = 'critical' if is_suspicious else 'good'
-                status_text = 'Benford deviation' if is_suspicious else 'Follows Benford'
+                # Determine severity based on semantic type and transactional context
+                # For non-monetary/non-transactional columns, use softer severity
+                is_transactional_col = col in transactional_cols
+                is_pricing_col = col in pricing_cols
+
+                if is_suspicious:
+                    if is_pricing_col:
+                        # Pricing fields: deviation is expected, use informational badge
+                        status_badge = 'info'
+                        status_text = 'Expected deviation'
+                    elif is_transactional_col and is_transactional_context:
+                        # Transactional field in financial context: can use critical
+                        status_badge = 'critical'
+                        status_text = 'Benford deviation'
+                    else:
+                        # Non-monetary field: use warning (amber) instead of critical (red)
+                        status_badge = 'warning'
+                        status_text = 'Pattern deviation'
+                else:
+                    status_badge = 'good'
+                    status_text = 'Follows Benford'
+
+                # Add clarifying note for non-transactional columns with deviation
+                clarification = ''
+                if is_suspicious and not is_transactional_col and not is_pricing_col:
+                    clarification = '<div style="font-size: 0.7em; color: var(--text-muted); margin-top: 4px; font-style: italic;">Non-monetary field - deviation often expected</div>'
+                elif is_suspicious and is_pricing_col:
+                    clarification = '<div style="font-size: 0.7em; color: var(--text-muted); margin-top: 4px; font-style: italic;">Structured pricing - deviation is normal</div>'
 
                 benford_charts.append(f'''
                     <div style="flex: 1; min-width: 280px; background: var(--bg-card); border-radius: 8px; padding: 16px; border: 1px solid var(--border-subtle);">
@@ -11274,6 +11366,7 @@ the largest difference between classes - a strong candidate for predictive model
                         <div style="font-size: 0.75em; color: var(--text-muted); margin-top: 8px;">
                             Chi-square: {chi_sq:.1f} | Confidence: {confidence}
                         </div>
+                        {clarification}
                     </div>''')
 
                 benford_scripts.append({
@@ -11288,33 +11381,6 @@ the largest difference between classes - a strong candidate for predictive model
                 normal_count = len(benford_analysis) - suspicious_count
                 chi_sq_values = [data.get('chi_square', 0) for _, data in benford_analysis.items()]
                 avg_chi_sq = sum(chi_sq_values) / len(chi_sq_values) if chi_sq_values else 0
-
-                # Check if columns are pricing/monetary or transactional fields (semantic-aware)
-                pricing_cols = []
-                transactional_cols = []
-                transactional_indicators = ['monetary', 'price', 'amount', 'cost', 'fee', 'fare', 'tariff',
-                                            'transaction', 'payment', 'invoice', 'revenue', 'sales', 'balance']
-                for col_name in benford_analysis.keys():
-                    if columns:
-                        col_obj = next((c for c in columns if c.name == col_name), None)
-                        if col_obj and hasattr(col_obj, 'semantic_info') and col_obj.semantic_info:
-                            resolved = col_obj.semantic_info.get('resolved', {})
-                            display_label = (resolved.get('display_label') or '').lower()
-                            primary_type = (resolved.get('primary_type') or '').lower()
-                            # Check for pricing-specific fields (structured pricing is expected to deviate)
-                            if any(term in display_label for term in ['price', 'fee', 'fare', 'tariff', 'rate']):
-                                pricing_cols.append(col_name)
-                            # Check for transactional/financial fields (where Benford applies meaningfully)
-                            if any(term in display_label or term in primary_type for term in transactional_indicators):
-                                transactional_cols.append(col_name)
-                    # Also check column name directly for transactional patterns
-                    col_lower = col_name.lower()
-                    if any(term in col_lower for term in transactional_indicators):
-                        if col_name not in transactional_cols:
-                            transactional_cols.append(col_name)
-
-                # Determine if this is a transactional/financial dataset context
-                is_transactional_context = len(transactional_cols) >= len(benford_analysis) * 0.5
 
                 # Plain-English summary based on results (semantic-aware)
                 if suspicious_count > 0:
@@ -11361,7 +11427,7 @@ the largest difference between classes - a strong candidate for predictive model
                                 <div class="accordion-icon"><svg style="width:16px;height:16px;color:#64748b;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z"/><path d="M2 12a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 12"/></svg></div>
                                 <div>
                                     <div class="accordion-title">Benford's Law Analysis</div>
-                                    <div class="accordion-subtitle">Detect potential data fabrication in numeric columns</div>
+                                    <div class="accordion-subtitle">Check digit distribution patterns in numeric columns</div>
                                 </div>
                             </div>
                             <div class="accordion-meta">

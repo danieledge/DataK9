@@ -879,6 +879,9 @@ class DataProfiler:
                     if hasattr(col, 'type_info') and col.type_info:
                         column_types[col.name] = col.type_info.inferred_type
 
+                # Set column profiles for identifier detection before analysis
+                self.categorical_analyzer.set_column_profiles(columns)
+
                 categorical_analysis = self.categorical_analyzer.analyze_categorical_associations(
                     df,
                     column_types
@@ -1899,6 +1902,9 @@ class DataProfiler:
                             for col in columns:
                                 if hasattr(col, 'type_info') and col.type_info:
                                     column_types[col.name] = col.type_info.inferred_type
+
+                            # Set column profiles for identifier detection before analysis
+                            self.categorical_analyzer.set_column_profiles(columns)
 
                             categorical_analysis = self.categorical_analyzer.analyze_categorical_associations(
                                 ml_df,
@@ -3327,10 +3333,11 @@ class DataProfiler:
 
     def _deduplicate_mandatory_field_checks(
         self,
-        suggestions: List[ValidationSuggestion]
+        suggestions: List[ValidationSuggestion],
+        columns: List = None
     ) -> List[ValidationSuggestion]:
         """
-        Consolidate MandatoryFieldCheck suggestions to avoid duplicates.
+        Consolidate and tier MandatoryFieldCheck suggestions.
 
         Fields can be flagged as mandatory from multiple sources:
         1. Completeness analysis (>95% completeness) - generates combined check
@@ -3338,11 +3345,15 @@ class DataProfiler:
 
         This method:
         - Collects all unique fields from MandatoryFieldCheck suggestions
-        - Creates a single MandatoryFieldCheck with all unique fields
+        - Tiers fields into critical (ERROR) vs recommended (WARNING) based on semantic type
+        - Creates separate MandatoryFieldCheck suggestions for each tier
         - Preserves all non-MandatoryFieldCheck suggestions unchanged
+
+        Tiering logic:
+        - Critical (ERROR): Identifiers, primary keys, timestamps, primary monetary fields
+        - Recommended (WARNING): Other complete fields
         """
         mandatory_fields = set()
-        mandatory_reasons = []
         other_suggestions = []
 
         for sugg in suggestions:
@@ -3355,31 +3366,92 @@ class DataProfiler:
                     mandatory_fields.update(fields)
                 if field:
                     mandatory_fields.add(field)
-
-                # Collect reasons for documentation
-                if sugg.reason and sugg.reason not in mandatory_reasons:
-                    mandatory_reasons.append(sugg.reason)
             else:
                 other_suggestions.append(sugg)
 
-        # Create single consolidated MandatoryFieldCheck if any fields found
-        if mandatory_fields:
-            # Build combined reason
-            if len(mandatory_reasons) == 1:
-                combined_reason = mandatory_reasons[0]
-            else:
-                combined_reason = f"{len(mandatory_fields)} fields have >95% completeness"
+        if not mandatory_fields:
+            return other_suggestions
 
-            consolidated = ValidationSuggestion(
+        # Build semantic lookup from columns
+        semantic_lookup = {}
+        if columns:
+            for col in columns:
+                if hasattr(col, 'name') and hasattr(col, 'semantic_info'):
+                    semantic_lookup[col.name] = col.semantic_info
+
+        # Tier the fields based on semantic type
+        critical_fields = []
+        recommended_fields = []
+
+        for field in mandatory_fields:
+            is_critical = False
+            semantic_info = semantic_lookup.get(field, {})
+
+            # Check semantic type
+            if semantic_info:
+                resolved = semantic_info.get('resolved', {})
+                primary_type = (resolved.get('primary_type') or '').lower()
+                fibo = semantic_info.get('fibo', {})
+                fibo_type = (fibo.get('type') or '').lower() if fibo else ''
+
+                # Critical: identifiers, timestamps, core monetary fields
+                critical_patterns = [
+                    'identifier', 'id', 'primary', 'key',
+                    'timestamp', 'datetime', 'date',
+                    'account', 'transaction'
+                ]
+                for pattern in critical_patterns:
+                    if pattern in primary_type or pattern in fibo_type:
+                        is_critical = True
+                        break
+
+                # Also check FIBO tags for critical fields
+                if not is_critical and fibo:
+                    fibo_tag = fibo.get('type', '')
+                    if fibo_tag in ['banking.account', 'banking.transaction',
+                                   'party.customer_id', 'temporal.transaction_date',
+                                   'identifier.code']:
+                        is_critical = True
+
+            # Fallback: check field name patterns
+            if not is_critical:
+                field_lower = field.lower()
+                critical_name_patterns = [
+                    '_id', 'id_', '_pk', 'primary',
+                    '_date', 'date_', 'timestamp', 'created_at', 'updated_at'
+                ]
+                for pattern in critical_name_patterns:
+                    if pattern in field_lower or field_lower.endswith('id'):
+                        is_critical = True
+                        break
+
+            if is_critical:
+                critical_fields.append(field)
+            else:
+                recommended_fields.append(field)
+
+        # Create tiered suggestions
+        if critical_fields:
+            other_suggestions.append(ValidationSuggestion(
+                validation_type="MandatoryFieldCheck",
+                severity="ERROR",
+                params={
+                    "fields": sorted(critical_fields)
+                },
+                reason=f"Critical fields: {len(critical_fields)} identifier/timestamp fields required for data integrity",
+                confidence=98.0
+            ))
+
+        if recommended_fields:
+            other_suggestions.append(ValidationSuggestion(
                 validation_type="MandatoryFieldCheck",
                 severity="WARNING",
                 params={
-                    "fields": sorted(list(mandatory_fields))  # Sort for consistent output
+                    "fields": sorted(recommended_fields)
                 },
-                reason=combined_reason,
-                confidence=95.0
-            )
-            other_suggestions.append(consolidated)
+                reason=f"Recommended fields: {len(recommended_fields)} business fields with >95% completeness",
+                confidence=90.0
+            ))
 
         return other_suggestions
 
@@ -3688,12 +3760,12 @@ class DataProfiler:
                 confidence=95.0
             ))
 
-        # DEDUPLICATION: Consolidate MandatoryFieldCheck suggestions to avoid duplicates
+        # DEDUPLICATION: Consolidate and tier MandatoryFieldCheck suggestions
         # Fields can be flagged as mandatory from multiple sources:
         # 1. Completeness analysis (>95% completeness)
         # 2. FIBO semantic suggestions (banking.account, party.customer_id, etc.)
-        # Merge all into a single MandatoryFieldCheck per unique field set
-        suggestions = self._deduplicate_mandatory_field_checks(suggestions)
+        # Tier into critical (ERROR) vs recommended (WARNING) based on semantic type
+        suggestions = self._deduplicate_mandatory_field_checks(suggestions, columns)
 
         # DEDUPLICATION: Remove duplicate validations targeting the same field
         # Multiple sources can generate identical ValidValuesCheck, RangeCheck, etc:

@@ -21,6 +21,8 @@ except ImportError:
     SCIPY_AVAILABLE = False
     logging.warning("scipy not available - categorical analysis limited")
 
+from .semantic_config import get_semantic_config
+
 logger = logging.getLogger(__name__)
 
 
@@ -38,7 +40,8 @@ class CategoricalAnalyzer:
         min_association_threshold: float = 0.2,
         max_categories_for_analysis: int = 20,
         binary_detection_threshold: float = 0.95,
-        max_columns_for_pairwise: int = 50
+        max_columns_for_pairwise: int = 50,
+        column_profiles: List = None
     ):
         """
         Initialize categorical analyzer.
@@ -49,11 +52,97 @@ class CategoricalAnalyzer:
             binary_detection_threshold: Min proportion of binary values to detect as binary (default: 0.95)
             max_columns_for_pairwise: Max columns to include in pairwise analysis (default: 50)
                                       Prevents memory explosion with wide datasets (1000+ columns)
+            column_profiles: Optional list of ColumnProfile objects with semantic_info for ID detection
         """
         self.min_association_threshold = min_association_threshold
         self.max_categories_for_analysis = max_categories_for_analysis
         self.binary_detection_threshold = binary_detection_threshold
         self.max_columns_for_pairwise = max_columns_for_pairwise
+
+        # Build semantic cache for identifier detection
+        self._semantic_cache = {}
+        if column_profiles:
+            for col_profile in column_profiles:
+                if hasattr(col_profile, 'name') and hasattr(col_profile, 'semantic_info'):
+                    self._semantic_cache[col_profile.name] = col_profile.semantic_info
+
+    def _is_identifier_column(self, col: str, df: pd.DataFrame = None) -> bool:
+        """
+        Check if column is an identifier based on semantic metadata and config-driven patterns.
+
+        Identifier columns should be excluded from association analysis as they
+        represent structural relationships (join keys) not predictive signals.
+
+        Uses the semantic detection system's classification first, then falls back
+        to config-driven token matching from semantic_config.yaml.
+        """
+        # Check semantic cache first (most authoritative)
+        if col in self._semantic_cache:
+            semantic_info = self._semantic_cache.get(col)
+            if semantic_info:
+                resolved = semantic_info.get('resolved', {})
+                primary_type = (resolved.get('primary_type') or '').lower()
+                if 'identifier' in primary_type or 'id' in primary_type:
+                    return True
+
+                # Check FIBO tags
+                fibo = semantic_info.get('fibo', {})
+                if fibo:
+                    fibo_type = (fibo.get('type') or '').lower()
+                    if 'identifier' in fibo_type or 'account' in fibo_type:
+                        # Use config to verify it's actually an identifier pattern
+                        config = get_semantic_config()
+                        token_match = config.check_name_tokens('identifier', col)
+                        if token_match is True:
+                            return True
+
+                # Check semantic tags
+                tags = semantic_info.get('semantic_tags', [])
+                for tag in tags:
+                    tag_lower = tag.lower() if isinstance(tag, str) else ''
+                    if 'identifier' in tag_lower:
+                        return True
+
+        # Config-driven fallback: use semantic_config.yaml tokens and patterns
+        config = get_semantic_config()
+
+        # Check if column matches negative pattern (should NOT be treated as identifier)
+        if config.matches_negative_pattern('identifier', col):
+            return False
+
+        # Check name tokens from config
+        token_match = config.check_name_tokens('identifier', col)
+        if token_match is False:
+            # Explicitly excluded by negative token
+            return False
+        elif token_match is True:
+            # Positive token match - verify with cardinality check
+            if df is not None and col in df.columns:
+                uniqueness = df[col].nunique() / max(len(df), 1)
+                # Use config's value hints for threshold (default 0.80, but accept 0.5 for correlation exclusion)
+                value_hints = config.get_value_hints('identifier')
+                min_unique = value_hints.get('min_unique_ratio', 0.80)
+                # Use 50% threshold for correlation exclusion (stricter analysis requires higher uniqueness)
+                if uniqueness > 0.5:
+                    return True
+            else:
+                # No data to verify - trust the token match
+                return True
+
+        return False
+
+    def set_column_profiles(self, column_profiles: List) -> None:
+        """
+        Update the semantic cache with column profiles for identifier detection.
+
+        Call this before analyze_categorical_associations when column profiles
+        become available after initialization.
+        """
+        self._semantic_cache = {}
+        if column_profiles:
+            for col_profile in column_profiles:
+                if hasattr(col_profile, 'name') and hasattr(col_profile, 'semantic_info'):
+                    self._semantic_cache[col_profile.name] = col_profile.semantic_info
 
     def analyze_categorical_associations(
         self,
@@ -483,17 +572,27 @@ class CategoricalAnalyzer:
 
         Cramér's V measures association between categorical variables,
         ranging from 0 (no association) to 1 (perfect association).
+
+        Note: Identifier columns are excluded as they represent structural
+        relationships (join keys) not meaningful predictive associations.
         """
         associations = []
 
+        # Filter out identifier columns before analysis
+        non_id_cols = [col for col in categorical_cols if not self._is_identifier_column(col, df)]
+
+        if len(non_id_cols) < len(categorical_cols):
+            id_count = len(categorical_cols) - len(non_id_cols)
+            logger.debug(f"Filtered {id_count} identifier columns from Cramér's V analysis")
+
         # Apply column limit to prevent memory explosion with wide datasets
-        cols_to_analyze = categorical_cols
-        if len(categorical_cols) > self.max_columns_for_pairwise:
+        cols_to_analyze = non_id_cols
+        if len(non_id_cols) > self.max_columns_for_pairwise:
             logger.warning(
-                f"Too many categorical columns ({len(categorical_cols)}) for pairwise analysis. "
+                f"Too many categorical columns ({len(non_id_cols)}) for pairwise analysis. "
                 f"Limiting to first {self.max_columns_for_pairwise} columns."
             )
-            cols_to_analyze = categorical_cols[:self.max_columns_for_pairwise]
+            cols_to_analyze = non_id_cols[:self.max_columns_for_pairwise]
 
         for i, col1 in enumerate(cols_to_analyze):
             for col2 in cols_to_analyze[i+1:]:

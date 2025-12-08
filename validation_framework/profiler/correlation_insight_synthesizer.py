@@ -12,6 +12,8 @@ from dataclasses import dataclass
 import logging
 import re
 
+from .semantic_config import get_semantic_config
+
 logger = logging.getLogger(__name__)
 
 # Threshold below which correlations are considered "weak"
@@ -85,31 +87,62 @@ class CorrelationInsightSynthesizer:
 
     def _is_identifier_column(self, col: str) -> bool:
         """
-        Check if column is an identifier based on existing semantic metadata.
+        Check if column is an identifier based on semantic metadata and config-driven patterns.
 
-        Uses the semantic detection system's classification - no redundant
-        pattern matching here.
+        Uses the semantic detection system's classification first, with config-driven
+        fallback from semantic_config.yaml for columns not yet classified.
         """
-        if col not in self._semantic_cache:
+        # First check semantic cache (most authoritative)
+        if col in self._semantic_cache:
+            semantic_info = self._semantic_cache.get(col)
+            if semantic_info:
+                # Check resolved semantic type from existing detection
+                resolved = semantic_info.get('resolved', {})
+                primary_type = (resolved.get('primary_type') or '').lower()
+
+                # Check if semantic system classified this as an identifier
+                if 'identifier' in primary_type or 'id' in primary_type:
+                    return True
+
+                # Check FIBO semantic tags
+                fibo = semantic_info.get('fibo', {})
+                if fibo:
+                    fibo_type = (fibo.get('type') or '').lower()
+                    if 'identifier' in fibo_type or 'account' in fibo_type or 'transaction' in fibo_type:
+                        # Use config to verify it's actually an identifier pattern
+                        config = get_semantic_config()
+                        token_match = config.check_name_tokens('identifier', col)
+                        if token_match is True:
+                            return True
+
+                # Check semantic tags from existing detection
+                tags = semantic_info.get('semantic_tags', [])
+                for tag in tags:
+                    tag_lower = tag.lower() if isinstance(tag, str) else ''
+                    if 'identifier' in tag_lower:
+                        return True
+
+        # Config-driven fallback: use semantic_config.yaml tokens and patterns
+        config = get_semantic_config()
+
+        # Check if column matches negative pattern (should NOT be treated as identifier)
+        if config.matches_negative_pattern('identifier', col):
             return False
 
-        semantic_info = self._semantic_cache.get(col)
-        if not semantic_info:
+        # Check name tokens from config
+        token_match = config.check_name_tokens('identifier', col)
+        if token_match is False:
+            # Explicitly excluded by negative token
             return False
-
-        # Check resolved semantic type from existing detection
-        resolved = semantic_info.get('resolved', {})
-        primary_type = (resolved.get('primary_type') or '').lower()
-
-        # Check if semantic system classified this as an identifier
-        if 'identifier' in primary_type or 'id' in primary_type:
-            return True
-
-        # Check semantic tags from existing detection
-        tags = semantic_info.get('semantic_tags', [])
-        for tag in tags:
-            tag_lower = tag.lower() if isinstance(tag, str) else ''
-            if 'identifier' in tag_lower:
+        elif token_match is True:
+            # Positive token match - verify with cardinality check
+            if col in self.df.columns:
+                uniqueness = self.df[col].nunique() / max(len(self.df), 1)
+                # Use 50% threshold for correlation exclusion
+                if uniqueness > 0.5:
+                    return True
+            else:
+                # No data to verify - trust the token match
                 return True
 
         return False
