@@ -2297,6 +2297,9 @@ class DataProfiler:
         chunk_idx: int
     ) -> None:
         """Update column profile with chunk data."""
+        import sys
+        col_name = profile.get("column_name", "?")
+        print(f"    [UCP] start {col_name}", file=sys.stderr, flush=True)
         profile["total_processed"] += len(series)
 
         # Treat whitespace-only strings as null
@@ -2378,6 +2381,7 @@ class DataProfiler:
         # Count nulls (now includes whitespace-only values)
         null_mask = series.isna()
         profile["null_count"] += null_mask.sum()
+        print(f"    [UCP] nulls done", file=sys.stderr, flush=True)
 
         # Process non-null values
         non_null_series = series[~null_mask]
@@ -2386,6 +2390,7 @@ class DataProfiler:
         if chunk_idx == 0 and len(profile["sample_values"]) < 100:
             samples = non_null_series.head(100 - len(profile["sample_values"])).tolist()
             profile["sample_values"].extend(samples)
+        print(f"    [UCP] samples done", file=sys.stderr, flush=True)
 
         # Type detection (sample-based for performance)
         # CRITICAL: Sample for type detection even on first chunk to avoid O(n) iteration
@@ -2417,6 +2422,7 @@ class DataProfiler:
                         unexpected_types_logged += 1
 
             profile["type_sampled_count"] += len(type_sample)
+            print(f"    [UCP] type detection done", file=sys.stderr, flush=True)
         elif chunk_idx % 10 == 0:
             # Every 10th chunk: sample 1000 values for type refinement
             sample_size = min(1000, len(non_null_series))
@@ -2453,6 +2459,7 @@ class DataProfiler:
                 # Use to_hashable() to handle all Parquet types (arrays, structs, etc.)
                 hashable_val = to_hashable(val)
                 profile["value_counts"][hashable_val] = profile["value_counts"].get(hashable_val, 0) + count
+            print(f"    [UCP] value_counts done", file=sys.stderr, flush=True)
 
         # Numeric analysis (memory-efficient sampling for statistics)
         # Use intelligent sampling based on column semantics
@@ -2474,6 +2481,7 @@ class DataProfiler:
                     profile["numeric_values"].extend(sampled.tolist())
                 else:
                     profile["numeric_values"].extend(numeric_series.tolist())
+        print(f"    [UCP] numeric done", file=sys.stderr, flush=True)
 
         # String analysis (memory-efficient sampling for length statistics)
         # Use intelligent sampling based on column semantics (reuse intelligence from above)
@@ -2494,6 +2502,7 @@ class DataProfiler:
                 profile["string_lengths"].extend(sampled_lengths.tolist())
             else:
                 profile["string_lengths"].extend(lengths.tolist())
+        print(f"    [UCP] string done", file=sys.stderr, flush=True)
 
         # Pattern detection (sample only)
         if chunk_idx == 0:
