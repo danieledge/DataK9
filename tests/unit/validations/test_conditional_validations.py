@@ -353,6 +353,56 @@ class TestConditionSyntax:
         assert result is not None
 
 
+@pytest.mark.unit
+class TestConditionEvaluationError:
+    """Tests for condition evaluation error handling."""
+
+    def test_invalid_column_in_condition_raises_error(self, sample_dataframe):
+        """Test that referencing a non-existent column raises ConditionEvaluationError."""
+        from validation_framework.core.exceptions import ConditionEvaluationError
+
+        validation = MandatoryFieldCheck(
+            name="Test",
+            severity=Severity.ERROR,
+            params={"fields": ["company_name"]},
+            condition="nonexistent_column == 'VALUE'"  # Column doesn't exist!
+        )
+
+        def data_iter():
+            yield sample_dataframe
+
+        context = {"max_sample_failures": 100}
+
+        # Should raise ConditionEvaluationError, NOT silently run on all rows
+        with pytest.raises(ConditionEvaluationError) as exc_info:
+            validation.validate(data_iter(), context)
+
+        # Verify error details
+        assert "nonexistent_column" in str(exc_info.value)
+        assert exc_info.value.condition == "nonexistent_column == 'VALUE'"
+        assert exc_info.value.validation_name == "Test"
+
+    def test_syntax_error_in_condition_raises_error(self, sample_dataframe):
+        """Test that invalid condition syntax raises ConditionEvaluationError."""
+        from validation_framework.core.exceptions import ConditionEvaluationError
+
+        validation = MandatoryFieldCheck(
+            name="Test",
+            severity=Severity.ERROR,
+            params={"fields": ["company_name"]},
+            condition="account_type === 'BUSINESS'"  # Invalid syntax (triple equals)
+        )
+
+        def data_iter():
+            yield sample_dataframe
+
+        context = {"max_sample_failures": 100}
+
+        # Should raise ConditionEvaluationError, NOT silently run on all rows
+        with pytest.raises(ConditionEvaluationError):
+            validation.validate(data_iter(), context)
+
+
 @pytest.mark.integration
 class TestConditionalValidationEndToEnd:
     """Integration tests for conditional validations in full validation pipeline."""

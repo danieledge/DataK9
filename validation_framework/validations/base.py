@@ -4,6 +4,7 @@ from abc import ABC, abstractmethod
 from typing import Iterator, Dict, Any, Optional
 import pandas as pd
 from validation_framework.core.results import ValidationResult, Severity
+from validation_framework.core.exceptions import ConditionEvaluationError
 import logging
 
 logger = logging.getLogger(__name__)
@@ -58,6 +59,11 @@ class ValidationRule(ABC):
         Returns:
             Boolean Series indicating which rows match the condition
             If no condition is set, returns all True (run validation on all rows)
+
+        Raises:
+            ConditionEvaluationError: If condition cannot be evaluated.
+                This prevents silent scope changes that could cause incorrect
+                validation results in production pipelines.
         """
         if not self.condition:
             # No condition - validation applies to all rows
@@ -72,8 +78,19 @@ class ValidationRule(ABC):
             return matching_mask
 
         except Exception as e:
-            logger.warning(f"Error evaluating condition '{self.condition}': {str(e)}. Running validation on all rows.")
-            return pd.Series([True] * len(df), index=df.index)
+            # Do NOT silently run validation on all rows - this could cause
+            # incorrect pass/fail results in production ETL pipelines
+            error_msg = (
+                f"Cannot evaluate condition '{self.condition}': {str(e)}. "
+                f"Check that all referenced columns exist and the syntax is valid."
+            )
+            logger.error(error_msg)
+            raise ConditionEvaluationError(
+                message=error_msg,
+                validation_name=self.name,
+                condition=self.condition,
+                original_exception=e
+            )
 
     def _convert_condition_syntax(self, condition: str) -> str:
         """

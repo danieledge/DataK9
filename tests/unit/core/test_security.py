@@ -378,13 +378,13 @@ class TestMemoryBounds:
         validation = MandatoryFieldCheck(
             name="MemoryTest",
             severity=Severity.ERROR,
-            params={"fields": ["missing_column"]}
+            params={"fields": ["mandatory_column"]}
         )
 
-        # Create large dataset with all failures
+        # Create large dataset where mandatory_column has all null values (all failures)
         large_df = pd.DataFrame({
             "id": range(100000),
-            "other_column": range(100000)
+            "mandatory_column": [None] * 100000  # All nulls = all failures
         })
 
         context = {"max_sample_failures": 100}
@@ -392,6 +392,9 @@ class TestMemoryBounds:
 
         # Should have limited sample failures despite many actual failures
         assert len(result.sample_failures) <= 100
+        # Verify validation did fail (at least 100 failures detected)
+        assert result.failed_count == 100  # Capped to max_sample_failures
+        assert result.passed is False
 
     def test_chunk_size_limits_memory_usage(self):
         """Test that chunk size effectively limits memory usage."""

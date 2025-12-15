@@ -1517,6 +1517,7 @@ class DataProfiler:
             logger.debug(f"💾 Total correlation samples in memory: {total_samples:,} values (vs {row_count:,} total rows)")
 
         # Finalize column profiles
+        _progress("Finalizing column profiles...")
         finalize_start = time.time()
         columns = []
         for col_name, profile_data in column_profiles.items():
@@ -1527,6 +1528,7 @@ class DataProfiler:
 
         # Phase 1: Apply temporal analysis to datetime columns
         if self.enable_temporal_analysis:
+            _progress("Analyzing temporal patterns...")
             temporal_start = time.time()
             logger.debug("Running temporal analysis on datetime columns...")
             for column in columns:
@@ -1712,6 +1714,7 @@ class DataProfiler:
 
         # Generate validation suggestions (using extracted ValidationSuggestionGenerator)
         # Use actual_total_rows for suggestions to get correct row count range (not sampled count)
+        _progress("Generating validation suggestions...")
         suggestions_start = time.time()
         actual_rows_for_suggestions = actual_total_rows if actual_total_rows else row_count
         # For wide datasets, exclude family columns from suggestion generation

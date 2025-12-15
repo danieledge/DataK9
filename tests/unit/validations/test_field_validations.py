@@ -100,14 +100,14 @@ class TestMandatoryFieldCheck:
             params={"fields": ["nonexistent_field"]}
         )
 
-        # Should either skip gracefully or raise error
-        try:
-            result = validation.validate(create_data_iterator(df), {})
-            # If it doesn't raise, it should fail validation
-            assert result.passed is False
-        except (KeyError, ValueError):
-            # Acceptable to raise error for missing field
-            pass
+        # Should raise ColumnNotFoundError to prevent silent failures in production
+        from validation_framework.core.exceptions import ColumnNotFoundError
+        with pytest.raises(ColumnNotFoundError) as exc_info:
+            validation.validate(create_data_iterator(df), {})
+
+        # Verify error contains useful information
+        assert "nonexistent_field" in str(exc_info.value)
+        assert exc_info.value.validation_name == "MandatoryFieldCheck"
 
 
 # ============================================================================

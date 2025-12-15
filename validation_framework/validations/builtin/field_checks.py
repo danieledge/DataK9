@@ -22,6 +22,7 @@ from dateutil import parser as date_parser
 from validation_framework.validations.base import DataValidationRule, ValidationResult
 from validation_framework.core.exceptions import (
     ColumnNotFoundError,
+    ConditionEvaluationError,
     ParameterValidationError
 )
 from validation_framework.core.constants import MAX_SAMPLE_FAILURES
@@ -146,6 +147,10 @@ class MandatoryFieldCheck(DataValidationRule):
                 message=f"All mandatory fields contain values across {total_rows} rows",
                 total_count=total_rows * len(fields),
             )
+
+        except (ColumnNotFoundError, ConditionEvaluationError):
+            # Re-raise validation-specific exceptions for proper handling
+            raise
 
         except Exception as e:
             return self._create_result(
@@ -327,6 +332,9 @@ class RegexCheck(DataValidationRule):
                 total_count=total_rows,
             )
 
+        except (ColumnNotFoundError, ConditionEvaluationError):
+            raise
+
         except Exception as e:
             return self._create_result(
                 passed=False,
@@ -481,6 +489,9 @@ class ValidValuesCheck(DataValidationRule):
                 total_count=total_rows,
             )
 
+        except (ColumnNotFoundError, ConditionEvaluationError):
+            raise
+
         except Exception as e:
             return self._create_result(
                 passed=False,
@@ -629,6 +640,9 @@ class RangeCheck(DataValidationRule):
                 total_count=total_rows,
             )
 
+        except (ColumnNotFoundError, ConditionEvaluationError):
+            raise
+
         except Exception as e:
             return self._create_result(
                 passed=False,
@@ -764,6 +778,9 @@ class DateFormatCheck(DataValidationRule):
                 total_count=total_rows,
             )
 
+        except (ColumnNotFoundError, ConditionEvaluationError):
+            # Re-raise critical errors that should not be silently caught
+            raise
         except Exception as e:
             return self._create_result(
                 passed=False,

@@ -190,8 +190,10 @@ class TestMandatoryFieldCheck:
         assert result.failed_count > 0
         assert len(result.sample_failures) > 0
 
-    def test_mandatory_field_missing_column_fails(self, sample_dataframe):
-        """Test that mandatory field check fails when column doesn't exist."""
+    def test_mandatory_field_missing_column_raises_error(self, sample_dataframe):
+        """Test that mandatory field check raises ColumnNotFoundError when column doesn't exist."""
+        from validation_framework.core.exceptions import ColumnNotFoundError
+
         validation = MandatoryFieldCheck(
             name="MandatoryFieldCheck",
             severity=Severity.ERROR,
@@ -201,10 +203,12 @@ class TestMandatoryFieldCheck:
         data_iterator = iter([sample_dataframe])
         context = {}
 
-        result = validation.validate(data_iterator, context)
+        # Should raise ColumnNotFoundError to prevent silent failures in production
+        with pytest.raises(ColumnNotFoundError) as exc_info:
+            validation.validate(data_iterator, context)
 
-        assert result.passed is False
-        assert "not found" in result.message.lower()
+        assert "nonexistent_column" in str(exc_info.value)
+        assert exc_info.value.validation_name == "MandatoryFieldCheck"
 
 
 @pytest.mark.unit
@@ -255,8 +259,10 @@ class TestRangeCheck:
         assert result.failed_count == 2
         assert len(result.sample_failures) == 2
 
-    def test_range_check_missing_field_fails(self, sample_dataframe):
-        """Test that range check fails when field doesn't exist."""
+    def test_range_check_missing_field_raises_error(self, sample_dataframe):
+        """Test that range check raises ColumnNotFoundError when field doesn't exist."""
+        from validation_framework.core.exceptions import ColumnNotFoundError
+
         validation = RangeCheck(
             name="RangeCheck",
             severity=Severity.ERROR,
@@ -270,10 +276,12 @@ class TestRangeCheck:
         data_iterator = iter([sample_dataframe])
         context = {}
 
-        result = validation.validate(data_iterator, context)
+        # Should raise ColumnNotFoundError to prevent silent failures in production
+        with pytest.raises(ColumnNotFoundError) as exc_info:
+            validation.validate(data_iterator, context)
 
-        assert result.passed is False
-        assert "not found" in result.message.lower()
+        assert "nonexistent" in str(exc_info.value)
+        assert exc_info.value.validation_name == "RangeCheck"
 
 
 @pytest.mark.unit

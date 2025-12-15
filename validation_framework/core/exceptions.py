@@ -428,6 +428,59 @@ class ParameterValidationError(ValidationExecutionError):
         })
 
 
+class ConditionEvaluationError(ValidationExecutionError):
+    """
+    Error evaluating conditional expression in validation rule.
+
+    Raised when a condition expression cannot be evaluated, typically due to:
+    - Referenced column doesn't exist in the data
+    - Syntax error in condition expression
+    - Type mismatch in comparison
+
+    This is critical because running validation without proper condition scope
+    could cause incorrect pass/fail results in production pipelines.
+
+    Attributes:
+        condition (str): The condition expression that failed
+        column_name (str): Column referenced in condition (if applicable)
+
+    Example:
+        >>> raise ConditionEvaluationError(
+        ...     "Column 'status' not found in data",
+        ...     validation_name="MandatoryFieldCheck",
+        ...     condition="status == 'ACTIVE'",
+        ...     original_exception=KeyError('status')
+        ... )
+    """
+
+    def __init__(
+        self,
+        message: str,
+        validation_name: str,
+        condition: str,
+        original_exception: Optional[Exception] = None
+    ):
+        """
+        Initialize condition evaluation error.
+
+        Args:
+            message: Error description
+            validation_name: Name of validation
+            condition: The condition expression that failed
+            original_exception: Original exception if wrapping
+        """
+        super().__init__(
+            message,
+            validation_name,
+            recoverable=False,  # Cannot run validation with incorrect scope
+            original_exception=original_exception
+        )
+        self.condition = condition
+        self.details.update({
+            'condition': condition
+        })
+
+
 class ColumnNotFoundError(ValidationExecutionError):
     """
     Required column not found in dataset.
