@@ -2301,6 +2301,11 @@ class DataProfiler:
         chunk_idx: int
     ) -> None:
         """Update column profile with chunk data."""
+        import time as _t
+        import sys
+        _timings = {}
+        _start = _t.time()
+
         profile["total_processed"] += len(series)
 
         # Treat whitespace-only strings as null
@@ -2379,6 +2384,8 @@ class DataProfiler:
                         series = series.copy()
                     series[full_placeholder_mask] = np.nan
 
+        _timings['whitespace'] = _t.time() - _start
+
         # Count nulls (now includes whitespace-only values)
         null_mask = series.isna()
         profile["null_count"] += null_mask.sum()
@@ -2390,6 +2397,7 @@ class DataProfiler:
         if chunk_idx == 0 and len(profile["sample_values"]) < 100:
             samples = non_null_series.head(100 - len(profile["sample_values"])).tolist()
             profile["sample_values"].extend(samples)
+        _timings['samples'] = _t.time() - _start
 
         # Type detection (sample-based for performance)
         # CRITICAL: Sample for type detection even on first chunk to avoid O(n) iteration
@@ -2421,6 +2429,7 @@ class DataProfiler:
                         unexpected_types_logged += 1
 
             profile["type_sampled_count"] += len(type_sample)
+            _timings['type_detect'] = _t.time() - _start
         elif chunk_idx % 10 == 0:
             # Every 10th chunk: sample 1000 values for type refinement
             sample_size = min(1000, len(non_null_series))
@@ -2457,6 +2466,7 @@ class DataProfiler:
                 # Use to_hashable() to handle all Parquet types (arrays, structs, etc.)
                 hashable_val = to_hashable(val)
                 profile["value_counts"][hashable_val] = profile["value_counts"].get(hashable_val, 0) + count
+            _timings['value_counts'] = _t.time() - _start
 
         # Numeric analysis (memory-efficient sampling for statistics)
         # Use intelligent sampling based on column semantics
@@ -2504,6 +2514,13 @@ class DataProfiler:
             for val in non_null_series.head(100):
                 pattern = self.type_inferrer.extract_pattern(str(val))
                 profile["patterns"][pattern] = profile["patterns"].get(pattern, 0) + 1
+
+        # Print timing breakdown for slow columns (>5s)
+        _total = _t.time() - _start
+        if _total > 5:
+            col_name = profile.get("column_name", "?")
+            timing_str = ", ".join(f"{k}={v:.1f}s" for k, v in sorted(_timings.items(), key=lambda x: x[1], reverse=True)[:3])
+            print(f"    SLOW COL {col_name}: {_total:.1f}s ({timing_str})", file=sys.stderr, flush=True)
 
     # =========================================================================
     # COLUMN PROFILE FINALIZATION
