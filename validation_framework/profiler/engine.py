@@ -1509,6 +1509,9 @@ class DataProfiler:
         phase_timings['chunk_processing'] = time.time() - chunk_processing_start
         logger.debug(f"⏱  Chunk processing completed in {phase_timings['chunk_processing']:.2f}s")
 
+        # Debug: confirm we've exited the chunk loop
+        print(f"\n  [DEBUG] Chunk loop completed. Processed {row_count:,} rows.", flush=True)
+
         # Show transition from data loading to analysis
         _progress(f"Data loaded ({row_count:,} rows). Starting analysis...")
 

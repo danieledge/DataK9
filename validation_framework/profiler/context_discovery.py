@@ -478,6 +478,10 @@ class ContextDiscovery:
                 arr1 = valid[col1].to_numpy()
                 arr2 = valid[col2].to_numpy()
 
+                # Skip if either array has zero variance (constant values)
+                if np.std(arr1) == 0 or np.std(arr2) == 0:
+                    continue
+
                 corr = np.corrcoef(arr1, arr2)[0, 1]
 
                 if abs(corr) >= self.min_correlation:

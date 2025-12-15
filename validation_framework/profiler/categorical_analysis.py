@@ -676,7 +676,13 @@ class CategoricalAnalyzer:
                     if not unique_binary <= {0, 1, 0.0, 1.0}:
                         # Map to 0/1
                         min_val, max_val = binary_vals.min(), binary_vals.max()
+                        if max_val == min_val:
+                            continue  # Constant column, skip
                         binary_vals = ((binary_vals - min_val) / (max_val - min_val)).astype(int)
+
+                    # Skip if either array is constant (zero variance)
+                    if binary_vals.std() == 0 or numeric_vals.std() == 0:
+                        continue
 
                     # Calculate point-biserial correlation
                     correlation, p_value = pointbiserialr(binary_vals, numeric_vals)

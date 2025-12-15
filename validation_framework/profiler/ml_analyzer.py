@@ -2725,11 +2725,13 @@ class MLAnalyzer:
             findings["duplicate_analysis"] = duplicate_result
 
         # 12. NEW: Referential integrity checks
+        _ml_progress("Checking referential integrity...")
         ref_integrity = self._check_referential_integrity(df)
         if ref_integrity:
             findings["referential_integrity"] = ref_integrity
 
         # 13. NEW: Distribution fitting (on key numeric columns)
+        _ml_progress("Fitting distributions...")
         findings["distribution_analysis"] = {}
         for col in actual_numeric_cols[:5]:  # Limit to first 5 numeric columns for performance
             # Handle string columns that need coercion to numeric
@@ -2743,6 +2745,7 @@ class MLAnalyzer:
                     findings["distribution_analysis"][col] = dist_result
 
         # 14. Missingness Impact Analysis (target-based or unsupervised fallback)
+        _ml_progress("Analyzing missingness impact...")
         if self.detected_targets:
             missingness_result = self._compute_missingness_impact_direct(df)
             if missingness_result:
@@ -2754,12 +2757,14 @@ class MLAnalyzer:
                 findings["missingness_impact"] = {"_unsupervised": unsupervised_result}
 
         # 15. Target-Feature Analysis (feature importance for detected targets)
+        _ml_progress("Analyzing target-feature relationships...")
         if self.detected_targets:
             target_feature_result = self._compute_target_feature_analysis_direct(df)
             if target_feature_result:
                 findings["target_feature_analysis"] = target_feature_result
 
         # 16. MI-based Target Recommendation (data-driven target detection)
+        _ml_progress("Recommending ML targets...")
         try:
             target_recommendations = self._recommend_targets_mi(df, max_targets=3)
             if target_recommendations:
@@ -2769,10 +2774,12 @@ class MLAnalyzer:
             logger.debug(f"Target recommendation failed: {e}")
 
         # Generate summary
+        _ml_progress("Generating summary...")
         findings["summary"] = self._generate_summary(findings)
         findings["analysis_time_seconds"] = round(time.time() - start_time, 2)
 
         # Generate visualization data
+        _ml_progress("Generating visualization data...")
         findings["visualizations"] = self._generate_visualization_data_direct(df, findings, numeric_cols, string_cols)
 
         return findings
