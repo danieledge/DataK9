@@ -695,7 +695,7 @@ class ExecutiveHTMLReporter:
                     <p class="section-accordion-subtitle">How values spread across your columns</p>
                 </div>
                 <div class="section-accordion-meta">
-                    <div class="section-accordion-badge">{ml_field_count} Categorical</div>
+                    <div class="section-accordion-badge">{len(categorical_columns)} Categorical</div>
                     <span class="section-accordion-chevron">{icon('chevron-down', 16)}</span>
                 </div>
             </div>
@@ -12215,7 +12215,8 @@ the largest difference between classes - a strong candidate for predictive model
         if columns_with_semantics == len(columns):
             plain_english_parts.append(f"DataK9 successfully identified all {columns_with_semantics} columns in your data.")
         elif columns_with_semantics > 0:
-            plain_english_parts.append(f"DataK9 identified {columns_with_semantics} of {len(columns)} columns ({columns_with_semantics * 100 // len(columns)}%).")
+            pct = round(columns_with_semantics * 100 / len(columns))
+            plain_english_parts.append(f"DataK9 identified {columns_with_semantics} of {len(columns)} columns ({pct}%).")
         else:
             plain_english_parts.append("DataK9 couldn't confidently classify any columns in this dataset.")
 
@@ -14612,6 +14613,9 @@ the largest difference between classes - a strong candidate for predictive model
         count = skipped_info.get('count', 0)
         reason = skipped_info.get('reason', 'Parsing errors')
 
+        # Proper grammar for singular/plural
+        row_word = "row was" if count == 1 else "rows were"
+
         return f'''
         <div class="csv-format-warning" style="border-left-color: #f59e0b;">
             <div class="csv-format-warning-header">
@@ -14619,7 +14623,7 @@ the largest difference between classes - a strong candidate for predictive model
                 <span class="csv-format-warning-title">Rows Skipped During Loading</span>
             </div>
             <div class="csv-format-warning-body">
-                {count:,} row(s) were skipped because they could not be parsed correctly.
+                {count:,} {row_word} skipped because they could not be parsed correctly.
                 This typically happens when rows have inconsistent column counts (more or fewer fields than the header).
             </div>
             <div class="csv-format-warning-details">

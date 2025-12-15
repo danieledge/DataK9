@@ -480,8 +480,9 @@ class ValidationSuggestionGenerator:
                     return (0, 100, "Rating field: 0-100 scale")
 
         # Name-based detection for common semantic patterns
-        # Age detection
-        if 'age' in col_lower and 'age' not in ['page', 'stage', 'average', 'storage']:
+        # Age detection - exclude columns that contain unit indicators (days, months, weeks) or false positives
+        age_exclusions = ['page', 'stage', 'average', 'storage', 'days', 'months', 'weeks', 'hours', 'minutes', 'seconds']
+        if 'age' in col_lower and not any(excl in col_lower for excl in age_exclusions):
             return (0, 120, "Age field: 0-120 years (human lifespan)")
 
         # Percentage detection
@@ -524,7 +525,9 @@ class ValidationSuggestionGenerator:
         confidence = fibo_info.get('confidence', 0)
 
         # Only suggest validations for high-confidence semantic matches
-        if confidence < 70:
+        # Note: confidence is stored as decimal (0-1) not percentage (0-100)
+        # Require 80% confidence for validation suggestions (stricter than 70% classification threshold)
+        if confidence < 0.80:
             return suggestions
 
         # FIBO-specific validation mappings

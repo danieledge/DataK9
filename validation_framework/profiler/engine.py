@@ -228,8 +228,9 @@ def check_csv_format(file_path: str, sample_rows: int = 1000) -> Dict[str, Any]:
     # Summarize issues
     if result['inconsistent_rows']:
         count = len(result['inconsistent_rows'])
+        row_word = "row has" if count == 1 else "rows have"
         result['issues'].append(
-            f"{count} row(s) have inconsistent column counts "
+            f"{count} {row_word} inconsistent column counts "
             f"(expected {result['column_count']}, delimiter={repr(result['delimiter'])})"
         )
 
@@ -2561,8 +2562,10 @@ class DataProfiler:
         col_name_lower = col_name.lower()
 
         # Age-related fields: use human-sensible bounds
+        # Exclude columns with unit indicators (days, months, etc.) which suggest age in non-year units
         age_keywords = ['age', 'years_old', 'yearsold', 'person_age']
-        if any(kw in col_name_lower for kw in age_keywords):
+        age_exclusions = ['page', 'stage', 'average', 'storage', 'days', 'months', 'weeks', 'hours', 'minutes', 'seconds']
+        if any(kw in col_name_lower for kw in age_keywords) and not any(excl in col_name_lower for excl in age_exclusions):
             # Human age: 0-120 is sensible regardless of observed range
             return (0, 120, "Age field with human-sensible bounds (0-120 years)")
 

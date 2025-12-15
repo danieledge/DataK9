@@ -508,8 +508,9 @@ class CSVFormatCheck(FileValidationRule):
             error_rate = error_count / row_count if row_count > 0 else 1
             passed = error_count <= max_errors and error_rate < 0.1  # Fail if >10% bad rows
 
+            row_word = "row has" if error_count == 1 else "rows have"
             message = (
-                f"CSV format issues detected: {error_count} rows have inconsistent column counts "
+                f"CSV format issues detected: {error_count} {row_word} inconsistent column counts "
                 f"(expected {expected_columns}, delimiter={repr(delimiter)}). "
             )
 
