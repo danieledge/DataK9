@@ -28,6 +28,11 @@ from validation_framework.profiler.visualization_fallbacks import (
     coerce_to_numeric,
     is_numeric_for_analysis,
     should_apply_benford_generic,
+)
+from validation_framework.profiler.parquet_type_handler import to_hashable
+
+# Re-open the import block for remaining imports
+from validation_framework.profiler.visualization_fallbacks import (
     extract_benford_digits,
     is_identifier_like,
     is_binary_column,
@@ -468,7 +473,9 @@ class ChunkedMLAccumulator:
             for val, count in val_counts.items():
                 if len(self.value_counts[col]) >= max_unique_values:
                     break
-                self.value_counts[col][val] += count
+                # Use to_hashable to handle numpy arrays and other unhashable types
+                hashable_val = to_hashable(val)
+                self.value_counts[col][hashable_val] += count
 
         # Format pattern counts - process all values (counting is memory efficient)
         patterns = valid.apply(self._extract_pattern)
