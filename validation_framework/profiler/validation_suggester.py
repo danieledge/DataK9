@@ -94,14 +94,15 @@ class ValidationSuggestionGenerator:
     def __init__(self):
         """Initialize the validation suggestion generator."""
         # Load patterns from external JSON via ReferenceDataLoader
+        # Falls back to built-in defaults if no custom config exists (normal behavior)
         self._id_patterns = ReferenceDataLoader.get_id_patterns()
         if not self._id_patterns:
-            logger.warning("No ID patterns loaded from JSON, using defaults")
+            logger.debug("Using built-in ID patterns (no custom config)")
             self._id_patterns = self._DEFAULT_ID_PATTERNS
 
         self._measurement_patterns = ReferenceDataLoader.get_measurement_patterns()
         if not self._measurement_patterns:
-            logger.warning("No measurement patterns loaded from JSON, using defaults")
+            logger.debug("Using built-in measurement patterns (no custom config)")
             self._measurement_patterns = self._DEFAULT_MEASUREMENT_PATTERNS
 
         logger.debug(

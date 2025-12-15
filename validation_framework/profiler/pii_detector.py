@@ -85,15 +85,16 @@ class PIIDetector:
         self.sample_size = sample_size
 
         # Load patterns from external JSON via ReferenceDataLoader
+        # Falls back to built-in defaults if no custom config exists (normal behavior)
         self.patterns = ReferenceDataLoader.get_pii_patterns()
         if not self.patterns:
-            logger.warning("No PII patterns loaded from JSON, using defaults")
+            logger.debug("Using built-in PII patterns (no custom config)")
             self.patterns = self._DEFAULT_PATTERNS
 
         # Load column name indicators from external JSON
         self.column_indicators = ReferenceDataLoader.get_column_indicators()
         if not self.column_indicators:
-            logger.warning("No column indicators loaded from JSON, using defaults")
+            logger.debug("Using built-in column indicators (no custom config)")
             self.column_indicators = self._DEFAULT_COLUMN_INDICATORS
 
         logger.debug(
