@@ -616,6 +616,8 @@ class ExecutiveHTMLReporter:
         <main class="dq-main page">
         <!-- CSV Format Warning Banner (if issues detected) -->
         {self._generate_csv_format_warning(profile)}
+        <!-- Skipped Rows Warning Banner (if rows were skipped during loading) -->
+        {self._generate_skipped_rows_warning(profile)}
 
         <!-- ═══════════════════════════════════════════════════════════════ -->
         <!-- 1. EXECUTIVE SUMMARY WITH DIAL WIDGETS                          -->
@@ -14586,6 +14588,61 @@ the largest difference between classes - a strong candidate for predictive model
                 </div>{rows_sample_html}
             </div>
             <div class="csv-format-warning-issues">{issues_html}</div>
+        </div>'''
+
+    def _generate_skipped_rows_warning(self, profile: ProfileResult) -> str:
+        """
+        Generate a warning banner if rows were skipped during CSV parsing.
+
+        Args:
+            profile: ProfileResult containing file_metadata with skipped_rows info
+
+        Returns:
+            HTML string for the warning banner, or empty string if no skipped rows
+        """
+        # Check if file_metadata exists and has skipped_rows
+        file_metadata = getattr(profile, 'file_metadata', None)
+        if not file_metadata:
+            return ''
+
+        skipped_info = file_metadata.get('skipped_rows')
+        if not skipped_info or skipped_info.get('count', 0) == 0:
+            return ''
+
+        count = skipped_info.get('count', 0)
+        line_numbers = skipped_info.get('line_numbers', [])
+        reason = skipped_info.get('reason', 'Parsing errors')
+
+        # Build line numbers display
+        if len(line_numbers) <= 5:
+            lines_display = ', '.join(str(ln) for ln in line_numbers)
+        else:
+            lines_display = ', '.join(str(ln) for ln in line_numbers[:5]) + f' ... (+{len(line_numbers) - 5} more)'
+
+        return f'''
+        <div class="csv-format-warning" style="border-left-color: #f59e0b;">
+            <div class="csv-format-warning-header">
+                {icon('alert-triangle', 20)}
+                <span class="csv-format-warning-title">Rows Skipped During Loading</span>
+            </div>
+            <div class="csv-format-warning-body">
+                {count:,} row(s) were skipped because they could not be parsed correctly.
+                This typically happens when rows have inconsistent column counts (more or fewer fields than the header).
+            </div>
+            <div class="csv-format-warning-details">
+                <div class="csv-format-warning-row">
+                    <span class="csv-format-warning-row-label">Skipped rows</span>
+                    <span class="csv-format-warning-row-value">{count:,}</span>
+                </div>
+                <div class="csv-format-warning-row">
+                    <span class="csv-format-warning-row-label">Reason</span>
+                    <span class="csv-format-warning-row-value">{reason}</span>
+                </div>
+                <div class="csv-format-warning-row">
+                    <span class="csv-format-warning-row-label">Line numbers</span>
+                    <span class="csv-format-warning-row-value">{lines_display}</span>
+                </div>
+            </div>
         </div>'''
 
     def _generate_exec1_summary(self, profile: ProfileResult, avg_completeness: float, avg_validity: float, type_counts: dict, insights) -> str:

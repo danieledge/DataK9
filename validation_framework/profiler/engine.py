@@ -1479,6 +1479,15 @@ class DataProfiler:
         phase_timings['chunk_processing'] = time.time() - chunk_processing_start
         logger.debug(f"⏱  Chunk processing completed in {phase_timings['chunk_processing']:.2f}s")
 
+        # Capture skipped rows info from CSV loader (if any)
+        if hasattr(loader, 'skipped_rows') and loader.skipped_rows:
+            file_metadata['skipped_rows'] = {
+                'count': len(loader.skipped_rows),
+                'line_numbers': loader.skipped_rows[:20],  # First 20 line numbers
+                'reason': 'Malformed rows (inconsistent column count)'
+            }
+            logger.info(f"⚠️  {len(loader.skipped_rows)} rows skipped due to parsing errors")
+
         # Log memory optimization summary
         if sampling_triggered:
             logger.debug(f"💾 Memory optimization: Sampled {len(sampling_triggered)} numeric columns (max {MAX_CORRELATION_SAMPLES:,} values each)")

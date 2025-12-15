@@ -76,6 +76,9 @@ class CSVLoader(DataLoader):
         """
         super().__init__(file_path, chunk_size, **kwargs)
 
+        # Track skipped rows for reporting
+        self.skipped_rows = []
+
         # Auto-detect delimiter if not specified
         if 'delimiter' not in kwargs or kwargs.get('delimiter') is None:
             self.kwargs['delimiter'] = detect_delimiter(file_path)
@@ -99,12 +102,12 @@ class CSVLoader(DataLoader):
         encoding = self.kwargs.get("encoding", "utf-8")
         header = self.kwargs.get("header", 0)
 
-        # Track skipped rows for summary reporting
-        skipped_rows = []
+        # Reset skipped rows tracking
+        self.skipped_rows = []
 
         def track_bad_line(bad_line):
             """Track bad lines instead of printing each one."""
-            skipped_rows.append(len(skipped_rows) + 2)  # +2 for 1-indexed + header
+            self.skipped_rows.append(len(self.skipped_rows) + 2)  # +2 for 1-indexed + header
             return None  # Return None to skip the line
 
         try:
@@ -125,13 +128,13 @@ class CSVLoader(DataLoader):
                     yield chunk
 
             # Log summary of skipped rows (if any)
-            if skipped_rows:
-                if len(skipped_rows) <= 5:
-                    logger.warning(f"Skipped {len(skipped_rows)} malformed row(s): lines {skipped_rows}")
+            if self.skipped_rows:
+                if len(self.skipped_rows) <= 5:
+                    logger.warning(f"Skipped {len(self.skipped_rows)} malformed row(s): lines {self.skipped_rows}")
                 else:
-                    first_few = skipped_rows[:3]
+                    first_few = self.skipped_rows[:3]
                     logger.warning(
-                        f"Skipped {len(skipped_rows)} malformed rows "
+                        f"Skipped {len(self.skipped_rows)} malformed rows "
                         f"(first few: lines {first_few}...)"
                     )
 
