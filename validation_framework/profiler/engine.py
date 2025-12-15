@@ -1714,6 +1714,7 @@ class DataProfiler:
         # Phase 3: ML-based Anomaly Detection (Beta)
         ml_findings = None
         categorical_analysis = None  # Phase 4: Categorical analysis
+        pca_analysis = None  # Phase 5: PCA analysis
         skip_ml_analysis = False
         if self.enable_ml_analysis and self.ml_analyzer:
             # Memory check before ML analysis
