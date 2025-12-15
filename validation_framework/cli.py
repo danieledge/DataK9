@@ -731,12 +731,18 @@ def profile(file_path, format, delimiter, database, table, query, html_output, j
                     delim_display = repr(detected_delimiter).strip("'")
                     po.info(f"Auto-detected delimiter: {delim_display}")
 
+            last_phase = [None]  # Use list to allow modification in nested function
             def progress_callback(msg, current=0, total=0):
-                """Progress callback that shows progress bar when totals available."""
+                """Progress callback that shows clear phase transitions."""
                 if current > 0:
+                    # Show progress bar for data processing
                     po.progress_bar(current, total, msg)
                 else:
-                    po.progress_status(msg)
+                    # Print phase changes on new lines so user sees progress
+                    if msg != last_phase[0]:
+                        po.progress_done()  # Clear any progress bar
+                        print(f"  -> {msg}", flush=True)
+                        last_phase[0] = msg
 
             profile_result = profiler.profile_file(
                 file_path=file_path,
