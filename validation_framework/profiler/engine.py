@@ -2389,8 +2389,8 @@ class DataProfiler:
 
         # Type detection (sample-based for performance)
         # CRITICAL: Sample for type detection even on first chunk to avoid O(n) iteration
-        # A 10K sample provides >99.9% confidence for type inference
-        TYPE_DETECTION_SAMPLE_SIZE = 10000
+        # A 1K sample provides >99% confidence for type inference (reduced from 10K for performance)
+        TYPE_DETECTION_SAMPLE_SIZE = 1000
 
         if chunk_idx == 0:
             # First chunk: sample for type detection (not all values - that's O(n)!)

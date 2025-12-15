@@ -103,11 +103,11 @@ class TypeInferrer:
         if pd.isna(value):
             return 'null'
 
-        # Boolean
-        if isinstance(value, bool) or str(value).lower() in ['true', 'false', 'yes', 'no']:
+        # Boolean - check native bool first, string check only for string types
+        if isinstance(value, bool):
             return 'boolean'
 
-        # Try numeric
+        # Try numeric first (most common case for performance)
         try:
             float_val = float(value)
             if float_val.is_integer():
@@ -116,8 +116,14 @@ class TypeInferrer:
         except (ValueError, TypeError):
             pass
 
-        # Try date
+        # Convert to string once and reuse
         value_str = str(value)
+
+        # Boolean string check
+        if value_str.lower() in ('true', 'false', 'yes', 'no'):
+            return 'boolean'
+
+        # Try date
         if self._is_date_like(value_str):
             return 'date'
 
