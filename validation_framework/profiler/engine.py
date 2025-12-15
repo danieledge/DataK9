@@ -1190,13 +1190,13 @@ class DataProfiler:
             """Helper to call progress callback if provided."""
             if progress_callback:
                 try:
-                    # Try new signature with current/total first
-                    import inspect
-                    sig = inspect.signature(progress_callback)
-                    if len(sig.parameters) >= 3:
-                        progress_callback(msg, current, total)
-                    else:
+                    progress_callback(msg, current, total)
+                except TypeError:
+                    # Fallback for callbacks that don't accept current/total
+                    try:
                         progress_callback(msg)
+                    except Exception:
+                        pass
                 except Exception:
                     pass  # Don't let callback errors stop profiling
         start_time = time.time()
@@ -1748,12 +1748,12 @@ class DataProfiler:
         phase_timings['generate_config'] = time.time() - config_start
 
         # Phase 3: ML-based Anomaly Detection (Beta)
-        _progress("Running ML analysis...")
         ml_findings = None
         categorical_analysis = None  # Phase 4: Categorical analysis
         pca_analysis = None  # Phase 5: PCA analysis
         skip_ml_analysis = False
         if self.enable_ml_analysis and self.ml_analyzer:
+            _progress("Checking memory for ML analysis...")
             # Memory check before ML analysis
             try:
                 system_memory = psutil.virtual_memory()
@@ -1767,6 +1767,7 @@ class DataProfiler:
                 logger.debug(f"Could not check system memory: {e}")
 
         if self.enable_ml_analysis and self.ml_analyzer and not skip_ml_analysis:
+            _progress("Running ML anomaly detection...")
             ml_start = time.time()
             logger.debug("🧠 Running ML-based anomaly detection (Beta)...")
             try:
@@ -1959,6 +1960,7 @@ class DataProfiler:
                     # Must run before ml_df cleanup!
                     # ═══════════════════════════════════════════════════════════════
                     if self.enable_categorical_analysis and self.categorical_analyzer:
+                        _progress("Analyzing categorical associations...")
                         cat_start = time.time()
                         try:
                             # Build column types dict from profiles
@@ -2001,6 +2003,7 @@ class DataProfiler:
                     # ═══════════════════════════════════════════════════════════════
                     pca_analysis = None
                     if self.enable_pca_analysis and self.pca_analyzer:
+                        _progress("Running PCA dimensionality reduction...")
                         pca_start = time.time()
                         try:
                             # Get numeric column names from profiles
