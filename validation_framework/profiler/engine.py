@@ -1806,6 +1806,7 @@ class DataProfiler:
                         csv_kwargs = {
                             'nrows': ml_sample_size,
                             'on_bad_lines': track_ml_bad_line,
+                            'engine': 'python',  # Required for callable on_bad_lines
                         }
                         if 'delimiter' in loader_kwargs:
                             csv_kwargs['delimiter'] = loader_kwargs['delimiter']
