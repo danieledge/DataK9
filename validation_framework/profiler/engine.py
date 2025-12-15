@@ -1413,13 +1413,13 @@ class DataProfiler:
             # Update profiles with chunk data
             print(f"*** STEP 4: Updating profiles for {len(chunk.columns)} columns ***", file=sys.stderr, flush=True)
             for col_idx, col in enumerate(chunk.columns):
-                # Show every column for debugging
-                print(f"*** COL {col_idx}: {col} ***", file=sys.stderr, flush=True)
+                # Progress every 20 columns to reduce output overhead
+                if col_idx % 20 == 0:
+                    print(f"*** COL {col_idx}/{len(chunk.columns)} ***", file=sys.stderr, flush=True)
 
                 self._update_column_profile(
                     column_profiles[col], chunk[col], chunk_idx
                 )
-                print(f"*** COL {col_idx}: profile done ***", file=sys.stderr, flush=True)
 
                 # Collect numeric data for correlations with memory-efficient sampling
                 # Limit to MAX_CORRELATION_SAMPLES per column to prevent memory exhaustion with very large datasets
@@ -1509,8 +1509,6 @@ class DataProfiler:
                         samples_needed = 1000 - len(all_column_data[col])
                         all_column_data[col].extend(chunk[col].dropna().head(samples_needed).tolist())
 
-                # Mark column done
-                print(f"*** COL {col_idx}: COMPLETE ***", file=sys.stderr, flush=True)
 
             print(f"*** STEP 5: Column loop done for chunk {chunk_idx} ***", file=sys.stderr, flush=True)
 
