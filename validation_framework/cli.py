@@ -902,6 +902,32 @@ def profile(file_path, format, delimiter, database, table, query, html_output, j
         po.blank_line()
         sys.exit(0)
 
+    except KeyboardInterrupt:
+        # User pressed Ctrl+C
+        po.progress_done()  # Clear any progress line
+        po.blank_line()
+        po.warning("Profiling cancelled by user (Ctrl+C)")
+        sys.exit(130)  # Standard exit code for Ctrl+C
+
+    except MemoryError as e:
+        # Memory safety termination from profiler or system OOM
+        po.progress_done()  # Clear any progress line
+        po.blank_line()
+        po.error("Memory limit exceeded - profiler terminated to prevent system instability")
+        error_msg = str(e)
+        if error_msg:
+            po.blank_line()
+            click.echo(f"   {error_msg}", err=True)
+        po.blank_line()
+        po.info("Solutions:")
+        click.echo("   1. Use --sample to profile a subset: --sample 100000")
+        click.echo("   2. Process file in smaller chunks: --chunk-size 10000")
+        click.echo("   3. Close other applications to free memory")
+        click.echo("   4. Convert large CSV files to Parquet format (more efficient)")
+        if not no_memory_check:
+            click.echo("   5. Use --no-memory-check to disable safety limits (USE WITH CAUTION)")
+        sys.exit(137)  # Standard exit code for OOM-killed processes
+
     except FileNotFoundError as e:
         po.blank_line()
         po.error(f"File not found: {str(e)}")
@@ -921,6 +947,7 @@ def profile(file_path, format, delimiter, database, table, query, html_output, j
         sys.exit(1)
 
     except Exception as e:
+        po.progress_done()  # Clear any progress line
         po.blank_line()
         po.error(f"Unexpected error: {str(e)}")
         po.blank_line()

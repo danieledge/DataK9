@@ -584,3 +584,240 @@ class CSVFormatCheck(FileValidationRule):
                 continue
 
         return 'utf-8'
+
+
+class SkippedRowsCheck(FileValidationRule):
+    """
+    Validates that the number of skipped/unparseable rows is within acceptable limits.
+
+    This validation compares the raw line count in the file against the number of
+    rows that can be successfully parsed. Rows may be skipped due to:
+    - Inconsistent column counts (wrong number of fields)
+    - Encoding errors in specific rows
+    - Malformed quoting or escaping
+    - Data corruption
+
+    Unlike CSVFormatCheck which samples rows, this validation counts ALL rows
+    to give an accurate skipped count suitable for production ETL pipelines.
+
+    Configuration:
+        params:
+            max_skipped_count (int, optional): Maximum number of skipped rows allowed.
+                If exceeded, validation fails. Default: no limit (use percentage)
+            max_skipped_percentage (float, optional): Maximum percentage of skipped rows
+                allowed (0-100). Default: 5.0 (5%)
+            delimiter (str, optional): Expected delimiter. Default: auto-detect
+
+    Example YAML:
+        # Fail if more than 100 rows are skipped
+        - type: "SkippedRowsCheck"
+          severity: "ERROR"
+          params:
+            max_skipped_count: 100
+
+        # Fail if more than 1% of rows are skipped
+        - type: "SkippedRowsCheck"
+          severity: "ERROR"
+          params:
+            max_skipped_percentage: 1.0
+
+        # Fail if more than 50 rows OR 2% are skipped
+        - type: "SkippedRowsCheck"
+          severity: "ERROR"
+          params:
+            max_skipped_count: 50
+            max_skipped_percentage: 2.0
+    """
+
+    def get_description(self) -> str:
+        """Get human-readable description."""
+        max_count = self.params.get("max_skipped_count")
+        max_pct = self.params.get("max_skipped_percentage", 5.0)
+
+        if max_count and max_pct:
+            return f"Checks that skipped rows do not exceed {max_count} or {max_pct}%"
+        elif max_count:
+            return f"Checks that skipped rows do not exceed {max_count}"
+        else:
+            return f"Checks that skipped rows do not exceed {max_pct}%"
+
+    def validate_file(self, context: Dict[str, Any]) -> ValidationResult:
+        """
+        Check the number of rows skipped during parsing.
+
+        Args:
+            context: Must contain 'file_path' key
+
+        Returns:
+            ValidationResult with details of skipped rows
+        """
+        import csv
+
+        try:
+            file_path = context.get("file_path")
+            if not file_path:
+                return self._create_result(
+                    passed=False,
+                    message="File path not provided in context",
+                    failed_count=1,
+                )
+
+            # Only applies to CSV files
+            file_format = context.get("file_format", "csv")
+            if file_format.lower() not in ["csv", "tsv"]:
+                return self._create_result(
+                    passed=True,
+                    message=f"SkippedRowsCheck only applies to CSV/TSV files, skipping for {file_format}",
+                    total_count=0,
+                )
+
+            # Get parameters
+            max_count = self.params.get("max_skipped_count")
+            max_pct = self.params.get("max_skipped_percentage", 5.0)
+            delimiter = self.params.get("delimiter")
+
+            # Auto-detect delimiter if not specified
+            if not delimiter:
+                delimiter = self._detect_delimiter(file_path)
+
+            # Auto-detect encoding
+            encoding = self._detect_encoding(file_path)
+
+            # Count raw lines in file (fast binary read)
+            try:
+                with open(file_path, 'rb') as f:
+                    raw_line_count = sum(1 for _ in f)
+            except Exception as e:
+                return self._create_result(
+                    passed=False,
+                    message=f"Could not read file: {str(e)}",
+                    failed_count=1,
+                )
+
+            # Count parseable rows (header + data rows that parse correctly)
+            parsed_count = 0
+            expected_columns = None
+            skipped_rows = []
+
+            try:
+                with open(file_path, 'r', newline='', encoding=encoding, errors='replace') as f:
+                    reader = csv.reader(f, delimiter=delimiter)
+
+                    for i, row in enumerate(reader):
+                        if expected_columns is None:
+                            expected_columns = len(row)
+                            parsed_count += 1  # Header counts
+                            continue
+
+                        # Row is "parseable" if it has the expected column count
+                        if len(row) == expected_columns:
+                            parsed_count += 1
+                        else:
+                            if len(skipped_rows) < MAX_SAMPLE_FAILURES:
+                                skipped_rows.append({
+                                    'row': i + 1,
+                                    'expected': expected_columns,
+                                    'actual': len(row)
+                                })
+
+            except Exception as e:
+                return self._create_result(
+                    passed=False,
+                    message=f"Error parsing file: {str(e)}",
+                    failed_count=1,
+                )
+
+            # Calculate skipped count
+            # Note: raw_line_count includes header, parsed_count includes header
+            skipped_count = raw_line_count - parsed_count
+            skipped_percentage = (skipped_count / raw_line_count * 100) if raw_line_count > 0 else 0
+            data_rows = raw_line_count - 1  # Exclude header
+
+            # Determine pass/fail
+            passed = True
+            fail_reasons = []
+
+            if max_count is not None and skipped_count > max_count:
+                passed = False
+                fail_reasons.append(f"skipped {skipped_count} rows (max: {max_count})")
+
+            if max_pct is not None and skipped_percentage > max_pct:
+                passed = False
+                fail_reasons.append(f"skipped {skipped_percentage:.2f}% (max: {max_pct}%)")
+
+            # Build result message
+            if skipped_count == 0:
+                message = f"All {data_rows:,} data rows parsed successfully"
+            elif passed:
+                row_word = "row was" if skipped_count == 1 else "rows were"
+                message = f"{skipped_count:,} {row_word} skipped ({skipped_percentage:.2f}%), within acceptable limits"
+            else:
+                row_word = "row was" if skipped_count == 1 else "rows were"
+                message = (
+                    f"Skipped rows exceed threshold: {skipped_count:,} {row_word} skipped ({skipped_percentage:.2f}%). "
+                    f"Failure: {'; '.join(fail_reasons)}"
+                )
+
+            # Build sample failures for detailed reporting
+            sample_failures = []
+            for row_info in skipped_rows:
+                sample_failures.append({
+                    'row': row_info['row'],
+                    'issue': f"Expected {row_info['expected']} columns, found {row_info['actual']}"
+                })
+
+            return self._create_result(
+                passed=passed,
+                message=message,
+                total_count=data_rows,
+                failed_count=skipped_count,
+                sample_failures=sample_failures if not passed else None,
+            )
+
+        except FileNotFoundError:
+            return self._create_result(
+                passed=False,
+                message=f"File not found: {file_path}",
+                failed_count=1,
+            )
+
+        except Exception as e:
+            return self._create_result(
+                passed=False,
+                message=f"Error checking skipped rows: {str(e)}",
+                failed_count=1,
+            )
+
+    def _detect_delimiter(self, file_path: str, sample_size: int = 8192) -> str:
+        """Auto-detect CSV delimiter."""
+        import csv
+        encodings = ['utf-8', 'utf-8-sig', 'cp1252', 'latin-1']
+
+        for encoding in encodings:
+            try:
+                with open(file_path, 'r', newline='', encoding=encoding) as f:
+                    sample = f.read(sample_size)
+
+                sniffer = csv.Sniffer()
+                dialect = sniffer.sniff(sample, delimiters=',\t|;:')
+                return dialect.delimiter
+            except (UnicodeDecodeError, csv.Error):
+                continue
+            except Exception:
+                break
+
+        return ','
+
+    def _detect_encoding(self, file_path: str) -> str:
+        """Auto-detect file encoding."""
+        encodings = ['utf-8', 'utf-8-sig', 'cp1252', 'latin-1', 'iso-8859-1']
+
+        for encoding in encodings:
+            try:
+                with open(file_path, 'r', encoding=encoding) as f:
+                    f.read(8192)
+                return encoding
+            except UnicodeDecodeError:
+                continue
+
+        return 'utf-8'

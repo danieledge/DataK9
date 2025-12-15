@@ -96,6 +96,10 @@ class PolarsCSVLoader(DataLoader):
         """
         super().__init__(file_path, chunk_size, **kwargs)
 
+        # Track skipped rows due to parsing errors
+        self.skipped_row_count = 0
+        self._expected_row_count = None  # Set after first successful scan
+
         # Auto-detect delimiter if not specified
         if 'delimiter' not in kwargs or kwargs.get('delimiter') is None:
             self.kwargs['delimiter'] = detect_delimiter(file_path)
@@ -137,6 +141,17 @@ class PolarsCSVLoader(DataLoader):
         has_header = self.kwargs.get("header", 0) == 0  # 0 means first row is header
 
         try:
+            # First, count raw lines in file to detect skipped rows later
+            # This is O(n) but fast as we just count newlines
+            try:
+                with open(str(self.file_path), 'rb') as f:
+                    raw_line_count = sum(1 for _ in f)
+                # Subtract 1 for header if present
+                self._expected_row_count = raw_line_count - 1 if has_header else raw_line_count
+            except Exception as e:
+                logger.debug(f"Could not count raw lines: {e}")
+                self._expected_row_count = None
+
             # Polars scan_csv provides lazy reading with automatic optimization
             lazy_df = pl.scan_csv(
                 str(self.file_path),
@@ -151,8 +166,17 @@ class PolarsCSVLoader(DataLoader):
             # Collect the data (Polars is memory efficient)
             df = lazy_df.collect()
 
-            # Yield chunks
+            # Calculate skipped rows
             total_rows = df.height
+            if self._expected_row_count is not None and self._expected_row_count > total_rows:
+                self.skipped_row_count = self._expected_row_count - total_rows
+                if self.skipped_row_count > 0:
+                    logger.warning(
+                        f"⚠️  {self.skipped_row_count:,} rows skipped due to parsing errors "
+                        f"(expected {self._expected_row_count:,}, loaded {total_rows:,})"
+                    )
+
+            # Yield chunks
             for start_row in range(0, total_rows, self.chunk_size):
                 end_row = min(start_row + self.chunk_size, total_rows)
                 chunk = df.slice(start_row, end_row - start_row)
@@ -247,8 +271,9 @@ class PolarsCSVLoader(DataLoader):
                         has_header=has_header,
                     ).select(pl.count()).collect().item()
                     metadata["total_rows"] = full_count
-                except:
+                except Exception as e:
                     # If full scan fails, provide estimate
+                    logger.debug(f"Could not get exact row count: {e}")
                     metadata["estimated_rows"] = "unknown (scan failed)"
 
             except Exception as e:

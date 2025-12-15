@@ -13,6 +13,7 @@ from validation_framework.validations.builtin.file_checks import (
     RowCountRangeCheck,
     FileSizeCheck,
     CSVFormatCheck,
+    SkippedRowsCheck,
 )
 
 from validation_framework.validations.builtin.schema_checks import (
@@ -85,6 +86,7 @@ def register_all_builtin_validations():
     register_validation("RowCountRangeCheck", RowCountRangeCheck)
     register_validation("FileSizeCheck", FileSizeCheck)
     register_validation("CSVFormatCheck", CSVFormatCheck)
+    register_validation("SkippedRowsCheck", SkippedRowsCheck)
 
     # Schema checks
     register_validation("SchemaMatchCheck", SchemaMatchCheck)

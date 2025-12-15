@@ -147,6 +147,48 @@
       "notes": "CSV file-only validation. Not applicable to database tables or other file formats."
     }
   },
+  "SkippedRowsCheck": {
+    "category": "File-Level",
+    "icon": "⚠️",
+    "description": "Validates that the number of skipped/unparseable rows is within acceptable limits",
+    "params": [
+      {
+        "name": "max_skipped_count",
+        "label": "Max Skipped Count",
+        "type": "number",
+        "required": false,
+        "help": "Maximum number of skipped rows allowed. If exceeded, validation fails.",
+        "min": 0
+      },
+      {
+        "name": "max_skipped_percentage",
+        "label": "Max Skipped Percentage",
+        "type": "number",
+        "required": false,
+        "help": "Maximum percentage of skipped rows allowed (0-100). Default: 5.0",
+        "default": 5.0,
+        "min": 0,
+        "max": 100
+      },
+      {
+        "name": "delimiter",
+        "label": "Delimiter",
+        "type": "string",
+        "required": false,
+        "help": "Expected delimiter character. Auto-detected if not specified.",
+        "placeholder": ","
+      }
+    ],
+    "examples": "Ensure production ETL pipelines fail if more than 1% of rows are skipped due to parsing errors",
+    "tips": "Unlike CSVFormatCheck which samples rows, this validation checks ALL rows for accurate skipped counts. Ideal for production pipelines where data loss must be minimized.",
+    "severity_recommendation": "ERROR",
+    "python_module": "validation_framework.validations.file_checks",
+    "source_compatibility": {
+      "file": true,
+      "database": false,
+      "notes": "CSV/TSV file-only validation. Not applicable to database tables or other file formats."
+    }
+  },
   "SchemaMatchCheck": {
     "category": "Schema",
     "icon": "🎨",

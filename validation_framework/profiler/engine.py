@@ -525,6 +525,11 @@ class DataProfiler:
         Returns:
             ProfileResult with comprehensive profile information
         """
+        # Define no-op progress function for profile_dataframe (no callback support)
+        def _progress(msg: str):
+            """No-op progress function - profile_dataframe doesn't support callbacks."""
+            pass
+
         start_time = time.time()
         logger.debug(f"Starting profile of DataFrame: {name}")
 
