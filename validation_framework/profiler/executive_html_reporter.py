@@ -14506,59 +14506,42 @@ the largest difference between classes - a strong candidate for predictive model
 
     def _generate_csv_format_warning(self, profile: ProfileResult) -> str:
         """
-        Generate a warning banner if CSV format issues were detected during profiling.
+        Generate a consolidated warning banner for CSV format issues.
+
+        Uses the full skipped row count from file loading when available,
+        falling back to sampled check data if not.
 
         Args:
-            profile: ProfileResult containing csv_format_issues data
+            profile: ProfileResult containing csv_format_issues and/or file_metadata
 
         Returns:
             HTML string for the warning banner, or empty string if no issues
         """
-        # Check if csv_format_issues exists and has issues
+        # Get both data sources
         csv_issues = getattr(profile, 'csv_format_issues', None)
-        if not csv_issues or csv_issues.get('valid', True):
+        file_metadata = getattr(profile, 'file_metadata', None)
+        skipped_info = file_metadata.get('skipped_rows') if file_metadata else None
+
+        # Determine the actual failure count - prefer full count from loader
+        full_failure_count = skipped_info.get('count', 0) if skipped_info else 0
+        sampled_failure_count = len(csv_issues.get('inconsistent_rows', [])) if csv_issues else 0
+
+        # Use full count if available, otherwise sampled
+        failure_count = full_failure_count if full_failure_count > 0 else sampled_failure_count
+
+        # No issues to report
+        if failure_count == 0 and (not csv_issues or csv_issues.get('valid', True)):
             return ''
 
-        issues = csv_issues.get('issues', [])
-        if not issues:
-            return ''
-
-        # Get details for display
-        delimiter = csv_issues.get('delimiter', ',')
+        # Get details for display (from csv_issues if available)
+        delimiter = csv_issues.get('delimiter', ',') if csv_issues else ','
         delimiter_display = {'\\t': 'Tab', '\t': 'Tab', ',': 'Comma', '|': 'Pipe', ';': 'Semicolon', ':': 'Colon'}.get(delimiter, delimiter)
-        encoding = csv_issues.get('encoding', 'utf-8')
-        expected_cols = csv_issues.get('column_count', 0)
-        rows_checked = csv_issues.get('rows_checked', 0)
-        inconsistent_rows = csv_issues.get('inconsistent_rows', [])
+        encoding = csv_issues.get('encoding', 'utf-8') if csv_issues else 'utf-8'
+        expected_cols = csv_issues.get('column_count', 0) if csv_issues else 0
 
-        # Build issues list
-        issues_html = ''
-        for issue in issues[:5]:  # Limit to first 5 issues
-            issues_html += f'''
-                <div class="csv-format-warning-issue">
-                    <span class="csv-format-warning-issue-icon">{icon('x-circle', 14)}</span>
-                    <span>{issue}</span>
-                </div>'''
-
-        if len(issues) > 5:
-            issues_html += f'''
-                <div class="csv-format-warning-issue">
-                    <span class="csv-format-warning-issue-icon">{icon('alert-circle', 14)}</span>
-                    <span>...and {len(issues) - 5} more issue(s)</span>
-                </div>'''
-
-        # Build inconsistent rows sample
-        rows_sample_html = ''
-        if inconsistent_rows:
-            sample_rows = inconsistent_rows[:3]
-            rows_list = ', '.join([f"Row {r['row']}: {r['actual']} cols (expected {r['expected']})" for r in sample_rows])
-            if len(inconsistent_rows) > 3:
-                rows_list += f' (+{len(inconsistent_rows) - 3} more)'
-            rows_sample_html = f'''
-                <div class="csv-format-warning-row">
-                    <span class="csv-format-warning-row-label">Sample rows</span>
-                    <span class="csv-format-warning-row-value">{rows_list}</span>
-                </div>'''
+        # Build the failure count display
+        row_word = "row has" if failure_count == 1 else "rows have"
+        failure_message = f"{failure_count:,} {row_word} inconsistent column counts"
 
         return f'''
         <div class="csv-format-warning">
@@ -14567,10 +14550,18 @@ the largest difference between classes - a strong candidate for predictive model
                 <span class="csv-format-warning-title">CSV Format Issues Detected</span>
             </div>
             <div class="csv-format-warning-body">
-                The source file has structural inconsistencies that may affect data quality analysis.
-                This could indicate unescaped delimiters, malformed rows, or encoding issues.
+                {failure_message}. These rows were skipped during loading.
+                This typically indicates unescaped delimiters, malformed rows, or encoding issues.
             </div>
             <div class="csv-format-warning-details">
+                <div class="csv-format-warning-row">
+                    <span class="csv-format-warning-row-label">Rows with issues</span>
+                    <span class="csv-format-warning-row-value">{failure_count:,}</span>
+                </div>
+                <div class="csv-format-warning-row">
+                    <span class="csv-format-warning-row-label">Expected columns</span>
+                    <span class="csv-format-warning-row-value">{expected_cols}</span>
+                </div>
                 <div class="csv-format-warning-row">
                     <span class="csv-format-warning-row-label">Detected delimiter</span>
                     <span class="csv-format-warning-row-value">{delimiter_display}</span>
@@ -14579,21 +14570,15 @@ the largest difference between classes - a strong candidate for predictive model
                     <span class="csv-format-warning-row-label">Encoding</span>
                     <span class="csv-format-warning-row-value">{encoding}</span>
                 </div>
-                <div class="csv-format-warning-row">
-                    <span class="csv-format-warning-row-label">Expected columns</span>
-                    <span class="csv-format-warning-row-value">{expected_cols}</span>
-                </div>
-                <div class="csv-format-warning-row">
-                    <span class="csv-format-warning-row-label">Rows checked</span>
-                    <span class="csv-format-warning-row-value">{rows_checked:,}</span>
-                </div>{rows_sample_html}
             </div>
-            <div class="csv-format-warning-issues">{issues_html}</div>
         </div>'''
 
     def _generate_skipped_rows_warning(self, profile: ProfileResult) -> str:
         """
         Generate a warning banner if rows were skipped during CSV parsing.
+
+        Note: This is now only shown if _generate_csv_format_warning doesn't cover
+        the skipped rows (e.g., non-CSV files or other skip reasons).
 
         Args:
             profile: ProfileResult containing file_metadata with skipped_rows info
@@ -14601,6 +14586,12 @@ the largest difference between classes - a strong candidate for predictive model
         Returns:
             HTML string for the warning banner, or empty string if no skipped rows
         """
+        # Check if csv_format_warning already covers this
+        csv_issues = getattr(profile, 'csv_format_issues', None)
+        if csv_issues and not csv_issues.get('valid', True):
+            # CSV format warning already shown, don't duplicate
+            return ''
+
         # Check if file_metadata exists and has skipped_rows
         file_metadata = getattr(profile, 'file_metadata', None)
         if not file_metadata:

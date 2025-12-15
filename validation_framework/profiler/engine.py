@@ -229,8 +229,10 @@ def check_csv_format(file_path: str, sample_rows: int = 1000) -> Dict[str, Any]:
     if result['inconsistent_rows']:
         count = len(result['inconsistent_rows'])
         row_word = "row has" if count == 1 else "rows have"
+        # Add context about sample size if we hit the limit (rows_checked > sample_rows means we broke early)
+        checked_note = f" (checked first {sample_rows:,} rows)" if result['rows_checked'] > sample_rows else ""
         result['issues'].append(
-            f"{count} {row_word} inconsistent column counts "
+            f"{count} {row_word} inconsistent column counts{checked_note} "
             f"(expected {result['column_count']}, delimiter={repr(result['delimiter'])})"
         )
 
