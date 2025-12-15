@@ -21,6 +21,16 @@ import logging
 from typing import Any, Dict, Optional
 from decimal import Decimal as PyDecimal
 
+import numpy as np
+
+# Import pyarrow once at module level
+try:
+    import pyarrow as pa
+    HAS_PYARROW = True
+except ImportError:
+    pa = None
+    HAS_PYARROW = False
+
 logger = logging.getLogger(__name__)
 
 # Track which type warnings we've already logged to avoid spam
@@ -58,20 +68,12 @@ def to_hashable(value: Any) -> Any:
             return str(value)
 
     # numpy scalar types
-    try:
-        import numpy as np
-        if isinstance(value, np.generic):
-            return value.item()  # Convert to Python native type
-    except ImportError:
-        pass
+    if isinstance(value, np.generic):
+        return value.item()  # Convert to Python native type
 
     # PyArrow scalar types
-    try:
-        import pyarrow as pa
-        if hasattr(pa, 'Scalar') and isinstance(value, pa.Scalar):
-            return to_hashable(value.as_py())
-    except ImportError:
-        pass
+    if HAS_PYARROW and hasattr(pa, 'Scalar') and isinstance(value, pa.Scalar):
+        return to_hashable(value.as_py())
 
     # Lists, arrays, tuples -> tuple of hashable values (for small ones) or string
     if isinstance(value, (list, tuple)):
@@ -83,14 +85,10 @@ def to_hashable(value: Any) -> Any:
         return f"[{len(value)} items]"
 
     # numpy arrays
-    try:
-        import numpy as np
-        if isinstance(value, np.ndarray):
-            if value.size <= 10:
-                return tuple(to_hashable(v) for v in value.flat)
-            return f"array({value.shape}, {value.dtype})"
-    except ImportError:
-        pass
+    if isinstance(value, np.ndarray):
+        if value.size <= 10:
+            return tuple(to_hashable(v) for v in value.flat)
+        return f"array({value.shape}, {value.dtype})"
 
     # Dicts/maps -> frozenset of tuples or string
     if isinstance(value, dict):
