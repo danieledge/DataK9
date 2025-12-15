@@ -101,17 +101,21 @@ class CSVLoader(DataLoader):
 
         try:
             # Use chunksize for memory-efficient reading
-            for chunk in pd.read_csv(
-                self.file_path,
-                delimiter=delimiter,
-                encoding=encoding,
-                header=header,
-                chunksize=self.chunk_size,
-                low_memory=False,
-                on_bad_lines='warn',  # Warn but don't fail on bad lines
-                quoting=0,  # QUOTE_MINIMAL - handle quoted fields properly
-            ):
-                yield chunk
+            # Suppress pandas warnings about skipped lines to avoid flooding console
+            import warnings
+            with warnings.catch_warnings():
+                warnings.filterwarnings('ignore', message='Skipping line')
+                for chunk in pd.read_csv(
+                    self.file_path,
+                    delimiter=delimiter,
+                    encoding=encoding,
+                    header=header,
+                    chunksize=self.chunk_size,
+                    low_memory=False,
+                    on_bad_lines='skip',  # Skip bad lines silently
+                    quoting=0,  # QUOTE_MINIMAL - handle quoted fields properly
+                ):
+                    yield chunk
 
         except pd.errors.EmptyDataError:
             logger.warning(f"Empty CSV file: {self.file_path}")

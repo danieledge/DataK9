@@ -1788,12 +1788,20 @@ class DataProfiler:
                     else:
                         # CSV/other: read with nrows limit
                         # Use delimiter from loader_kwargs if provided (for pipe-delimited, tab-delimited, etc.)
-                        csv_kwargs = {'nrows': ml_sample_size}
+                        csv_kwargs = {
+                            'nrows': ml_sample_size,
+                            'on_bad_lines': 'skip',  # Skip malformed rows instead of failing
+                        }
                         if 'delimiter' in loader_kwargs:
                             csv_kwargs['delimiter'] = loader_kwargs['delimiter']
                         if 'encoding' in loader_kwargs:
                             csv_kwargs['encoding'] = loader_kwargs['encoding']
-                        ml_df = pd.read_csv(file_path, **csv_kwargs)
+
+                        # Suppress pandas warnings about skipped lines
+                        import warnings
+                        with warnings.catch_warnings():
+                            warnings.filterwarnings('ignore', message='Skipping line')
+                            ml_df = pd.read_csv(file_path, **csv_kwargs)
 
                     # Build semantic info from columns for intelligent analysis
                     column_semantic_info = {}
