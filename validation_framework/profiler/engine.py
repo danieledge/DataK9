@@ -1787,10 +1787,16 @@ class DataProfiler:
                         logger.debug(f"💾 ML sampling: loaded {len(ml_df):,} rows from {groups_to_read if total_rows > ml_sample_size else num_row_groups} row groups (vs {total_rows:,} total)")
                     else:
                         # CSV/other: read with nrows limit
-                        # Use delimiter from loader_kwargs if provided (for pipe-delimited, tab-delimited, etc.)
+                        # Track skipped rows for summary
+                        ml_skipped_rows = []
+
+                        def track_ml_bad_line(bad_line):
+                            ml_skipped_rows.append(len(ml_skipped_rows) + 2)
+                            return None
+
                         csv_kwargs = {
                             'nrows': ml_sample_size,
-                            'on_bad_lines': 'skip',  # Skip malformed rows instead of failing
+                            'on_bad_lines': track_ml_bad_line,
                         }
                         if 'delimiter' in loader_kwargs:
                             csv_kwargs['delimiter'] = loader_kwargs['delimiter']
@@ -1802,6 +1808,9 @@ class DataProfiler:
                         with warnings.catch_warnings():
                             warnings.filterwarnings('ignore', message='Skipping line')
                             ml_df = pd.read_csv(file_path, **csv_kwargs)
+
+                        if ml_skipped_rows:
+                            logger.debug(f"ML sampling skipped {len(ml_skipped_rows)} malformed rows")
 
                     # Build semantic info from columns for intelligent analysis
                     column_semantic_info = {}

@@ -99,9 +99,16 @@ class CSVLoader(DataLoader):
         encoding = self.kwargs.get("encoding", "utf-8")
         header = self.kwargs.get("header", 0)
 
+        # Track skipped rows for summary reporting
+        skipped_rows = []
+
+        def track_bad_line(bad_line):
+            """Track bad lines instead of printing each one."""
+            skipped_rows.append(len(skipped_rows) + 2)  # +2 for 1-indexed + header
+            return None  # Return None to skip the line
+
         try:
             # Use chunksize for memory-efficient reading
-            # Suppress pandas warnings about skipped lines to avoid flooding console
             import warnings
             with warnings.catch_warnings():
                 warnings.filterwarnings('ignore', message='Skipping line')
@@ -112,10 +119,21 @@ class CSVLoader(DataLoader):
                     header=header,
                     chunksize=self.chunk_size,
                     low_memory=False,
-                    on_bad_lines='skip',  # Skip bad lines silently
+                    on_bad_lines=track_bad_line,  # Track and skip bad lines
                     quoting=0,  # QUOTE_MINIMAL - handle quoted fields properly
                 ):
                     yield chunk
+
+            # Log summary of skipped rows (if any)
+            if skipped_rows:
+                if len(skipped_rows) <= 5:
+                    logger.warning(f"Skipped {len(skipped_rows)} malformed row(s): lines {skipped_rows}")
+                else:
+                    first_few = skipped_rows[:3]
+                    logger.warning(
+                        f"Skipped {len(skipped_rows)} malformed rows "
+                        f"(first few: lines {first_few}...)"
+                    )
 
         except pd.errors.EmptyDataError:
             logger.warning(f"Empty CSV file: {self.file_path}")
