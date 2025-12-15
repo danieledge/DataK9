@@ -44,6 +44,7 @@ from validation_framework.profiler.profile_result import (
     CorrelationResult,
 )
 from validation_framework.profiler.column_intelligence import SmartColumnAnalyzer
+from validation_framework.profiler.parquet_type_handler import to_serializable
 
 logger = logging.getLogger(__name__)
 
@@ -212,14 +213,22 @@ class StatisticsCalculator:
         if not value_counts:
             return
 
-        sorted_values = sorted(value_counts.items(), key=lambda x: x[1], reverse=True)
-        stats.mode = sorted_values[0][0]
+        # Sort by count, handling potential comparison errors with complex types
+        try:
+            sorted_values = sorted(value_counts.items(), key=lambda x: x[1], reverse=True)
+        except TypeError:
+            # If comparison fails, convert to list and sort
+            sorted_values = list(value_counts.items())
+            sorted_values.sort(key=lambda x: x[1], reverse=True)
+
+        # Use to_serializable for safe handling of all Parquet types
+        stats.mode = to_serializable(sorted_values[0][0])
         stats.mode_frequency = sorted_values[0][1]
 
-        # Top values (top 10)
+        # Top values (top 10) - use to_serializable for safe JSON serialization
         stats.top_values = [
             {
-                "value": str(val),
+                "value": to_serializable(val),
                 "count": count,
                 "percentage": round(100 * count / non_null_count, 2) if non_null_count > 0 else 0
             }

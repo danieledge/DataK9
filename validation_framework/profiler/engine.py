@@ -30,6 +30,7 @@ import socket
 from validation_framework.profiler.column_intelligence import SmartColumnAnalyzer
 from validation_framework.loaders.factory import LoaderFactory
 from validation_framework.utils.chunk_size_calculator import ChunkSizeCalculator
+from validation_framework.profiler.parquet_type_handler import to_hashable, to_serializable, get_dtype_category
 
 # Phase 1 Profiler Enhancements
 try:
@@ -2383,13 +2384,9 @@ class DataProfiler:
                     break  # Stop if we hit the limit mid-iteration
                 # Note: Counts are from sampled data, not exact counts
                 # This is acceptable as value_counts is for cardinality estimation
-                # Handle unhashable types (numpy arrays, lists) by converting to string
-                try:
-                    profile["value_counts"][val] = profile["value_counts"].get(val, 0) + count
-                except TypeError:
-                    # Value is unhashable (e.g., numpy array, list) - convert to string
-                    str_val = str(val)
-                    profile["value_counts"][str_val] = profile["value_counts"].get(str_val, 0) + count
+                # Use to_hashable() to handle all Parquet types (arrays, structs, etc.)
+                hashable_val = to_hashable(val)
+                profile["value_counts"][hashable_val] = profile["value_counts"].get(hashable_val, 0) + count
 
         # Numeric analysis (memory-efficient sampling for statistics)
         # Use intelligent sampling based on column semantics
