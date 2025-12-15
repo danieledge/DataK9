@@ -498,8 +498,9 @@ def version():
 @click.option('--analysis-sample-size', type=int, default=100000, help='Sample size for analysis when file exceeds this many rows (default: 100000). Files <= this size are analyzed fully.')
 @click.option('--field-descriptions', type=click.Path(exists=True), help='YAML file with friendly field names and descriptions for better anomaly explanations')
 @click.option('--correlation-threshold', type=float, default=None, help='Minimum absolute correlation to report (default: 0.3, Cohen\'s medium effect). Range: 0.0-1.0')
+@click.option('--verbose', '-v', is_flag=True, help='Show detailed progress with timestamps for debugging')
 def profile(file_path, format, delimiter, database, table, query, html_output, json_output, config_output, chunk_size, sample, no_memory_check, log_level,
-            disable_temporal, disable_pii, disable_correlation, disable_all_enhancements, no_ml, full_analysis, analysis_sample_size, field_descriptions, correlation_threshold):
+            disable_temporal, disable_pii, disable_correlation, disable_all_enhancements, no_ml, full_analysis, analysis_sample_size, field_descriptions, correlation_threshold, verbose):
     """
     Profile a data file or database table to understand its structure and quality.
 
@@ -731,7 +732,9 @@ def profile(file_path, format, delimiter, database, table, query, html_output, j
                     delim_display = repr(detected_delimiter).strip("'")
                     po.info(f"Auto-detected delimiter: {delim_display}")
 
+            import time as _time
             last_phase = [None]  # Use list to allow modification in nested function
+            phase_start = [_time.time()]  # Track phase timing
             def progress_callback(msg, current=0, total=0):
                 """Progress callback that shows clear phase transitions."""
                 if current > 0:
@@ -741,8 +744,18 @@ def profile(file_path, format, delimiter, database, table, query, html_output, j
                     # Print phase changes on new lines so user sees progress
                     if msg != last_phase[0]:
                         po.progress_done()  # Clear any progress bar
-                        print(f"  -> {msg}", flush=True)
+                        if verbose:
+                            # Show timing for previous phase
+                            if last_phase[0]:
+                                elapsed = _time.time() - phase_start[0]
+                                print(f"       ({elapsed:.1f}s)", flush=True)
+                            # Show timestamp for new phase
+                            timestamp = _time.strftime("%H:%M:%S")
+                            print(f"  [{timestamp}] {msg}", flush=True)
+                        else:
+                            print(f"  -> {msg}", flush=True)
                         last_phase[0] = msg
+                        phase_start[0] = _time.time()
 
             profile_result = profiler.profile_file(
                 file_path=file_path,
@@ -752,6 +765,10 @@ def profile(file_path, format, delimiter, database, table, query, html_output, j
                 **loader_kwargs
             )
             po.progress_done()  # Clear the progress line
+            # Show final phase timing in verbose mode
+            if verbose and last_phase[0]:
+                elapsed = _time.time() - phase_start[0]
+                print(f"       ({elapsed:.1f}s)", flush=True)
 
         # Format file size
         size_bytes = profile_result.file_size_bytes
