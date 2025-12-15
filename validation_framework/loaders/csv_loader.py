@@ -121,7 +121,6 @@ class CSVLoader(DataLoader):
                     encoding=encoding,
                     header=header,
                     chunksize=self.chunk_size,
-                    low_memory=False,
                     on_bad_lines=track_bad_line,  # Track and skip bad lines
                     engine='python',  # Required for callable on_bad_lines
                     quoting=0,  # QUOTE_MINIMAL - handle quoted fields properly
