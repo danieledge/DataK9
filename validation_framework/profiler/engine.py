@@ -1343,9 +1343,11 @@ class DataProfiler:
         # For CSV and other formats: iterate through all chunks (full scan)
         chunk_processing_start = time.time()
 
+        import sys
         if use_stratified_chunks:
             # PARQUET PATH: Use stratified chunk iterator (memory-efficient)
             # Each chunk is bounded by chunk_size, data comes from across the file
+            print(f"*** USING STRATIFIED CHUNKS (large parquet) ***", file=sys.stderr, flush=True)
             chunk_iterator = self._create_stratified_parquet_chunks(
                 file_path,
                 sample_size=ANALYSIS_SAMPLE_SIZE,
@@ -1355,10 +1357,14 @@ class DataProfiler:
             total_chunks_str = "?"
         else:
             # CSV/OTHER PATH: Use regular loader iterator (full scan for accurate counts)
+            print(f"*** USING REGULAR LOADER ({file_format}) ***", file=sys.stderr, flush=True)
             chunk_iterator = loader.load()
 
         # Process chunks from either iterator (unified processing for both paths)
+        import sys
+        print(f"*** ENTERING CHUNK LOOP ***", file=sys.stderr, flush=True)
         for chunk_idx, chunk in enumerate(chunk_iterator):
+            print(f"*** CHUNK {chunk_idx}: got {len(chunk)} rows ***", file=sys.stderr, flush=True)
             # Handle sampling: if we've already reached sample_rows, don't process more
             if sample_rows and row_count >= sample_rows:
                 logger.debug(f"📊 Sample limit reached ({sample_rows:,} rows) - stopping chunk processing")
