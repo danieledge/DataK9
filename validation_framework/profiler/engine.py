@@ -2447,22 +2447,28 @@ class DataProfiler:
         # Value frequency (limit to prevent memory issues)
         # Only compute value_counts if we haven't reached the limit
         if len(profile["value_counts"]) < 10000:
-            # CRITICAL MEMORY FIX: Always sample before computing value_counts
-            # Computing value_counts on 2M rows creates large temporary structures
-            # Sample to max 10K rows to prevent memory spikes
-            max_sample_size = 10000
+            # PERFORMANCE: Reduced from 10K to 2K samples - still statistically valid
+            # for cardinality estimation but much faster on pyarrow types
+            max_sample_size = 2000
             if len(non_null_series) > max_sample_size:
                 sample_for_freq = non_null_series.sample(n=max_sample_size, random_state=42)
             else:
                 sample_for_freq = non_null_series
 
+            # Convert to Python objects once before value_counts for pyarrow types
+            # This avoids repeated pyarrow->python conversion in the loop
+            if hasattr(sample_for_freq, 'to_numpy'):
+                try:
+                    sample_for_freq = pd.Series(sample_for_freq.to_numpy())
+                except Exception:
+                    pass  # Keep original if conversion fails
+
             value_freq = sample_for_freq.value_counts()
 
-            for val, count in value_freq.items():
-                if len(profile["value_counts"]) >= 10000:
-                    break  # Stop if we hit the limit mid-iteration
-                # Note: Counts are from sampled data, not exact counts
-                # This is acceptable as value_counts is for cardinality estimation
+            # Limit iteration to top 1000 values (sorted by frequency)
+            for idx, (val, count) in enumerate(value_freq.items()):
+                if idx >= 1000 or len(profile["value_counts"]) >= 10000:
+                    break
                 # Use to_hashable() to handle all Parquet types (arrays, structs, etc.)
                 hashable_val = to_hashable(val)
                 profile["value_counts"][hashable_val] = profile["value_counts"].get(hashable_val, 0) + count
