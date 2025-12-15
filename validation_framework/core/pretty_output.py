@@ -38,6 +38,10 @@ class PrettyOutput:
     WARN = "⚠"
     INFO_SYMBOL = "ℹ"
     MAGNIFY = "🔍"
+
+    # Spinner animation frames
+    SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+    _spinner_index = 0
     BRAIN = "🧠"
     CHART = "📊"
     FILE = "📄"
@@ -279,21 +283,70 @@ class PrettyOutput:
     @staticmethod
     def progress_status(message, clear_line=True):
         """
-        Print a progress status that overwrites the current line.
+        Print a progress status that overwrites the current line with spinner.
 
         Args:
             message: Status message to display
             clear_line: If True, clear the line before printing (for overwriting)
         """
         if clear_line and sys.stdout.isatty():
+            # Get spinner frame and advance
+            spinner = PrettyOutput.SPINNER_FRAMES[PrettyOutput._spinner_index]
+            PrettyOutput._spinner_index = (PrettyOutput._spinner_index + 1) % len(PrettyOutput.SPINNER_FRAMES)
+
             # Clear line and move cursor to start
             terminal_width = PrettyOutput.get_terminal_width()
-            # Truncate message if too long
-            display_msg = message[:terminal_width - 5] + "..." if len(message) > terminal_width - 2 else message
-            print(f"\r{PrettyOutput.DIM}  ↳ {display_msg}{PrettyOutput.RESET}" + " " * 20, end="", flush=True)
+            # Truncate message if too long (account for spinner)
+            max_msg_len = terminal_width - 10
+            display_msg = message[:max_msg_len - 3] + "..." if len(message) > max_msg_len else message
+            print(f"\r{PrettyOutput.PRIMARY}{spinner}{PrettyOutput.RESET} {PrettyOutput.DIM}{display_msg}{PrettyOutput.RESET}" + " " * 20, end="", flush=True)
         else:
             # Non-TTY: print on new line
             print(f"  {PrettyOutput.DIM}↳ {message}{PrettyOutput.RESET}")
+
+    @staticmethod
+    def progress_bar(current, total, message="", bar_width=20):
+        """
+        Print a progress bar with spinner, percentage and counts.
+
+        Args:
+            current: Current progress value
+            total: Total value (if 0 or None, shows indeterminate spinner)
+            message: Optional message to display
+            bar_width: Width of the progress bar in characters
+        """
+        if not sys.stdout.isatty():
+            # Non-TTY: just print status
+            if total and total > 0:
+                pct = (current / total) * 100
+                print(f"  {message}: {current:,} / {total:,} ({pct:.0f}%)")
+            else:
+                print(f"  {message}: {current:,} rows")
+            return
+
+        # Get spinner frame and advance
+        spinner = PrettyOutput.SPINNER_FRAMES[PrettyOutput._spinner_index]
+        PrettyOutput._spinner_index = (PrettyOutput._spinner_index + 1) % len(PrettyOutput.SPINNER_FRAMES)
+
+        terminal_width = PrettyOutput.get_terminal_width()
+
+        if total and total > 0:
+            # Determinate progress bar
+            pct = min(100, (current / total) * 100)
+            filled = int(bar_width * pct / 100)
+            bar = "█" * filled + "░" * (bar_width - filled)
+            status = f"{PrettyOutput.PRIMARY}{spinner}{PrettyOutput.RESET} [{PrettyOutput.PRIMARY}{bar}{PrettyOutput.RESET}] {current:,} / {total:,} ({pct:.0f}%)"
+            if message:
+                status = f"{PrettyOutput.PRIMARY}{spinner}{PrettyOutput.RESET} {PrettyOutput.DIM}{message}{PrettyOutput.RESET} [{PrettyOutput.PRIMARY}{bar}{PrettyOutput.RESET}] {current:,} / {total:,} ({pct:.0f}%)"
+        else:
+            # Indeterminate - just show spinner and count
+            status = f"{PrettyOutput.PRIMARY}{spinner}{PrettyOutput.RESET} {PrettyOutput.DIM}{message}{PrettyOutput.RESET} {current:,} rows..."
+
+        # Truncate if too long
+        if len(status) > terminal_width - 2:
+            status = status[:terminal_width - 5] + "..."
+
+        print(f"\r{status}" + " " * 10, end="", flush=True)
 
     @staticmethod
     def progress_done():

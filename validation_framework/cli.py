@@ -731,11 +731,18 @@ def profile(file_path, format, delimiter, database, table, query, html_output, j
                     delim_display = repr(detected_delimiter).strip("'")
                     po.info(f"Auto-detected delimiter: {delim_display}")
 
+            def progress_callback(msg, current=0, total=0):
+                """Progress callback that shows progress bar when totals available."""
+                if current > 0:
+                    po.progress_bar(current, total, msg)
+                else:
+                    po.progress_status(msg)
+
             profile_result = profiler.profile_file(
                 file_path=file_path,
                 file_format=format,
                 sample_rows=sample,
-                progress_callback=po.progress_status,
+                progress_callback=progress_callback,
                 **loader_kwargs
             )
             po.progress_done()  # Clear the progress line

@@ -1186,11 +1186,17 @@ class DataProfiler:
         Returns:
             ProfileResult with comprehensive profile information
         """
-        def _progress(msg: str):
+        def _progress(msg: str, current: int = 0, total: int = 0):
             """Helper to call progress callback if provided."""
             if progress_callback:
                 try:
-                    progress_callback(msg)
+                    # Try new signature with current/total first
+                    import inspect
+                    sig = inspect.signature(progress_callback)
+                    if len(sig.parameters) >= 3:
+                        progress_callback(msg, current, total)
+                    else:
+                        progress_callback(msg)
                 except Exception:
                     pass  # Don't let callback errors stop profiling
         start_time = time.time()
@@ -1284,6 +1290,7 @@ class DataProfiler:
 
         # Try to get metadata for enhanced profiling (works for Parquet and other formats)
         total_chunks_str = "?"
+        total_rows = 0  # Initialize - will be updated if metadata available
         file_metadata = {}
         try:
             if hasattr(loader, 'get_metadata'):
@@ -1365,7 +1372,7 @@ class DataProfiler:
 
             row_count += len(chunk)
             logger.debug(f"📊 Processing chunk {chunk_idx + 1}/{total_chunks_str} ({len(chunk):,} rows) - Total: {row_count:,} rows")
-            _progress(f"Processing data: {row_count:,} rows...")
+            _progress("Processing", row_count, total_rows or 0)
 
             # Memory safety check - will raise MemoryError if critical threshold exceeded
             self._check_memory_safety(chunk_idx, row_count)
