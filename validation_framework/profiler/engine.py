@@ -1470,34 +1470,25 @@ class DataProfiler:
 
                     if is_likely_datetime:
                         try:
+                            print(f"*** DT: parsing {col} ***", file=sys.stderr, flush=True)
+                            # PERFORMANCE: Sample before datetime parsing (67K rows is slow)
+                            col_data = chunk[col]
+                            if len(col_data) > MAX_TEMPORAL_SAMPLES:
+                                col_data = col_data.sample(n=MAX_TEMPORAL_SAMPLES, random_state=42)
                             # Try to convert to datetime
-                            dt_values = pd.to_datetime(chunk[col], errors='coerce')
+                            dt_values = pd.to_datetime(col_data, errors='coerce')
+                            print(f"*** DT: {col} done ***", file=sys.stderr, flush=True)
                             # Only keep if at least 50% of non-null values converted successfully
-                            non_null_count = chunk[col].notna().sum()
+                            non_null_count = col_data.notna().sum()
                             if non_null_count > 0:
                                 converted_count = dt_values.notna().sum()
                                 if converted_count / non_null_count >= 0.5:
                                     if col not in datetime_data:
                                         datetime_data[col] = []
 
-                                    # Only collect if we haven't reached the limit
-                                    current_count = len(datetime_data[col])
-                                    if current_count < MAX_TEMPORAL_SAMPLES:
-                                        # MEMORY EFFICIENT: Sample from Series before tolist()
-                                        dt_series = dt_values.dropna()
-                                        samples_needed = MAX_TEMPORAL_SAMPLES - current_count
-
-                                        # Sample from Series first to avoid memory spike
-                                        if len(dt_series) > samples_needed:
-                                            sampled = dt_series.sample(n=samples_needed, random_state=42 + chunk_idx)
-                                            datetime_data[col].extend(sampled.tolist())
-                                            if col not in sampling_triggered:
-                                                sampling_triggered[col] = row_count
-                                                logger.debug(f"💾 Memory optimization: Column '{col}' temporal sampling limit reached at {row_count:,} rows (using {MAX_TEMPORAL_SAMPLES:,} samples)")
-                                        else:
-                                            # Size is under limit - use head() to bound
-                                            bounded_dt = dt_series.head(samples_needed)
-                                            datetime_data[col].extend(bounded_dt.tolist())
+                                    # Already sampled above, just collect non-null values
+                                    dt_series = dt_values.dropna()
+                                    datetime_data[col].extend(dt_series.tolist())
                         except (ValueError, TypeError) as e:
                             logger.debug(f"Could not convert column '{col}' to datetime: {e}")
 
