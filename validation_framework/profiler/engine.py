@@ -632,6 +632,7 @@ class DataProfiler:
             logger.debug(f"⏱  PII detection completed in {phase_timings['pii_detection']:.2f}s")
 
         # Phase 2: Apply dual semantic tagging (Schema.org + FIBO) to all columns
+        _progress("Analyzing semantic types...")
         semantic_start = time.time()
         logger.debug("🧠 Running dual semantic tagging (Schema.org + FIBO) on all columns...")
         for column in columns:
@@ -737,6 +738,7 @@ class DataProfiler:
         logger.debug(f"⏱  Semantic tagging completed in {phase_timings['semantic_tagging']:.2f}s")
 
         # Calculate correlations (using extracted StatisticsCalculator)
+        _progress("Calculating correlations...")
         correlation_start = time.time()
         correlations = self.stats_calculator.calculate_correlations(numeric_data, row_count)
         phase_timings['basic_correlation'] = time.time() - correlation_start
@@ -972,6 +974,7 @@ class DataProfiler:
         # Deduplicate correlations before returning
         correlations = self._deduplicate_correlations(correlations)
 
+        _progress("Generating report...")
         return ProfileResult(
             file_name=f"{name} (DataFrame)",
             file_path="",
@@ -1160,6 +1163,7 @@ class DataProfiler:
         file_format: Optional[str] = None,
         declared_schema: Optional[Dict[str, str]] = None,
         sample_rows: Optional[int] = None,
+        progress_callback: Optional[callable] = None,
         **loader_kwargs
     ) -> ProfileResult:
         """
@@ -1170,11 +1174,19 @@ class DataProfiler:
             file_format: Format (csv, excel, json, parquet). Auto-detected from extension if not specified.
             declared_schema: Optional declared schema {column: type}
             sample_rows: Optional limit - profile only the first N rows (useful for large files)
+            progress_callback: Optional callback function(status_message) for progress updates
             **loader_kwargs: Additional arguments for data loader
 
         Returns:
             ProfileResult with comprehensive profile information
         """
+        def _progress(msg: str):
+            """Helper to call progress callback if provided."""
+            if progress_callback:
+                try:
+                    progress_callback(msg)
+                except Exception:
+                    pass  # Don't let callback errors stop profiling
         start_time = time.time()
         logger.debug(f"Starting profile of {file_path}")
 
@@ -1235,6 +1247,7 @@ class DataProfiler:
             logger.debug(f"📊 Using specified chunk size: {chunk_size:,} rows")
 
         # Load data iterator
+        _progress("Loading data...")
         loader = LoaderFactory.create_loader(
             file_format=file_format,
             file_path=file_path,
@@ -1346,6 +1359,7 @@ class DataProfiler:
 
             row_count += len(chunk)
             logger.debug(f"📊 Processing chunk {chunk_idx + 1}/{total_chunks_str} ({len(chunk):,} rows) - Total: {row_count:,} rows")
+            _progress(f"Processing data: {row_count:,} rows...")
 
             # Memory safety check - will raise MemoryError if critical threshold exceeded
             self._check_memory_safety(chunk_idx, row_count)
@@ -1524,6 +1538,7 @@ class DataProfiler:
             logger.debug(f"⏱  Temporal analysis completed in {phase_timings['temporal_analysis']:.2f}s")
 
         # Phase 1: Apply PII detection to all columns
+        _progress("Detecting sensitive data (PII)...")
         pii_columns = []
         if self.enable_pii_detection:
             pii_start = time.time()
@@ -1546,6 +1561,7 @@ class DataProfiler:
             logger.debug(f"⏱  PII detection completed in {phase_timings['pii_detection']:.2f}s")
 
         # Phase 2: Apply dual semantic tagging (Schema.org + FIBO) to all columns
+        _progress("Analyzing semantic types...")
         semantic_start = time.time()
         logger.debug("🧠 Running dual semantic tagging (Schema.org + FIBO) on all columns...")
         for column in columns:
@@ -1651,6 +1667,7 @@ class DataProfiler:
         logger.debug(f"⏱  Semantic tagging completed in {phase_timings['semantic_tagging']:.2f}s")
 
         # Calculate correlations (using extracted StatisticsCalculator)
+        _progress("Calculating correlations...")
         correlation_start = time.time()
         correlations = self.stats_calculator.calculate_correlations(numeric_data, row_count)
         phase_timings['basic_correlation'] = time.time() - correlation_start
@@ -1715,6 +1732,7 @@ class DataProfiler:
         phase_timings['generate_config'] = time.time() - config_start
 
         # Phase 3: ML-based Anomaly Detection (Beta)
+        _progress("Running ML analysis...")
         ml_findings = None
         categorical_analysis = None  # Phase 4: Categorical analysis
         pca_analysis = None  # Phase 5: PCA analysis
@@ -2164,6 +2182,7 @@ class DataProfiler:
         # Deduplicate correlations before returning
         correlations = self._deduplicate_correlations(correlations)
 
+        _progress("Generating report...")
         return ProfileResult(
             file_name=file_name,
             file_path=file_path,
@@ -2364,7 +2383,13 @@ class DataProfiler:
                     break  # Stop if we hit the limit mid-iteration
                 # Note: Counts are from sampled data, not exact counts
                 # This is acceptable as value_counts is for cardinality estimation
-                profile["value_counts"][val] = profile["value_counts"].get(val, 0) + count
+                # Handle unhashable types (numpy arrays, lists) by converting to string
+                try:
+                    profile["value_counts"][val] = profile["value_counts"].get(val, 0) + count
+                except TypeError:
+                    # Value is unhashable (e.g., numpy array, list) - convert to string
+                    str_val = str(val)
+                    profile["value_counts"][str_val] = profile["value_counts"].get(str_val, 0) + count
 
         # Numeric analysis (memory-efficient sampling for statistics)
         # Use intelligent sampling based on column semantics

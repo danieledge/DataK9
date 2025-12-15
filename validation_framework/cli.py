@@ -735,8 +735,10 @@ def profile(file_path, format, delimiter, database, table, query, html_output, j
                 file_path=file_path,
                 file_format=format,
                 sample_rows=sample,
+                progress_callback=po.progress_status,
                 **loader_kwargs
             )
+            po.progress_done()  # Clear the progress line
 
         # Format file size
         size_bytes = profile_result.file_size_bytes

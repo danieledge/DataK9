@@ -277,6 +277,32 @@ class PrettyOutput:
             print(f"{PrettyOutput.SUCCESS}{PrettyOutput.CHECK}{PrettyOutput.RESET} {message}")
 
     @staticmethod
+    def progress_status(message, clear_line=True):
+        """
+        Print a progress status that overwrites the current line.
+
+        Args:
+            message: Status message to display
+            clear_line: If True, clear the line before printing (for overwriting)
+        """
+        if clear_line and sys.stdout.isatty():
+            # Clear line and move cursor to start
+            terminal_width = PrettyOutput.get_terminal_width()
+            # Truncate message if too long
+            display_msg = message[:terminal_width - 5] + "..." if len(message) > terminal_width - 2 else message
+            print(f"\r{PrettyOutput.DIM}  ↳ {display_msg}{PrettyOutput.RESET}" + " " * 20, end="", flush=True)
+        else:
+            # Non-TTY: print on new line
+            print(f"  {PrettyOutput.DIM}↳ {message}{PrettyOutput.RESET}")
+
+    @staticmethod
+    def progress_done():
+        """Clear the progress line after completion."""
+        if sys.stdout.isatty():
+            terminal_width = PrettyOutput.get_terminal_width()
+            print("\r" + " " * terminal_width + "\r", end="", flush=True)
+
+    @staticmethod
     def metric(label, value, color=None, indent=2):
         """
         Print a metric with label and value.
