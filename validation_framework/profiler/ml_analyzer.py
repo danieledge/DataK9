@@ -2556,6 +2556,15 @@ class MLAnalyzer:
         numeric_cols, coerced_info = self._get_numeric_columns(df, exclude_binary=True)
         string_cols = df.select_dtypes(include=['object']).columns.tolist()
 
+        # DEFENSIVE: Actually coerce identified numeric columns to ensure they're numeric
+        # This prevents "could not convert string to float" errors in ML operations
+        for col in numeric_cols:
+            if col in df.columns and not pd.api.types.is_numeric_dtype(df[col]):
+                try:
+                    df[col] = pd.to_numeric(df[col], errors='coerce')
+                except Exception as e:
+                    logger.debug(f"Could not coerce column {col} to numeric: {e}")
+
         # Log coercion info for transparency
         if coerced_info:
             coerced_cols = [col for col, info in coerced_info.items() if 'coerced' in info]
