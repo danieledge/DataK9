@@ -1788,9 +1788,13 @@ class DataProfiler:
                             )
                 else:
                     # Standard mode: sample data and run ML analysis
-                    # Note: Individual ML algorithms (clustering, etc.) have their own internal limits
-                    # to prevent memory issues, so we can allow larger samples here
-                    ml_sample_size = min(ANALYSIS_SAMPLE_SIZE, row_count)
+                    # Cap ML sample size at 50K to prevent memory issues (ML algorithms are memory-intensive)
+                    ML_MAX_SAMPLE = 50_000
+                    ml_sample_size = min(ML_MAX_SAMPLE, row_count)
+
+                    if row_count > ML_MAX_SAMPLE:
+                        _progress(f"Sampling {ML_MAX_SAMPLE:,} rows for ML analysis...")
+                        logger.debug(f"ML analysis: sampling {ML_MAX_SAMPLE:,} of {row_count:,} rows to manage memory")
 
                     if file_format == 'parquet':
                         # Parquet: MEMORY-EFFICIENT sampling using row groups
@@ -1800,11 +1804,14 @@ class DataProfiler:
                         total_rows = parquet_file.metadata.num_rows
                         num_row_groups = parquet_file.metadata.num_row_groups
 
+                        groups_to_read = num_row_groups  # Default for small files
                         if total_rows <= ml_sample_size:
-                            # Small file - safe to load entirely
+                            # Small enough file - safe to load entirely
+                            _progress(f"Loading {total_rows:,} rows for ML analysis...")
                             ml_df = parquet_file.read().to_pandas()
                         else:
                             # Large file - sample from random row groups
+                            _progress(f"Sampling {ml_sample_size:,} of {total_rows:,} rows for ML analysis...")
                             # Calculate how many row groups to read to get ~ml_sample_size rows
                             avg_rows_per_group = total_rows / num_row_groups
                             groups_needed = max(1, int(ml_sample_size / avg_rows_per_group) + 1)
@@ -1836,6 +1843,12 @@ class DataProfiler:
                         # CSV/other: read with nrows limit
                         # Track skipped rows for summary
                         ml_skipped_rows = []
+
+                        # Progress message for CSV loading
+                        if row_count > ml_sample_size:
+                            _progress(f"Sampling {ml_sample_size:,} of {row_count:,} rows for ML analysis...")
+                        else:
+                            _progress(f"Loading {row_count:,} rows for ML analysis...")
 
                         def track_ml_bad_line(bad_line):
                             ml_skipped_rows.append(len(ml_skipped_rows) + 2)
