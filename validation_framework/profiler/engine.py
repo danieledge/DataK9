@@ -1509,6 +1509,9 @@ class DataProfiler:
         phase_timings['chunk_processing'] = time.time() - chunk_processing_start
         logger.debug(f"⏱  Chunk processing completed in {phase_timings['chunk_processing']:.2f}s")
 
+        # Show transition from data loading to analysis
+        _progress(f"Data loaded ({row_count:,} rows). Starting analysis...")
+
         # Capture skipped rows info from CSV loader (if any)
         if hasattr(loader, 'skipped_row_count') and loader.skipped_row_count > 0:
             file_metadata['skipped_rows'] = {
@@ -1880,7 +1883,12 @@ class DataProfiler:
                             column_semantic_info[col.name] = col.semantic_info
 
                     # Run ML analysis with semantic context
-                    ml_findings = self.ml_analyzer.analyze(ml_df, column_semantic_info=column_semantic_info)
+                    _progress(f"Analyzing {len(ml_df):,} rows with ML algorithms...")
+                    ml_findings = self.ml_analyzer.analyze(
+                        ml_df,
+                        column_semantic_info=column_semantic_info,
+                        progress_callback=lambda msg: _progress(f"ML: {msg}")
+                    )
 
                     # Update sample_info with actual original row count (ML only sees sampled rows)
                     if 'sample_info' in ml_findings:

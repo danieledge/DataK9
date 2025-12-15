@@ -16,7 +16,7 @@ Enable with --beta-ml flag.
 
 import numpy as np
 import pandas as pd
-from typing import Dict, List, Any, Optional, Tuple
+from typing import Dict, List, Any, Optional, Tuple, Callable
 from collections import Counter
 import re
 import logging
@@ -2501,7 +2501,8 @@ class MLAnalyzer:
 
         return results
 
-    def analyze(self, df: pd.DataFrame, column_semantic_info: Optional[Dict[str, Dict[str, Any]]] = None) -> Dict[str, Any]:
+    def analyze(self, df: pd.DataFrame, column_semantic_info: Optional[Dict[str, Dict[str, Any]]] = None,
+                progress_callback: Optional[Callable[[str], None]] = None) -> Dict[str, Any]:
         """
         Run ML analysis on dataframe.
 
@@ -2509,16 +2510,27 @@ class MLAnalyzer:
             df: DataFrame to analyze (will be sampled if too large)
             column_semantic_info: Dict mapping column names to their semantic info (from profiler)
                                   Each entry has 'semantic_tags', 'primary_tag', etc.
+            progress_callback: Optional callback for progress updates
 
         Returns:
             Dictionary containing ML findings
         """
         start_time = time.time()
 
+        def _ml_progress(msg: str):
+            """Report ML sub-step progress."""
+            if progress_callback:
+                try:
+                    progress_callback(msg)
+                except Exception:
+                    pass
+            logger.debug(f"ML: {msg}")
+
         # Store semantic info for use by detection methods
         self._column_semantic_info = column_semantic_info or {}
 
         # Detect target columns (needed for is_target_like in visualizations)
+        _ml_progress("Detecting target columns...")
         self.detected_targets = self._detect_target_columns(df)
 
         # No internal sampling - engine handles all sampling decisions
@@ -2606,6 +2618,7 @@ class MLAnalyzer:
 
         # 1. Univariate outlier detection with adaptive contamination (only on true numeric cols)
         # Store ALL results for visualization (even 0% outliers)
+        _ml_progress(f"Detecting outliers in {len(actual_numeric_cols)} numeric columns...")
         all_numeric_outlier_stats = {}
         for col in actual_numeric_cols:
             outlier_result = self._detect_numeric_outliers(df, col)
@@ -2621,12 +2634,14 @@ class MLAnalyzer:
         # 2. Clustering analysis (INFORMATIONAL ONLY - shows data structure, not anomalies)
         # Note: Noise points are NOT counted as issues - they overlap with outlier detection
         if len(actual_numeric_cols) >= 2 and self._sklearn_available:
+            _ml_progress("Running clustering analysis...")
             clustering_result = self._analyze_clusters(df, actual_numeric_cols)
             if clustering_result:
                 clustering_result["is_informational"] = True  # Flag as informational
                 findings["clustering_analysis"] = clustering_result
 
         # 4. Format pattern analysis (skip low cardinality columns)
+        _ml_progress(f"Analyzing format patterns in {len(string_cols)} string columns...")
         for col in string_cols:
             unique_count = df[col].nunique()
             if unique_count <= 100:
@@ -2637,6 +2652,7 @@ class MLAnalyzer:
                 findings["format_anomalies"][col] = format_result
 
         # 5. Rare category detection with adaptive threshold
+        _ml_progress("Detecting rare categories...")
         for col in string_cols:
             if self._looks_like_datetime(df[col]):
                 continue
@@ -2647,17 +2663,20 @@ class MLAnalyzer:
                     findings["rare_categories"][col] = rare_result
 
         # 6. Cross-column consistency
+        _ml_progress("Checking cross-column consistency...")
         cross_col_issues = self._check_cross_column_consistency(df)
         findings["cross_column_issues"] = cross_col_issues
 
         # 7. Correlation-based anomaly detection (only on true numeric columns)
         # Correlations between numeric IDs (bank IDs, account numbers) are meaningless
         if len(actual_numeric_cols) >= 2:
+            _ml_progress("Detecting correlation anomalies...")
             corr_anomalies = self._detect_correlation_anomalies(df, actual_numeric_cols)
             if corr_anomalies:
                 findings["correlation_anomalies"] = corr_anomalies
 
         # 8. Temporal pattern analysis
+        _ml_progress("Analyzing temporal patterns...")
         for col in string_cols:
             if self._looks_like_datetime(df[col]):
                 temporal_result = self._analyze_temporal_patterns(df, col)
@@ -2674,6 +2693,7 @@ class MLAnalyzer:
         # 9. Benford's Law analysis (based on numeric properties, not just FIBO tags)
         # Include ALL results (both suspicious and natural) so users see full analysis
         # Track ineligible columns with reasons for fallback display
+        _ml_progress(f"Running Benford's Law analysis on {len(numeric_cols)} columns...")
         benford_ineligible = {}
         for col in numeric_cols:
             # Handle string columns that need coercion to numeric
@@ -2693,11 +2713,13 @@ class MLAnalyzer:
 
         # 10. Autoencoder anomaly detection (on true numeric columns)
         if len(actual_numeric_cols) >= 2 and self._sklearn_available:
+            _ml_progress("Running autoencoder anomaly detection...")
             autoencoder_result = self._detect_autoencoder_anomalies(df, actual_numeric_cols)
             if autoencoder_result:
                 findings["autoencoder_anomalies"] = autoencoder_result
 
         # 11. NEW: Duplicate detection
+        _ml_progress("Detecting duplicates...")
         duplicate_result = self._detect_duplicates(df)
         if duplicate_result:
             findings["duplicate_analysis"] = duplicate_result

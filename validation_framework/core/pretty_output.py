@@ -315,13 +315,16 @@ class PrettyOutput:
             message: Optional message to display
             bar_width: Width of the progress bar in characters
         """
+        import platform
+        is_windows = platform.system() == 'Windows'
+
         if not sys.stdout.isatty():
-            # Non-TTY: just print status
+            # Non-TTY: just print status (only every 10% to avoid spam)
             if total and total > 0:
-                pct = (current / total) * 100
-                print(f"  {message}: {current:,} / {total:,} ({pct:.0f}%)")
-            else:
-                print(f"  {message}: {current:,} rows")
+                pct = int((current / total) * 100)
+                # Only print at 0%, 25%, 50%, 75%, 100% to reduce output
+                if pct in (0, 25, 50, 75, 100) or current == total:
+                    print(f"  {message}: {current:,} / {total:,} ({pct}%)", flush=True)
             return
 
         # Get spinner frame and advance
@@ -335,12 +338,19 @@ class PrettyOutput:
             pct = min(100, (current / total) * 100)
             filled = int(bar_width * pct / 100)
             bar = "#" * filled + "-" * (bar_width - filled)
-            status = f"{PrettyOutput.PRIMARY}{spinner}{PrettyOutput.RESET} [{PrettyOutput.PRIMARY}{bar}{PrettyOutput.RESET}] {current:,} / {total:,} ({pct:.0f}%)"
-            if message:
-                status = f"{PrettyOutput.PRIMARY}{spinner}{PrettyOutput.RESET} {PrettyOutput.DIM}{message}{PrettyOutput.RESET} [{PrettyOutput.PRIMARY}{bar}{PrettyOutput.RESET}] {current:,} / {total:,} ({pct:.0f}%)"
+            # Use plain text on Windows to avoid ANSI issues
+            if is_windows:
+                status = f"{spinner} {message} [{bar}] {current:,} / {total:,} ({pct:.0f}%)"
+            else:
+                status = f"{PrettyOutput.PRIMARY}{spinner}{PrettyOutput.RESET} [{PrettyOutput.PRIMARY}{bar}{PrettyOutput.RESET}] {current:,} / {total:,} ({pct:.0f}%)"
+                if message:
+                    status = f"{PrettyOutput.PRIMARY}{spinner}{PrettyOutput.RESET} {PrettyOutput.DIM}{message}{PrettyOutput.RESET} [{PrettyOutput.PRIMARY}{bar}{PrettyOutput.RESET}] {current:,} / {total:,} ({pct:.0f}%)"
         else:
             # Indeterminate - just show spinner and count
-            status = f"{PrettyOutput.PRIMARY}{spinner}{PrettyOutput.RESET} {PrettyOutput.DIM}{message}{PrettyOutput.RESET} {current:,} rows..."
+            if is_windows:
+                status = f"{spinner} {message} {current:,} rows..."
+            else:
+                status = f"{PrettyOutput.PRIMARY}{spinner}{PrettyOutput.RESET} {PrettyOutput.DIM}{message}{PrettyOutput.RESET} {current:,} rows..."
 
         # Truncate if too long
         if len(status) > terminal_width - 2:
@@ -354,6 +364,8 @@ class PrettyOutput:
         if sys.stdout.isatty():
             terminal_width = PrettyOutput.get_terminal_width()
             print("\r" + " " * terminal_width + "\r", end="", flush=True)
+        # Always print newline to ensure next output starts fresh
+        print("", flush=True)
 
     @staticmethod
     def metric(label, value, color=None, indent=2):
