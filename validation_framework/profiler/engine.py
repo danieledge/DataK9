@@ -2316,13 +2316,23 @@ class DataProfiler:
             pd.api.types.is_string_dtype(series) or
             str(series.dtype).startswith('string')
         )
+
+        # Cache string conversion to avoid multiple expensive .astype(str) calls
+        # This is especially slow for pyarrow string types from parquet files
+        _str_series_cache = None
+        def get_str_series():
+            nonlocal _str_series_cache
+            if _str_series_cache is None:
+                _str_series_cache = series.astype(str)
+            return _str_series_cache
+
         if is_string_type:
             # First, identify values that are NOT already null
             not_null_mask = series.notna()
 
             # Convert to standard string type to handle pyarrow string types
             # that pandas can't use .str accessor on directly
-            str_series = series.astype(str)
+            str_series = get_str_series()
 
             # For non-null values, check if they're whitespace-only
             # This avoids converting NaN to string 'nan' and incorrectly counting it
@@ -2351,8 +2361,8 @@ class DataProfiler:
             # Check for placeholders (case-insensitive, stripped)
             still_not_null = series.notna()
             if still_not_null.any():
-                # Use astype(str) to handle pyarrow string types
-                stripped_lower = series[still_not_null].astype(str).str.strip().str.lower()
+                # Use cached string conversion to handle pyarrow string types
+                stripped_lower = get_str_series()[still_not_null].str.strip().str.lower()
                 placeholder_mask_values = stripped_lower.isin(placeholder_patterns)
 
                 if placeholder_mask_values.any():
@@ -2478,7 +2488,11 @@ class DataProfiler:
         # Use intelligent sampling based on column semantics (reuse intelligence from above)
         MAX_STRING_LENGTH_SAMPLES = intelligence.recommended_sample_size
 
-        string_series = non_null_series.astype(str)
+        # Use cached string conversion if available, otherwise convert non-null series
+        if is_string_type:
+            string_series = get_str_series()[~null_mask]
+        else:
+            string_series = non_null_series.astype(str)
         lengths = string_series.str.len()
         current_count = len(profile["string_lengths"])
         if current_count < MAX_STRING_LENGTH_SAMPLES:
