@@ -205,6 +205,13 @@ class EnhancedCorrelationAnalyzer(BackendAwareProfiler):
         Returns:
             Tuple of (correlation_matrix, significant_pairs)
         """
+        # Filter out constant columns (zero variance) to avoid division by zero
+        non_constant_cols = [col for col in columns if col in df.columns and df[col].std() > 0]
+        if len(non_constant_cols) < 2:
+            return {}, []
+        df = df[non_constant_cols]
+        columns = non_constant_cols
+
         # Calculate correlation matrix
         corr_matrix = df.corr(method='pearson')
 
@@ -258,6 +265,13 @@ class EnhancedCorrelationAnalyzer(BackendAwareProfiler):
         Returns:
             Tuple of (correlation_matrix, significant_pairs)
         """
+        # Filter out constant columns (zero variance) to avoid division by zero
+        non_constant_cols = [col for col in columns if col in df.columns and df[col].std() > 0]
+        if len(non_constant_cols) < 2:
+            return {}, []
+        df = df[non_constant_cols]
+        columns = non_constant_cols
+
         # Calculate correlation matrix
         corr_matrix = df.corr(method='spearman')
 
@@ -311,6 +325,12 @@ class EnhancedCorrelationAnalyzer(BackendAwareProfiler):
         Returns:
             Tuple of (correlation_matrix, significant_pairs)
         """
+        # Filter out constant columns (zero variance) to avoid division by zero
+        non_constant_cols = [col for col in columns if col in df.columns and df[col].std() > 0]
+        if len(non_constant_cols) < 2:
+            return {}, []
+        columns = non_constant_cols
+
         # Kendall correlation matrix (slower, so limit to fewer columns)
         if len(columns) > 10:
             logger.info("Limiting Kendall correlation to first 10 columns (performance)")
@@ -627,6 +647,16 @@ class EnhancedCorrelationAnalyzer(BackendAwareProfiler):
             df_dict[col] = values
 
         df = pd.DataFrame(df_dict)
+
+        # Filter out constant columns (zero variance) to avoid division by zero
+        non_constant_cols = [col for col in df.columns if df[col].std() > 0]
+        if len(non_constant_cols) < 2:
+            return {
+                "available": False,
+                "reason": "Less than 2 non-constant numeric columns available"
+            }
+        df = df[non_constant_cols]
+        numeric_columns = non_constant_cols
 
         # Basic Pearson correlation
         corr_matrix = df.corr()

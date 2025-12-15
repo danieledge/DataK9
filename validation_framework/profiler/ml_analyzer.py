@@ -40,6 +40,11 @@ from validation_framework.reference_data import ReferenceDataLoader
 
 logger = logging.getLogger(__name__)
 
+# Suppress numpy warnings about division by zero in correlation calculations
+# This happens when columns have constant values (zero variance)
+warnings.filterwarnings('ignore', message='invalid value encountered in', category=RuntimeWarning)
+warnings.filterwarnings('ignore', message='divide by zero encountered in', category=RuntimeWarning)
+
 # Default sample size threshold - if file has more rows than this, sampling is applied
 # No hard cap - user controls via --analysis-sample-size parameter
 DEFAULT_SAMPLE_THRESHOLD = 100_000
@@ -2423,6 +2428,10 @@ class MLAnalyzer:
                         # Get valid pairs
                         valid_mask = target_numeric.notna() & feature_numeric.notna()
                         if valid_mask.sum() < 30:
+                            continue
+
+                        # Skip if either series is constant (zero variance)
+                        if target_numeric[valid_mask].std() == 0 or feature_numeric[valid_mask].std() == 0:
                             continue
 
                         # Compute point-biserial correlation (or Pearson if both numeric)

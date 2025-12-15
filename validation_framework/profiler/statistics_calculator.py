@@ -416,6 +416,13 @@ class StatisticsCalculator:
             # This enables proper pairwise deletion during correlation
             df = pd.DataFrame(numeric_data)
 
+            # Filter out constant columns (zero variance) to avoid division by zero
+            non_constant_cols = [col for col in df.columns if df[col].std() > 0]
+            if len(non_constant_cols) < 2:
+                return correlations
+            df = df[non_constant_cols]
+            numeric_columns = non_constant_cols
+
             # Calculate correlation matrix
             corr_matrix = df.corr()
 
