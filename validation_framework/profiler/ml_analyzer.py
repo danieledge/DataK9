@@ -2659,24 +2659,34 @@ class MLAnalyzer:
         # 4. Format pattern analysis (skip low cardinality columns)
         _ml_progress(f"Analyzing format patterns in {len(string_cols)} string columns...")
         for col in string_cols:
-            unique_count = df[col].nunique()
-            if unique_count <= 100:
-                logger.debug(f"Skipping format analysis for categorical column {col}")
+            try:
+                unique_count = df[col].nunique()
+                if unique_count <= 100:
+                    logger.debug(f"Skipping format analysis for categorical column {col}")
+                    continue
+                format_result = self._analyze_format_patterns(df, col)
+                if format_result and format_result.get("anomaly_count", 0) > 0:
+                    findings["format_anomalies"][col] = format_result
+            except TypeError as e:
+                # Skip columns with unhashable types (e.g., numpy arrays from parquet)
+                logger.debug(f"Skipping format analysis for {col}: {e}")
                 continue
-            format_result = self._analyze_format_patterns(df, col)
-            if format_result and format_result.get("anomaly_count", 0) > 0:
-                findings["format_anomalies"][col] = format_result
 
         # 5. Rare category detection with adaptive threshold
         _ml_progress("Detecting rare categories...")
         for col in string_cols:
-            if self._looks_like_datetime(df[col]):
+            try:
+                if self._looks_like_datetime(df[col]):
+                    continue
+                unique_count = df[col].nunique()
+                if 2 <= unique_count <= 100:
+                    rare_result = self._detect_rare_categories(df, col)
+                    if rare_result and rare_result.get("rare_values"):
+                        findings["rare_categories"][col] = rare_result
+            except TypeError as e:
+                # Skip columns with unhashable types (e.g., numpy arrays from parquet)
+                logger.debug(f"Skipping rare category detection for {col}: {e}")
                 continue
-            unique_count = df[col].nunique()
-            if 2 <= unique_count <= 100:
-                rare_result = self._detect_rare_categories(df, col)
-                if rare_result and rare_result.get("rare_values"):
-                    findings["rare_categories"][col] = rare_result
 
         # 6. Cross-column consistency
         _ml_progress("Checking cross-column consistency...")
@@ -3570,7 +3580,8 @@ class MLAnalyzer:
 
         # Extract format patterns
         patterns = values.apply(self._extract_format_pattern)
-        pattern_counts = Counter(patterns)
+        # Use to_hashable to handle any unhashable types from pyarrow
+        pattern_counts = Counter(to_hashable(p) for p in patterns)
 
         if not pattern_counts:
             return None
@@ -3600,7 +3611,8 @@ class MLAnalyzer:
         for idx in anomaly_indices:
             if idx < len(non_null_df):
                 row = non_null_df.iloc[idx]
-                row_dict = {str(k)[:25]: str(v)[:50] for k, v in row.items()}
+                # Use to_hashable to handle numpy arrays and other complex types
+                row_dict = {str(k)[:25]: str(to_hashable(v))[:50] for k, v in row.items()}
                 sample_rows.append(row_dict)
 
         pattern_desc = self._describe_pattern(dominant_pattern)
