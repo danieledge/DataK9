@@ -2205,9 +2205,13 @@ class DataProfiler:
             # First, identify values that are NOT already null
             not_null_mask = series.notna()
 
+            # Convert to standard string type to handle pyarrow string types
+            # that pandas can't use .str accessor on directly
+            str_series = series.astype(str)
+
             # For non-null values, check if they're whitespace-only
             # This avoids converting NaN to string 'nan' and incorrectly counting it
-            whitespace_mask = not_null_mask & (series.str.strip() == '')
+            whitespace_mask = not_null_mask & (str_series.str.strip() == '')
             whitespace_count = whitespace_mask.sum()
 
             # Track whitespace nulls for informational reporting
@@ -2232,7 +2236,8 @@ class DataProfiler:
             # Check for placeholders (case-insensitive, stripped)
             still_not_null = series.notna()
             if still_not_null.any():
-                stripped_lower = series[still_not_null].str.strip().str.lower()
+                # Use astype(str) to handle pyarrow string types
+                stripped_lower = series[still_not_null].astype(str).str.strip().str.lower()
                 placeholder_mask_values = stripped_lower.isin(placeholder_patterns)
 
                 if placeholder_mask_values.any():
