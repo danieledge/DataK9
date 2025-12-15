@@ -1509,9 +1509,6 @@ class DataProfiler:
         phase_timings['chunk_processing'] = time.time() - chunk_processing_start
         logger.debug(f"⏱  Chunk processing completed in {phase_timings['chunk_processing']:.2f}s")
 
-        # Debug: confirm we've exited the chunk loop
-        print(f"\n  [DEBUG] Chunk loop completed. Processed {row_count:,} rows.", flush=True)
-
         # Show transition from data loading to analysis
         _progress(f"Data loaded ({row_count:,} rows). Starting analysis...")
 
@@ -3412,7 +3409,8 @@ class DataProfiler:
 
         # ═══════════════════════════════════════════════════════════════
         # 5. RARE VALUE SUGGESTIONS
-        # If rare categories found, suggest ValidValuesCheck
+        # If rare categories found, suggest ValidValuesCheck with VALID values (allowlist)
+        # This is the correct approach: define what's valid, flag anything else
         # ═══════════════════════════════════════════════════════════════
         rare_categories = ml_findings.get('rare_categories', {})
 
@@ -3421,20 +3419,40 @@ class DataProfiler:
             total_rare_count = rare_data.get('total_rare_count', 0)
 
             if total_rare_count > 0 and rare_values:
-                # Get the rare values (potential typos/errors)
-                rare_value_list = [rv.get('value') for rv in rare_values[:5]]
+                # Get rare value strings for exclusion from valid list
+                rare_value_set = {rv.get('value') for rv in rare_values}
 
-                suggestions.append(ValidationSuggestion(
-                    validation_type="ValidValuesCheck",
-                    severity="INFO",
-                    params={
-                        "field": col_name,
-                        "exclude_values": rare_value_list,
-                        "note": "These rare values may be valid edge cases or data entry errors"
-                    },
-                    reason=f"ML found {len(rare_values)} rare values in {col_name} ({total_rare_count:,} total instances). Review if these should be excluded.",
-                    confidence=55.0
-                ))
+                # Get common values from column profile (the valid ones)
+                valid_values = []
+                if columns:
+                    for col in columns:
+                        if col.name == col_name and col.statistics:
+                            # Get top values from the column statistics
+                            top_values = getattr(col.statistics, 'top_values', None)
+                            if top_values:
+                                # top_values is a list of (value, count) tuples
+                                valid_values = [
+                                    str(v[0]) if isinstance(v, (list, tuple)) else str(v)
+                                    for v in top_values
+                                    if (str(v[0]) if isinstance(v, (list, tuple)) else str(v)) not in rare_value_set
+                                ][:20]  # Limit to top 20 valid values
+                            break
+
+                # Only suggest if we found valid values
+                if valid_values:
+                    rare_value_list = [rv.get('value') for rv in rare_values[:5]]
+                    suggestions.append(ValidationSuggestion(
+                        validation_type="ValidValuesCheck",
+                        severity="INFO",
+                        params={
+                            "field": col_name,
+                            "valid_values": valid_values,
+                            "rare_values_found": rare_value_list,
+                            "note": "Values not in valid_values list will be flagged. Rare values shown for reference."
+                        },
+                        reason=f"ML found {len(rare_values)} rare values in {col_name} ({total_rare_count:,} instances). Suggested allowlist of {len(valid_values)} common values.",
+                        confidence=55.0
+                    ))
 
         return suggestions
 
