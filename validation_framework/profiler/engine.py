@@ -1412,14 +1412,18 @@ class DataProfiler:
 
             # Update profiles with chunk data
             print(f"*** STEP 4: Updating profiles for {len(chunk.columns)} columns ***", file=sys.stderr, flush=True)
+            import time as _time
             for col_idx, col in enumerate(chunk.columns):
-                # Progress every 10 columns
-                if col_idx % 10 == 0 or col_idx == len(chunk.columns) - 1:
-                    print(f"*** COL {col_idx}/{len(chunk.columns)} ***", file=sys.stderr, flush=True)
+                # Progress every 10 columns with timing
+                _col_start = _time.time()
 
                 self._update_column_profile(
                     column_profiles[col], chunk[col], chunk_idx
                 )
+
+                _col_elapsed = _time.time() - _col_start
+                if col_idx % 10 == 0 or col_idx == len(chunk.columns) - 1 or _col_elapsed > 2:
+                    print(f"*** COL {col_idx}/{len(chunk.columns)} ({_col_elapsed:.1f}s) ***", file=sys.stderr, flush=True)
 
                 # Collect numeric data for correlations with memory-efficient sampling
                 # Limit to MAX_CORRELATION_SAMPLES per column to prevent memory exhaustion with very large datasets
