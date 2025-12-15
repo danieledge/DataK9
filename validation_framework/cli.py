@@ -1116,5 +1116,271 @@ def cda_analysis(config_file, output, json_output, fail_on_gaps):
         sys.exit(1)
 
 
+@cli.command('check-policy')
+@click.argument('config_file', type=click.Path(exists=True))
+@click.option('--policy', '-p', type=click.Choice(['none', 'minimal', 'standard', 'strict']),
+              default=None, help='Policy to check against (overrides config)')
+@click.option('--fix', is_flag=True, help='Generate fixed config with missing checks added')
+@click.option('--output', '-o', help='Output path for fixed config (default: {config}_fixed.yaml)')
+@click.option('--json-output', '-j', help='Path for JSON policy report')
+def check_policy(config_file, policy, fix, output, json_output):
+    """
+    Check configuration against validation policy requirements.
+
+    This command analyzes your validation configuration to detect missing
+    required checks according to the specified policy.
+
+    CONFIG_FILE: Path to YAML configuration file to check
+
+    Available policies:
+    - none: No policy enforcement (all checks optional)
+    - minimal: Basic checks only (EmptyFileCheck)
+    - standard: Recommended for most projects (default)
+    - strict: Comprehensive checks for critical pipelines
+
+    Examples:
+
+    \b
+    # Check against standard policy
+    python3 -m validation_framework.cli check-policy config.yaml
+
+    \b
+    # Check against strict policy
+    python3 -m validation_framework.cli check-policy config.yaml --policy strict
+
+    \b
+    # Generate fixed configuration with missing checks
+    python3 -m validation_framework.cli check-policy config.yaml --fix
+
+    \b
+    # Output JSON report for CI/CD
+    python3 -m validation_framework.cli check-policy config.yaml -j policy_report.json
+    """
+    import yaml
+    import json as json_module
+    from validation_framework.policy import (
+        PolicyAnalyzer, POLICIES, get_policy,
+        EnforcementMode, get_default_check_config
+    )
+
+    po.logo()
+    po.header("Policy Compliance Check")
+
+    try:
+        # Load configuration
+        with open(config_file, 'r') as f:
+            config = yaml.safe_load(f)
+
+        job_config = config.get('validation_job', config)
+
+        # Determine which policy to use
+        if policy:
+            # CLI override
+            policy_obj = get_policy(policy)
+            po.info(f"Using CLI-specified policy: {policy}")
+        elif 'policy' in job_config:
+            # From config
+            policy_name = job_config['policy']
+            try:
+                policy_obj = get_policy(policy_name)
+            except KeyError:
+                policy_obj = POLICIES['standard']
+            po.info(f"Using config-specified policy: {policy_name}")
+        else:
+            # Default
+            policy_obj = POLICIES['standard']
+            po.info(f"Using default policy: standard")
+
+        po.blank_line()
+
+        # Display policy details
+        po.subsection(f"Policy: {policy_obj.name}")
+        po.info(f"Description: {policy_obj.description}")
+        po.info(f"Enforcement: {policy_obj.enforcement.value}")
+
+        if policy_obj.universal_checks:
+            po.info(f"Universal checks: {', '.join(policy_obj.universal_checks)}")
+        if policy_obj.format_checks:
+            for fmt, checks in policy_obj.format_checks.items():
+                po.info(f"{fmt.upper()} checks: {', '.join(checks)}")
+        if policy_obj.cda_require_one_of:
+            po.info(f"CDA require one of: {', '.join(policy_obj.cda_require_one_of)}")
+        if policy_obj.cda_require_all:
+            po.info(f"CDA require all: {', '.join(policy_obj.cda_require_all)}")
+
+        po.blank_line()
+
+        # Analyze configuration
+        analyzer = PolicyAnalyzer(policy_obj)
+        violations = analyzer.analyze(config)
+
+        # Separate by severity
+        required = [v for v in violations if v.severity == "required"]
+        recommended = [v for v in violations if v.severity == "recommended"]
+
+        # Display results
+        if not violations:
+            po.success(f"Configuration complies with '{policy_obj.name}' policy")
+            po.blank_line()
+            sys.exit(0)
+
+        # Show violations
+        po.subsection("Policy Violations")
+
+        if required:
+            po.error(f"Required checks missing ({len(required)}):")
+            for v in required:
+                fixable = " [auto-fixable]" if v.auto_fixable else " [needs params]"
+                po.warning(f"  {v.file_name}: {v.check_type}{fixable}")
+                po.info(f"    Reason: {v.reason}")
+
+        if recommended:
+            po.blank_line()
+            po.warning(f"Recommended checks missing ({len(recommended)}):")
+            for v in recommended:
+                po.info(f"  {v.file_name}: {v.check_type}")
+
+        po.blank_line()
+
+        # Summary
+        summary_items = [
+            ("Required Missing", str(len(required)), "red" if required else "green"),
+            ("Recommended Missing", str(len(recommended)), "yellow" if recommended else "green"),
+            ("Auto-Fixable", str(sum(1 for v in violations if v.auto_fixable)), "cyan"),
+        ]
+        po.summary_box("Policy Check Summary", summary_items)
+
+        # Generate fixed config if requested
+        if fix:
+            po.blank_line()
+            po.subsection("Generating Fixed Configuration")
+
+            # Only fix auto-fixable violations
+            fixable = [v for v in required if v.auto_fixable]
+            if not fixable:
+                po.warning("No auto-fixable violations found")
+                po.info("Some violations require manual configuration (field names, patterns, etc.)")
+            else:
+                # Deep copy config and add missing checks
+                import copy
+                fixed_config = copy.deepcopy(config)
+                fixed_job = fixed_config.get('validation_job', fixed_config)
+
+                for violation in fixable:
+                    # Find file config
+                    for file_config in fixed_job.get('files', []):
+                        if file_config.get('name') == violation.file_name:
+                            default_check = get_default_check_config(violation.check_type)
+                            # Convert Severity enum to string for YAML
+                            if 'severity' in default_check:
+                                default_check['severity'] = default_check['severity'].value if hasattr(default_check['severity'], 'value') else str(default_check['severity'])
+                            if 'validations' not in file_config:
+                                file_config['validations'] = []
+                            file_config['validations'].insert(0, default_check)
+                            po.success(f"Added {violation.check_type} to {violation.file_name}")
+                            break
+
+                # Determine output path
+                if not output:
+                    output = config_file.replace('.yaml', '_fixed.yaml').replace('.yml', '_fixed.yml')
+                    if output == config_file:
+                        output = config_file + '_fixed'
+
+                with open(output, 'w') as f:
+                    yaml.dump(fixed_config, f, default_flow_style=False, sort_keys=False)
+                po.success(f"Fixed configuration saved to: {output}")
+
+        # Generate JSON report if requested
+        if json_output:
+            summary = analyzer.get_summary(violations)
+            json_data = {
+                'config_file': config_file,
+                'policy': policy_obj.to_dict(),
+                'compliant': len(required) == 0,
+                'summary': summary,
+                'violations': [
+                    {
+                        'file_name': v.file_name,
+                        'check_type': v.check_type,
+                        'reason': v.reason,
+                        'severity': v.severity,
+                        'auto_fixable': v.auto_fixable,
+                        'cda_field': v.cda_field,
+                    }
+                    for v in violations
+                ]
+            }
+            with open(json_output, 'w') as f:
+                json_module.dump(json_data, f, indent=2)
+            po.success(f"JSON report saved to: {json_output}")
+
+        # Exit code based on required violations
+        if required:
+            po.blank_line()
+            po.error(f"Policy check failed: {len(required)} required check(s) missing")
+            sys.exit(1)
+        else:
+            po.blank_line()
+            po.warning("Policy check passed with recommendations")
+            sys.exit(0)
+
+    except FileNotFoundError as e:
+        po.error(f"File not found: {str(e)}")
+        sys.exit(1)
+
+    except Exception as e:
+        po.error(f"Error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
+
+
+@cli.command('list-policies')
+def list_policies():
+    """
+    List all available validation policies.
+
+    Shows built-in policies and their requirements.
+
+    Examples:
+
+    \b
+    python3 -m validation_framework.cli list-policies
+    """
+    from validation_framework.policy import POLICIES
+
+    po.logo()
+    po.header("Available Validation Policies")
+    po.blank_line()
+
+    for name, policy in POLICIES.items():
+        po.subsection(f"{name.upper()}")
+        po.info(f"Description: {policy.description}")
+        po.info(f"Enforcement: {policy.enforcement.value}")
+
+        if policy.universal_checks:
+            po.info(f"Universal: {', '.join(policy.universal_checks)}")
+        else:
+            po.info("Universal: (none)")
+
+        if policy.format_checks:
+            for fmt, checks in policy.format_checks.items():
+                po.info(f"{fmt.upper()}: {', '.join(checks)}")
+
+        if policy.cda_require_all:
+            po.info(f"CDA require all: {', '.join(policy.cda_require_all)}")
+
+        if policy.cda_require_one_of:
+            po.info(f"CDA require one of: {', '.join(policy.cda_require_one_of)}")
+
+        if policy.recommended_checks:
+            po.info(f"Recommended: {', '.join(policy.recommended_checks)}")
+
+        po.blank_line()
+
+    po.info("Use --policy flag with validate or check-policy commands to select a policy")
+    po.blank_line()
+
+
 if __name__ == '__main__':
     cli()

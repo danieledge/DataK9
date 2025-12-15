@@ -2,6 +2,7 @@
 
 import yaml
 import os
+import logging
 from datetime import datetime
 from typing import Dict, Any, List, Optional
 from pathlib import Path
@@ -21,9 +22,17 @@ from validation_framework.core.constants import (
 )
 from validation_framework.utils.path_patterns import PathPatternExpander
 
+# Policy module imports
+from validation_framework.policy.schema import ValidationPolicy, EnforcementMode, PolicyViolation
+from validation_framework.policy.builtin_policies import POLICIES, DEFAULT_POLICY
+from validation_framework.policy.analyzer import PolicyAnalyzer
+from validation_framework.policy.defaults import get_default_check_config, is_auto_fixable
+
 
 # Alias for backwards compatibility
 YAMLStructureError = ConfigValidationError
+
+logger = logging.getLogger(__name__)
 
 
 class ValidationConfig:
@@ -216,6 +225,11 @@ class ValidationConfig:
         self.parallel_files = processing.get("parallel_files", False)
         self.max_sample_failures = processing.get("max_sample_failures", MAX_SAMPLE_FAILURES)
 
+        # Policy enforcement
+        self.policy = self._load_policy(job_config)
+        self.policy_violations: List[PolicyViolation] = []
+        self._enforce_policy()
+
     def _parse_files(self, files_config: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
         Parse files configuration.
@@ -348,4 +362,149 @@ class ValidationConfig:
             "json_summary_path": self.json_summary_path,
             "fail_on_error": self.fail_on_error,
             "fail_on_warning": self.fail_on_warning,
+            "policy": self.policy.name if self.policy else None,
         }
+
+    # =========================================================================
+    # POLICY ENFORCEMENT
+    # =========================================================================
+
+    def _load_policy(self, job_config: Dict[str, Any]) -> ValidationPolicy:
+        """
+        Load validation policy from config or use default.
+
+        Supports:
+        - Built-in policies by name: policy: "standard"
+        - Custom policy definitions: policy_definition: {...}
+        - Enforcement mode override: policy_enforcement: "error"
+
+        Args:
+            job_config: Job configuration dictionary
+
+        Returns:
+            ValidationPolicy instance
+        """
+        # Check for custom policy definition first
+        if 'policy_definition' in job_config:
+            policy = ValidationPolicy.from_dict(job_config['policy_definition'])
+        else:
+            # Load built-in policy by name
+            policy_name = job_config.get('policy', DEFAULT_POLICY)
+            try:
+                policy = POLICIES[policy_name.lower()]
+            except KeyError:
+                available = ", ".join(POLICIES.keys())
+                logger.warning(
+                    f"Unknown policy '{policy_name}', using '{DEFAULT_POLICY}'. "
+                    f"Available policies: {available}"
+                )
+                policy = POLICIES[DEFAULT_POLICY]
+
+        # Override enforcement mode if specified
+        if 'policy_enforcement' in job_config:
+            enforcement_str = job_config['policy_enforcement'].lower()
+            try:
+                enforcement = EnforcementMode(enforcement_str)
+                policy = policy.copy_with_enforcement(enforcement)
+            except ValueError:
+                logger.warning(
+                    f"Invalid policy_enforcement '{enforcement_str}', "
+                    f"using policy default '{policy.enforcement.value}'"
+                )
+
+        return policy
+
+    def _enforce_policy(self) -> None:
+        """
+        Check configuration against policy and handle violations.
+
+        Behavior depends on enforcement mode:
+        - WARN: Log warnings, continue execution
+        - ERROR: Raise ConfigValidationError if required checks missing
+        - AUTO: Auto-inject missing checks with defaults
+        """
+        # Analyze configuration against policy
+        analyzer = PolicyAnalyzer(self.policy)
+        self.policy_violations = analyzer.analyze(self.raw_config)
+
+        if not self.policy_violations:
+            logger.debug(f"Configuration complies with policy '{self.policy.name}'")
+            return
+
+        # Separate by severity
+        required = [v for v in self.policy_violations if v.severity == "required"]
+        recommended = [v for v in self.policy_violations if v.severity == "recommended"]
+
+        # Handle based on enforcement mode
+        if self.policy.enforcement == EnforcementMode.AUTO:
+            self._auto_inject_missing_checks(required)
+            self._log_policy_warnings(recommended, "Recommended")
+
+        elif self.policy.enforcement == EnforcementMode.ERROR:
+            if required:
+                violations_str = "\n".join(f"  - {v}" for v in required)
+                raise ConfigValidationError(
+                    f"Policy '{self.policy.name}' violations (enforcement=error):\n"
+                    f"{violations_str}\n\n"
+                    f"Add the missing validations or change policy to 'none' to bypass."
+                )
+            self._log_policy_warnings(recommended, "Recommended")
+
+        else:  # WARN mode
+            self._log_policy_warnings(required, "Required")
+            self._log_policy_warnings(recommended, "Recommended")
+
+    def _auto_inject_missing_checks(self, violations: List[PolicyViolation]) -> None:
+        """
+        Auto-inject missing required checks with default configurations.
+
+        Only injects checks that are auto-fixable (don't require specific params).
+
+        Args:
+            violations: List of policy violations to fix
+        """
+        injected_count = 0
+
+        for violation in violations:
+            if not violation.auto_fixable:
+                logger.warning(
+                    f"Cannot auto-inject {violation.check_type} for '{violation.file_name}': "
+                    f"requires configuration parameters"
+                )
+                continue
+
+            # Find the file config to update
+            for file_config in self.files:
+                if file_config['name'] == violation.file_name:
+                    # Get default configuration
+                    default_config = get_default_check_config(violation.check_type)
+
+                    # Insert at beginning of validations list
+                    file_config['validations'].insert(0, default_config)
+
+                    logger.info(
+                        f"Auto-injected {violation.check_type} for '{violation.file_name}' "
+                        f"(policy={self.policy.name})"
+                    )
+                    injected_count += 1
+                    break
+
+        if injected_count > 0:
+            logger.info(f"Policy auto-injection: {injected_count} check(s) added")
+
+    def _log_policy_warnings(self, violations: List[PolicyViolation], severity_label: str) -> None:
+        """
+        Log policy violations as warnings.
+
+        Args:
+            violations: List of violations to log
+            severity_label: Label for the severity level
+        """
+        if not violations:
+            return
+
+        logger.warning(
+            f"Policy '{self.policy.name}' - {severity_label} check(s) missing:"
+        )
+        for violation in violations:
+            logger.warning(f"  - {violation}")

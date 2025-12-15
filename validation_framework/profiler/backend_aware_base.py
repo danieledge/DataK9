@@ -259,23 +259,41 @@ class BackendAwareProfiler:
     def string_length(self, series: Series):
         """Get string lengths vectorized (backend-agnostic)."""
         if self.is_polars(series):
+            # Ensure series is string type for Polars
+            if series.dtype != pl.Utf8:
+                series = series.cast(pl.Utf8)
             return series.str.len_chars()
         else:
+            # Convert to string if needed for pandas
+            if not pd.api.types.is_string_dtype(series) and series.dtype != 'object':
+                series = series.astype(str)
             return series.str.len()
 
     def string_contains(self, series: Series, pattern: str, regex: bool = True):
         """Check if strings contain pattern (backend-agnostic)."""
         if self.is_polars(series):
+            # Ensure series is string type for Polars
+            if series.dtype != pl.Utf8:
+                series = series.cast(pl.Utf8)
             return series.str.contains(pattern)
         else:
+            # Convert to string if needed for pandas
+            if not pd.api.types.is_string_dtype(series) and series.dtype != 'object':
+                series = series.astype(str)
             return series.str.contains(pattern, regex=regex, na=False)
 
     def string_match(self, series: Series, pattern: str):
         """Check if strings match pattern (backend-agnostic)."""
         if self.is_polars(series):
+            # Ensure series is string type for Polars
+            if series.dtype != pl.Utf8:
+                series = series.cast(pl.Utf8)
             # Polars uses contains for regex matching
             return series.str.contains(f"^{pattern}$")
         else:
+            # Convert to string if needed for pandas
+            if not pd.api.types.is_string_dtype(series) and series.dtype != 'object':
+                series = series.astype(str)
             return series.str.match(pattern, na=False)
 
     def to_pandas(self, df: DataFrame) -> pd.DataFrame:

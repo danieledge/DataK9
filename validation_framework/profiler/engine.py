@@ -2195,7 +2195,13 @@ class DataProfiler:
 
         # Treat whitespace-only strings as null
         # Check for string columns and replace whitespace-only values with NaN
-        if series.dtype == 'object':  # String columns are typically 'object' dtype
+        # Use proper type check that works with Parquet string types (string, string[pyarrow], etc.)
+        is_string_type = (
+            series.dtype == 'object' or
+            pd.api.types.is_string_dtype(series) or
+            str(series.dtype).startswith('string')
+        )
+        if is_string_type:
             # First, identify values that are NOT already null
             not_null_mask = series.notna()
 
