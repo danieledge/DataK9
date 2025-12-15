@@ -39,8 +39,8 @@ class PrettyOutput:
     INFO_SYMBOL = "ℹ"
     MAGNIFY = "🔍"
 
-    # Spinner animation frames
-    SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+    # Spinner animation frames (ASCII for Windows cmd compatibility)
+    SPINNER_FRAMES = ["|", "/", "-", "\\"]
     _spinner_index = 0
     BRAIN = "🧠"
     CHART = "📊"
@@ -331,10 +331,10 @@ class PrettyOutput:
         terminal_width = PrettyOutput.get_terminal_width()
 
         if total and total > 0:
-            # Determinate progress bar
+            # Determinate progress bar (ASCII for Windows cmd compatibility)
             pct = min(100, (current / total) * 100)
             filled = int(bar_width * pct / 100)
-            bar = "█" * filled + "░" * (bar_width - filled)
+            bar = "#" * filled + "-" * (bar_width - filled)
             status = f"{PrettyOutput.PRIMARY}{spinner}{PrettyOutput.RESET} [{PrettyOutput.PRIMARY}{bar}{PrettyOutput.RESET}] {current:,} / {total:,} ({pct:.0f}%)"
             if message:
                 status = f"{PrettyOutput.PRIMARY}{spinner}{PrettyOutput.RESET} {PrettyOutput.DIM}{message}{PrettyOutput.RESET} [{PrettyOutput.PRIMARY}{bar}{PrettyOutput.RESET}] {current:,} / {total:,} ({pct:.0f}%)"
