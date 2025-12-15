@@ -1415,7 +1415,7 @@ class DataProfiler:
             for col_idx, col in enumerate(chunk.columns):
                 # Progress every 10 columns or first/last
                 if col_idx == 0 or col_idx == len(chunk.columns) - 1 or col_idx % 10 == 0:
-                    print(f"*** COL {col_idx}/{len(chunk.columns)}: '{col}' ***", file=sys.stderr, flush=True)
+                    print(f"*** COL {col_idx}/{len(chunk.columns)}: {col} ***", file=sys.stderr, flush=True)
 
                 self._update_column_profile(
                     column_profiles[col], chunk[col], chunk_idx
