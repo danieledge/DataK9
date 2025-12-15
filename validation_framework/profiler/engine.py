@@ -1479,8 +1479,17 @@ class DataProfiler:
                             col_data = chunk[col]
                             if len(col_data) > MAX_TEMPORAL_SAMPLES:
                                 col_data = col_data.sample(n=MAX_TEMPORAL_SAMPLES, random_state=42)
-                            # Try to convert to datetime
-                            dt_values = pd.to_datetime(col_data, errors='coerce')
+                            # Try to convert to datetime with format='mixed' to avoid slow per-element parsing
+                            # Suppress warning about format inference
+                            import warnings
+                            with warnings.catch_warnings():
+                                warnings.filterwarnings('ignore', message='Could not infer format')
+                                try:
+                                    # pandas 2.0+ supports format='mixed'
+                                    dt_values = pd.to_datetime(col_data, errors='coerce', format='mixed')
+                                except TypeError:
+                                    # Older pandas without format='mixed'
+                                    dt_values = pd.to_datetime(col_data, errors='coerce')
                             print(f"*** DT: {col} done ***", file=sys.stderr, flush=True)
                             # Only keep if at least 50% of non-null values converted successfully
                             non_null_count = col_data.notna().sum()
