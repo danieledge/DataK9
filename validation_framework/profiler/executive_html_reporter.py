@@ -14610,14 +14610,7 @@ the largest difference between classes - a strong candidate for predictive model
             return ''
 
         count = skipped_info.get('count', 0)
-        line_numbers = skipped_info.get('line_numbers', [])
         reason = skipped_info.get('reason', 'Parsing errors')
-
-        # Build line numbers display
-        if len(line_numbers) <= 5:
-            lines_display = ', '.join(str(ln) for ln in line_numbers)
-        else:
-            lines_display = ', '.join(str(ln) for ln in line_numbers[:5]) + f' ... (+{len(line_numbers) - 5} more)'
 
         return f'''
         <div class="csv-format-warning" style="border-left-color: #f59e0b;">
@@ -14637,10 +14630,6 @@ the largest difference between classes - a strong candidate for predictive model
                 <div class="csv-format-warning-row">
                     <span class="csv-format-warning-row-label">Reason</span>
                     <span class="csv-format-warning-row-value">{reason}</span>
-                </div>
-                <div class="csv-format-warning-row">
-                    <span class="csv-format-warning-row-label">Line numbers</span>
-                    <span class="csv-format-warning-row-value">{lines_display}</span>
                 </div>
             </div>
         </div>'''

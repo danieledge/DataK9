@@ -77,7 +77,7 @@ class CSVLoader(DataLoader):
         super().__init__(file_path, chunk_size, **kwargs)
 
         # Track skipped rows for reporting
-        self.skipped_rows = []
+        self.skipped_row_count = 0
 
         # Auto-detect delimiter if not specified
         if 'delimiter' not in kwargs or kwargs.get('delimiter') is None:
@@ -102,12 +102,12 @@ class CSVLoader(DataLoader):
         encoding = self.kwargs.get("encoding", "utf-8")
         header = self.kwargs.get("header", 0)
 
-        # Reset skipped rows tracking
-        self.skipped_rows = []
+        # Reset skipped rows tracking - just count, line numbers not available with chunked reading
+        self.skipped_row_count = 0
 
         def track_bad_line(bad_line):
             """Track bad lines instead of printing each one."""
-            self.skipped_rows.append(len(self.skipped_rows) + 2)  # +2 for 1-indexed + header
+            self.skipped_row_count += 1
             return None  # Return None to skip the line
 
         try:
@@ -128,15 +128,8 @@ class CSVLoader(DataLoader):
                     yield chunk
 
             # Log summary of skipped rows (if any)
-            if self.skipped_rows:
-                if len(self.skipped_rows) <= 5:
-                    logger.warning(f"Skipped {len(self.skipped_rows)} malformed row(s): lines {self.skipped_rows}")
-                else:
-                    first_few = self.skipped_rows[:3]
-                    logger.warning(
-                        f"Skipped {len(self.skipped_rows)} malformed rows "
-                        f"(first few: lines {first_few}...)"
-                    )
+            if self.skipped_row_count > 0:
+                logger.warning(f"Skipped {self.skipped_row_count} malformed row(s) due to inconsistent column counts")
 
         except pd.errors.EmptyDataError:
             logger.warning(f"Empty CSV file: {self.file_path}")

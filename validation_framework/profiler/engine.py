@@ -1480,13 +1480,12 @@ class DataProfiler:
         logger.debug(f"⏱  Chunk processing completed in {phase_timings['chunk_processing']:.2f}s")
 
         # Capture skipped rows info from CSV loader (if any)
-        if hasattr(loader, 'skipped_rows') and loader.skipped_rows:
+        if hasattr(loader, 'skipped_row_count') and loader.skipped_row_count > 0:
             file_metadata['skipped_rows'] = {
-                'count': len(loader.skipped_rows),
-                'line_numbers': loader.skipped_rows[:20],  # First 20 line numbers
+                'count': loader.skipped_row_count,
                 'reason': 'Malformed rows (inconsistent column count)'
             }
-            logger.info(f"⚠️  {len(loader.skipped_rows)} rows skipped due to parsing errors")
+            logger.info(f"⚠️  {loader.skipped_row_count} rows skipped due to parsing errors")
 
         # Log memory optimization summary
         if sampling_triggered:

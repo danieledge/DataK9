@@ -1,0 +1,26 @@
+id,name,email,age,department,salary
+1,John Smith,john@example.com,32,Engineering,75000
+2,Jane Doe,jane@example.com,28,Marketing,65000
+3,Bob Wilson,bob@example.com,45,Sales,80000
+4,Alice Brown,alice@example.com,38,HR,70000
+5,This row has,too,many,columns,here,extra1,extra2
+6,Charlie Davis,charlie@example.com,29,Engineering,72000
+7,Missing columns only
+8,Diana Prince,diana@example.com,35,Marketing,68000
+9,Row with unescaped, comma in name,broken@example.com,40,Sales,82000
+10,Eve Johnson,eve@example.com,31,HR,67000
+11,Extra,columns,again,55,Finance,90000,bonus,field
+12,Frank Miller,frank@example.com,42,Engineering,85000
+13
+14,Grace Lee,grace@example.com,27,Marketing,62000
+15,Henry Ford,henry@example.com,50,Sales,95000
+16,Too,few
+17,Ivy Chen,ivy@example.com,33,Engineering,78000
+18,Jack Brown,jack@example.com,39,Finance,88000
+19,Kate Wilson,kate@example.com,26,HR,60000
+20,Another bad,row,with,way,too,many,extra,columns,everywhere
+21,Leo Martin,leo@example.com,44,Sales,92000
+22,Mia Garcia,mia@example.com,30,Marketing,66000
+23,Noah Taylor,noah@example.com,36,Engineering,81000
+24,Olivia White,olivia@example.com,41,Finance,87000
+25,Good row at end,good@example.com,48,HR,75000
