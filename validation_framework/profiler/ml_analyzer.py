@@ -4036,6 +4036,13 @@ class MLAnalyzer:
             if len(subset) < MIN_ROWS_FOR_ML:
                 return None
 
+            # Filter out constant columns (zero variance) to avoid division by zero warnings
+            non_constant_cols = [col for col in subset.columns if subset[col].std() > 0]
+            if len(non_constant_cols) < 2:
+                return None
+            subset = subset[non_constant_cols]
+            numeric_cols = non_constant_cols
+
             corr_matrix = subset.corr()
 
             # Find highly correlated pairs
@@ -4065,7 +4072,10 @@ class MLAnalyzer:
                 # Simple linear fit
                 x_mean = np.mean(x)
                 y_mean = np.mean(y)
-                slope = np.sum((x - x_mean) * (y - y_mean)) / np.sum((x - x_mean) ** 2)
+                x_var = np.sum((x - x_mean) ** 2)
+                if x_var == 0:
+                    continue  # Skip constant columns (shouldn't happen after filtering)
+                slope = np.sum((x - x_mean) * (y - y_mean)) / x_var
                 intercept = y_mean - slope * x_mean
 
                 predicted = slope * x + intercept
