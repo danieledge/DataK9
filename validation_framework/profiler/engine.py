@@ -1379,16 +1379,20 @@ class DataProfiler:
             row_count += len(chunk)
             logger.debug(f"📊 Processing chunk {chunk_idx + 1}/{total_chunks_str} ({len(chunk):,} rows) - Total: {row_count:,} rows")
             _progress("Processing", row_count, total_rows or 0)
+            print(f"*** STEP 1: Progress shown ***", file=sys.stderr, flush=True)
 
             # Memory safety check - will raise MemoryError if critical threshold exceeded
             self._check_memory_safety(chunk_idx, row_count)
+            print(f"*** STEP 2: Memory check done ***", file=sys.stderr, flush=True)
 
             # Initialize column profiles on first chunk
             if chunk_idx == 0:
+                print(f"*** STEP 3: Initializing {len(chunk.columns)} column profiles ***", file=sys.stderr, flush=True)
                 for col in chunk.columns:
                     column_profiles[col] = self._initialize_column_profile(
                         col, declared_schema
                     )
+                print(f"*** STEP 3: Column profiles initialized ***", file=sys.stderr, flush=True)
 
                 # Detect column families for wide datasets
                 if COLUMN_FAMILY_DETECTION_AVAILABLE and len(chunk.columns) > 50:
@@ -1407,10 +1411,15 @@ class DataProfiler:
                         logger.warning(f"Column family detection failed: {e}")
 
             # Update profiles with chunk data
-            for col in chunk.columns:
+            print(f"*** STEP 4: Updating profiles for {len(chunk.columns)} columns ***", file=sys.stderr, flush=True)
+            for col_idx, col in enumerate(chunk.columns):
+                if col_idx == 0:
+                    print(f"*** STEP 4a: Processing first column '{col}' ***", file=sys.stderr, flush=True)
                 self._update_column_profile(
                     column_profiles[col], chunk[col], chunk_idx
                 )
+                if col_idx == 0:
+                    print(f"*** STEP 4b: First column profile updated ***", file=sys.stderr, flush=True)
 
                 # Collect numeric data for correlations with memory-efficient sampling
                 # Limit to MAX_CORRELATION_SAMPLES per column to prevent memory exhaustion with very large datasets
@@ -1500,16 +1509,22 @@ class DataProfiler:
                         samples_needed = 1000 - len(all_column_data[col])
                         all_column_data[col].extend(chunk[col].dropna().head(samples_needed).tolist())
 
+            print(f"*** STEP 5: Column loop done for chunk {chunk_idx} ***", file=sys.stderr, flush=True)
+
             # Process chunk for ML analysis (full_analysis mode)
             # This accumulates ML stats without loading all data at once
             if ml_accumulator is not None:
+                print(f"*** STEP 6: Starting ML accumulator processing ***", file=sys.stderr, flush=True)
                 # Force memory check before ML processing (heavy operation)
                 self._check_memory_safety(chunk_idx, row_count, force_check=True)
                 ml_accumulator.process_chunk(chunk, chunk_idx)
+                print(f"*** STEP 6: ML accumulator done ***", file=sys.stderr, flush=True)
 
             # Clean up chunk immediately after processing to free memory
+            print(f"*** STEP 7: Cleaning up chunk ***", file=sys.stderr, flush=True)
             del chunk
             gc.collect()
+            print(f"*** STEP 7: Chunk cleanup done ***", file=sys.stderr, flush=True)
 
         # Record chunk processing time
         phase_timings['chunk_processing'] = time.time() - chunk_processing_start
