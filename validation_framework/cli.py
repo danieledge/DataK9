@@ -5,22 +5,111 @@ Provides commands for:
 - Running validations
 - Listing available validation types
 - Generating reports
+
+Exit Codes:
+- 0: Success
+- 1: Validation failed (data quality errors)
+- 2: Warnings treated as failure (--fail-on-warning)
+- 3: Timeout exceeded (--timeout)
+- 4: Lock file conflict (--lock-file)
+- 5: Environment error (missing dependencies, wrong Python version)
+- 130: Interrupted (SIGINT/SIGTERM)
+- 137: Memory limit exceeded
+
+Platform Support:
+- Linux/macOS: Full feature support (file locking, timeouts, signals)
+- Windows: Partial support (no file locking or timeouts, Ctrl+C only)
 """
+
+import sys
+import platform
+
+# Platform detection for cross-platform compatibility
+IS_WINDOWS = platform.system() == 'Windows'
+
+# =============================================================================
+# DEPENDENCY CHECK - Graceful handling of missing dependencies
+# =============================================================================
+# This runs before any other imports to catch missing dependencies early
+# and provide helpful error messages instead of ugly tracebacks.
+
+REQUIRED_PACKAGES = {
+    'click': 'click',
+    'pandas': 'pandas',
+    'numpy': 'numpy',
+    'yaml': 'pyyaml',
+    'colorama': 'colorama',
+}
+
+def _check_dependencies():
+    """Check that all required dependencies are installed."""
+    missing = []
+    for module_name, package_name in REQUIRED_PACKAGES.items():
+        try:
+            __import__(module_name)
+        except ImportError:
+            missing.append(package_name)
+    return missing
+
+def _check_python_version():
+    """Check Python version is 3.8+."""
+    if sys.version_info < (3, 8):
+        return f"Python 3.8+ required, found {sys.version_info.major}.{sys.version_info.minor}"
+    return None
+
+# Run checks immediately on import
+_missing_deps = _check_dependencies()
+_python_error = _check_python_version()
+
+if _python_error or _missing_deps:
+    # Print error without fancy formatting (colorama may not be available)
+    print("\n" + "=" * 60, file=sys.stderr)
+    print("ERROR: DataK9 Environment Check Failed", file=sys.stderr)
+    print("=" * 60, file=sys.stderr)
+
+    if _python_error:
+        print(f"\n  Python Version: {_python_error}", file=sys.stderr)
+
+    if _missing_deps:
+        print(f"\n  Missing Dependencies:", file=sys.stderr)
+        for pkg in _missing_deps:
+            print(f"    - {pkg}", file=sys.stderr)
+        print(f"\n  Install with: pip install {' '.join(_missing_deps)}", file=sys.stderr)
+
+    print("\n" + "=" * 60, file=sys.stderr)
+    print("Exit Code: 5 (Environment Error)", file=sys.stderr)
+    print("=" * 60 + "\n", file=sys.stderr)
+    sys.exit(5)
+
+# =============================================================================
+# STANDARD IMPORTS - Only run if dependencies are available
+# =============================================================================
 
 import click
 import csv
 import os
-import sys
 from datetime import datetime
 from pathlib import Path
 
-from validation_framework.core.engine import ValidationEngine
-from validation_framework.core.optimized_engine import OptimizedValidationEngine
-from validation_framework.core.registry import get_registry
-from validation_framework.core.logging_config import setup_logging, get_logger
-from validation_framework.core.pretty_output import PrettyOutput as po, VerboseProgressReporter
-from validation_framework.utils.performance_advisor import get_performance_advisor
-from validation_framework.utils.path_patterns import PathPatternExpander
+try:
+    from validation_framework.core.engine import ValidationEngine
+    from validation_framework.core.optimized_engine import OptimizedValidationEngine
+    from validation_framework.core.registry import get_registry
+    from validation_framework.core.logging_config import setup_logging, get_logger
+    from validation_framework.core.pretty_output import PrettyOutput as po, VerboseProgressReporter
+    from validation_framework.utils.performance_advisor import get_performance_advisor
+    from validation_framework.utils.path_patterns import PathPatternExpander
+except ImportError as e:
+    # Internal module import failed - installation is broken
+    print("\n" + "=" * 60, file=sys.stderr)
+    print("ERROR: DataK9 Installation Corrupted", file=sys.stderr)
+    print("=" * 60, file=sys.stderr)
+    print(f"\n  Import Error: {e}", file=sys.stderr)
+    print("\n  Try reinstalling: pip install --force-reinstall datak9", file=sys.stderr)
+    print("\n" + "=" * 60, file=sys.stderr)
+    print("Exit Code: 5 (Environment Error)", file=sys.stderr)
+    print("=" * 60 + "\n", file=sys.stderr)
+    sys.exit(5)
 
 logger = get_logger(__name__)
 
@@ -124,11 +213,20 @@ def validate(config_file, html_output, json_output, verbose, fail_on_warning, de
       2 = Warnings treated as failure (--fail-on-warning set)
       3 = Timeout exceeded
       4 = Lock file conflict (another instance running)
+      5 = Environment error (missing dependencies, wrong Python version)
       130 = Interrupted (Ctrl+C / SIGINT)
       137 = Memory limit exceeded
     """
     import signal
-    import fcntl
+    import threading
+
+    # Platform-specific imports for file locking
+    if IS_WINDOWS:
+        # Windows: Limited support - no file locking, no SIGALRM
+        fcntl = None
+    else:
+        # Unix/Linux/macOS: Full support
+        import fcntl
 
     # Helper to write exit code to file (for batch systems)
     def write_exit_code(code: int):
@@ -144,6 +242,18 @@ def validate(config_file, html_output, json_output, verbose, fail_on_warning, de
         write_exit_code(code)
         sys.exit(code)
 
+    # Helper to release lock file (used in multiple exception handlers)
+    def release_lock():
+        nonlocal lock_fd
+        if lock_fd and not IS_WINDOWS:
+            try:
+                fcntl.flock(lock_fd, fcntl.LOCK_UN)
+                lock_fd.close()
+                os.unlink(lock_file)
+            except Exception:
+                pass
+            lock_fd = None
+
     # Create pattern expander with consistent timestamp for this run
     run_timestamp = datetime.now()
     expander = PathPatternExpander(run_timestamp=run_timestamp)
@@ -158,41 +268,62 @@ def validate(config_file, html_output, json_output, verbose, fail_on_warning, de
     logger.info(f"Log level: {log_level}")
 
     # Lock file handling for batch/Autosys (prevent concurrent runs)
+    # Note: Full locking only supported on Unix/Linux/macOS
     lock_fd = None
     if lock_file:
-        try:
-            Path(lock_file).parent.mkdir(parents=True, exist_ok=True)
-            lock_fd = open(lock_file, 'w')
-            fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            lock_fd.write(f"{os.getpid()}\n{datetime.now().isoformat()}\n")
-            lock_fd.flush()
-            logger.info(f"Acquired lock file: {lock_file}")
-        except BlockingIOError:
-            po.error(f"Another validation instance is running (lock file: {lock_file})")
-            po.info("If this is incorrect, delete the lock file and retry")
-            clean_exit(4)
-        except Exception as e:
-            po.warning(f"Could not create lock file: {e}")
+        if IS_WINDOWS:
+            # Windows: Lock files not supported, warn user
+            po.warning("Lock files (--lock-file) are not supported on Windows")
+            po.info("For Windows batch processing, use external job scheduling to prevent concurrent runs")
+        else:
+            try:
+                Path(lock_file).parent.mkdir(parents=True, exist_ok=True)
+                lock_fd = open(lock_file, 'w')
+                fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                lock_fd.write(f"{os.getpid()}\n{datetime.now().isoformat()}\n")
+                lock_fd.flush()
+                logger.info(f"Acquired lock file: {lock_file}")
+            except BlockingIOError:
+                po.error(f"Another validation instance is running (lock file: {lock_file})")
+                po.info("If this is incorrect, delete the lock file and retry")
+                clean_exit(4)
+            except Exception as e:
+                po.warning(f"Could not create lock file: {e}")
 
     # Timeout handling for batch/Autosys
-    def timeout_handler(signum, frame):
+    # Note: Uses SIGALRM on Unix, threading.Timer on Windows
+    timeout_timer = None
+
+    def timeout_handler_unix(signum, frame):
+        """Unix signal-based timeout handler."""
         po.progress_done()
         po.blank_line()
         po.error(f"Validation timed out after {timeout} seconds")
         logger.error(f"Validation timed out after {timeout} seconds")
-        if lock_fd:
-            try:
-                fcntl.flock(lock_fd, fcntl.LOCK_UN)
-                lock_fd.close()
-                os.unlink(lock_file)
-            except Exception:
-                pass
+        release_lock()
         clean_exit(3)
 
+    def timeout_handler_windows():
+        """Windows threading-based timeout handler."""
+        po.progress_done()
+        po.blank_line()
+        po.error(f"Validation timed out after {timeout} seconds")
+        logger.error(f"Validation timed out after {timeout} seconds")
+        # Force exit since we're in a different thread
+        os._exit(3)
+
     if timeout > 0:
-        signal.signal(signal.SIGALRM, timeout_handler)
-        signal.alarm(timeout)
-        logger.info(f"Timeout set: {timeout} seconds")
+        if IS_WINDOWS:
+            # Windows: Use threading.Timer (less reliable but functional)
+            timeout_timer = threading.Timer(timeout, timeout_handler_windows)
+            timeout_timer.daemon = True
+            timeout_timer.start()
+            logger.info(f"Timeout set: {timeout} seconds (Windows timer)")
+        else:
+            # Unix: Use SIGALRM (reliable)
+            signal.signal(signal.SIGALRM, timeout_handler_unix)
+            signal.alarm(timeout)
+            logger.info(f"Timeout set: {timeout} seconds")
 
     # Signal handling for graceful shutdown
     def signal_handler(signum, frame):
@@ -201,15 +332,13 @@ def validate(config_file, html_output, json_output, verbose, fail_on_warning, de
         po.blank_line()
         po.warning(f"Received {signal_name}, shutting down gracefully...")
         logger.warning(f"Received {signal_name}, shutting down")
-        if lock_fd:
-            try:
-                fcntl.flock(lock_fd, fcntl.LOCK_UN)
-                lock_fd.close()
-                os.unlink(lock_file)
-            except Exception:
-                pass
+        # Cancel timeout timer if active (Windows)
+        if timeout_timer and timeout_timer.is_alive():
+            timeout_timer.cancel()
+        release_lock()
         clean_exit(130)
 
+    # SIGTERM works on both Unix and Windows
     signal.signal(signal.SIGTERM, signal_handler)
 
     # Create progress reporter for verbose mode
@@ -252,9 +381,13 @@ def validate(config_file, html_output, json_output, verbose, fail_on_warning, de
 
         report = engine.run(verbose=verbose, progress_callback=reporter.callback)
 
-        # Cancel timeout alarm on successful completion
+        # Cancel timeout on successful completion
         if timeout > 0:
-            signal.alarm(0)
+            if IS_WINDOWS:
+                if timeout_timer and timeout_timer.is_alive():
+                    timeout_timer.cancel()
+            else:
+                signal.alarm(0)
 
         # Build context for pattern expansion
         context = {'job_name': engine.config.job_name}
@@ -278,14 +411,9 @@ def validate(config_file, html_output, json_output, verbose, fail_on_warning, de
                 engine.generate_json_report(report, engine.config.json_summary_path)
 
         # Release lock file
-        if lock_fd:
-            try:
-                fcntl.flock(lock_fd, fcntl.LOCK_UN)
-                lock_fd.close()
-                os.unlink(lock_file)
-                logger.info(f"Released lock file: {lock_file}")
-            except Exception as e:
-                logger.warning(f"Failed to release lock file: {e}")
+        if lock_fd and not IS_WINDOWS:
+            logger.info(f"Releasing lock file: {lock_file}")
+        release_lock()
 
         # Log summary for headless/batch mode
         logger.info(f"Validation complete: Errors={report.total_errors}, Warnings={report.total_warnings}")
@@ -326,13 +454,7 @@ def validate(config_file, html_output, json_output, verbose, fail_on_warning, de
         po.blank_line()
         po.warning("Validation interrupted by user")
         logger.warning("Validation interrupted by user (Ctrl+C)")
-        if lock_fd:
-            try:
-                fcntl.flock(lock_fd, fcntl.LOCK_UN)
-                lock_fd.close()
-                os.unlink(lock_file)
-            except Exception:
-                pass
+        release_lock()
         clean_exit(130)
 
     except MemoryError as e:
@@ -349,26 +471,14 @@ def validate(config_file, html_output, json_output, verbose, fail_on_warning, de
         click.echo("   2. Use smaller chunk size in config: chunk_size: 10000")
         click.echo("   3. Close other applications to free memory")
         click.echo("   4. Convert large CSV files to Parquet format")
-        if lock_fd:
-            try:
-                fcntl.flock(lock_fd, fcntl.LOCK_UN)
-                lock_fd.close()
-                os.unlink(lock_file)
-            except Exception:
-                pass
+        release_lock()
         clean_exit(137)
 
     except FileNotFoundError as e:
         po.blank_line()
         po.error(f"File not found: {str(e)}")
         logger.error(f"File not found: {e}")
-        if lock_fd:
-            try:
-                fcntl.flock(lock_fd, fcntl.LOCK_UN)
-                lock_fd.close()
-                os.unlink(lock_file)
-            except Exception:
-                pass
+        release_lock()
         clean_exit(1)
 
     except RuntimeError as e:
@@ -383,13 +493,7 @@ def validate(config_file, html_output, json_output, verbose, fail_on_warning, de
             po.info("Tip: Try specifying the delimiter with -d option or in config:")
             click.echo("   Command line: data-validate validate config.yaml -d \"|\"")
             click.echo("   YAML config:  delimiter: \"|\"  (under files section)")
-        if lock_fd:
-            try:
-                fcntl.flock(lock_fd, fcntl.LOCK_UN)
-                lock_fd.close()
-                os.unlink(lock_file)
-            except Exception:
-                pass
+        release_lock()
         clean_exit(1)
 
     except Exception as e:
@@ -436,13 +540,7 @@ def validate(config_file, html_output, json_output, verbose, fail_on_warning, de
             po.blank_line()
             po.info("Run with -v flag to see full error traceback")
 
-        if lock_fd:
-            try:
-                fcntl.flock(lock_fd, fcntl.LOCK_UN)
-                lock_fd.close()
-                os.unlink(lock_file)
-            except Exception:
-                pass
+        release_lock()
         clean_exit(1)
 
 

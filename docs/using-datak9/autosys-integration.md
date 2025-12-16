@@ -60,13 +60,18 @@ AutoSys Workflow:
 
 ### DataK9 Exit Codes
 
-DataK9 follows Unix/AutoSys conventions:
+DataK9 follows Unix/AutoSys conventions with comprehensive exit codes for batch processing:
 
 | Exit Code | Meaning | AutoSys Status | Action |
 |-----------|---------|----------------|--------|
 | **0** | SUCCESS - All validations passed | SUCCESS | Continue pipeline |
 | **1** | FAILURE - ERROR validations failed | FAILURE | Stop pipeline, alert |
-| **2** | ERROR - Config/runtime error | FAILURE | Stop pipeline, investigate |
+| **2** | WARNING AS FAILURE - Warnings with `--fail-on-warning` | FAILURE | Stop pipeline, review |
+| **3** | TIMEOUT - Job exceeded `--timeout` limit | FAILURE | Stop, investigate slow job |
+| **4** | LOCK CONFLICT - Another instance running (`--lock-file`) | FAILURE | Stop, check for stuck job |
+| **5** | ENVIRONMENT ERROR - Missing dependencies or wrong Python version | FAILURE | Stop, fix environment |
+| **130** | INTERRUPTED - SIGINT (Ctrl+C) or SIGTERM received | FAILURE | Graceful shutdown |
+| **137** | MEMORY - Out of memory error | FAILURE | Stop, increase resources |
 
 ### Exit Code Behavior
 
@@ -91,15 +96,29 @@ echo $?
 # Alert: Triggered
 ```
 
-**Exit 2 (RUNTIME ERROR):**
+**Exit 2 (WARNING AS FAILURE):**
 ```bash
-python3 -m validation_framework.cli validate invalid_config.yaml
+python3 -m validation_framework.cli validate config.yaml --fail-on-warning
 echo $?
 # 2
 
+# AutoSys sees: FAILURE (warnings treated as failure)
+# Downstream jobs: Don't run
+# Alert: Triggered
+```
+
+**Exit 5 (ENVIRONMENT ERROR):**
+```bash
+# If dependencies are missing or wrong Python version
+python3 -m validation_framework.cli validate config.yaml
+# ERROR: DataK9 Environment Check Failed
+# Missing Dependencies: pandas, numpy
+echo $?
+# 5
+
 # AutoSys sees: FAILURE
 # Downstream jobs: Don't run
-# Alert: Triggered (different type)
+# Action: Fix Python environment, install dependencies
 ```
 
 ### Controlling Exit Codes
@@ -148,6 +167,203 @@ settings:
 # - ERROR failures → Exit 0 (pass!)
 # - WARNING failures → Exit 0 (pass)
 # Only use for reporting-only validations
+```
+
+---
+
+## Platform Support
+
+DataK9 runs on Linux, macOS, and Windows, but some batch processing features have platform-specific behavior:
+
+| Feature | Linux/macOS | Windows |
+|---------|-------------|---------|
+| Exit codes (0-5, 130, 137) | ✅ Full support | ✅ Full support |
+| `--timeout` | ✅ Full support (SIGALRM) | ⚠️ Limited (threading-based) |
+| `--lock-file` | ✅ Full support (fcntl) | ❌ Not supported |
+| `--exit-file` | ✅ Full support | ✅ Full support |
+| SIGTERM handling | ✅ Full support | ⚠️ Limited |
+| Ctrl+C / SIGINT | ✅ Full support | ✅ Full support |
+
+**Recommendations for Windows:**
+- Use Windows Task Scheduler's built-in job isolation instead of `--lock-file`
+- Use Windows Task Scheduler's timeout settings instead of `--timeout`
+- `--exit-file` works fully and is recommended for automation
+- All exit codes work as documented
+
+**Example: Windows-Friendly Command**
+```powershell
+# Windows batch command (no lock file or timeout)
+python -m validation_framework.cli validate config.yaml --exit-file C:\logs\validation.exit -q
+```
+
+---
+
+## Batch Processing Options
+
+### Built-in Defensive Features
+
+DataK9 provides several CLI options specifically designed for batch/headless environments:
+
+| Option | Description | Example |
+|--------|-------------|---------|
+| `--timeout SECONDS` | Kill job if exceeds time limit (exit code 3) | `--timeout 3600` |
+| `--lock-file PATH` | Prevent concurrent runs (exit code 4 if locked) | `--lock-file /tmp/job.lock` |
+| `--exit-file PATH` | Write exit code to file for automation | `--exit-file /tmp/job.exit` |
+| `--log-file PATH` | Write detailed logs to file | `--log-file /logs/job.log` |
+| `--log-level LEVEL` | Set logging verbosity (DEBUG/INFO/WARNING/ERROR) | `--log-level INFO` |
+| `-q, --quiet` | Minimal output for headless operation | `-q` |
+
+### Recommended Batch Command
+
+```bash
+# Full defensive batch command
+data-validate validate config.yaml \
+  --timeout 3600 \
+  --lock-file /tmp/validation_job.lock \
+  --exit-file /tmp/validation_job.exit \
+  --log-file /logs/validation_{timestamp}.log \
+  --log-level INFO \
+  -q
+```
+
+### Timeout Protection
+
+Prevent runaway jobs from blocking your pipeline:
+
+```bash
+# Kill job if it runs longer than 1 hour
+data-validate validate config.yaml --timeout 3600
+
+# Check exit code
+if [ $? -eq 3 ]; then
+    echo "Job timed out after 1 hour"
+fi
+```
+
+**AutoSys with Timeout:**
+
+```jil
+insert_job: VALIDATE_CUSTOMERS
+job_type: CMD
+command: data-validate validate /config/customers.yaml --timeout 1800 -q
+max_run_alarm: 35  # Set slightly higher than timeout
+alarm_if_fail: yes
+```
+
+### Lock File Protection
+
+Prevent multiple instances from running simultaneously:
+
+```bash
+# Use lock file to prevent concurrent runs
+data-validate validate config.yaml --lock-file /tmp/customers_validation.lock
+```
+
+**How it works:**
+1. DataK9 attempts to acquire exclusive lock on the file
+2. If lock acquired: runs validation, releases lock on completion
+3. If lock busy: exits immediately with code 4
+
+**AutoSys with Lock File:**
+
+```jil
+insert_job: VALIDATE_CUSTOMERS
+job_type: CMD
+command: data-validate validate /config/customers.yaml --lock-file /tmp/cust_val.lock -q
+/* If previous run is stuck, this will exit with code 4 */
+alarm_if_fail: yes
+```
+
+### Exit File for Automation
+
+Write exit code to a file for downstream automation:
+
+```bash
+# Write exit code to file
+data-validate validate config.yaml --exit-file /tmp/validation_result.exit
+
+# Read result in downstream job
+EXIT_CODE=$(cat /tmp/validation_result.exit)
+if [ "$EXIT_CODE" -eq 0 ]; then
+    echo "Validation passed"
+fi
+```
+
+**Use Cases:**
+- Control-M event triggers based on file content
+- Custom monitoring scripts
+- Integration with non-shell schedulers
+
+### Complete Defensive Example
+
+```bash
+#!/bin/bash
+#===============================================================================
+# Defensive Validation Wrapper for AutoSys
+# Uses all batch safety features
+#===============================================================================
+
+JOB_NAME="customers_daily"
+CONFIG="/config/${JOB_NAME}.yaml"
+LOG_DIR="/logs/validation"
+LOCK_FILE="/tmp/${JOB_NAME}.lock"
+EXIT_FILE="/tmp/${JOB_NAME}.exit"
+TIMEOUT=1800  # 30 minutes
+
+# Create log directory
+mkdir -p "$LOG_DIR"
+
+# Run with all defensive options
+data-validate validate "$CONFIG" \
+    --timeout $TIMEOUT \
+    --lock-file "$LOCK_FILE" \
+    --exit-file "$EXIT_FILE" \
+    --log-file "$LOG_DIR/${JOB_NAME}_{timestamp}.log" \
+    --log-level INFO \
+    -q
+
+EXIT_CODE=$?
+
+# Handle exit codes
+case $EXIT_CODE in
+    0)
+        echo "SUCCESS: Validation passed"
+        ;;
+    1)
+        echo "FAILED: Data quality issues detected"
+        /scripts/alert_data_team.sh "$JOB_NAME"
+        ;;
+    2)
+        echo "FAILED: Warnings treated as failure"
+        /scripts/alert_data_team.sh "$JOB_NAME"
+        ;;
+    3)
+        echo "TIMEOUT: Job exceeded ${TIMEOUT}s limit"
+        /scripts/alert_ops_team.sh "$JOB_NAME" "timeout"
+        ;;
+    4)
+        echo "LOCKED: Another instance is running"
+        /scripts/alert_ops_team.sh "$JOB_NAME" "locked"
+        ;;
+    5)
+        echo "ENVIRONMENT: Missing dependencies or wrong Python version"
+        /scripts/alert_ops_team.sh "$JOB_NAME" "environment"
+        ;;
+    130)
+        echo "INTERRUPTED: Job was killed"
+        /scripts/alert_ops_team.sh "$JOB_NAME" "killed"
+        ;;
+    137)
+        echo "MEMORY: Out of memory error"
+        /scripts/alert_ops_team.sh "$JOB_NAME" "oom"
+        ;;
+    *)
+        echo "UNKNOWN: Exit code $EXIT_CODE"
+        /scripts/alert_ops_team.sh "$JOB_NAME" "unknown"
+        ;;
+esac
+
+exit $EXIT_CODE
 ```
 
 ---
