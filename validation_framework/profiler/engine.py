@@ -1343,11 +1343,9 @@ class DataProfiler:
         # For CSV and other formats: iterate through all chunks (full scan)
         chunk_processing_start = time.time()
 
-        import sys
         if use_stratified_chunks:
             # PARQUET PATH: Use stratified chunk iterator (memory-efficient)
             # Each chunk is bounded by chunk_size, data comes from across the file
-            print(f"*** USING STRATIFIED CHUNKS (large parquet) ***", file=sys.stderr, flush=True)
             chunk_iterator = self._create_stratified_parquet_chunks(
                 file_path,
                 sample_size=ANALYSIS_SAMPLE_SIZE,
@@ -1357,14 +1355,10 @@ class DataProfiler:
             total_chunks_str = "?"
         else:
             # CSV/OTHER PATH: Use regular loader iterator (full scan for accurate counts)
-            print(f"*** USING REGULAR LOADER ({file_format}) ***", file=sys.stderr, flush=True)
             chunk_iterator = loader.load()
 
         # Process chunks from either iterator (unified processing for both paths)
-        import sys
-        print(f"*** ENTERING CHUNK LOOP ***", file=sys.stderr, flush=True)
         for chunk_idx, chunk in enumerate(chunk_iterator):
-            print(f"*** CHUNK {chunk_idx}: got {len(chunk)} rows ***", file=sys.stderr, flush=True)
             # Handle sampling: if we've already reached sample_rows, don't process more
             if sample_rows and row_count >= sample_rows:
                 logger.debug(f"📊 Sample limit reached ({sample_rows:,} rows) - stopping chunk processing")
@@ -1379,20 +1373,16 @@ class DataProfiler:
             row_count += len(chunk)
             logger.debug(f"📊 Processing chunk {chunk_idx + 1}/{total_chunks_str} ({len(chunk):,} rows) - Total: {row_count:,} rows")
             _progress("Processing", row_count, total_rows or 0)
-            print(f"*** STEP 1: Progress shown ***", file=sys.stderr, flush=True)
 
             # Memory safety check - will raise MemoryError if critical threshold exceeded
             self._check_memory_safety(chunk_idx, row_count)
-            print(f"*** STEP 2: Memory check done ***", file=sys.stderr, flush=True)
 
             # Initialize column profiles on first chunk
             if chunk_idx == 0:
-                print(f"*** STEP 3: Initializing {len(chunk.columns)} column profiles ***", file=sys.stderr, flush=True)
                 for col in chunk.columns:
                     column_profiles[col] = self._initialize_column_profile(
                         col, declared_schema
                     )
-                print(f"*** STEP 3: Column profiles initialized ***", file=sys.stderr, flush=True)
 
                 # Detect column families for wide datasets
                 if COLUMN_FAMILY_DETECTION_AVAILABLE and len(chunk.columns) > 50:
@@ -1411,19 +1401,10 @@ class DataProfiler:
                         logger.warning(f"Column family detection failed: {e}")
 
             # Update profiles with chunk data
-            print(f"*** STEP 4: Updating profiles for {len(chunk.columns)} columns ***", file=sys.stderr, flush=True)
-            import time as _time
-            for col_idx, col in enumerate(chunk.columns):
-                # Progress every 10 columns with timing
-                _col_start = _time.time()
-
+            for col in chunk.columns:
                 self._update_column_profile(
                     column_profiles[col], chunk[col], chunk_idx
                 )
-
-                _col_elapsed = _time.time() - _col_start
-                if col_idx % 10 == 0 or col_idx == len(chunk.columns) - 1 or _col_elapsed > 2:
-                    print(f"*** COL {col_idx}/{len(chunk.columns)} ({_col_elapsed:.1f}s) ***", file=sys.stderr, flush=True)
 
                 # Collect numeric data for correlations with memory-efficient sampling
                 # Limit to MAX_CORRELATION_SAMPLES per column to prevent memory exhaustion with very large datasets
@@ -1474,23 +1455,22 @@ class DataProfiler:
 
                     if is_likely_datetime:
                         try:
-                            print(f"*** DT: parsing {col} ***", file=sys.stderr, flush=True)
                             # PERFORMANCE: Sample before datetime parsing (67K rows is slow)
                             col_data = chunk[col]
                             if len(col_data) > MAX_TEMPORAL_SAMPLES:
                                 col_data = col_data.sample(n=MAX_TEMPORAL_SAMPLES, random_state=42)
                             # Try to convert to datetime with format='mixed' to avoid slow per-element parsing
-                            # Suppress warning about format inference
+                            # Suppress warnings about format inference and mixed timezones
                             import warnings
                             with warnings.catch_warnings():
                                 warnings.filterwarnings('ignore', message='Could not infer format')
+                                warnings.filterwarnings('ignore', category=FutureWarning)
                                 try:
                                     # pandas 2.0+ supports format='mixed'
                                     dt_values = pd.to_datetime(col_data, errors='coerce', format='mixed')
                                 except TypeError:
                                     # Older pandas without format='mixed'
                                     dt_values = pd.to_datetime(col_data, errors='coerce')
-                            print(f"*** DT: {col} done ***", file=sys.stderr, flush=True)
                             # Only keep if at least 50% of non-null values converted successfully
                             non_null_count = col_data.notna().sum()
                             if non_null_count > 0:
@@ -1513,31 +1493,20 @@ class DataProfiler:
                         samples_needed = 1000 - len(all_column_data[col])
                         all_column_data[col].extend(chunk[col].dropna().head(samples_needed).tolist())
 
-
-            print(f"*** STEP 5: Column loop done for chunk {chunk_idx} ***", file=sys.stderr, flush=True)
-
             # Process chunk for ML analysis (full_analysis mode)
             # This accumulates ML stats without loading all data at once
             if ml_accumulator is not None:
-                print(f"*** STEP 6: Starting ML accumulator processing ***", file=sys.stderr, flush=True)
                 # Force memory check before ML processing (heavy operation)
                 self._check_memory_safety(chunk_idx, row_count, force_check=True)
                 ml_accumulator.process_chunk(chunk, chunk_idx)
-                print(f"*** STEP 6: ML accumulator done ***", file=sys.stderr, flush=True)
 
             # Clean up chunk immediately after processing to free memory
-            print(f"*** STEP 7: Cleaning up chunk ***", file=sys.stderr, flush=True)
             del chunk
             gc.collect()
-            print(f"*** STEP 7: Chunk cleanup done ***", file=sys.stderr, flush=True)
 
         # Record chunk processing time
         phase_timings['chunk_processing'] = time.time() - chunk_processing_start
         logger.debug(f"⏱  Chunk processing completed in {phase_timings['chunk_processing']:.2f}s")
-
-        # Debug: confirm chunk loop exit (stderr for immediate output)
-        import sys
-        print(f"\n*** CHUNK LOOP EXIT: {row_count:,} rows processed ***", file=sys.stderr, flush=True)
 
         # Show transition from data loading to analysis
         _progress(f"Data loaded ({row_count:,} rows). Starting analysis...")
@@ -2310,11 +2279,6 @@ class DataProfiler:
         chunk_idx: int
     ) -> None:
         """Update column profile with chunk data."""
-        import time as _t
-        import sys
-        _timings = {}
-        _start = _t.time()
-
         profile["total_processed"] += len(series)
 
         # Treat whitespace-only strings as null
@@ -2393,8 +2357,6 @@ class DataProfiler:
                         series = series.copy()
                     series[full_placeholder_mask] = np.nan
 
-        _timings['whitespace'] = _t.time() - _start
-
         # Count nulls (now includes whitespace-only values)
         null_mask = series.isna()
         profile["null_count"] += null_mask.sum()
@@ -2406,7 +2368,6 @@ class DataProfiler:
         if chunk_idx == 0 and len(profile["sample_values"]) < 100:
             samples = non_null_series.head(100 - len(profile["sample_values"])).tolist()
             profile["sample_values"].extend(samples)
-        _timings['samples'] = _t.time() - _start
 
         # Type detection (sample-based for performance)
         # CRITICAL: Sample for type detection even on first chunk to avoid O(n) iteration
@@ -2438,7 +2399,6 @@ class DataProfiler:
                         unexpected_types_logged += 1
 
             profile["type_sampled_count"] += len(type_sample)
-            _timings['type_detect'] = _t.time() - _start
         elif chunk_idx % 10 == 0:
             # Every 10th chunk: sample 1000 values for type refinement
             sample_size = min(1000, len(non_null_series))
@@ -2481,7 +2441,6 @@ class DataProfiler:
                 # Use to_hashable() to handle all Parquet types (arrays, structs, etc.)
                 hashable_val = to_hashable(val)
                 profile["value_counts"][hashable_val] = profile["value_counts"].get(hashable_val, 0) + count
-            _timings['value_counts'] = _t.time() - _start
 
         # Numeric analysis (memory-efficient sampling for statistics)
         # Use intelligent sampling based on column semantics
@@ -2529,13 +2488,6 @@ class DataProfiler:
             for val in non_null_series.head(100):
                 pattern = self.type_inferrer.extract_pattern(str(val))
                 profile["patterns"][pattern] = profile["patterns"].get(pattern, 0) + 1
-
-        # Print timing breakdown for slow columns (>5s)
-        _total = _t.time() - _start
-        if _total > 5:
-            col_name = profile.get("column_name", "?")
-            timing_str = ", ".join(f"{k}={v:.1f}s" for k, v in sorted(_timings.items(), key=lambda x: x[1], reverse=True)[:3])
-            print(f"    SLOW COL {col_name}: {_total:.1f}s ({timing_str})", file=sys.stderr, flush=True)
 
     # =========================================================================
     # COLUMN PROFILE FINALIZATION

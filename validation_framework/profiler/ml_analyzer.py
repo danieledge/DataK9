@@ -2960,7 +2960,9 @@ class MLAnalyzer:
         try:
             # Convert to datetime if needed
             if df[col].dtype == 'object':
-                dates = pd.to_datetime(df[col], errors='coerce')
+                with warnings.catch_warnings():
+                    warnings.filterwarnings('ignore', category=FutureWarning)
+                    dates = pd.to_datetime(df[col], errors='coerce')
             else:
                 dates = df[col]
 
@@ -4207,16 +4209,18 @@ class MLAnalyzer:
         try:
             series = df[col_name]
 
-            # Parse datetime
+            # Parse datetime with FutureWarning suppression for mixed timezones
             if series.dtype == 'object':
-                for fmt in ['%Y/%m/%d %H:%M', '%Y-%m-%d %H:%M:%S', '%Y-%m-%d', '%d/%m/%Y']:
-                    try:
-                        dt_series = pd.to_datetime(series, format=fmt)
-                        break
-                    except:
-                        continue
-                else:
-                    dt_series = pd.to_datetime(series, errors='coerce')
+                with warnings.catch_warnings():
+                    warnings.filterwarnings('ignore', category=FutureWarning)
+                    for fmt in ['%Y/%m/%d %H:%M', '%Y-%m-%d %H:%M:%S', '%Y-%m-%d', '%d/%m/%Y']:
+                        try:
+                            dt_series = pd.to_datetime(series, format=fmt)
+                            break
+                        except:
+                            continue
+                    else:
+                        dt_series = pd.to_datetime(series, errors='coerce')
             else:
                 dt_series = series
 
