@@ -10,6 +10,8 @@
   [![Status: Beta](https://img.shields.io/badge/status-beta-orange.svg)](#status)
 </div>
 
+Like a K9 unit sniffing out problems before they escalate, DataK9 catches data quality issues before they cause damage.
+
 DataK9 validates CSV, Excel, Parquet, JSON files and PostgreSQL, MySQL, SQL Server, Oracle databases. 37 built-in validations catch schema issues, missing data, duplicates, referential integrity problems, and statistical anomalies.
 
 ## Install
