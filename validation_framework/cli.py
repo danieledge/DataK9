@@ -160,7 +160,7 @@ def cli():
 @click.option('--json-output', '-j', help='Path for JSON report output')
 @click.option('--verbose/--quiet', '-v/-q', default=True, help='Verbose output')
 @click.option('--fail-on-warning', is_flag=True, help='Fail if warnings are found')
-@click.option('--delimiter', '-d', default=None, help='Column delimiter for CSV files (overrides config). Use "\\t" for tab.')
+@click.option('--delimiter', '-d', default=None, help='Column delimiter for CSV files. Use "tab", "pipe", "semicolon", or any single character.')
 @click.option('--log-level', type=click.Choice(['DEBUG', 'INFO', 'WARNING', 'ERROR'], case_sensitive=False),
               default='WARNING', help='Logging level')
 @click.option('--log-file', type=click.Path(), help='Optional log file path')
@@ -357,7 +357,19 @@ def validate(config_file, html_output, json_output, verbose, fail_on_warning, de
 
         # Override delimiter for all files if specified on CLI
         if delimiter:
-            delim_char = delimiter.encode().decode('unicode_escape')
+            # Handle named delimiters for cross-platform compatibility (Windows doesn't handle \t well)
+            delimiter_map = {
+                'tab': '\t',
+                '\\t': '\t',
+                'pipe': '|',
+                'semicolon': ';',
+                'colon': ':',
+                'space': ' ',
+            }
+            if delimiter.lower() in delimiter_map:
+                delim_char = delimiter_map[delimiter.lower()]
+            else:
+                delim_char = delimiter.encode().decode('unicode_escape')
             for file_config in engine.config.files:
                 file_config['delimiter'] = delim_char
             logger.info(f"Using delimiter: {repr(delim_char)}")
@@ -782,7 +794,7 @@ def version():
 @click.argument('file_path', type=click.Path(exists=True), required=False)
 @click.option('--format', '-f', type=click.Choice(['csv', 'excel', 'json', 'parquet'], case_sensitive=False),
               help='File format (auto-detected if not specified)')
-@click.option('--delimiter', '-d', default=None, help='Column delimiter for CSV files (default: comma). Use "\\t" for tab-separated files.')
+@click.option('--delimiter', '-d', default=None, help='Column delimiter for CSV files. Use "tab", "pipe", "semicolon", or any single character.')
 @click.option('--encoding', '-e', default=None, help='File encoding (default: auto-detect). Common: utf-8, utf-8-sig, cp1252, latin-1, iso-8859-1')
 @click.option('--skip-rows', type=int, default=None, help='Number of rows to skip before the header row. Use when file has identifier/metadata lines before headers.')
 @click.option('--database', '--db', help='Database connection string (e.g., sqlite:///test.db or postgresql://...)')
@@ -1029,8 +1041,20 @@ def profile(file_path, format, delimiter, encoding, skip_rows, database, table, 
             # Build loader kwargs
             loader_kwargs = {}
             if delimiter:
-                # Handle escape sequences like \t for tab
-                loader_kwargs['delimiter'] = delimiter.encode().decode('unicode_escape')
+                # Handle named delimiters for cross-platform compatibility (Windows doesn't handle \t well)
+                delimiter_map = {
+                    'tab': '\t',
+                    '\\t': '\t',
+                    'pipe': '|',
+                    'semicolon': ';',
+                    'colon': ':',
+                    'space': ' ',
+                }
+                if delimiter.lower() in delimiter_map:
+                    loader_kwargs['delimiter'] = delimiter_map[delimiter.lower()]
+                else:
+                    # Handle escape sequences like \t for tab (works on Linux/Mac)
+                    loader_kwargs['delimiter'] = delimiter.encode().decode('unicode_escape')
             elif format == 'csv':
                 # Auto-detect delimiter for CSV files
                 detected_delimiter = detect_csv_delimiter(file_path)
