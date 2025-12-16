@@ -17,6 +17,7 @@ from validation_framework.core.exceptions import (
     DataLoadError
 )
 from validation_framework.core.constants import MAX_SAMPLE_FAILURES
+from validation_framework.profiler.parquet_type_handler import to_hashable
 import logging
 
 logger = logging.getLogger(__name__)
@@ -291,7 +292,11 @@ class ReferentialIntegrityCheck(DataValidationRule):
                 return None
 
             # Get unique values (drop nulls for reference)
-            values = df[column].dropna().unique()
+            try:
+                values = df[column].dropna().unique()
+            except TypeError:
+                # Handle unhashable types from parquet
+                values = list(set(to_hashable(v) for v in df[column].dropna()))
             return pd.Series(values)
 
         except Exception as e:
@@ -911,7 +916,11 @@ class CrossFileDuplicateCheck(DataValidationRule):
             else:
                 keys = df[columns].astype(str).agg('|'.join, axis=1)
 
-            return set(keys.unique())
+            try:
+                return set(keys.unique())
+            except TypeError:
+                # Handle unhashable types from parquet
+                return set(to_hashable(v) for v in keys)
 
         except Exception as e:
             logger.error(f"Error loading reference keys from {file_path}: {str(e)}")

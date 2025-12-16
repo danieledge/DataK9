@@ -30,7 +30,7 @@ import socket
 from validation_framework.profiler.column_intelligence import SmartColumnAnalyzer
 from validation_framework.loaders.factory import LoaderFactory
 from validation_framework.utils.chunk_size_calculator import ChunkSizeCalculator
-from validation_framework.profiler.parquet_type_handler import to_hashable, to_serializable, get_dtype_category
+from validation_framework.profiler.parquet_type_handler import to_hashable, to_serializable, get_dtype_category, safe_value_counts
 
 # Phase 1 Profiler Enhancements
 try:
@@ -2403,7 +2403,10 @@ class DataProfiler:
                     profile["placeholder_null_count"] += placeholder_count
 
                     # Track which placeholder values were found
-                    found_placeholders = stripped_lower[placeholder_mask_values].value_counts()
+                    try:
+                        found_placeholders = stripped_lower[placeholder_mask_values].value_counts()
+                    except TypeError:
+                        found_placeholders = pd.Series(safe_value_counts(stripped_lower[placeholder_mask_values]))
                     for val, count in found_placeholders.items():
                         profile["placeholder_values_found"][val] = profile["placeholder_values_found"].get(val, 0) + count
 
@@ -2491,7 +2494,11 @@ class DataProfiler:
                 except Exception:
                     pass  # Keep original if conversion fails
 
-            value_freq = sample_for_freq.value_counts()
+            try:
+                value_freq = sample_for_freq.value_counts()
+            except TypeError:
+                # Handle unhashable types from parquet
+                value_freq = pd.Series(safe_value_counts(sample_for_freq))
 
             # Limit iteration to top 1000 values (sorted by frequency)
             for idx, (val, count) in enumerate(value_freq.items()):

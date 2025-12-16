@@ -9,6 +9,8 @@ import numpy as np
 import random
 from typing import List, Any, Optional, Dict
 
+from .parquet_type_handler import to_hashable
+
 
 class ReservoirSampler:
     """
@@ -438,12 +440,19 @@ class CardinalityEstimator:
                     continue
 
                 # Add values to tracker
-                values = chunk[col].dropna().unique()
+                try:
+                    values = chunk[col].dropna().unique()
+                except TypeError:
+                    # Handle unhashable types from parquet
+                    values = list(set(to_hashable(v) for v in chunk[col].dropna()))
 
                 if len(unique_trackers[col]) < max_tracked:
                     for v in values:
                         if len(unique_trackers[col]) < max_tracked:
-                            unique_trackers[col].add(v)
+                            try:
+                                unique_trackers[col].add(v)
+                            except TypeError:
+                                unique_trackers[col].add(str(to_hashable(v)))
                         else:
                             break
 

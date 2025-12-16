@@ -13,6 +13,7 @@ import logging
 import re
 
 from .semantic_config import get_semantic_config
+from .parquet_type_handler import to_hashable
 
 logger = logging.getLogger(__name__)
 
@@ -137,7 +138,11 @@ class CorrelationInsightSynthesizer:
         elif token_match is True:
             # Positive token match - verify with cardinality check
             if col in self.df.columns:
-                uniqueness = self.df[col].nunique() / max(len(self.df), 1)
+                try:
+                    uniqueness = self.df[col].nunique() / max(len(self.df), 1)
+                except TypeError:
+                    # Handle unhashable types from parquet
+                    uniqueness = len(set(str(to_hashable(v)) for v in self.df[col].dropna())) / max(len(self.df), 1)
                 # Use 50% threshold for correlation exclusion
                 if uniqueness > 0.5:
                     return True
@@ -220,7 +225,11 @@ class CorrelationInsightSynthesizer:
         """Check if column is binary (0/1 or two unique values)."""
         if col not in self.df.columns:
             return False
-        unique = self.df[col].dropna().unique()
+        try:
+            unique = self.df[col].dropna().unique()
+        except TypeError:
+            # Handle unhashable types from parquet
+            unique = list(set(to_hashable(v) for v in self.df[col].dropna()))
         if len(unique) == 2:
             return True
         if set(unique).issubset({0, 1, 0.0, 1.0}):

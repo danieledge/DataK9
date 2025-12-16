@@ -8,6 +8,7 @@ to work seamlessly with both pandas and Polars DataFrames without code duplicati
 from typing import Iterator, Dict, Any, List, Optional, Union
 from validation_framework.validations.base import DataValidationRule, ValidationResult
 from validation_framework.core.backend import HAS_POLARS
+from validation_framework.profiler.parquet_type_handler import to_hashable, safe_value_counts
 
 if HAS_POLARS:
     import polars as pl
@@ -241,9 +242,17 @@ class BackendAwareValidationRule(DataValidationRule):
             List of unique values
         """
         if self.is_polars(df):
-            return df[column].unique().to_list()
+            try:
+                return df[column].unique().to_list()
+            except TypeError:
+                # Handle unhashable types from parquet
+                return list(set(to_hashable(v) for v in df[column].to_list()))
         else:
-            return df[column].unique().tolist()
+            try:
+                return df[column].unique().tolist()
+            except TypeError:
+                # Handle unhashable types from parquet
+                return list(set(to_hashable(v) for v in df[column]))
 
     def get_value_counts(self, df, column: str) -> Dict[Any, int]:
         """
@@ -257,10 +266,18 @@ class BackendAwareValidationRule(DataValidationRule):
             Dictionary mapping values to counts
         """
         if self.is_polars(df):
-            counts = df[column].value_counts()
-            return dict(zip(counts[column].to_list(), counts["count"].to_list()))
+            try:
+                counts = df[column].value_counts()
+                return dict(zip(counts[column].to_list(), counts["count"].to_list()))
+            except TypeError:
+                # Handle unhashable types from parquet
+                return safe_value_counts(df[column].to_list())
         else:
-            return df[column].value_counts().to_dict()
+            try:
+                return df[column].value_counts().to_dict()
+            except TypeError:
+                # Handle unhashable types from parquet
+                return safe_value_counts(df[column])
 
     def df_to_dicts(self, df, limit: Optional[int] = None) -> List[Dict[str, Any]]:
         """

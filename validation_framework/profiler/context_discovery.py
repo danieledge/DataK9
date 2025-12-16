@@ -24,6 +24,8 @@ except ImportError:
 
 import numpy as np
 
+from .parquet_type_handler import to_hashable
+
 logger = logging.getLogger(__name__)
 
 
@@ -405,7 +407,12 @@ class ContextDiscovery:
 
             # Within-group variance
             ss_within = 0.0
-            for segment in valid[cat_col].unique().to_list():
+            try:
+                unique_segments = valid[cat_col].unique().to_list()
+            except TypeError:
+                # Handle unhashable types from parquet
+                unique_segments = list(set(to_hashable(v) for v in valid[cat_col].to_list()))
+            for segment in unique_segments:
                 segment_data = valid.filter(pl.col(cat_col) == segment)[num_col]
                 if len(segment_data) >= self.min_segment_size:
                     segment_mean = segment_data.mean()
@@ -429,7 +436,12 @@ class ContextDiscovery:
 
         valid = df.filter(pl.col(num_col).is_not_null() & pl.col(cat_col).is_not_null())
 
-        for segment in valid[cat_col].unique().to_list():
+        try:
+            unique_segments = valid[cat_col].unique().to_list()
+        except TypeError:
+            # Handle unhashable types from parquet
+            unique_segments = list(set(to_hashable(v) for v in valid[cat_col].to_list()))
+        for segment in unique_segments:
             segment_data = valid.filter(pl.col(cat_col) == segment)[num_col]
 
             if len(segment_data) < self.min_segment_size:

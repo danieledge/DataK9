@@ -26,6 +26,7 @@ from validation_framework.core.exceptions import (
     DataLoadError
 )
 from validation_framework.core.constants import MAX_SAMPLE_FAILURES
+from validation_framework.profiler.parquet_type_handler import to_hashable
 import logging
 import pickle
 
@@ -347,7 +348,11 @@ class CrossFileKeyCheck(BackendAwareValidationRule):
                 if df is not None:
                     if len(reference_key) == 1:
                         # Single column - get unique non-null values
-                        keys = df[reference_key[0]].drop_nulls().unique().to_list()
+                        try:
+                            keys = df[reference_key[0]].drop_nulls().unique().to_list()
+                        except TypeError:
+                            # Handle unhashable types from parquet
+                            keys = list(set(to_hashable(v) for v in df[reference_key[0]].drop_nulls().to_list()))
                     else:
                         # Multiple columns - create composite keys
                         keys = self._create_composite_keys(df, reference_key)
@@ -381,7 +386,11 @@ class CrossFileKeyCheck(BackendAwareValidationRule):
                 if df is not None:
                     if len(reference_key) == 1:
                         # Single column - get unique non-null values
-                        keys = df[reference_key[0]].dropna().unique().tolist()
+                        try:
+                            keys = df[reference_key[0]].dropna().unique().tolist()
+                        except TypeError:
+                            # Handle unhashable types from parquet
+                            keys = list(set(to_hashable(v) for v in df[reference_key[0]].dropna()))
                     else:
                         # Multiple columns - create composite keys
                         keys = self._create_composite_keys(df, reference_key)
@@ -433,14 +442,22 @@ class CrossFileKeyCheck(BackendAwareValidationRule):
                 ).alias("_composite_key")
             )
             # Drop nulls and get unique values
-            keys = composite["_composite_key"].drop_nulls().unique().to_list()
+            try:
+                keys = composite["_composite_key"].drop_nulls().unique().to_list()
+            except TypeError:
+                # Handle unhashable types from parquet
+                keys = list(set(to_hashable(v) for v in composite["_composite_key"].drop_nulls().to_list()))
             return keys
         else:
             # pandas vectorized approach
             # Convert all columns to string and concatenate
             composite = df[columns].astype(str).agg('|'.join, axis=1)
             # Drop nulls and get unique values
-            keys = composite.dropna().unique().tolist()
+            try:
+                keys = composite.dropna().unique().tolist()
+            except TypeError:
+                # Handle unhashable types from parquet
+                keys = list(set(to_hashable(v) for v in composite.dropna()))
             return keys
 
     def _check_exact_match(

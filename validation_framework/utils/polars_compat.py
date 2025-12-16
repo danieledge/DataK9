@@ -21,6 +21,7 @@ from validation_framework.core.backend import (
     DataFrameAdapter,
     BackendManager
 )
+from validation_framework.profiler.parquet_type_handler import to_hashable, safe_value_counts
 
 logger = logging.getLogger(__name__)
 
@@ -274,9 +275,17 @@ class UnifiedDataFrame:
             Series or list of unique values
         """
         if self.backend == DataFrameBackend.POLARS:
-            return self.df[column].unique().to_list()
+            try:
+                return self.df[column].unique().to_list()
+            except TypeError:
+                # Handle unhashable types from parquet
+                return list(set(to_hashable(v) for v in self.df[column].to_list()))
         else:
-            return self.df[column].unique()
+            try:
+                return self.df[column].unique()
+            except TypeError:
+                # Handle unhashable types from parquet
+                return list(set(to_hashable(v) for v in self.df[column]))
 
     def value_counts(self, column: str) -> Any:
         """
@@ -289,9 +298,17 @@ class UnifiedDataFrame:
             Value counts (backend-specific format)
         """
         if self.backend == DataFrameBackend.POLARS:
-            return self.df[column].value_counts()
+            try:
+                return self.df[column].value_counts()
+            except TypeError:
+                # Handle unhashable types from parquet
+                return safe_value_counts(self.df[column].to_list())
         else:
-            return self.df[column].value_counts()
+            try:
+                return self.df[column].value_counts()
+            except TypeError:
+                # Handle unhashable types from parquet
+                return safe_value_counts(self.df[column])
 
     def get_column(self, column: str) -> Any:
         """

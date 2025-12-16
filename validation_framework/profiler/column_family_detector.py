@@ -16,6 +16,8 @@ from collections import defaultdict
 import pandas as pd
 import numpy as np
 
+from .parquet_type_handler import to_hashable
+
 logger = logging.getLogger(__name__)
 
 # Thresholds
@@ -341,7 +343,11 @@ class ColumnFamilyDetector:
             constant_cols = []
             zero_cols = []
             for col in numeric_cols:
-                unique_vals = family_df[col].dropna().unique()
+                try:
+                    unique_vals = family_df[col].dropna().unique()
+                except TypeError:
+                    # Handle unhashable types from parquet
+                    unique_vals = list(set(to_hashable(v) for v in family_df[col].dropna()))
                 if len(unique_vals) <= 1:
                     constant_cols.append(col)
                     if len(unique_vals) == 1 and unique_vals[0] == 0:
