@@ -558,10 +558,17 @@ class ChunkedMLAccumulator:
                 is_numeric = self.column_types.get(feature_col) == 'numeric'
 
                 # Group by target value for analysis
-                for target_val in target_series.unique():
+                # Use try-except for unique() which can fail with unhashable numpy arrays
+                try:
+                    unique_targets = target_series.unique()
+                except TypeError:
+                    # Fall back to converting to strings first
+                    unique_targets = target_series.apply(lambda x: str(to_hashable(x))).unique()
+
+                for target_val in unique_targets:
                     if pd.isna(target_val):
                         continue
-                    target_val_str = str(target_val)
+                    target_val_str = str(to_hashable(target_val))
 
                     mask = target_series == target_val
                     feature_subset = feature_series[mask]
@@ -1914,7 +1921,13 @@ class MLAnalyzer:
             if len(target_series) == 0:
                 continue
 
-            target_values = target_series.unique()
+            # Handle unhashable types from parquet
+            try:
+                target_values = target_series.unique()
+            except TypeError:
+                target_series = target_series.apply(lambda x: str(to_hashable(x)))
+                target_values = target_series.unique()
+
             if len(target_values) < 2 or len(target_values) > 10:
                 # Skip if target is not binary/low-cardinality
                 continue
@@ -1933,9 +1946,10 @@ class MLAnalyzer:
 
                 # Calculate missingness rate per target class
                 missingness_rates = {}
+                # Use target_series which is already converted for hashability
                 for tv in target_values:
-                    mask = df[target_col] == tv
-                    subset = df.loc[mask, col]
+                    mask = target_series == tv
+                    subset = df.loc[mask.index[mask], col]
                     total = len(subset)
                     if total > 0:
                         missing = subset.isna().sum()
@@ -2467,15 +2481,22 @@ class MLAnalyzer:
 
                     else:
                         # Categorical: compute Cramér's V approximation
+                        # Convert to hashable types for crosstab (handles numpy arrays from parquet)
+                        try:
+                            target_hashable = target_series.apply(lambda x: str(to_hashable(x)))
+                            feature_hashable = feature_series.apply(lambda x: str(to_hashable(x)))
+                        except Exception:
+                            continue
+
                         # Check cardinality before creating contingency table
                         MAX_CARDINALITY = 1000
-                        target_card = target_series.nunique()
-                        feature_card = feature_series.nunique()
+                        target_card = target_hashable.nunique()
+                        feature_card = feature_hashable.nunique()
                         if target_card > MAX_CARDINALITY or feature_card > MAX_CARDINALITY:
                             continue
 
                         # Create contingency table
-                        contingency = pd.crosstab(target_series, feature_series)
+                        contingency = pd.crosstab(target_hashable, feature_hashable)
 
                         if contingency.size < 4:  # Need at least 2x2
                             continue
