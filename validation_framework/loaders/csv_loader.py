@@ -41,7 +41,7 @@ def detect_delimiter(file_path: str, sample_size: int = 8192) -> str:
 
 def detect_encoding(file_path: str) -> str:
     """
-    Detect the encoding of a file by trying common encodings.
+    Detect the encoding of a file using BOM detection and heuristics.
 
     Args:
         file_path: Path to the file
@@ -49,16 +49,61 @@ def detect_encoding(file_path: str) -> str:
     Returns:
         Detected encoding name, defaults to 'utf-8'
     """
-    encodings = ['utf-8', 'utf-8-sig', 'cp1252', 'latin-1', 'iso-8859-1']
+    # First, check for BOM (Byte Order Mark)
+    try:
+        with open(file_path, 'rb') as f:
+            raw = f.read(4)
+
+        # Check for common BOMs
+        if raw.startswith(b'\xef\xbb\xbf'):
+            logger.debug("Detected UTF-8 BOM")
+            return 'utf-8-sig'
+        elif raw.startswith(b'\xff\xfe\x00\x00'):
+            logger.debug("Detected UTF-32 LE BOM")
+            return 'utf-32-le'
+        elif raw.startswith(b'\x00\x00\xfe\xff'):
+            logger.debug("Detected UTF-32 BE BOM")
+            return 'utf-32-be'
+        elif raw.startswith(b'\xff\xfe'):
+            logger.debug("Detected UTF-16 LE BOM")
+            return 'utf-16-le'
+        elif raw.startswith(b'\xfe\xff'):
+            logger.debug("Detected UTF-16 BE BOM")
+            return 'utf-16-be'
+    except Exception:
+        pass
+
+    # Try encodings in order of likelihood, validating each
+    # Note: latin-1 never fails (accepts any byte), so it's last as fallback
+    encodings = ['utf-8', 'utf-8-sig', 'cp1252', 'iso-8859-1', 'latin-1']
 
     for encoding in encodings:
         try:
-            with open(file_path, 'r', encoding=encoding) as f:
-                f.read(8192)
+            with open(file_path, 'r', encoding=encoding, errors='strict') as f:
+                # Read a larger sample to catch encoding issues
+                content = f.read(32768)
+
+                # For UTF-8, check for common non-UTF-8 patterns that might slip through
+                if encoding == 'utf-8':
+                    # If we see replacement characters, encoding might be wrong
+                    if '\ufffd' in content:
+                        continue
+
+                    # Check if content looks reasonable (has printable chars)
+                    printable_ratio = sum(1 for c in content[:1000] if c.isprintable() or c in '\n\r\t') / max(len(content[:1000]), 1)
+                    if printable_ratio < 0.9:
+                        continue
+
+            logger.debug(f"Detected encoding: {encoding}")
             return encoding
         except UnicodeDecodeError:
             continue
+        except Exception as e:
+            logger.debug(f"Error testing encoding {encoding}: {e}")
+            continue
 
+    # Default to utf-8 if all else fails
+    logger.debug("Encoding detection failed, defaulting to utf-8")
     return 'utf-8'
 
 
