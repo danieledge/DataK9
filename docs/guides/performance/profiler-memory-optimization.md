@@ -377,7 +377,7 @@ watch -n 10 'ps aux | grep profile | grep -v grep'
 
 If you observe memory growth despite optimizations:
 
-1. **Check Python version**: Ensure Python 3.8+ (better garbage collection)
+1. **Check Python version**: Ensure Python 3.9+ (better garbage collection)
 2. **Verify sampling limits**: Confirm limits are active (check logs)
 3. **Disable features**: Try disabling enhanced correlation/temporal analysis
 4. **Reduce chunk size**: Use smaller chunks (25K rows)

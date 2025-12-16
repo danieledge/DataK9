@@ -36,7 +36,7 @@ DataK9 is a modular, extensible Python-based system for validating data quality 
 
 ### Technology Stack
 
-- **Python 3.8+**: Core language
+- **Python 3.9+**: Core language
 - **Polars / pandas**: Dual backend for data processing (Polars default, high performance)
 - **PyYAML**: Configuration parsing
 - **pytest**: Testing framework (900+ tests, 48% coverage)
@@ -699,10 +699,16 @@ validation_framework/
 ├── core/
 │   ├── __init__.py
 │   ├── engine.py             # ValidationEngine - main orchestrator
+│   ├── optimized_engine.py   # OptimizedValidationEngine - with memory monitoring
 │   ├── config.py             # ValidationConfig - YAML parsing
 │   ├── registry.py           # ValidationRegistry - plugin system
 │   ├── results.py            # ValidationResult, Report classes
 │   └── logging_config.py     # Logging configuration
+├── shared_analysis/          # Shared analysis modules (profiler + validator)
+│   ├── __init__.py           # Exports all shared functions
+│   ├── credit_card_detection.py  # Luhn algorithm, semantic exclusion
+│   ├── outlier_detection.py      # Z-score, IQR methods
+│   └── postal_code_detection.py  # Multi-format with decimal rejection
 ├── loaders/
 │   ├── __init__.py
 │   ├── base.py               # DataLoader abstract base
@@ -754,6 +760,142 @@ validation_framework/
 - `openpyxl >= 3.0.0` - Excel support
 - `pyarrow >= 5.0.0` - Parquet support (10x faster!)
 - `colorama >= 0.4.0` - Colored console output
+
+---
+
+## Memory Safety Architecture
+
+### Memory Monitoring
+
+The `OptimizedValidationEngine` includes built-in memory safety monitoring to prevent out-of-memory (OOM) crashes during validation of large datasets.
+
+**Key Features:**
+
+| Feature | Description |
+|---------|-------------|
+| **Warning Threshold** | 70% system memory usage - logs warning |
+| **Critical Threshold** | 80% system memory usage - raises `MemoryError` |
+| **Check Interval** | Every 5 chunks (configurable) |
+| **Graceful Termination** | Clean exit with meaningful error message |
+
+**Implementation:**
+
+```python
+class OptimizedValidationEngine:
+    MEMORY_WARNING_THRESHOLD = 70   # Log warning at 70%
+    MEMORY_CRITICAL_THRESHOLD = 80  # Raise error at 80%
+    MEMORY_CHECK_INTERVAL = 5       # Check every N chunks
+
+    def _check_memory_safety(self, chunk_idx: int, row_count: int) -> bool:
+        """Check memory usage and raise MemoryError if critical."""
+        if not PSUTIL_AVAILABLE or self.disable_memory_check:
+            return True
+
+        if chunk_idx % self.MEMORY_CHECK_INTERVAL != 0:
+            return True
+
+        memory = psutil.virtual_memory()
+        if memory.percent >= self.MEMORY_CRITICAL_THRESHOLD:
+            gc.collect()  # Try to free memory first
+            memory = psutil.virtual_memory()
+            if memory.percent >= self.MEMORY_CRITICAL_THRESHOLD:
+                raise MemoryError(f"Memory critical threshold ({self.MEMORY_CRITICAL_THRESHOLD}%) exceeded")
+
+        return True
+```
+
+**Disable Option:**
+
+Memory monitoring can be disabled via CLI (`--disable-memory-check`) for environments where you want to manage memory externally or trust the system's OOM killer.
+
+---
+
+## Shared Analysis Modules
+
+### Architecture
+
+The `shared_analysis` package provides consistent analysis logic used by both the profiler and validator, eliminating code duplication and ensuring identical behavior.
+
+```
+shared_analysis/
+├── __init__.py                    # Re-exports all public functions
+├── credit_card_detection.py       # Luhn algorithm validation
+├── outlier_detection.py           # Statistical outlier methods
+└── postal_code_detection.py       # Multi-format postal codes
+```
+
+### Credit Card Detection
+
+**Features:**
+- Luhn algorithm (modulus 10) validation
+- Semantic exclusion based on column names (prevents false positives on account_id, transaction_id, etc.)
+- Support for major card formats (Visa, MasterCard, Amex, Discover)
+- Configurable Luhn threshold for false positive reduction
+
+**Usage:**
+```python
+from validation_framework.shared_analysis import (
+    luhn_check,
+    detect_credit_cards,
+    is_valid_credit_card,
+)
+
+# Single value validation
+is_valid = luhn_check("4532015112830366")  # True
+
+# Series detection with details
+results = detect_credit_cards(df['card_number'], return_details=True)
+# {'count': 150, 'pattern_matches': 200, 'luhn_valid': 150, 'luhn_ratio': 0.75}
+```
+
+### Outlier Detection
+
+**Methods:**
+- **Z-score**: Statistical deviation from mean (configurable threshold, default 3.0)
+- **IQR**: Interquartile range method (configurable multiplier, default 1.5)
+- **Combined**: Both methods for comprehensive detection
+
+**Usage:**
+```python
+from validation_framework.shared_analysis import (
+    detect_outliers_zscore,
+    detect_outliers_iqr,
+    detect_outliers,
+)
+
+# Z-score detection
+count = detect_outliers_zscore(series, threshold=3.0)
+
+# IQR with bounds
+results = detect_outliers_iqr(series, return_bounds=True)
+# {'Q1': 25.0, 'Q3': 75.0, 'IQR': 50.0, 'lower_bound': -50.0, 'upper_bound': 150.0}
+
+# Combined detection
+results = detect_outliers(series, method='combined', return_details=True)
+```
+
+### Postal Code Detection
+
+**Features:**
+- Multi-format support (US, UK, Canada, Germany, France, generic)
+- **Decimal rejection**: Prevents false positives on float columns (0.04781 is NOT a postal code)
+- Column type awareness
+
+**Usage:**
+```python
+from validation_framework.shared_analysis import (
+    detect_postal_codes,
+    is_valid_postal_code,
+)
+
+# Single value
+is_valid = is_valid_postal_code("90210")  # True (US)
+is_valid = is_valid_postal_code("SW1A 1AA", country='uk')  # True
+
+# Series detection
+results = detect_postal_codes(series, return_details=True)
+# {'count': 45, 'formats': {'us_5digit': 40, 'us_9digit': 5}, 'rejected_decimals': 3}
+```
 
 ---
 

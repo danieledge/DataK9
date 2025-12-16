@@ -50,7 +50,7 @@ It has 115+ unit tests and has been tested with large datasets (357M rows, 200GB
 ### Q: What are the system requirements?
 
 **A:** Minimum requirements:
-- Python 3.8 or higher
+- Python 3.9 or higher
 - 2GB RAM (4GB+ recommended for large files)
 - 500MB disk space
 

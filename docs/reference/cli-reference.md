@@ -264,6 +264,63 @@ python3 -m validation_framework.cli validate config.yaml --no-json
 - Manual review only (don't need machine-readable output)
 - Simplified output
 
+### CSV Processing Options
+
+These options allow fine-grained control over CSV file parsing, matching the profiler's capabilities.
+
+#### `--encoding` / `-e`
+
+Specify file encoding (auto-detected if omitted).
+
+```bash
+python3 -m validation_framework.cli validate config.yaml --encoding utf-8-sig
+```
+
+**Common encodings:**
+- `utf-8` - Standard UTF-8 (default)
+- `utf-8-sig` - UTF-8 with BOM (common in Excel exports)
+- `cp1252` - Windows Western European
+- `latin-1` / `iso-8859-1` - Legacy encoding
+
+**Use Cases:**
+- Files exported from legacy systems
+- Excel-generated CSVs with special characters
+- International character sets
+
+#### `--quoting`
+
+Set CSV quoting mode to handle files with problematic quote characters.
+
+```bash
+python3 -m validation_framework.cli validate config.yaml --quoting none
+```
+
+**Options:**
+- `minimal` - Quote only fields containing special characters (default)
+- `all` - Quote all fields
+- `none` - Don't use quotes (use when file has unescaped quotes causing parse errors)
+- `nonnumeric` - Quote all non-numeric fields
+
+**Use Cases:**
+- Files with inconsistent quoting
+- Legacy exports with unescaped quotes
+- Tab-delimited files with embedded quotes
+
+#### `--skip-rows`
+
+Skip a number of rows before the header row.
+
+```bash
+python3 -m validation_framework.cli validate config.yaml --skip-rows 3
+```
+
+**Use Cases:**
+- Files with metadata rows before the header (e.g., export timestamps, system info)
+- Reports with title rows
+- Multi-header files where only one header matters
+
+**Note:** These options override any encoding/quoting/skip-rows settings in the YAML configuration file for all files in the job.
+
 #### `--fail-fast`
 
 Stop validation on first ERROR-severity failure.

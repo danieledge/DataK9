@@ -15,9 +15,11 @@ Solutions to common issues when using **DataK9** - your K9 guardian for data qua
 | YAML parsing error | [YAML Syntax Errors](#yaml-syntax-errors) |
 | Validation running slowly | [Performance Issues](#performance-issues) |
 | Out of memory error | [Memory Issues](#memory-issues) |
+| Memory threshold exceeded | [Memory Issues](#error-memoryerror-memory-critical-threshold-80-exceeded) |
 | HTML report won't open | [Large Report Issues](#large-report-issues) |
 | Regex not matching | [Regex Issues](#regex-issues) |
 | Import/module errors | [Installation Issues](#installation-issues) |
+| CSV encoding issues | [CLI Reference - CSV Options](../reference/cli-reference.md#csv-processing-options) |
 
 ---
 
@@ -258,6 +260,49 @@ python3 -m validation_framework.cli validate config.yaml --verbose
 
 ---
 
+#### Error: "MemoryError: Memory critical threshold (80%) exceeded"
+
+**Cause:** DataK9's built-in memory monitoring detected high system memory usage.
+
+**What happened:** The validation engine monitors system memory usage during processing. When memory usage exceeds 80% (critical threshold), it terminates gracefully to prevent the system from becoming unresponsive or crashing.
+
+**Solutions:**
+
+1. **Reduce chunk_size:**
+   ```yaml
+   settings:
+     chunk_size: 10000  # Smaller chunks use less memory
+   ```
+
+2. **Close other applications:** Free up system memory before running validation.
+
+3. **Use Parquet format:** More memory-efficient than CSV.
+
+4. **Disable memory monitoring (use with caution):**
+   ```bash
+   # Only if you trust your system's OOM killer
+   python3 -m validation_framework.cli validate config.yaml --disable-memory-check
+   ```
+
+5. **Reduce max_sample_failures:**
+   ```yaml
+   settings:
+     max_sample_failures: 10
+   ```
+
+**Memory Thresholds:**
+
+| Threshold | Level | Behavior |
+|-----------|-------|----------|
+| 70% | Warning | Logs warning, continues processing |
+| 80% | Critical | Raises MemoryError, terminates gracefully |
+
+**Why this is helpful:** Instead of an uncontrolled OOM crash, you get a clean error message that tells you exactly what happened and allows your batch job to exit with a meaningful exit code (137 for memory issues).
+
+**See Also:** [Architecture - Memory Safety](../for-developers/architecture.md#memory-safety-architecture)
+
+---
+
 ## 📊 Report Issues
 
 ### Large Report Issues
@@ -458,7 +503,7 @@ pattern: "^\\+[0-9]{1,3}-[0-9]{3}-[0-9]{3}-[0-9]{4}$"
 
 3. **Check Python version:**
    ```bash
-   python3 --version  # Must be 3.8+
+   python3 --version  # Must be 3.9+
    ```
 
 4. **Use correct Python:**

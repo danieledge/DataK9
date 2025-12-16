@@ -52,9 +52,9 @@ def _check_dependencies():
     return missing
 
 def _check_python_version():
-    """Check Python version is 3.8+."""
-    if sys.version_info < (3, 8):
-        return f"Python 3.8+ required, found {sys.version_info.major}.{sys.version_info.minor}"
+    """Check Python version is 3.9+."""
+    if sys.version_info < (3, 9):
+        return f"Python 3.9+ required, found {sys.version_info.major}.{sys.version_info.minor}"
     return None
 
 # Run checks immediately on import

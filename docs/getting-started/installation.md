@@ -7,7 +7,7 @@ This guide covers installing **DataK9** - your K9 guardian for data quality.
 ## System Requirements
 
 ### Minimum Requirements
-- **Python:** 3.8 or higher
+- **Python:** 3.9 or higher
 - **RAM:** 2GB minimum (4GB+ recommended for large files)
 - **Disk Space:** 500MB for installation
 - **Operating System:** Linux, macOS, or Windows
@@ -49,10 +49,12 @@ pip install -e .
 python3 -m validation_framework.cli --version
 ```
 
-You should see:
+Expected output:
 ```
-DataK9 Data Quality Framework v2.3.0
+DataK9 Data Quality Framework v0.2.0-beta
 ```
+
+If you see `command not found`, ensure you ran `pip install -e .` from the `data-validation-tool` directory.
 
 ---
 
@@ -126,7 +128,7 @@ python3 -m validation_framework.cli --version
 python3 -m validation_framework.cli list-validations
 ```
 
-You should see a list of 35+ validation types.
+You should see a list of 37 validation types.
 
 ### Run Sample Validation
 
