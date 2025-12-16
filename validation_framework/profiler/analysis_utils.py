@@ -20,6 +20,7 @@ import logging
 from validation_framework.profiler.profile_result import (
     DistributionMetrics, AnomalyInfo, TemporalMetrics, PatternInfo, DependencyInfo
 )
+from validation_framework.profiler.parquet_type_handler import to_hashable, safe_value_counts
 
 # Import advanced statistical analysis if available
 try:
@@ -802,8 +803,13 @@ class DependencyDiscoverer:
                 logger.debug(f"Small sample size ({len(df)}) may produce unreliable dependencies")
 
             # Cardinality check: if source is too unique, it's likely not a determining factor
-            source_unique = df[source_col].nunique()
-            target_unique = df[target_col].nunique()
+            try:
+                source_unique = df[source_col].nunique()
+                target_unique = df[target_col].nunique()
+            except TypeError:
+                # Handle unhashable types from parquet
+                source_unique = len(set(str(to_hashable(v)) for v in df[source_col].dropna()))
+                target_unique = len(set(str(to_hashable(v)) for v in df[target_col].dropna()))
 
             if source_unique > target_unique * 0.8:
                 # Source is too unique to be a determining factor
@@ -811,7 +817,10 @@ class DependencyDiscoverer:
                 return 0.0
 
             # Minimum occurrence threshold: source values must repeat to establish dependency
-            value_counts = df[source_col].value_counts()
+            try:
+                value_counts = df[source_col].value_counts()
+            except TypeError:
+                value_counts = pd.Series(safe_value_counts(df[source_col]))
             frequent_values = value_counts[value_counts >= 5].index
 
             if len(frequent_values) < 3:
@@ -826,7 +835,13 @@ class DependencyDiscoverer:
                 return 0.0
 
             # Group by source, count unique target values
-            grouped = filtered_df.groupby(source_col)[target_col].nunique()
+            try:
+                grouped = filtered_df.groupby(source_col)[target_col].nunique()
+            except TypeError:
+                # Handle unhashable types by converting to hashable
+                grouped = filtered_df.groupby(
+                    filtered_df[source_col].apply(lambda x: str(to_hashable(x)))
+                )[target_col].apply(lambda x: len(set(str(to_hashable(v)) for v in x)))
 
             # Perfect dependency: all groups have exactly 1 unique target value
             perfect_groups = (grouped == 1).sum()
