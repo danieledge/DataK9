@@ -1170,6 +1170,7 @@ class DataProfiler:
         declared_schema: Optional[Dict[str, str]] = None,
         sample_rows: Optional[int] = None,
         progress_callback: Optional[callable] = None,
+        verbose_callback: Optional[callable] = None,
         **loader_kwargs
     ) -> ProfileResult:
         """
@@ -1180,7 +1181,12 @@ class DataProfiler:
             file_format: Format (csv, excel, json, parquet). Auto-detected from extension if not specified.
             declared_schema: Optional declared schema {column: type}
             sample_rows: Optional limit - profile only the first N rows (useful for large files)
-            progress_callback: Optional callback function(status_message) for progress updates
+            progress_callback: Optional callback function(status_message, current, total) for progress updates
+            verbose_callback: Optional callback for verbose mode with column-level progress.
+                              Signature: callback(event_type, **kwargs) where event_type is one of:
+                              - 'column_start': col_idx, total_cols, col_name
+                              - 'column_complete': col_idx, total_cols, col_name
+                              - 'debug': message
             **loader_kwargs: Additional arguments for data loader
 
         Returns:
@@ -1199,6 +1205,15 @@ class DataProfiler:
                         pass
                 except Exception:
                     pass  # Don't let callback errors stop profiling
+
+        def _verbose(event_type: str, **kwargs):
+            """Helper to call verbose callback if provided."""
+            if verbose_callback:
+                try:
+                    verbose_callback(event_type, **kwargs)
+                except Exception:
+                    pass  # Don't let callback errors stop profiling
+
         start_time = time.time()
         logger.debug(f"Starting profile of {file_path}")
 
@@ -1401,10 +1416,19 @@ class DataProfiler:
                         logger.warning(f"Column family detection failed: {e}")
 
             # Update profiles with chunk data
-            for col in chunk.columns:
+            total_cols = len(chunk.columns)
+            for col_idx, col in enumerate(chunk.columns):
+                # Emit verbose callback for column start
+                _verbose('column_start', col_idx=col_idx, total_cols=total_cols, col_name=col)
+                col_start_time = time.time()
+
                 self._update_column_profile(
                     column_profiles[col], chunk[col], chunk_idx
                 )
+
+                # Emit verbose callback for column complete with timing
+                col_elapsed = time.time() - col_start_time
+                _verbose('column_complete', col_idx=col_idx, total_cols=total_cols, col_name=col, elapsed=col_elapsed)
 
                 # Collect numeric data for correlations with memory-efficient sampling
                 # Limit to MAX_CORRELATION_SAMPLES per column to prevent memory exhaustion with very large datasets

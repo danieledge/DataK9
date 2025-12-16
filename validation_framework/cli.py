@@ -17,7 +17,7 @@ from validation_framework.core.engine import ValidationEngine
 from validation_framework.core.optimized_engine import OptimizedValidationEngine
 from validation_framework.core.registry import get_registry
 from validation_framework.core.logging_config import setup_logging, get_logger
-from validation_framework.core.pretty_output import PrettyOutput as po
+from validation_framework.core.pretty_output import PrettyOutput as po, VerboseProgressReporter
 from validation_framework.utils.performance_advisor import get_performance_advisor
 from validation_framework.utils.path_patterns import PathPatternExpander
 
@@ -732,43 +732,33 @@ def profile(file_path, format, delimiter, database, table, query, html_output, j
                     delim_display = repr(detected_delimiter).strip("'")
                     po.info(f"Auto-detected delimiter: {delim_display}")
 
-            import time as _time
-            last_phase = [None]  # Use list to allow modification in nested function
-            phase_start = [_time.time()]  # Track phase timing
-            def progress_callback(msg, current=0, total=0):
-                """Progress callback that shows clear phase transitions."""
-                if current > 0:
-                    # Show progress bar for data processing
-                    po.progress_bar(current, total, msg)
-                else:
-                    # Print phase changes on new lines so user sees progress
-                    if msg != last_phase[0]:
-                        po.progress_done()  # Clear any progress bar
-                        if verbose:
-                            # Show timing for previous phase
-                            if last_phase[0]:
-                                elapsed = _time.time() - phase_start[0]
-                                print(f"       ({elapsed:.1f}s)", flush=True)
-                            # Show timestamp for new phase
-                            timestamp = _time.strftime("%H:%M:%S")
-                            print(f"  [{timestamp}] {msg}", flush=True)
-                        else:
-                            print(f"  -> {msg}", flush=True)
-                        last_phase[0] = msg
-                        phase_start[0] = _time.time()
+            # Create progress reporter (handles both normal and verbose output)
+            reporter = VerboseProgressReporter(verbose=verbose)
+
+            # Verbose callback for column-level progress
+            def verbose_callback(event_type, **kwargs):
+                """Handle verbose events from profiler."""
+                if event_type == 'column_start':
+                    reporter.column_start(kwargs['col_idx'], kwargs['total_cols'], kwargs['col_name'])
+                elif event_type == 'column_complete':
+                    reporter.column_complete(
+                        kwargs['col_idx'], kwargs['total_cols'], kwargs['col_name'],
+                        elapsed=kwargs.get('elapsed')
+                    )
+                elif event_type == 'debug':
+                    reporter.debug(kwargs.get('message', ''))
 
             profile_result = profiler.profile_file(
                 file_path=file_path,
                 file_format=format,
                 sample_rows=sample,
-                progress_callback=progress_callback,
+                progress_callback=reporter.callback,
+                verbose_callback=verbose_callback if verbose else None,
                 **loader_kwargs
             )
             po.progress_done()  # Clear the progress line
-            # Show final phase timing in verbose mode
-            if verbose and last_phase[0]:
-                elapsed = _time.time() - phase_start[0]
-                print(f"       ({elapsed:.1f}s)", flush=True)
+            reporter.phase_complete()  # Show final phase timing
+            reporter.summary()  # Show slow column summary if any
 
         # Format file size
         size_bytes = profile_result.file_size_bytes

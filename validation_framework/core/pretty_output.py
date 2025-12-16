@@ -635,3 +635,160 @@ class PrettyOutput:
         for row in rows:
             row_str = "  ".join(f"{str(v):<{col_widths[i]}}" for i, v in enumerate(row))
             print(f"  {row_str}")
+
+
+class VerboseProgressReporter:
+    """
+    Progress reporter for verbose mode with detailed timing and phase information.
+
+    Provides rich, informative output during profiling including:
+    - Timestamps for each phase
+    - Per-column timing for slow columns
+    - Memory usage indicators
+    - Detailed step breakdowns
+    """
+
+    def __init__(self, verbose: bool = False):
+        """
+        Initialize the progress reporter.
+
+        Args:
+            verbose: If True, show detailed timing and debug information
+        """
+        self.verbose = verbose
+        self.current_phase = None
+        self.phase_start_time = None
+        self.column_count = 0
+        self.total_columns = 0
+        self.slow_columns = []  # Track columns that took >2s
+        import time
+        self._time = time
+
+    def _timestamp(self) -> str:
+        """Get current timestamp string."""
+        return self._time.strftime("%H:%M:%S")
+
+    def _elapsed(self) -> float:
+        """Get elapsed time since phase start."""
+        if self.phase_start_time:
+            return self._time.time() - self.phase_start_time
+        return 0.0
+
+    def phase_start(self, phase_name: str) -> None:
+        """
+        Report the start of a new phase.
+
+        Args:
+            phase_name: Name of the phase (e.g., "Loading data", "Analyzing columns")
+        """
+        # Complete previous phase
+        if self.current_phase and self.verbose:
+            elapsed = self._elapsed()
+            if elapsed > 0.1:  # Only show timing for phases >100ms
+                print(f"       {PrettyOutput.DIM}({elapsed:.1f}s){PrettyOutput.RESET}", flush=True)
+
+        self.current_phase = phase_name
+        self.phase_start_time = self._time.time()
+
+        if self.verbose:
+            timestamp = self._timestamp()
+            print(f"  {PrettyOutput.DIM}[{timestamp}]{PrettyOutput.RESET} {PrettyOutput.PRIMARY}→{PrettyOutput.RESET} {phase_name}", flush=True)
+        else:
+            # Clean mode: simple arrow
+            print(f"  {PrettyOutput.PRIMARY}→{PrettyOutput.RESET} {phase_name}", flush=True)
+
+    def phase_complete(self) -> None:
+        """Report completion of current phase with timing."""
+        if self.verbose and self.current_phase:
+            elapsed = self._elapsed()
+            if elapsed > 0.1:
+                print(f"       {PrettyOutput.DIM}({elapsed:.1f}s){PrettyOutput.RESET}", flush=True)
+        self.current_phase = None
+        self.phase_start_time = None
+
+    def column_start(self, col_idx: int, total_cols: int, col_name: str) -> None:
+        """
+        Report start of column processing.
+
+        Args:
+            col_idx: Current column index (0-based)
+            total_cols: Total number of columns
+            col_name: Name of the column
+        """
+        self.column_count = col_idx + 1
+        self.total_columns = total_cols
+        self._col_start_time = self._time.time()
+        self._current_col_name = col_name
+
+    def column_complete(self, col_idx: int, total_cols: int, col_name: str, elapsed: float = None) -> None:
+        """
+        Report completion of column processing.
+
+        Args:
+            col_idx: Current column index (0-based)
+            total_cols: Total number of columns
+            col_name: Name of the column
+            elapsed: Time taken for column processing (optional, calculated if not provided)
+        """
+        if elapsed is None:
+            elapsed = self._time.time() - getattr(self, '_col_start_time', self._time.time())
+
+        if self.verbose:
+            # Show progress every 10 columns or for slow columns
+            if (col_idx + 1) % 10 == 0 or col_idx == total_cols - 1 or elapsed > 2.0:
+                if elapsed > 2.0:
+                    # Highlight slow columns
+                    print(f"       {PrettyOutput.WARNING}⚠{PrettyOutput.RESET} Column {col_idx + 1}/{total_cols}: {col_name} {PrettyOutput.WARNING}({elapsed:.1f}s){PrettyOutput.RESET}", flush=True)
+                    self.slow_columns.append((col_name, elapsed))
+                else:
+                    print(f"       {PrettyOutput.DIM}Column {col_idx + 1}/{total_cols}{PrettyOutput.RESET}", flush=True)
+
+    def chunk_progress(self, rows_processed: int, total_rows: int = 0) -> None:
+        """
+        Report chunk processing progress.
+
+        Args:
+            rows_processed: Number of rows processed so far
+            total_rows: Total rows (0 if unknown)
+        """
+        if total_rows > 0:
+            PrettyOutput.progress_bar(rows_processed, total_rows, "Processing")
+        else:
+            PrettyOutput.progress_bar(rows_processed, 0, "Processing")
+
+    def debug(self, message: str) -> None:
+        """
+        Print a debug message (only in verbose mode).
+
+        Args:
+            message: Debug message to print
+        """
+        if self.verbose:
+            print(f"       {PrettyOutput.DIM}• {message}{PrettyOutput.RESET}", flush=True)
+
+    def summary(self) -> None:
+        """Print summary of any notable events (slow columns, etc.)."""
+        if self.verbose and self.slow_columns:
+            print(f"\n  {PrettyOutput.WARNING}⚠{PrettyOutput.RESET} {PrettyOutput.HEADER}Slow Columns:{PrettyOutput.RESET}")
+            for col_name, elapsed in sorted(self.slow_columns, key=lambda x: -x[1])[:5]:
+                print(f"       {PrettyOutput.DIM}•{PrettyOutput.RESET} {col_name}: {elapsed:.1f}s")
+
+    def callback(self, message: str, current: int = 0, total: int = 0) -> None:
+        """
+        Main callback for profiler progress updates.
+
+        This method is designed to be passed to the profiler as progress_callback.
+        It handles both progress bar updates and phase transitions.
+
+        Args:
+            message: Status message or phase name
+            current: Current progress value (for progress bar)
+            total: Total progress value (for progress bar)
+        """
+        if current > 0:
+            # Progress bar mode
+            self.chunk_progress(current, total)
+        else:
+            # Phase transition
+            PrettyOutput.progress_done()  # Clear any progress bar
+            self.phase_start(message)
