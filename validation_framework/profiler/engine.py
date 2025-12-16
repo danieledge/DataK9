@@ -148,13 +148,14 @@ except ImportError:
     logger.debug("Visions library not available - using fallback type inference")
 
 
-def check_csv_format(file_path: str, sample_rows: int = 1000) -> Dict[str, Any]:
+def check_csv_format(file_path: str, sample_rows: int = 1000, skip_rows: int = None) -> Dict[str, Any]:
     """
     Check CSV file for structural issues before profiling.
 
     Args:
         file_path: Path to CSV file
         sample_rows: Number of rows to check
+        skip_rows: Number of rows to skip before header (None = auto-detect)
 
     Returns:
         Dict with 'valid', 'issues', 'delimiter', 'encoding', 'column_count', 'skip_rows'
@@ -170,7 +171,7 @@ def check_csv_format(file_path: str, sample_rows: int = 1000) -> Dict[str, Any]:
         'column_count': 0,
         'rows_checked': 0,
         'inconsistent_rows': [],
-        'skip_rows': 0
+        'skip_rows': skip_rows if skip_rows is not None else 0
     }
 
     # Auto-detect delimiter
@@ -199,8 +200,9 @@ def check_csv_format(file_path: str, sample_rows: int = 1000) -> Dict[str, Any]:
         logger.debug(f"Delimiter auto-detection failed, defaulting to comma: {e}")
         result['delimiter'] = ','
 
-    # Auto-detect rows to skip (file identifier lines before headers)
-    skip_rows = detect_header_skip_rows(file_path, result['delimiter'], detected_encoding)
+    # Use explicit skip_rows if provided, otherwise auto-detect
+    if skip_rows is None:
+        skip_rows = detect_header_skip_rows(file_path, result['delimiter'], detected_encoding)
     result['skip_rows'] = skip_rows
 
     # Check for structural issues (accounting for skip_rows)
@@ -1249,7 +1251,9 @@ class DataProfiler:
         # CSV format check for CSV files
         csv_format_check = None
         if file_format.lower() == 'csv':
-            csv_format_check = check_csv_format(file_path)
+            # Pass explicit skip_rows if provided in loader_kwargs
+            explicit_skip_rows = loader_kwargs.get('skiprows', None)
+            csv_format_check = check_csv_format(file_path, skip_rows=explicit_skip_rows)
             if not csv_format_check['valid']:
                 logger.warning(f"CSV format issues detected: {csv_format_check['issues']}")
 
