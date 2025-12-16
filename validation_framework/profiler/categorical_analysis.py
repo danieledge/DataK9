@@ -594,9 +594,24 @@ class CategoricalAnalyzer:
             )
             cols_to_analyze = non_id_cols[:self.max_columns_for_pairwise]
 
+        # Maximum cardinality for crosstab to prevent memory explosion
+        # 1000 x 1000 = 1M cells is reasonable, but 50000 x 50000 = 2.5B cells will crash
+        MAX_CARDINALITY_FOR_CROSSTAB = 1000
+
         for i, col1 in enumerate(cols_to_analyze):
             for col2 in cols_to_analyze[i+1:]:
                 try:
+                    # Check cardinality before creating contingency table
+                    # This prevents memory explosion with high-cardinality columns
+                    card1 = df[col1].nunique()
+                    card2 = df[col2].nunique()
+                    if card1 > MAX_CARDINALITY_FOR_CROSSTAB or card2 > MAX_CARDINALITY_FOR_CROSSTAB:
+                        logger.debug(
+                            f"Skipping Cramér's V for {col1}×{col2}: cardinality too high "
+                            f"({card1}×{card2} would create {card1*card2:,} cell matrix)"
+                        )
+                        continue
+
                     # Create contingency table
                     contingency = pd.crosstab(df[col1], df[col2])
 

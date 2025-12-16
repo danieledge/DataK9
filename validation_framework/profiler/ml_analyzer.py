@@ -2325,10 +2325,20 @@ class MLAnalyzer:
 
         scores = []
         target_series = df[target_col].fillna('__NA__').astype(str)
+        target_cardinality = target_series.nunique()
+
+        # Maximum cardinality to prevent memory explosion in crosstab
+        MAX_CARDINALITY = 1000
 
         for col in feature_cols:
             try:
                 feature_series = df[col].fillna('__NA__').astype(str)
+
+                # Check cardinality before creating contingency table
+                feature_cardinality = feature_series.nunique()
+                if target_cardinality > MAX_CARDINALITY or feature_cardinality > MAX_CARDINALITY:
+                    scores.append((col, 0.0))
+                    continue
 
                 # Compute Cramér's V using scipy (vectorized)
                 contingency = pd.crosstab(target_series, feature_series)
@@ -2457,6 +2467,13 @@ class MLAnalyzer:
 
                     else:
                         # Categorical: compute Cramér's V approximation
+                        # Check cardinality before creating contingency table
+                        MAX_CARDINALITY = 1000
+                        target_card = target_series.nunique()
+                        feature_card = feature_series.nunique()
+                        if target_card > MAX_CARDINALITY or feature_card > MAX_CARDINALITY:
+                            continue
+
                         # Create contingency table
                         contingency = pd.crosstab(target_series, feature_series)
 
