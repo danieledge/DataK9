@@ -22,6 +22,7 @@ except ImportError:
     logging.warning("scipy not available - categorical analysis limited")
 
 from .semantic_config import get_semantic_config
+from .parquet_type_handler import to_hashable, safe_value_counts
 
 logger = logging.getLogger(__name__)
 
@@ -118,7 +119,11 @@ class CategoricalAnalyzer:
         elif token_match is True:
             # Positive token match - verify with cardinality check
             if df is not None and col in df.columns:
-                uniqueness = df[col].nunique() / max(len(df), 1)
+                try:
+                    uniqueness = df[col].nunique() / max(len(df), 1)
+                except TypeError:
+                    # Handle unhashable types from parquet
+                    uniqueness = len(set(str(to_hashable(v)) for v in df[col].dropna())) / max(len(df), 1)
                 # Use config's value hints for threshold (default 0.80, but accept 0.5 for correlation exclusion)
                 value_hints = config.get_value_hints('identifier')
                 min_unique = value_hints.get('min_unique_ratio', 0.80)
@@ -240,7 +245,11 @@ class CategoricalAnalyzer:
 
         for col in df.columns:
             col_type = column_types.get(col, "unknown")
-            nunique = df[col].nunique()
+            try:
+                nunique = df[col].nunique()
+            except TypeError:
+                # Handle unhashable types from parquet
+                nunique = len(set(str(to_hashable(v)) for v in df[col].dropna()))
 
             # Consider categorical if:
             # 1. Explicitly string type with low cardinality
@@ -261,7 +270,11 @@ class CategoricalAnalyzer:
 
         for col in df.columns:
             non_null = df[col].dropna()
-            unique_vals = non_null.unique()
+            try:
+                unique_vals = non_null.unique()
+            except TypeError:
+                # Handle unhashable types from parquet
+                unique_vals = list(set(str(to_hashable(v)) for v in non_null))
 
             if len(unique_vals) == 2:
                 # Check if values are binary-like (0/1, yes/no, true/false)
@@ -269,7 +282,10 @@ class CategoricalAnalyzer:
             elif len(unique_vals) <= 3:
                 # Could be binary with one rare value
                 # Check if dominant two values cover most data
-                value_counts = non_null.value_counts()
+                try:
+                    value_counts = non_null.value_counts()
+                except TypeError:
+                    value_counts = pd.Series(safe_value_counts(non_null))
                 if len(value_counts) >= 2:
                     top_two_pct = value_counts.iloc[:2].sum() / len(non_null)
                     if top_two_pct >= self.binary_detection_threshold:
@@ -332,8 +348,13 @@ class CategoricalAnalyzer:
             if len(non_null) == 0:
                 return None
 
-            unique_vals = list(non_null.unique())
-            value_counts = non_null.value_counts()
+            try:
+                unique_vals = list(non_null.unique())
+                value_counts = non_null.value_counts()
+            except TypeError:
+                # Handle unhashable types from parquet
+                unique_vals = list(set(str(to_hashable(v)) for v in non_null))
+                value_counts = pd.Series(safe_value_counts(non_null))
             n_classes = len(unique_vals)
 
             # Calculate ML target score (0-100)
@@ -466,7 +487,10 @@ class CategoricalAnalyzer:
             if len(non_null) == 0:
                 return None
 
-            n_unique = non_null.nunique()
+            try:
+                n_unique = non_null.nunique()
+            except TypeError:
+                n_unique = len(set(str(to_hashable(v)) for v in non_null))
 
             # Must have high cardinality (continuous) to be regression target
             if n_unique < 20:
@@ -555,7 +579,11 @@ class CategoricalAnalyzer:
         for col in df.columns:
             if df[col].dtype in ('int64', 'float64', 'int32', 'float32'):
                 # Exclude very low cardinality (likely categorical codes)
-                if df[col].nunique() > 10:
+                try:
+                    n_unique = df[col].nunique()
+                except TypeError:
+                    n_unique = len(set(str(to_hashable(v)) for v in df[col].dropna()))
+                if n_unique > 10:
                     numeric.append(col)
             elif column_types.get(col) in ("integer", "float", "decimal"):
                 numeric.append(col)
@@ -603,8 +631,14 @@ class CategoricalAnalyzer:
                 try:
                     # Check cardinality before creating contingency table
                     # This prevents memory explosion with high-cardinality columns
-                    card1 = df[col1].nunique()
-                    card2 = df[col2].nunique()
+                    try:
+                        card1 = df[col1].nunique()
+                        card2 = df[col2].nunique()
+                    except TypeError:
+                        # Handle unhashable types from parquet
+                        card1 = len(set(str(to_hashable(v)) for v in df[col1].dropna()))
+                        card2 = len(set(str(to_hashable(v)) for v in df[col2].dropna()))
+
                     if card1 > MAX_CARDINALITY_FOR_CROSSTAB or card2 > MAX_CARDINALITY_FOR_CROSSTAB:
                         logger.debug(
                             f"Skipping Cramér's V for {col1}×{col2}: cardinality too high "
@@ -612,8 +646,13 @@ class CategoricalAnalyzer:
                         )
                         continue
 
-                    # Create contingency table
-                    contingency = pd.crosstab(df[col1], df[col2])
+                    # Create contingency table (convert to hashable for parquet arrays)
+                    try:
+                        contingency = pd.crosstab(df[col1], df[col2])
+                    except TypeError:
+                        col1_hashable = df[col1].apply(lambda x: str(to_hashable(x)))
+                        col2_hashable = df[col2].apply(lambda x: str(to_hashable(x)))
+                        contingency = pd.crosstab(col1_hashable, col2_hashable)
 
                     if contingency.size < 4:  # Need at least 2x2
                         continue
@@ -680,14 +719,20 @@ class CategoricalAnalyzer:
 
                     # Convert binary to numeric if needed
                     if binary_vals.dtype == 'object':
-                        unique_vals = binary_vals.unique()
+                        try:
+                            unique_vals = binary_vals.unique()
+                        except TypeError:
+                            unique_vals = list(set(str(to_hashable(v)) for v in binary_vals))
                         if len(unique_vals) == 2:
                             binary_vals = (binary_vals == unique_vals[0]).astype(int)
                         else:
                             continue
 
                     # Ensure binary is 0/1
-                    unique_binary = set(binary_vals.unique())
+                    try:
+                        unique_binary = set(binary_vals.unique())
+                    except TypeError:
+                        unique_binary = set(to_hashable(v) for v in binary_vals)
                     if not unique_binary <= {0, 1, 0.0, 1.0}:
                         # Map to 0/1
                         min_val, max_val = binary_vals.min(), binary_vals.max()
@@ -800,9 +845,21 @@ class CategoricalAnalyzer:
                             })
 
                     # For categorical columns, check if missingness differs by group
-                    elif other_vals.dtype == 'object' or other_vals.nunique() <= 10:
+                    else:
+                        try:
+                            n_unique = other_vals.nunique()
+                        except TypeError:
+                            n_unique = len(set(str(to_hashable(v)) for v in other_vals.dropna()))
+
+                        if other_vals.dtype != 'object' and n_unique > 10:
+                            continue
+
                         # Chi-squared test for independence
-                        contingency = pd.crosstab(missing_indicator, other_vals)
+                        try:
+                            contingency = pd.crosstab(missing_indicator, other_vals)
+                        except TypeError:
+                            other_hashable = other_vals.apply(lambda x: str(to_hashable(x)))
+                            contingency = pd.crosstab(missing_indicator, other_hashable)
                         if contingency.size >= 4:
                             chi2, p_val, _, _ = chi2_contingency(contingency)
 
