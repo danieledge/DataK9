@@ -783,6 +783,7 @@ def version():
 @click.option('--format', '-f', type=click.Choice(['csv', 'excel', 'json', 'parquet'], case_sensitive=False),
               help='File format (auto-detected if not specified)')
 @click.option('--delimiter', '-d', default=None, help='Column delimiter for CSV files (default: comma). Use "\\t" for tab-separated files.')
+@click.option('--skip-rows', type=int, default=None, help='Number of rows to skip before the header row. Use when file has identifier/metadata lines before headers.')
 @click.option('--database', '--db', help='Database connection string (e.g., sqlite:///test.db or postgresql://...)')
 @click.option('--table', '-t', help='Database table name to profile')
 @click.option('--query', '-q', help='SQL query to profile (alternative to --table)')
@@ -804,7 +805,7 @@ def version():
 @click.option('--field-descriptions', type=click.Path(exists=True), help='YAML file with friendly field names and descriptions for better anomaly explanations')
 @click.option('--correlation-threshold', type=float, default=None, help='Minimum absolute correlation to report (default: 0.3, Cohen\'s medium effect). Range: 0.0-1.0')
 @click.option('--verbose', '-v', is_flag=True, help='Show detailed progress with timestamps for debugging')
-def profile(file_path, format, delimiter, database, table, query, html_output, json_output, config_output, chunk_size, sample, no_memory_check, log_level,
+def profile(file_path, format, delimiter, skip_rows, database, table, query, html_output, json_output, config_output, chunk_size, sample, no_memory_check, log_level,
             disable_temporal, disable_pii, disable_correlation, disable_all_enhancements, no_ml, full_analysis, analysis_sample_size, field_descriptions, correlation_threshold, verbose):
     """
     Profile a data file or database table to understand its structure and quality.
@@ -1036,6 +1037,11 @@ def profile(file_path, format, delimiter, database, table, query, html_output, j
                     loader_kwargs['delimiter'] = detected_delimiter
                     delim_display = repr(detected_delimiter).strip("'")
                     po.info(f"Auto-detected delimiter: {delim_display}")
+
+            # Handle skip rows (for files with metadata/identifier lines before headers)
+            if skip_rows:
+                loader_kwargs['skiprows'] = skip_rows
+                po.info(f"Skipping first {skip_rows} row(s) before header")
 
             # Create progress reporter (handles both normal and verbose output)
             reporter = VerboseProgressReporter(verbose=verbose)

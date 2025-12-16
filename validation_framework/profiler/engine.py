@@ -157,9 +157,10 @@ def check_csv_format(file_path: str, sample_rows: int = 1000) -> Dict[str, Any]:
         sample_rows: Number of rows to check
 
     Returns:
-        Dict with 'valid', 'issues', 'delimiter', 'encoding', 'column_count'
+        Dict with 'valid', 'issues', 'delimiter', 'encoding', 'column_count', 'skip_rows'
     """
     import csv
+    from validation_framework.loaders.csv_loader import detect_header_skip_rows
 
     result = {
         'valid': True,
@@ -168,7 +169,8 @@ def check_csv_format(file_path: str, sample_rows: int = 1000) -> Dict[str, Any]:
         'encoding': 'utf-8',
         'column_count': 0,
         'rows_checked': 0,
-        'inconsistent_rows': []
+        'inconsistent_rows': [],
+        'skip_rows': 0
     }
 
     # Auto-detect delimiter
@@ -197,10 +199,18 @@ def check_csv_format(file_path: str, sample_rows: int = 1000) -> Dict[str, Any]:
         logger.debug(f"Delimiter auto-detection failed, defaulting to comma: {e}")
         result['delimiter'] = ','
 
-    # Check for structural issues
+    # Auto-detect rows to skip (file identifier lines before headers)
+    skip_rows = detect_header_skip_rows(file_path, result['delimiter'], detected_encoding)
+    result['skip_rows'] = skip_rows
+
+    # Check for structural issues (accounting for skip_rows)
     try:
         with open(file_path, 'r', newline='', encoding=detected_encoding) as f:
             reader = csv.reader(f, delimiter=result['delimiter'])
+
+            # Skip file identifier/metadata rows
+            for _ in range(skip_rows):
+                next(reader, None)
 
             expected_columns = None
             for i, row in enumerate(reader):
@@ -214,7 +224,7 @@ def check_csv_format(file_path: str, sample_rows: int = 1000) -> Dict[str, Any]:
                 if len(row) != expected_columns:
                     result['valid'] = False
                     result['inconsistent_rows'].append({
-                        'row': i + 1,
+                        'row': i + 1 + skip_rows,  # Adjust row number for skipped rows
                         'expected': expected_columns,
                         'actual': len(row)
                     })

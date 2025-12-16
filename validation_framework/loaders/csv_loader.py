@@ -62,6 +62,86 @@ def detect_encoding(file_path: str) -> str:
     return 'utf-8'
 
 
+def detect_header_skip_rows(file_path: str, delimiter: str = ',', encoding: str = 'utf-8') -> int:
+    """
+    Auto-detect the number of rows to skip before the header row.
+
+    Detects common patterns where files have metadata/identifier lines before headers:
+    - First line has fewer columns than second line (file identifier)
+    - First line matches common metadata patterns (File:, Report:, Generated:, Export:, etc.)
+    - First line is a single value (file ID, timestamp, etc.)
+
+    Args:
+        file_path: Path to the CSV file
+        delimiter: Column delimiter
+        encoding: File encoding
+
+    Returns:
+        Number of rows to skip (0 if header is on first line)
+    """
+    import re
+
+    # Metadata patterns that suggest a non-header first line
+    metadata_patterns = [
+        r'^file[:\s]',
+        r'^report[:\s]',
+        r'^generated[:\s]',
+        r'^export[:\s]',
+        r'^date[:\s]',
+        r'^created[:\s]',
+        r'^source[:\s]',
+        r'^data\s*extract',
+        r'^\d{4}[-/]\d{2}[-/]\d{2}',  # Date-like: 2024-01-15
+        r'^[A-Z]{2,5}[-_]\d+',  # ID-like: FILE-001, EXP_123
+    ]
+
+    try:
+        with open(file_path, 'r', newline='', encoding=encoding) as f:
+            # Read first few lines
+            lines = []
+            for i, line in enumerate(f):
+                if i >= 5:  # Only check first 5 lines
+                    break
+                lines.append(line.strip())
+
+            if len(lines) < 2:
+                return 0
+
+            # Count columns in first few lines
+            def count_cols(line):
+                # Simple column count (doesn't handle all quoting edge cases)
+                return len(line.split(delimiter))
+
+            first_line_cols = count_cols(lines[0])
+            second_line_cols = count_cols(lines[1])
+
+            # Check if first line looks like a file identifier
+            first_line_lower = lines[0].lower()
+
+            # Pattern 1: First line has significantly fewer columns than second
+            if first_line_cols == 1 and second_line_cols > 1:
+                logger.info(f"Auto-detected file identifier line: first line has 1 column, second has {second_line_cols}")
+                return 1
+
+            # Pattern 2: First line matches metadata patterns
+            for pattern in metadata_patterns:
+                if re.match(pattern, first_line_lower, re.IGNORECASE):
+                    logger.info(f"Auto-detected metadata line matching pattern: {pattern}")
+                    return 1
+
+            # Pattern 3: First line has much fewer columns than subsequent lines
+            if len(lines) >= 3:
+                third_line_cols = count_cols(lines[2])
+                if first_line_cols < second_line_cols and second_line_cols == third_line_cols:
+                    logger.info(f"Auto-detected header skip: line 1 has {first_line_cols} cols, lines 2-3 have {second_line_cols} cols")
+                    return 1
+
+    except Exception as e:
+        logger.debug(f"Header skip detection failed: {e}")
+
+    return 0
+
+
 class CSVLoader(DataLoader):
     """Loader for CSV and delimited text files with robust error handling."""
 
@@ -91,6 +171,17 @@ class CSVLoader(DataLoader):
             if self.kwargs['encoding'] != 'utf-8':
                 logger.info(f"Auto-detected encoding: {self.kwargs['encoding']}")
 
+        # Auto-detect skiprows if not specified (detect file identifier lines)
+        if 'skiprows' not in kwargs or kwargs.get('skiprows') is None:
+            detected_skip = detect_header_skip_rows(
+                file_path,
+                delimiter=self.kwargs.get('delimiter', ','),
+                encoding=self.kwargs.get('encoding', 'utf-8')
+            )
+            if detected_skip > 0:
+                self.kwargs['skiprows'] = detected_skip
+                logger.info(f"Auto-detected: skipping first {detected_skip} row(s) before header")
+
     def load(self) -> Iterator[pd.DataFrame]:
         """
         Load CSV data in chunks with robust error handling.
@@ -101,6 +192,11 @@ class CSVLoader(DataLoader):
         delimiter = self.kwargs.get("delimiter", ",")
         encoding = self.kwargs.get("encoding", "utf-8")
         header = self.kwargs.get("header", 0)
+        skiprows = self.kwargs.get("skiprows", None)
+
+        # Log skiprows if set
+        if skiprows:
+            logger.info(f"Skipping first {skiprows} row(s) before header")
 
         # Reset skipped rows tracking - just count, line numbers not available with chunked reading
         self.skipped_row_count = 0
@@ -120,6 +216,7 @@ class CSVLoader(DataLoader):
                     delimiter=delimiter,
                     encoding=encoding,
                     header=header,
+                    skiprows=skiprows,  # Skip metadata/identifier rows before header
                     chunksize=self.chunk_size,
                     on_bad_lines=track_bad_line,  # Track and skip bad lines
                     engine='python',  # Required for callable on_bad_lines
@@ -147,6 +244,7 @@ class CSVLoader(DataLoader):
                         delimiter=delimiter,
                         encoding=encoding,
                         header=header,
+                        skiprows=skiprows,  # Skip metadata/identifier rows before header
                         chunksize=self.chunk_size,
                         low_memory=False,
                         on_bad_lines='skip',  # Skip problematic rows
@@ -202,6 +300,7 @@ class CSVLoader(DataLoader):
                 delimiter = self.kwargs.get("delimiter", ",")
                 encoding = self.kwargs.get("encoding", "utf-8")
                 header = self.kwargs.get("header", 0)
+                skiprows = self.kwargs.get("skiprows", None)
 
                 # Read just first chunk to get schema
                 first_chunk = pd.read_csv(
@@ -209,6 +308,7 @@ class CSVLoader(DataLoader):
                     delimiter=delimiter,
                     encoding=encoding,
                     header=header,
+                    skiprows=skiprows,
                     nrows=1000,
                     low_memory=False,
                 )
