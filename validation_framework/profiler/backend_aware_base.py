@@ -46,6 +46,8 @@ import pandas as pd
 from typing import Any, List, Dict, Optional, Union
 import numpy as np
 
+from .parquet_type_handler import to_hashable, safe_value_counts
+
 # Import Polars if available
 try:
     import polars as pl
@@ -170,7 +172,11 @@ class BackendAwareProfiler:
         if self.is_polars(series):
             return series.n_unique()
         else:
-            return series.nunique()
+            try:
+                return series.nunique()
+            except TypeError:
+                # Handle unhashable types from parquet
+                return len(set(str(to_hashable(v)) for v in series.dropna()))
 
     def get_null_count(self, series: Series) -> int:
         """Get count of null values (backend-agnostic)."""
@@ -188,7 +194,11 @@ class BackendAwareProfiler:
                 vc = vc.head(limit)
             return {row[0]: row[1] for row in vc.iter_rows()}
         else:
-            vc = series.value_counts()
+            try:
+                vc = series.value_counts()
+            except TypeError:
+                # Handle unhashable types from parquet
+                vc = pd.Series(safe_value_counts(series))
             if limit:
                 vc = vc.head(limit)
             return vc.to_dict()
