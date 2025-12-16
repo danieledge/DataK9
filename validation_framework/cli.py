@@ -969,14 +969,46 @@ def profile(file_path, format, delimiter, database, table, query, html_output, j
     except Exception as e:
         po.progress_done()  # Clear any progress line
         po.blank_line()
-        po.error(f"Unexpected error: {str(e)}")
+
+        # Get exception type for context-aware error messages
+        error_type = type(e).__name__
+        error_msg = str(e)
+
+        po.error(f"Unexpected error: {error_type}")
+        if error_msg:
+            click.echo(f"   {error_msg}", err=True)
+
         po.blank_line()
-        po.info("If this is a CSV parsing issue, try:")
-        click.echo("   - Check the file encoding (UTF-8, CP1252, etc.)")
-        click.echo("   - Verify the delimiter is correct (-d option)")
-        click.echo("   - Check for malformed rows (unquoted delimiters in data)")
-        import traceback
-        traceback.print_exc()
+
+        # Context-aware help based on error type
+        if "encoding" in error_msg.lower() or "codec" in error_msg.lower():
+            po.info("This looks like an encoding issue. Try:")
+            click.echo("   - Specify encoding: check file encoding (UTF-8, CP1252, Latin-1)")
+            click.echo("   - Convert file to UTF-8 before profiling")
+        elif "delimiter" in error_msg.lower() or "parse" in error_msg.lower():
+            po.info("This looks like a parsing issue. Try:")
+            click.echo(f"   - Specify delimiter: data-validate profile {file_path} -d \"|\"")
+            click.echo("   - Check for malformed rows (unquoted delimiters in data)")
+        elif "memory" in error_msg.lower() or "allocate" in error_msg.lower():
+            po.info("This looks like a memory issue. Try:")
+            click.echo("   - Use --sample to profile a subset: --sample 100000")
+            click.echo("   - Use smaller chunks: --chunk-size 10000")
+        else:
+            po.info("Troubleshooting:")
+            click.echo("   - Run with -v flag for more details")
+            click.echo("   - Check file format and integrity")
+            click.echo("   - Report issue: https://github.com/danieledge/DataK9/issues")
+
+        # Only show traceback in verbose mode
+        if verbose:
+            po.blank_line()
+            po.warning("Traceback (verbose mode):")
+            import traceback
+            traceback.print_exc()
+        else:
+            po.blank_line()
+            po.info("Run with -v flag to see full error traceback")
+
         sys.exit(1)
 
 
