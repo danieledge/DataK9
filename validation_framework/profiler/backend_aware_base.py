@@ -261,7 +261,7 @@ class BackendAwareProfiler:
         if self.is_polars(series):
             try:
                 return series.cast(pl.Float64, strict=strict)
-            except:
+            except Exception:
                 return None
         else:
             return pd.to_numeric(series, errors='raise' if strict else 'coerce')

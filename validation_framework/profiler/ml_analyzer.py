@@ -4294,7 +4294,7 @@ class MLAnalyzer:
                         try:
                             dt_series = pd.to_datetime(series, format=fmt)
                             break
-                        except:
+                        except (ValueError, TypeError):
                             continue
                     else:
                         dt_series = pd.to_datetime(series, errors='coerce')

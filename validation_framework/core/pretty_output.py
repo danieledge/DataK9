@@ -53,7 +53,7 @@ class PrettyOutput:
         """Get terminal width, default to 80 if cannot determine."""
         try:
             return os.get_terminal_size().columns
-        except:
+        except OSError:
             return 80
 
     @staticmethod

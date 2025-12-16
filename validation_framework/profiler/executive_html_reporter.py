@@ -8257,7 +8257,7 @@ These are individual field values that fall outside the typical range for their 
                                 val_dev = abs(val_num - median) / median
                             else:
                                 val_dev = val_num
-                        except:
+                        except (ValueError, TypeError):
                             val_display = str(val)
                             val_dev = deviation
 
@@ -8313,7 +8313,7 @@ These are individual field values that fall outside the typical range for their 
                             val_num = float(val)
                             val_display = f'{val_num:,.2f}'
                             val_dev = abs(val_num - median) / median if median > 0 else val_num
-                        except:
+                        except (ValueError, TypeError):
                             val_display = str(val)
                             val_dev = deviation
 
@@ -8570,7 +8570,7 @@ These rows have field combinations that don't match typical patterns.
                     recon_error = record.get('_reconstruction_error', 0)
                     try:
                         error_score = float(recon_error)
-                    except:
+                    except (ValueError, TypeError):
                         error_score = 0
 
                     # Find the most unusual field in this record
@@ -8585,7 +8585,7 @@ These rows have field combinations that don't match typical patterns.
                                     dev = abs(val - median) / median
                                     if dev > 1:  # More than 2x median
                                         unusual_fields.append((col, val, median, dev))
-                            except:
+                            except (ValueError, TypeError, KeyError):
                                 pass
 
                     # Sort by deviation
@@ -8644,7 +8644,7 @@ These rows have field combinations that don't match typical patterns.
                             try:
                                 v = float(record[col])
                                 field_vals.append(f"{abbrev}={v:,.0f}")
-                            except:
+                            except (ValueError, TypeError, KeyError):
                                 field_vals.append(f"{abbrev}={record[col]}")
 
                     # Severity based on error score with explanation

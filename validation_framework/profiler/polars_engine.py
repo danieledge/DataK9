@@ -289,7 +289,7 @@ class PolarsDataProfiler(BackendAwareProfiler):
             try:
                 unique_sample = self.series_to_list(series_clean, limit=1000)
                 accumulator['unique_values'].update(unique_sample)
-            except:
+            except Exception:
                 pass
 
         # Update value counts (for categorical columns)
@@ -298,7 +298,7 @@ class PolarsDataProfiler(BackendAwareProfiler):
                 chunk_counts = self.get_value_counts(series_clean, limit=100)
                 for value, count in chunk_counts.items():
                     accumulator['value_counts'][value] = accumulator['value_counts'].get(value, 0) + count
-            except:
+            except Exception:
                 pass
 
         # Numeric updates

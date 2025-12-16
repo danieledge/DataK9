@@ -244,7 +244,7 @@ class VectorizedPatternDetector(BackendAwareProfiler):
                     'count': int(iso_count),
                     'percentage': float(iso_count / series.len() * 100)
                 }
-            except:
+            except Exception:
                 pass
 
         return results
