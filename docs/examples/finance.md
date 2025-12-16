@@ -2,7 +2,7 @@
 
 **DataK9 for Banking, Trading, and Financial Data**
 
-This guide provides production-ready validation examples for financial services data. DataK9 guards your financial data with K9 vigilance!
+This guide provides validation examples for financial services data use cases.
 
 ---
 

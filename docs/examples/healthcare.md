@@ -2,7 +2,7 @@
 
 **DataK9 for Healthcare Data with HIPAA Compliance**
 
-This guide provides production-ready validation examples for healthcare data. DataK9 guards your healthcare data with K9 vigilance while maintaining HIPAA compliance!
+This guide provides validation examples for healthcare data use cases, with considerations for HIPAA compliance.
 
 ---
 

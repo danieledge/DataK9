@@ -29,7 +29,7 @@ DataK9 validates data **before** it enters your data warehouse, analytics platfo
 ### Define Rules Easily 📝
 - Write validation rules in simple YAML configuration
 - Or use DataK9 Studio visual IDE (no coding required!)
-- 35 built-in validation types across 10 categories ready to use
+- 37 built-in validation types across 10 categories ready to use
 
 ### Handle Massive Datasets 💪
 - Process 200GB+ files efficiently with Polars backend
@@ -42,18 +42,18 @@ DataK9 validates data **before** it enters your data warehouse, analytics platfo
 - JSON output for CI/CD integration
 - Clear identification of failed rows and issues
 
-### Integrate Seamlessly 🔗
+### Integration Options 🔗
 - AutoSys batch job integration
-- CI/CD pipeline ready
+- CI/CD pipeline support via exit codes
 - Works with Airflow and other orchestration tools
 
 ---
 
 ## Key Features
 
-### 35 Built-in Validation Types
+### 37 Built-in Validation Types
 
-**File-Level Checks (3):**
+**File-Level Checks (5):**
 - EmptyFileCheck - Ensure files aren't empty
 - RowCountRangeCheck - Verify expected row counts
 - FileSizeCheck - Check file size constraints

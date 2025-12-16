@@ -100,8 +100,9 @@ python3 -m validation_framework.cli profile data.csv
 # Financial data profiling (FIBO semantic tagging enabled by default)
 python3 -m validation_framework.cli profile transactions.csv -o profile.html
 
-# With ML-based anomaly detection (beta)
-python3 -m validation_framework.cli profile transactions.csv --beta-ml -o report.html
+# ML-based anomaly detection is enabled by default
+# Use --no-ml to disable if you want faster profiling
+python3 -m validation_framework.cli profile transactions.csv -o report.html
 
 # Generated files:
 # ✓ data_profile_report.html    (Interactive visual report)
@@ -542,15 +543,18 @@ What DataK9 profiles:
 
 ---
 
-### 🧠 ML-Based Anomaly Detection (Beta)
+### 🧠 ML-Based Anomaly Detection
 
-**Enable with `--beta-ml` flag for machine learning-powered anomaly detection.**
+**ML anomaly detection is enabled by default.** Use `--no-ml` to disable.
 
 DataK9's ML analyzer uses industry-standard algorithms to find patterns that traditional profiling might miss:
 
 ```bash
-# Enable ML analysis
-python3 -m validation_framework.cli profile data.csv --beta-ml -o report.html
+# ML analysis runs by default
+python3 -m validation_framework.cli profile data.csv -o report.html
+
+# Disable ML for faster profiling
+python3 -m validation_framework.cli profile data.csv --no-ml -o report.html
 ```
 
 #### What ML Analysis Detects
@@ -939,9 +943,9 @@ python3 -m validation_framework.cli profile data.csv --disable-correlation
 python3 -m validation_framework.cli profile data.csv --disable-temporal
 ```
 
-### ML-Based Analysis (Default: Disabled)
+### ML-Based Analysis (Default: Enabled)
 
-**Enable with `--beta-ml` flag.**
+**ML analysis runs by default.** Use `--no-ml` to disable.
 
 | Analysis | Algorithm | What It Detects |
 |----------|-----------|-----------------|
@@ -953,11 +957,14 @@ python3 -m validation_framework.cli profile data.csv --disable-temporal
 | **Rare Category Detection** | Frequency analysis | Suspiciously infrequent categorical values |
 
 ```bash
-# Enable ML analysis
-python3 -m validation_framework.cli profile data.csv --beta-ml
+# ML analysis runs by default
+python3 -m validation_framework.cli profile data.csv
 
 # Full ML analysis (no internal sampling)
-python3 -m validation_framework.cli profile data.csv --beta-ml --full-analysis
+python3 -m validation_framework.cli profile data.csv --full-analysis
+
+# Disable ML for faster profiling
+python3 -m validation_framework.cli profile data.csv --no-ml
 ```
 
 ### Validation Suggestion Generation
@@ -1259,7 +1266,7 @@ python3 -m validation_framework.cli profile <file_path>
 | `-c`, `--config` | YAML config path | `-c validation.yaml` |
 | `-j`, `--json` | JSON export path | `-j profile.json` |
 | `--field-descriptions` | YAML file with friendly names and value labels | `--field-descriptions fields.yaml` |
-| `--beta-ml` | Enable ML anomaly detection | `--beta-ml` |
+| `--no-ml` | Disable ML anomaly detection (enabled by default) | `--no-ml` |
 | `--full-analysis` | Disable internal sampling for ML (slower, more accurate) | `--full-analysis` |
 | `--no-memory-check` | Disable memory safety termination (use with caution) | `--no-memory-check` |
 | `--format` | Explicit format | `--format csv` |
@@ -1443,14 +1450,12 @@ python3 -m validation_framework.cli profile large.csv \
   --chunk-size 25000 \
   -o profile.html
 
-# 6. ML-based anomaly detection (beta)
+# 6. ML-based anomaly detection (enabled by default)
 python3 -m validation_framework.cli profile transactions.csv \
-  --beta-ml \
   -o profile_with_ml.html
 
 # 7. Full analysis mode (slower but more accurate ML)
 python3 -m validation_framework.cli profile financial_data.parquet \
-  --beta-ml \
   --full-analysis \
   -o full_analysis.html \
   -j analysis.json
@@ -1462,9 +1467,9 @@ python3 -m validation_framework.cli profile data.csv \
 ```
 
 **💡 Tips:**
-- All enhancements (FIBO, PII, temporal, correlation) are **enabled by default** - no flags needed!
-- Use `--beta-ml` when you want to detect outliers, clusters, and anomalies that basic profiling might miss
-- Use `--full-analysis` with `--beta-ml` for comprehensive anomaly detection on large datasets
+- All enhancements (FIBO, PII, temporal, correlation, ML) are **enabled by default** - no flags needed!
+- Use `--no-ml` to disable ML anomaly detection for faster profiling
+- Use `--full-analysis` for comprehensive anomaly detection on large datasets (slower, more accurate)
 - Use `--disable-all-enhancements` when you only need basic statistics quickly
 
 ---

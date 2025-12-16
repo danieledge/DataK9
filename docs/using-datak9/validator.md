@@ -183,7 +183,7 @@ Use patterns in output paths to prevent file overwrites:
 
 ## Validation Categories
 
-DataK9 includes **35 built-in validation types** organized into 10 categories:
+DataK9 includes **37 built-in validation types** organized into 10 categories:
 
 ### File-Level Validations
 Check properties of the entire file before processing rows.
@@ -439,9 +439,6 @@ python3 -m validation_framework.cli validate config.yaml -v
 
 # Custom chunk size
 python3 -m validation_framework.cli validate config.yaml --chunk-size 100000
-
-# Use Polars backend (faster)
-python3 -m validation_framework.cli validate config.yaml --backend polars
 ```
 
 ### All Options
@@ -452,9 +449,11 @@ python3 -m validation_framework.cli validate config.yaml --backend polars
 | `-j, --json` | JSON summary path |
 | `-v, --verbose` | Verbose output |
 | `--chunk-size` | Rows per chunk |
-| `--backend` | Processing backend (polars/pandas) |
 | `--fail-on-warning` | Exit code 1 for warnings |
 | `--log-level` | Logging level (DEBUG/INFO/WARNING/ERROR) |
+| `--timeout` | Timeout in seconds (0=no timeout) |
+| `--lock-file` | Lock file to prevent concurrent runs |
+| `--exit-file` | Write exit code to file on completion |
 
 ---
 
@@ -523,7 +522,7 @@ python3 -m validation_framework.cli validate data_validation.yaml
 
 ## Next Steps
 
-- **[Validation Catalog](validation-catalog.md)** - Complete reference of all 35 validations
+- **[Validation Catalog](validation-catalog.md)** - Complete reference of all 37 validations
 - **[Configuration Guide](configuration-guide.md)** - Detailed YAML syntax
 - **[Best Practices](best-practices.md)** - Production deployment tips
 - **[CDA Gap Analysis](../guides/advanced/CDA_GAP_ANALYSIS_GUIDE.md)** - Compliance tracking

@@ -174,17 +174,13 @@ DataK9 now supports two backends:
 
 **Recommendation:** Use Polars for files > 1GB or 10M+ rows.
 
-### How to Select Backend
+### Backend Selection
+
+DataK9 automatically selects the optimal backend:
 
 **CLI:**
 ```bash
-# Use Polars (recommended for large files)
-python3 -m validation_framework.cli validate config.yaml --backend polars
-
-# Use pandas (for Excel or compatibility)
-python3 -m validation_framework.cli validate config.yaml --backend pandas
-
-# Auto-select (defaults to Polars if installed)
+# Auto-selects Polars if installed, pandas otherwise
 python3 -m validation_framework.cli validate config.yaml
 ```
 
@@ -231,59 +227,33 @@ export DATAK9_BACKEND=polars
 | ValidValuesCheck | ~2.5 hours | ~2 sec |
 | StatisticalOutlierCheck | OOM | 180 sec |
 
-### When to Use Polars
+### When Polars is Used (Automatic)
 
-✅ **Large CSV or Parquet files** (> 1GB)
+Polars is automatically selected when installed for:
+
+- ✅ **Large CSV or Parquet files** (> 1GB)
+- ✅ **High row count datasets** (> 10M rows)
+- ✅ **Memory-constrained environments** (50% less memory usage)
+- ✅ **Parquet files** (native support, very fast)
+
 ```bash
-python3 -m validation_framework.cli validate large_data.yaml --backend polars
+# Ensure Polars is installed for best performance
+pip install polars
+
+# DataK9 will use Polars automatically
+python3 -m validation_framework.cli validate large_data.yaml
 ```
 
-✅ **High row count datasets** (> 10M rows)
-```bash
-python3 -m validation_framework.cli validate big_table.yaml --backend polars
-```
+### When pandas is Used (Automatic)
 
-✅ **Memory-constrained environments**
-```bash
-# Polars is memory efficient
-python3 -m validation_framework.cli validate config.yaml --backend polars
-```
+pandas is automatically selected for:
 
-✅ **Production validation workloads**
-```bash
-# Fast validation for production
-python3 -m validation_framework.cli validate prod_data.yaml --backend polars
-```
+- ✅ **Excel files** (.xlsx, .xls) - Polars doesn't support Excel
+- ✅ **Fallback** when Polars is not installed
 
-✅ **Parquet files** (native support, very fast)
 ```bash
-python3 -m validation_framework.cli validate transactions.yaml --backend polars
-```
-
-### When to Use pandas
-
-✅ **Excel files** (.xlsx, .xls)
-```bash
-# Polars Excel support coming soon
-python3 -m validation_framework.cli validate excel_config.yaml --backend pandas
-```
-
-✅ **Small datasets** (< 100MB)
-```bash
-# Either backend works, pandas is fine
-python3 -m validation_framework.cli validate small_file.yaml --backend pandas
-```
-
-✅ **Polars not available**
-```bash
-# Automatic fallback
-python3 -m validation_framework.cli validate config.yaml
-```
-
-✅ **Compatibility requirements**
-```bash
-# Existing pandas-specific code
-python3 -m validation_framework.cli validate config.yaml --backend pandas
+# pandas used automatically for Excel
+python3 -m validation_framework.cli validate excel_config.yaml
 ```
 
 ### Feature Matrix
@@ -305,18 +275,14 @@ python3 -m validation_framework.cli validate config.yaml --backend pandas
 START: Need to validate data
 │
 ├─ Is it an Excel file (.xlsx, .xls)?
-│  ├─ YES → Use pandas (--backend pandas)
+│  ├─ YES → pandas used automatically
 │  └─ NO → Continue
 │
-├─ Is file > 1GB or > 10M rows?
-│  ├─ YES → Use Polars (--backend polars) ⚡ RECOMMENDED
-│  └─ NO → Continue
+├─ Is Polars installed?
+│  ├─ YES → Polars used automatically ⚡ RECOMMENDED
+│  └─ NO → pandas used as fallback
 │
-├─ Is performance critical?
-│  ├─ YES → Use Polars (high performance) ⚡
-│  └─ NO → Use pandas (broad compatibility)
-│
-└─ Default: Polars (if installed), else pandas
+└─ Tip: Install Polars for best performance on large files
 ```
 
 ### Installation
@@ -346,14 +312,18 @@ pip install polars
 
 **Excel validation fails with Polars:**
 ```bash
-# Use pandas for Excel files
-python3 -m validation_framework.cli validate config.yaml --backend pandas
+# pandas is used automatically for Excel files
+# Ensure pandas and openpyxl are installed:
+pip install pandas openpyxl
 ```
 
 **Slower than expected:**
 ```bash
-# Check Polars is installed and being used
-python3 -m validation_framework.cli validate config.yaml --backend polars --verbose
+# Check Polars is installed
+python3 -c "import polars; print('Polars installed')"
+
+# Run with verbose to see which backend is used
+python3 -m validation_framework.cli validate config.yaml --verbose
 ```
 
 ---
@@ -1104,8 +1074,8 @@ validations:
 This real-world test proves DataK9 can handle enterprise-scale data on budget hardware:
 
 ✅ **Budget Hardware**: $35 Raspberry Pi validates 357M rows
-✅ **Memory Efficient**: 3.5GB RAM for 10GB dataset (disk spillover magic)
-✅ **Production Ready**: 30 different validation types including ML and cross-file
+✅ **Memory Efficient**: 3.5GB RAM for 10GB dataset (disk spillover)
+✅ **Validation Coverage**: 30 validation types including ML and cross-file
 ✅ **Reliable**: 100% completion rate, no crashes
 
 ### Validation Breakdown

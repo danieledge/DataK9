@@ -237,9 +237,9 @@ We've tested with 200GB+ files successfully.
 
 ### Q: What validation types are available?
 
-**A:** DataK9 has 35 built-in validation rules in 10 categories:
+**A:** DataK9 has 37 built-in validation rules in 10 categories:
 
-- **File-Level** (3): EmptyFileCheck, RowCountRangeCheck, FileSizeCheck
+- **File-Level** (5): EmptyFileCheck, RowCountRangeCheck, FileSizeCheck, CSVFormatCheck, SkippedRowsCheck
 - **Schema** (2): SchemaMatchCheck, ColumnPresenceCheck
 - **Field-Level** (5): MandatoryFieldCheck, RegexCheck, ValidValuesCheck, RangeCheck, DateFormatCheck
 - **Record-Level** (3): DuplicateRowCheck, BlankRecordCheck, UniqueKeyCheck

@@ -22,6 +22,14 @@ from typing import Dict, Any, List, Optional, Tuple, Iterator
 import logging
 import pandas as pd
 import numpy as np
+import os
+import gc
+
+try:
+    import psutil
+    PSUTIL_AVAILABLE = True
+except ImportError:
+    PSUTIL_AVAILABLE = False
 
 from validation_framework.core.config import ValidationConfig
 from validation_framework.core.registry import get_registry, ValidationRegistry
@@ -310,17 +318,75 @@ class OptimizedValidationEngine:
     Backward compatible with existing configurations.
     """
 
-    def __init__(self, config: ValidationConfig, use_single_pass: bool = True) -> None:
+    # Memory safety thresholds (class-level defaults)
+    MEMORY_WARNING_THRESHOLD = 70  # Warn at 70% system memory usage
+    MEMORY_CRITICAL_THRESHOLD = 80  # Terminate at 80% to protect system
+    MEMORY_CHECK_INTERVAL = 5  # Check every N chunks
+
+    def __init__(self, config: ValidationConfig, use_single_pass: bool = True,
+                 disable_memory_check: bool = False) -> None:
         """
         Initialize the optimized validation engine.
 
         Args:
             config: Validation configuration object
             use_single_pass: Whether to use single-pass optimization (default: True)
+            disable_memory_check: Disable memory safety checks (default: False)
         """
         self.config: ValidationConfig = config
         self.registry: ValidationRegistry = get_registry()
         self.use_single_pass = use_single_pass
+        self.disable_memory_check = disable_memory_check
+
+    def _check_memory_safety(self, chunk_idx: int, row_count: int) -> bool:
+        """
+        Check system memory usage and terminate if critical threshold exceeded.
+
+        Args:
+            chunk_idx: Current chunk index
+            row_count: Total rows processed so far
+
+        Returns:
+            True if safe to continue, raises MemoryError if critical threshold exceeded
+        """
+        # Skip if psutil not available or memory check disabled
+        if not PSUTIL_AVAILABLE or self.disable_memory_check:
+            return True
+
+        # Check every N chunks to minimize overhead
+        if chunk_idx % self.MEMORY_CHECK_INTERVAL != 0:
+            return True
+
+        try:
+            process = psutil.Process(os.getpid())
+            process_memory_mb = process.memory_info().rss / 1024 / 1024
+            system_memory = psutil.virtual_memory()
+            memory_percent = system_memory.percent
+
+            logger.debug(f"Memory check at chunk {chunk_idx + 1}: Process={process_memory_mb:.1f}MB, System={memory_percent:.1f}%")
+
+            # Check warning threshold
+            if memory_percent >= self.MEMORY_WARNING_THRESHOLD and memory_percent < self.MEMORY_CRITICAL_THRESHOLD:
+                logger.warning(f"High memory usage: {memory_percent:.1f}% (threshold: {self.MEMORY_WARNING_THRESHOLD}%)")
+                logger.warning(f"Process using {process_memory_mb:.1f}MB, {row_count:,} rows processed")
+
+            # Check critical threshold
+            if memory_percent >= self.MEMORY_CRITICAL_THRESHOLD:
+                available_mb = system_memory.available / 1024 / 1024
+                logger.error(f"CRITICAL: Memory usage {memory_percent:.1f}% exceeds threshold {self.MEMORY_CRITICAL_THRESHOLD}%")
+                logger.error(f"Process: {process_memory_mb:.1f}MB, Available: {available_mb:.1f}MB")
+                logger.error(f"Terminating validation to prevent system instability at {row_count:,} rows")
+                raise MemoryError(
+                    f"Validation terminated: Memory usage {memory_percent:.1f}% exceeded critical threshold {self.MEMORY_CRITICAL_THRESHOLD}%. "
+                    f"Processed {row_count:,} rows before termination. "
+                    f"Consider validating a smaller dataset or increasing available system memory."
+                )
+
+            return True
+
+        except psutil.Error as e:
+            logger.warning(f"Could not check memory usage: {e}")
+            return True
 
     @classmethod
     def from_config(cls, config_path: str, use_single_pass: bool = True) -> "OptimizedValidationEngine":
@@ -570,12 +636,19 @@ class OptimizedValidationEngine:
                 chunk_count += 1
                 rows_processed += len(chunk)
 
+                # Memory safety check - will raise MemoryError if critical threshold exceeded
+                self._check_memory_safety(chunk_idx, rows_processed)
+
                 # Apply all validations to this chunk
                 for state in validation_states:
                     try:
                         state.process_chunk(chunk, chunk_idx)
                     except Exception as e:
                         logger.error(f"Error processing chunk {chunk_idx} for validation {state.validation.name}: {str(e)}")
+
+                # Clean up chunk immediately after processing to free memory
+                del chunk
+                gc.collect()
 
                 # Update progress bar
                 if verbose:

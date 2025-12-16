@@ -2,7 +2,7 @@
 
 **DataK9 for E-Commerce Platforms**
 
-This guide provides production-ready validation examples for e-commerce data. DataK9 guards your e-commerce data with K9 vigilance!
+This guide provides validation examples for e-commerce data use cases.
 
 ---
 

@@ -161,6 +161,9 @@ def cli():
 @click.option('--verbose/--quiet', '-v/-q', default=True, help='Verbose output')
 @click.option('--fail-on-warning', is_flag=True, help='Fail if warnings are found')
 @click.option('--delimiter', '-d', default=None, help='Column delimiter for CSV files. Use "tab", "pipe", "semicolon", or any single character.')
+@click.option('--encoding', '-e', default=None, help='File encoding (default: auto-detect). Common: utf-8, utf-8-sig, cp1252, latin-1, iso-8859-1')
+@click.option('--quoting', type=click.Choice(['minimal', 'all', 'none', 'nonnumeric'], case_sensitive=False), default=None, help='CSV quoting mode. Use "none" if file has unescaped quotes causing parse errors.')
+@click.option('--skip-rows', type=int, default=None, help='Number of rows to skip before the header row. Use when file has identifier/metadata lines before headers.')
 @click.option('--log-level', type=click.Choice(['DEBUG', 'INFO', 'WARNING', 'ERROR'], case_sensitive=False),
               default='WARNING', help='Logging level')
 @click.option('--log-file', type=click.Path(), help='Optional log file path')
@@ -168,7 +171,7 @@ def cli():
 @click.option('--timeout', type=int, default=0, help='Timeout in seconds (0=no timeout). For batch/Autosys scheduling.')
 @click.option('--lock-file', type=click.Path(), help='Lock file to prevent concurrent runs. For batch/Autosys.')
 @click.option('--exit-file', type=click.Path(), help='Write exit code to file on completion. For batch/Autosys.')
-def validate(config_file, html_output, json_output, verbose, fail_on_warning, delimiter, log_level, log_file, no_optimize, timeout, lock_file, exit_file):
+def validate(config_file, html_output, json_output, verbose, fail_on_warning, delimiter, encoding, quoting, skip_rows, log_level, log_file, no_optimize, timeout, lock_file, exit_file):
     """
     Run data validation from a configuration file.
 
@@ -373,6 +376,32 @@ def validate(config_file, html_output, json_output, verbose, fail_on_warning, de
             for file_config in engine.config.files:
                 file_config['delimiter'] = delim_char
             logger.info(f"Using delimiter: {repr(delim_char)}")
+
+        # Override encoding for all files if specified on CLI
+        if encoding:
+            for file_config in engine.config.files:
+                file_config['encoding'] = encoding
+            logger.info(f"Using encoding: {encoding}")
+
+        # Override quoting for all files if specified on CLI
+        if quoting:
+            import csv
+            quoting_map = {
+                'minimal': csv.QUOTE_MINIMAL,
+                'all': csv.QUOTE_ALL,
+                'none': csv.QUOTE_NONE,
+                'nonnumeric': csv.QUOTE_NONNUMERIC,
+            }
+            quoting_value = quoting_map[quoting.lower()]
+            for file_config in engine.config.files:
+                file_config['quoting'] = quoting_value
+            logger.info(f"Using quoting mode: {quoting}")
+
+        # Override skip_rows for all files if specified on CLI
+        if skip_rows:
+            for file_config in engine.config.files:
+                file_config['skiprows'] = skip_rows
+            logger.info(f"Skipping first {skip_rows} row(s) before header")
 
         # Performance advisory: Check files and recommend Parquet if needed
         # (Skip database sources)
@@ -809,6 +838,10 @@ def version():
 @click.option('--no-memory-check', is_flag=True, help='Disable memory usage warnings for large files')
 @click.option('--log-level', type=click.Choice(['DEBUG', 'INFO', 'WARNING', 'ERROR'], case_sensitive=False),
               default='WARNING', help='Logging level')
+@click.option('--log-file', type=click.Path(), help='Optional log file path')
+@click.option('--timeout', type=int, default=0, help='Timeout in seconds (0=no timeout). For batch/Autosys scheduling.')
+@click.option('--lock-file', type=click.Path(), help='Lock file to prevent concurrent runs. For batch/Autosys.')
+@click.option('--exit-file', type=click.Path(), help='Write exit code to file on completion. For batch/Autosys.')
 @click.option('--disable-temporal', is_flag=True, help='Disable temporal analysis for datetime columns')
 @click.option('--disable-pii', is_flag=True, help='Disable PII detection with privacy risk scoring')
 @click.option('--disable-correlation', is_flag=True, help='Disable enhanced multi-method correlation analysis')
@@ -819,7 +852,7 @@ def version():
 @click.option('--field-descriptions', type=click.Path(exists=True), help='YAML file with friendly field names and descriptions for better anomaly explanations')
 @click.option('--correlation-threshold', type=float, default=None, help='Minimum absolute correlation to report (default: 0.3, Cohen\'s medium effect). Range: 0.0-1.0')
 @click.option('--verbose', '-v', is_flag=True, help='Show detailed progress with timestamps for debugging')
-def profile(file_path, format, delimiter, encoding, quoting, skip_rows, database, table, query, html_output, json_output, config_output, chunk_size, sample, no_memory_check, log_level,
+def profile(file_path, format, delimiter, encoding, quoting, skip_rows, database, table, query, html_output, json_output, config_output, chunk_size, sample, no_memory_check, log_level, log_file, timeout, lock_file, exit_file,
             disable_temporal, disable_pii, disable_correlation, disable_all_enhancements, no_ml, full_analysis, analysis_sample_size, field_descriptions, correlation_threshold, verbose):
     """
     Profile a data file or database table to understand its structure and quality.
@@ -868,16 +901,117 @@ def profile(file_path, format, delimiter, encoding, quoting, skip_rows, database
     # Profile database with custom query
     data-validate profile --db "postgresql://user:pass@localhost/db" --query "SELECT * FROM orders WHERE date > '2024-01-01'"
     """
+    import signal
+    import threading
     from validation_framework.profiler.engine import DataProfiler
     from validation_framework.profiler.executive_html_reporter import ExecutiveHTMLReporter
     from validation_framework.loaders.factory import LoaderFactory
+
+    # Platform-specific imports for file locking
+    if IS_WINDOWS:
+        fcntl = None
+    else:
+        import fcntl
 
     # Create pattern expander with consistent timestamp for this run
     run_timestamp = datetime.now()
     expander = PathPatternExpander(run_timestamp=run_timestamp)
 
+    # Expand log file pattern first (needed for setup_logging)
+    if log_file:
+        log_file = expander.expand(log_file, {})
+
     # Setup logging
-    setup_logging(level=log_level)
+    setup_logging(level=log_level, log_file=log_file)
+
+    # Helper to write exit code to file (for batch systems)
+    def write_exit_code(code: int):
+        if exit_file:
+            try:
+                Path(exit_file).parent.mkdir(parents=True, exist_ok=True)
+                Path(exit_file).write_text(str(code))
+            except Exception as e:
+                logger.warning(f"Failed to write exit file: {e}")
+
+    # Helper for clean exit with exit file writing
+    def clean_exit(code: int):
+        write_exit_code(code)
+        sys.exit(code)
+
+    # Helper to release lock file
+    lock_fd = None
+    def release_lock():
+        nonlocal lock_fd
+        if lock_fd and not IS_WINDOWS:
+            try:
+                fcntl.flock(lock_fd, fcntl.LOCK_UN)
+                lock_fd.close()
+                os.unlink(lock_file)
+            except Exception:
+                pass
+            lock_fd = None
+
+    # Lock file handling for batch/Autosys (prevent concurrent runs)
+    if lock_file:
+        if IS_WINDOWS:
+            po.warning("Lock files (--lock-file) are not supported on Windows")
+        else:
+            try:
+                Path(lock_file).parent.mkdir(parents=True, exist_ok=True)
+                lock_fd = open(lock_file, 'w')
+                fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                lock_fd.write(f"{os.getpid()}\n{datetime.now().isoformat()}\n")
+                lock_fd.flush()
+                logger.info(f"Acquired lock file: {lock_file}")
+            except BlockingIOError:
+                po.error(f"Another profiler instance is running (lock file: {lock_file})")
+                po.info("If this is incorrect, delete the lock file and retry")
+                clean_exit(4)
+            except Exception as e:
+                po.warning(f"Could not create lock file: {e}")
+
+    # Timeout handling for batch/Autosys
+    timeout_timer = None
+
+    def timeout_handler_unix(signum, frame):
+        po.progress_done()
+        po.blank_line()
+        po.error(f"Profiling timed out after {timeout} seconds")
+        logger.error(f"Profiling timed out after {timeout} seconds")
+        release_lock()
+        clean_exit(3)
+
+    def timeout_handler_windows():
+        po.progress_done()
+        po.blank_line()
+        po.error(f"Profiling timed out after {timeout} seconds")
+        logger.error(f"Profiling timed out after {timeout} seconds")
+        os._exit(3)
+
+    if timeout > 0:
+        if IS_WINDOWS:
+            timeout_timer = threading.Timer(timeout, timeout_handler_windows)
+            timeout_timer.daemon = True
+            timeout_timer.start()
+            logger.info(f"Timeout set: {timeout} seconds (Windows timer)")
+        else:
+            signal.signal(signal.SIGALRM, timeout_handler_unix)
+            signal.alarm(timeout)
+            logger.info(f"Timeout set: {timeout} seconds")
+
+    # Signal handling for graceful shutdown
+    def signal_handler(signum, frame):
+        signal_name = signal.Signals(signum).name
+        po.progress_done()
+        po.blank_line()
+        po.warning(f"Received {signal_name}, shutting down gracefully...")
+        logger.warning(f"Received {signal_name}, shutting down")
+        if timeout_timer and timeout_timer.is_alive():
+            timeout_timer.cancel()
+        release_lock()
+        clean_exit(130)
+
+    signal.signal(signal.SIGTERM, signal_handler)
 
     # Validate arguments
     if not file_path and not database:
@@ -1273,15 +1407,27 @@ def profile(file_path, format, delimiter, encoding, quoting, skip_rows, database
                 f.write(profile_result.generated_config_yaml)
             po.output_file(f"Suggested Config ({validation_count} rules)", config_output)
 
+        # Cancel timeout on successful completion
+        if timeout > 0:
+            if IS_WINDOWS:
+                if timeout_timer and timeout_timer.is_alive():
+                    timeout_timer.cancel()
+            else:
+                signal.alarm(0)
+
+        # Release lock file
+        release_lock()
+
         po.blank_line()
-        sys.exit(0)
+        clean_exit(0)
 
     except KeyboardInterrupt:
         # User pressed Ctrl+C
         po.progress_done()  # Clear any progress line
         po.blank_line()
         po.warning("Profiling cancelled by user (Ctrl+C)")
-        sys.exit(130)  # Standard exit code for Ctrl+C
+        release_lock()
+        clean_exit(130)  # Standard exit code for Ctrl+C
 
     except MemoryError as e:
         # Memory safety termination from profiler or system OOM
@@ -1300,12 +1446,14 @@ def profile(file_path, format, delimiter, encoding, quoting, skip_rows, database
         click.echo("   4. Convert large CSV files to Parquet format (more efficient)")
         if not no_memory_check:
             click.echo("   5. Use --no-memory-check to disable safety limits (USE WITH CAUTION)")
-        sys.exit(137)  # Standard exit code for OOM-killed processes
+        release_lock()
+        clean_exit(137)  # Standard exit code for OOM-killed processes
 
     except FileNotFoundError as e:
         po.blank_line()
         po.error(f"File not found: {str(e)}")
-        sys.exit(1)
+        release_lock()
+        clean_exit(1)
 
     except RuntimeError as e:
         # Graceful error from loaders (CSV parsing, encoding issues)
@@ -1318,7 +1466,8 @@ def profile(file_path, format, delimiter, encoding, quoting, skip_rows, database
             po.info("Tip: Try specifying the delimiter with -d option:")
             click.echo(f"   python -m validation_framework.cli profile {file_path} -d \"|\"")
             click.echo(f"   python -m validation_framework.cli profile {file_path} -d \"\\t\"  # for tabs")
-        sys.exit(1)
+        release_lock()
+        clean_exit(1)
 
     except Exception as e:
         po.progress_done()  # Clear any progress line
@@ -1363,7 +1512,8 @@ def profile(file_path, format, delimiter, encoding, quoting, skip_rows, database
             po.blank_line()
             po.info("Run with -v flag to see full error traceback")
 
-        sys.exit(1)
+        release_lock()
+        clean_exit(1)
 
 
 @cli.command('cda-analysis')

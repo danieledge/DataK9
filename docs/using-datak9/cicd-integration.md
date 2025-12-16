@@ -2,7 +2,7 @@
 
 **Integrate DataK9 with Modern CI/CD Pipelines**
 
-DataK9 integrates seamlessly with Jenkins, GitLab CI, GitHub Actions, and other CI/CD tools. This guide shows you how to implement data validation as part of your continuous integration and deployment workflows.
+DataK9 integrates with Jenkins, GitLab CI, GitHub Actions, and other CI/CD tools via exit codes and JSON output. This guide shows you how to implement data validation as part of your continuous integration and deployment workflows.
 
 ---
 

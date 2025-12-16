@@ -15,6 +15,10 @@ DataK9's command-line interface provides powerful tools for data validation, pro
    - [validate](#validate)
    - [profile](#profile)
    - [list-validations](#list-validations)
+   - [cda-analysis](#cda-analysis)
+   - [check-policy](#check-policy)
+   - [list-policies](#list-policies)
+   - [init-config](#init-config)
 5. [Exit Codes](#exit-codes)
 6. [Environment Variables](#environment-variables)
 7. [Configuration Files](#configuration-files)
@@ -39,6 +43,10 @@ python3 -m validation_framework.cli <command> [options] [arguments]
 | `validate` | Execute validation rules | Production validation gates |
 | `profile` | Analyze data files | Initial data discovery |
 | `list-validations` | Show available validation types | Configuration planning |
+| `cda-analysis` | CDA gap analysis | Compliance auditing |
+| `check-policy` | Validate config against policy | Quality gates |
+| `list-policies` | Show available policies | Policy selection |
+| `init-config` | Generate sample config | Getting started |
 
 ### Quick Examples
 
@@ -179,63 +187,35 @@ python3 -m validation_framework.cli validate config.yaml --verbose
 - Monitoring long-running validations
 - Understanding validation execution flow
 
-#### `--backend` / `-b` ⚡ Performance Critical
+#### Backend Selection (Automatic)
 
-Select data processing backend for validation.
+DataK9 automatically selects the optimal backend based on file format and available libraries:
+
+- **Polars** (default when installed) - Used for CSV, Parquet, JSON files
+- **pandas** - Used for Excel files, or as fallback when Polars unavailable
 
 ```bash
-# Use Polars backend (8x faster, recommended for large files)
-python3 -m validation_framework.cli validate config.yaml --backend polars
-
-# Use pandas backend (universal compatibility, Excel support)
-python3 -m validation_framework.cli validate config.yaml --backend pandas
-```
-
-**Available Options:**
-- `polars` (default) - Polars backend for high performance
-- `pandas` - Pandas backend for compatibility
-
-**Default:** `polars` (if installed), otherwise `pandas`
-
-**Performance Characteristics:**
-
-| Backend | Speed | Memory | Best For |
-|---------|-------|--------|----------|
-| **Polars** | **High performance** | **Efficient** | Files > 1GB, Parquet, 10M+ rows |
-| pandas | Standard | Standard | Excel files, small files, compatibility |
-
-**When to Use Polars:**
-- ✅ Large CSV or Parquet files (> 1GB)
-- ✅ Datasets with 10M+ rows
-- ✅ Memory-constrained environments
-- ✅ Production validation workloads
-- ✅ When speed is critical
-
-**When to Use pandas:**
-- ✅ Excel files (.xlsx, .xls)
-- ✅ Small datasets (< 100MB)
-- ✅ When Polars is not installed
-- ✅ Compatibility requirements
-
-**Examples:**
-```bash
-# Large file validation (recommended: Polars)
-python3 -m validation_framework.cli validate large_data.yaml --backend polars
-
-# Excel file validation (required: pandas)
-python3 -m validation_framework.cli validate excel_config.yaml --backend pandas
-
-# Let DataK9 choose backend (defaults to Polars)
+# DataK9 automatically selects the best backend
 python3 -m validation_framework.cli validate config.yaml
 ```
 
-**Performance Comparison:**
+**Performance Characteristics:**
 
-Real-world benchmark (179M rows, 5.1GB Parquet file):
+| Backend | Speed | Memory | Used For |
+|---------|-------|--------|----------|
+| **Polars** | **8x faster** | **50% less** | CSV, Parquet, JSON (auto-selected) |
+| pandas | Baseline | Baseline | Excel files (auto-selected) |
+
+**To use Polars** (recommended for large files):
+```bash
+pip install polars
+```
+
+**Performance Benchmark** (179M rows, 5.1GB Parquet):
 - **Polars**: 5 minutes, 10.2GB memory, 15/15 validations completed
-- **pandas**: 42 minutes, 15.2GB+ memory, 12/15 validations (OOM crashes)
+- **pandas**: 42 minutes, 15.2GB+ memory, 12/15 validations (OOM)
 
-**See:** [Performance Benchmarks](../../README.md#-performance) | [Migration Guide](../../CHANGELOG.md#migration-guide)
+**See:** [Performance Tuning](../using-datak9/performance-tuning.md)
 
 #### `--output-dir` / `-o`
 
@@ -939,6 +919,154 @@ python3 -m validation_framework.cli list-validations --format json > validations
 
 ---
 
+## cda-analysis
+
+Analyzes your validation configuration to detect gaps in Critical Data Attribute (CDA) coverage. Essential for audit compliance and demonstrating data quality controls.
+
+### Syntax
+
+```bash
+python3 -m validation_framework.cli cda-analysis <config_file> [options]
+```
+
+### Arguments
+
+#### `<config_file>` (Required)
+
+Path to YAML configuration file with `critical_data_attributes` defined.
+
+### Options
+
+| Option | Short | Description | Default |
+|--------|-------|-------------|---------|
+| `--output` | `-o` | Path for HTML gap analysis report | `cda_gap_analysis_{timestamp}.html` |
+| `--json-output` | `-j` | Path for JSON output | None |
+| `--fail-on-gaps` | | Exit with error if any gaps detected | False |
+
+### Examples
+
+```bash
+# Basic CDA gap analysis
+python3 -m validation_framework.cli cda-analysis config.yaml
+
+# Custom output path
+python3 -m validation_framework.cli cda-analysis config.yaml -o gaps.html
+
+# Fail pipeline if any gaps detected (recommended for CI/CD)
+python3 -m validation_framework.cli cda-analysis config.yaml --fail-on-gaps
+
+# Generate JSON for CI/CD integration
+python3 -m validation_framework.cli cda-analysis config.yaml -j gaps.json
+```
+
+### Exit Codes
+
+- `0` - Success (all CDAs covered or no `--fail-on-gaps`)
+- `1` - Gaps detected (with `--fail-on-gaps`)
+- `2` - Command error (bad config, file not found)
+
+---
+
+## check-policy
+
+Validates a configuration file against a policy level to ensure required validation coverage.
+
+### Syntax
+
+```bash
+python3 -m validation_framework.cli check-policy <config_file> [options]
+```
+
+### Arguments
+
+#### `<config_file>` (Required)
+
+Path to YAML configuration file to check.
+
+### Options
+
+| Option | Short | Description | Default |
+|--------|-------|-------------|---------|
+| `--policy` | `-p` | Policy level: none, minimal, standard, strict | `standard` |
+| `--fix` | | Generate fixed config with missing checks added | False |
+| `--output` | `-o` | Output path for fixed config | `{config}_fixed.yaml` |
+| `--json-output` | `-j` | Path for JSON policy report | None |
+
+### Examples
+
+```bash
+# Check against standard policy
+python3 -m validation_framework.cli check-policy config.yaml
+
+# Check against strict policy
+python3 -m validation_framework.cli check-policy config.yaml -p strict
+
+# Generate fixed config with missing checks
+python3 -m validation_framework.cli check-policy config.yaml --fix
+
+# Output JSON report for CI/CD
+python3 -m validation_framework.cli check-policy config.yaml -j policy_report.json
+```
+
+---
+
+## list-policies
+
+Lists available policy levels and their requirements.
+
+### Syntax
+
+```bash
+python3 -m validation_framework.cli list-policies
+```
+
+### Output
+
+Displays all available policy levels with their required validations:
+- **none** - No requirements
+- **minimal** - Basic file and schema checks
+- **standard** - Comprehensive data quality checks
+- **strict** - Full coverage including cross-file and statistical checks
+
+---
+
+## init-config
+
+Generates a sample YAML configuration file with common validation patterns.
+
+### Syntax
+
+```bash
+python3 -m validation_framework.cli init-config <output_path>
+```
+
+### Arguments
+
+#### `<output_path>` (Required)
+
+Path where sample config should be written.
+
+### Examples
+
+```bash
+# Generate sample config
+python3 -m validation_framework.cli init-config my_validation.yaml
+
+# Create in specific directory
+python3 -m validation_framework.cli init-config configs/sample_validation.yaml
+```
+
+### Generated Config Includes
+
+- File-level checks (EmptyFileCheck, RowCountRangeCheck)
+- Schema validation (SchemaMatchCheck)
+- Field-level validations (MandatoryFieldCheck, RegexCheck, RangeCheck)
+- Record-level checks (DuplicateRowCheck)
+- Output configuration
+- Processing options
+
+---
+
 ## Exit Codes
 
 DataK9 uses standard exit codes for integration with scripts and orchestration tools.
@@ -948,8 +1076,13 @@ DataK9 uses standard exit codes for integration with scripts and orchestration t
 | Code | Status | Condition | Action |
 |------|--------|-----------|--------|
 | `0` | SUCCESS | All validations passed | Proceed with data processing |
-| `1` | FAILURE | ERROR-severity validation(s) failed | Stop processing, investigate failures |
-| `2` | ERROR | Configuration or runtime error | Fix configuration or environment |
+| `1` | FAILURE | Validation failed (data quality errors) | Stop processing, investigate failures |
+| `2` | WARNING_FAILURE | Warnings treated as failure (`--fail-on-warning`) | Review warnings |
+| `3` | TIMEOUT | Timeout exceeded (`--timeout`) | Extend timeout or optimize |
+| `4` | LOCK_CONFLICT | Lock file conflict (`--lock-file`) | Wait or check for stuck process |
+| `5` | ENV_ERROR | Environment error (missing deps, Python version) | Fix environment |
+| `130` | INTERRUPTED | Process interrupted (SIGINT/SIGTERM) | Check if manual or system |
+| `137` | MEMORY | Memory limit exceeded | Reduce chunk size or sample
 
 ### Detailed Behaviors
 

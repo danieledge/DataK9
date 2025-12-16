@@ -8,7 +8,7 @@
 
 The DataK9 profiler includes an experimental machine learning-based anomaly detection system that identifies data quality issues that traditional profiling might miss. This feature uses Isolation Forest, pattern detection algorithms, and statistical methods to analyze sampled data and detect outliers, format inconsistencies, and suspicious patterns.
 
-> **Note:** This is a beta feature. Enable it with the `--beta-ml` flag.
+> **Note:** ML analysis is enabled by default. Use `--no-ml` to disable it.
 
 ## Table of Contents
 
@@ -24,17 +24,20 @@ The DataK9 profiler includes an experimental machine learning-based anomaly dete
 
 ## Quick Start
 
-Enable ML analysis when profiling:
+ML analysis is enabled by default when profiling:
 
 ```bash
-# Basic usage
-data-validate profile data.csv --beta-ml
+# Basic usage (ML enabled by default)
+python3 -m validation_framework.cli profile data.csv -o report.html
 
 # With output options
-data-validate profile data.parquet --beta-ml -o report.html -j profile.json
+python3 -m validation_framework.cli profile data.parquet -o report.html -j profile.json
 
 # Sampling for large files (recommended for files > 1GB)
-data-validate profile large_data.parquet --beta-ml --sample 500000
+python3 -m validation_framework.cli profile large_data.parquet --sample 500000
+
+# Disable ML if not needed (faster profiling)
+python3 -m validation_framework.cli profile data.csv --no-ml -o report.html
 ```
 
 ## How It Works
@@ -256,7 +259,7 @@ The ML analysis requires scikit-learn:
 pip install scikit-learn
 ```
 
-If scikit-learn is not installed, the `--beta-ml` flag will display a warning and skip ML analysis.
+If scikit-learn is not installed, ML analysis will display a warning and be skipped automatically.
 
 ---
 
@@ -275,7 +278,7 @@ Currently, the ML analyzer uses sensible defaults. Future versions may expose:
 
 ### HTML Report Section
 
-When `--beta-ml` is enabled, the HTML report includes an "ML-Based Anomaly Detection" section with:
+With ML analysis enabled (default), the HTML report includes an "ML-Based Anomaly Detection" section with:
 
 1. **Summary Card** - Total issues found and key findings list
 2. **Issue Breakdown Chart** - Doughnut chart showing distribution by category

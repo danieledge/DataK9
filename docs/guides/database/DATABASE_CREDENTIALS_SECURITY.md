@@ -311,7 +311,7 @@ sudo journalctl -u datak9-validation
 
 **Security Level:** ✅ MINIMAL
 
-Enterprise-grade secrets management with auditing, encryption, and rotation.
+Secrets management features include auditing, encryption, and rotation.
 
 ### Installation
 

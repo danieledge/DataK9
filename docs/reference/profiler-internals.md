@@ -449,13 +449,16 @@ python3 -m validation_framework.cli profile data.csv --disable-correlation
 python3 -m validation_framework.cli profile data.csv --disable-all-enhancements
 ```
 
-**ML Analysis** (Beta - requires `--beta-ml` flag):
+**ML Analysis** (Enabled by default):
 ```bash
-# Enable ML-based anomaly detection
-python3 -m validation_framework.cli profile data.csv --beta-ml
+# ML-based anomaly detection runs by default
+python3 -m validation_framework.cli profile data.csv
 
 # Full analysis mode (no internal sampling, more accurate but slower)
-python3 -m validation_framework.cli profile data.csv --beta-ml --full-analysis
+python3 -m validation_framework.cli profile data.csv --full-analysis
+
+# Disable ML for faster profiling
+python3 -m validation_framework.cli profile data.csv --no-ml
 ```
 
 ### Enhancement Processing Order
@@ -592,7 +595,7 @@ python3 -m validation_framework.cli profile data.csv -c validation.yaml
 
 ## Open Source Libraries Used
 
-DataK9 profiler leverages best-in-class open source libraries for data processing and analysis:
+DataK9 profiler uses established open source libraries for data processing and analysis:
 
 ### Core Data Processing
 
@@ -739,7 +742,7 @@ DataK9 profiler leverages best-in-class open source libraries for data processin
 - Option validation
 - User-friendly error messages
 
-**Why**: Best-in-class CLI framework, used by Flask and major Python projects.
+**Why**: Industry-standard CLI framework, used by Flask and many Python projects.
 
 **License**: BSD 3-Clause
 

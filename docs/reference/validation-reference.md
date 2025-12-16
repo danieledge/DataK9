@@ -1,6 +1,6 @@
 # Validation Reference
 
-**Quick Reference Guide for All 35 Validation Types**
+**Quick Reference Guide for All 37 Validation Types**
 
 This reference provides a comprehensive, quick-lookup guide for every DataK9 validation rule organized across 10 categories. Use this when you need fast answers about parameters, examples, and behavior.
 
@@ -10,7 +10,7 @@ This reference provides a comprehensive, quick-lookup guide for every DataK9 val
 
 1. [Overview](#overview)
 2. [Quick Reference Matrix](#quick-reference-matrix)
-3. [File-Level Validations](#file-level-validations) (3)
+3. [File-Level Validations](#file-level-validations) (5)
 4. [Schema Validations](#schema-validations) (2)
 5. [Field-Level Validations](#field-level-validations) (5)
 6. [Record-Level Validations](#record-level-validations) (3)
@@ -29,11 +29,11 @@ This reference provides a comprehensive, quick-lookup guide for every DataK9 val
 
 ### Validation Categories
 
-DataK9 provides **35 built-in validation types** organized into **10 categories**:
+DataK9 provides **37 built-in validation types** organized into **10 categories**:
 
 | Category | Count | Purpose |
 |----------|-------|---------|
-| File-Level | 3 | Check overall file properties |
+| File-Level | 5 | Check overall file properties |
 | Schema | 2 | Validate column structure |
 | Field-Level | 5 | Check individual field values |
 | Record-Level | 3 | Check across rows |
@@ -67,6 +67,8 @@ validations:
 | **EmptyFileCheck** | File | File not empty | `check_data_rows` | ERROR |
 | **RowCountRangeCheck** | File | Row count validation | `min_rows`, `max_rows` | WARNING |
 | **FileSizeCheck** | File | File size validation | `min_size_mb`, `max_size_mb` | WARNING |
+| **CSVFormatCheck** | File | CSV format integrity | `delimiter`, `sample_rows` | ERROR |
+| **SkippedRowsCheck** | File | Unparseable row limits | `max_skipped_percentage` | ERROR |
 | **SchemaMatchCheck** | Schema | Exact schema match | `expected_columns`, `allow_extra` | ERROR |
 | **ColumnPresenceCheck** | Schema | Required columns | `columns` | ERROR |
 | **MandatoryFieldCheck** | Field | Non-null fields | `fields` | ERROR |
@@ -84,9 +86,13 @@ validations:
 | **CompletenessCheck** | Advanced | Completeness % | `field`, `min_completeness` | WARNING |
 | **StringLengthCheck** | Advanced | String length | `field`, `min_length`, `max_length` | ERROR |
 | **NumericPrecisionCheck** | Advanced | Decimal precision | `field`, `max_decimal_places` | ERROR |
+| **InlineRegexCheck** | Advanced | Quick regex validation | `field`, `pattern` | ERROR |
+| **InlineBusinessRuleCheck** | Advanced | Custom business rules | `expression`, `message` | ERROR |
+| **InlineLookupCheck** | Advanced | Inline value lookup | `field`, `lookup_values` | ERROR |
 | **ReferentialIntegrityCheck** | Cross-File | Foreign keys | `foreign_key`, `reference_file` | ERROR |
 | **CrossFileComparisonCheck** | Cross-File | Aggregate comparison | `aggregation`, `reference_file` | ERROR |
 | **CrossFileDuplicateCheck** | Cross-File | Cross-file duplicates | `columns`, `reference_files` | ERROR |
+| **CrossFileKeyCheck** | Cross-File | Advanced FK validation | `foreign_key`, `reference_file`, `check_mode` | ERROR |
 | **SQLCustomCheck** | Database | Custom SQL | `connection_string`, `sql_query` | Varies |
 | **DatabaseReferentialIntegrityCheck** | Database | DB foreign keys | `foreign_key_table`, `reference_table` | ERROR |
 | **DatabaseConstraintCheck** | Database | DB constraints | `table`, `constraint_query` | ERROR |
@@ -161,6 +167,54 @@ validations:
 
 **Passes:** File size within range
 **Fails:** File too small or too large
+
+---
+
+### CSVFormatCheck
+
+**Purpose:** Validates CSV file format integrity before processing
+
+**Parameters:**
+- `delimiter` (string, optional): Expected delimiter character. Auto-detected if not specified.
+- `sample_rows` (integer, optional): Number of rows to check. Default: `1000`
+- `max_errors` (integer, optional): Max format errors before failing. Default: `10`
+
+**Example:**
+```yaml
+- type: "CSVFormatCheck"
+  severity: "ERROR"
+  params:
+    delimiter: ","
+    sample_rows: 5000
+    max_errors: 5
+```
+
+**Passes:** CSV format is valid and consistent
+**Fails:** Inconsistent column counts, delimiter issues, or encoding problems
+
+---
+
+### SkippedRowsCheck
+
+**Purpose:** Validates that skipped/unparseable rows are within acceptable limits
+
+**Parameters:**
+- `max_skipped_count` (integer, optional): Maximum number of skipped rows allowed
+- `max_skipped_percentage` (float, optional): Maximum percentage of skipped rows (0-100). Default: `5.0`
+- `delimiter` (string, optional): Expected delimiter character. Auto-detected if not specified.
+
+**Example:**
+```yaml
+- type: "SkippedRowsCheck"
+  severity: "ERROR"
+  params:
+    max_skipped_percentage: 1.0
+```
+
+**Passes:** Skipped rows within acceptable limits
+**Fails:** Too many rows skipped due to parsing errors
+
+**Note:** Unlike CSVFormatCheck which samples rows, this checks ALL rows for accurate counts.
 
 ---
 
@@ -778,6 +832,55 @@ Overlap Check:
 
 **Passes:** No duplicates across files
 **Fails:** Duplicates found
+
+---
+
+### CrossFileKeyCheck
+
+**Purpose:** Advanced cross-file referential integrity with multiple check modes
+
+**Parameters:**
+- `foreign_key` (string, required): Column(s) to validate (comma-separated for composite keys)
+- `reference_file` (string, required): Path to reference file
+- `reference_key` (string, required): Column(s) in reference file
+- `check_mode` (string): Check mode - `exact_match`, `overlap`, `subset`, `superset`. Default: `"exact_match"`
+- `allow_null` (boolean): Allow NULL values. Default: `false`
+- `min_overlap_pct` (float): Minimum overlap % (for overlap mode). Default: `1.0`
+- `reference_file_format` (string): Format. Default: `"csv"`
+
+**Check Modes:**
+- `exact_match`: All foreign keys must exist in reference (strict FK)
+- `overlap`: Minimum percentage of keys must overlap
+- `subset`: All data keys must be in reference (allows extra in reference)
+- `superset`: All reference keys must be in data (completeness check)
+
+**Example:**
+```yaml
+# Strict foreign key check
+- type: "CrossFileKeyCheck"
+  severity: "ERROR"
+  params:
+    foreign_key: "customer_id"
+    reference_file: "customers.csv"
+    reference_key: "id"
+    check_mode: "exact_match"
+
+# Partial overlap check
+- type: "CrossFileKeyCheck"
+  severity: "WARNING"
+  params:
+    foreign_key: "account_id"
+    reference_file: "accounts.parquet"
+    reference_key: "account_number"
+    reference_file_format: "parquet"
+    check_mode: "overlap"
+    min_overlap_pct: 80
+```
+
+**Passes:** Keys satisfy the specified check mode
+**Fails:** Key relationship violation detected
+
+**Note:** Memory-efficient with automatic disk spillover - handles billions of keys.
 
 ---
 

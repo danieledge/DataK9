@@ -2,7 +2,7 @@
 
 **Integrate DataK9 with Enterprise Job Schedulers**
 
-DataK9 integrates seamlessly with AutoSys, Control-M, and other enterprise job schedulers. This guide shows you how to deploy DataK9 as a data quality gate in your batch processing pipelines.
+DataK9 integrates with AutoSys, Control-M, and other job schedulers through exit codes and standard output. This guide shows you how to deploy DataK9 as a data quality gate in your batch processing pipelines.
 
 ---
 
@@ -217,7 +217,7 @@ DataK9 provides several CLI options specifically designed for batch/headless env
 
 ```bash
 # Full defensive batch command
-data-validate validate config.yaml \
+python3 -m validation_framework.cli validate config.yaml \
   --timeout 3600 \
   --lock-file /tmp/validation_job.lock \
   --exit-file /tmp/validation_job.exit \
@@ -232,7 +232,7 @@ Prevent runaway jobs from blocking your pipeline:
 
 ```bash
 # Kill job if it runs longer than 1 hour
-data-validate validate config.yaml --timeout 3600
+python3 -m validation_framework.cli validate config.yaml --timeout 3600
 
 # Check exit code
 if [ $? -eq 3 ]; then
@@ -245,7 +245,7 @@ fi
 ```jil
 insert_job: VALIDATE_CUSTOMERS
 job_type: CMD
-command: data-validate validate /config/customers.yaml --timeout 1800 -q
+command: python3 -m validation_framework.cli validate /config/customers.yaml --timeout 1800 -q
 max_run_alarm: 35  # Set slightly higher than timeout
 alarm_if_fail: yes
 ```
@@ -256,7 +256,7 @@ Prevent multiple instances from running simultaneously:
 
 ```bash
 # Use lock file to prevent concurrent runs
-data-validate validate config.yaml --lock-file /tmp/customers_validation.lock
+python3 -m validation_framework.cli validate config.yaml --lock-file /tmp/customers_validation.lock
 ```
 
 **How it works:**
@@ -269,7 +269,7 @@ data-validate validate config.yaml --lock-file /tmp/customers_validation.lock
 ```jil
 insert_job: VALIDATE_CUSTOMERS
 job_type: CMD
-command: data-validate validate /config/customers.yaml --lock-file /tmp/cust_val.lock -q
+command: python3 -m validation_framework.cli validate /config/customers.yaml --lock-file /tmp/cust_val.lock -q
 /* If previous run is stuck, this will exit with code 4 */
 alarm_if_fail: yes
 ```
@@ -280,7 +280,7 @@ Write exit code to a file for downstream automation:
 
 ```bash
 # Write exit code to file
-data-validate validate config.yaml --exit-file /tmp/validation_result.exit
+python3 -m validation_framework.cli validate config.yaml --exit-file /tmp/validation_result.exit
 
 # Read result in downstream job
 EXIT_CODE=$(cat /tmp/validation_result.exit)
@@ -314,7 +314,7 @@ TIMEOUT=1800  # 30 minutes
 mkdir -p "$LOG_DIR"
 
 # Run with all defensive options
-data-validate validate "$CONFIG" \
+python3 -m validation_framework.cli validate "$CONFIG" \
     --timeout $TIMEOUT \
     --lock-file "$LOCK_FILE" \
     --exit-file "$EXIT_FILE" \

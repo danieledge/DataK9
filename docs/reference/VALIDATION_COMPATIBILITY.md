@@ -2,7 +2,7 @@
 
 ## Overview
 
-DataK9 supports **35 validation types** that work with both **file sources** (CSV, Excel, JSON, Parquet) and **database sources** (PostgreSQL, MySQL, SQL Server, Oracle, SQLite).
+DataK9 supports **37 validation types** that work with both **file sources** (CSV, Excel, JSON, Parquet) and **database sources** (PostgreSQL, MySQL, SQL Server, Oracle, SQLite).
 
 ## Quick Reference
 

@@ -1,6 +1,6 @@
 # Cross-File Validation Quick Reference
 
-**DataK9 Framework - Production-Ready Designs**
+**DataK9 Framework - Cross-File Validation Reference**
 
 ---
 
@@ -482,7 +482,7 @@ register_validation("CrossFileAggregationCheck", CrossFileAggregationCheck)
 
 ## Summary
 
-Three production-ready cross-file validation types designed for DataK9:
+Three cross-file validation types designed for DataK9's chunked processing architecture:
 
 1. **CrossFileKeyCheck** - Referential integrity (foreign keys)
 2. **CrossFileConsistencyCheck** - Distribution comparison (statistics, schema)
