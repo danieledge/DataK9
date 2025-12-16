@@ -149,7 +149,7 @@ except ImportError:
 
 
 def check_csv_format(file_path: str, sample_rows: int = 1000, skip_rows: int = None,
-                     delimiter: str = None, encoding: str = None) -> Dict[str, Any]:
+                     delimiter: str = None, encoding: str = None, quoting: int = None) -> Dict[str, Any]:
     """
     Check CSV file for structural issues before profiling.
 
@@ -159,6 +159,7 @@ def check_csv_format(file_path: str, sample_rows: int = 1000, skip_rows: int = N
         skip_rows: Number of rows to skip before header (None = auto-detect)
         delimiter: Column delimiter (None = auto-detect)
         encoding: File encoding (None = auto-detect)
+        quoting: CSV quoting mode (csv.QUOTE_* constants, None = QUOTE_MINIMAL)
 
     Returns:
         Dict with 'valid', 'issues', 'delimiter', 'encoding', 'column_count', 'skip_rows'
@@ -216,7 +217,10 @@ def check_csv_format(file_path: str, sample_rows: int = 1000, skip_rows: int = N
     # Check for structural issues (accounting for skip_rows)
     try:
         with open(file_path, 'r', newline='', encoding=detected_encoding) as f:
-            reader = csv.reader(f, delimiter=result['delimiter'])
+            reader_kwargs = {'delimiter': result['delimiter']}
+            if quoting is not None:
+                reader_kwargs['quoting'] = quoting
+            reader = csv.reader(f, **reader_kwargs)
 
             # Skip file identifier/metadata rows
             for _ in range(skip_rows):
@@ -1264,7 +1268,8 @@ class DataProfiler:
                 file_path,
                 skip_rows=loader_kwargs.get('skiprows'),
                 delimiter=loader_kwargs.get('delimiter'),
-                encoding=loader_kwargs.get('encoding')
+                encoding=loader_kwargs.get('encoding'),
+                quoting=loader_kwargs.get('quoting')
             )
             if not csv_format_check['valid']:
                 logger.warning(f"CSV format issues detected: {csv_format_check['issues']}")
@@ -1917,6 +1922,8 @@ class DataProfiler:
                             csv_kwargs['encoding'] = loader_kwargs['encoding']
                         if 'skiprows' in loader_kwargs:
                             csv_kwargs['skiprows'] = loader_kwargs['skiprows']
+                        if 'quoting' in loader_kwargs:
+                            csv_kwargs['quoting'] = loader_kwargs['quoting']
 
                         # Suppress pandas warnings about skipped lines
                         import warnings

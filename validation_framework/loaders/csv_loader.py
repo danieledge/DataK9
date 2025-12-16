@@ -238,6 +238,7 @@ class CSVLoader(DataLoader):
         encoding = self.kwargs.get("encoding", "utf-8")
         header = self.kwargs.get("header", 0)
         skiprows = self.kwargs.get("skiprows", None)
+        quoting = self.kwargs.get("quoting", 0)  # Default: QUOTE_MINIMAL
 
         # Log skiprows if set
         if skiprows:
@@ -265,7 +266,7 @@ class CSVLoader(DataLoader):
                     chunksize=self.chunk_size,
                     on_bad_lines=track_bad_line,  # Track and skip bad lines
                     engine='python',  # Required for callable on_bad_lines
-                    quoting=0,  # QUOTE_MINIMAL - handle quoted fields properly
+                    quoting=quoting,
                 ):
                     yield chunk
 
@@ -293,7 +294,7 @@ class CSVLoader(DataLoader):
                         chunksize=self.chunk_size,
                         low_memory=False,
                         on_bad_lines='skip',  # Skip problematic rows
-                        quoting=0,
+                        quoting=quoting,
                     ):
                         yield chunk
                     logger.warning("CSV loaded with some rows skipped due to parsing errors")
@@ -346,6 +347,7 @@ class CSVLoader(DataLoader):
                 encoding = self.kwargs.get("encoding", "utf-8")
                 header = self.kwargs.get("header", 0)
                 skiprows = self.kwargs.get("skiprows", None)
+                quoting = self.kwargs.get("quoting", 0)
 
                 # Read just first chunk to get schema
                 first_chunk = pd.read_csv(
@@ -354,6 +356,7 @@ class CSVLoader(DataLoader):
                     encoding=encoding,
                     header=header,
                     skiprows=skiprows,
+                    quoting=quoting,
                     nrows=1000,
                     low_memory=False,
                 )

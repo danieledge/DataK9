@@ -796,6 +796,7 @@ def version():
               help='File format (auto-detected if not specified)')
 @click.option('--delimiter', '-d', default=None, help='Column delimiter for CSV files. Use "tab", "pipe", "semicolon", or any single character.')
 @click.option('--encoding', '-e', default=None, help='File encoding (default: auto-detect). Common: utf-8, utf-8-sig, cp1252, latin-1, iso-8859-1')
+@click.option('--quoting', type=click.Choice(['minimal', 'all', 'none', 'nonnumeric'], case_sensitive=False), default=None, help='CSV quoting mode. Use "none" if file has unescaped quotes causing parse errors.')
 @click.option('--skip-rows', type=int, default=None, help='Number of rows to skip before the header row. Use when file has identifier/metadata lines before headers.')
 @click.option('--database', '--db', help='Database connection string (e.g., sqlite:///test.db or postgresql://...)')
 @click.option('--table', '-t', help='Database table name to profile')
@@ -818,7 +819,7 @@ def version():
 @click.option('--field-descriptions', type=click.Path(exists=True), help='YAML file with friendly field names and descriptions for better anomaly explanations')
 @click.option('--correlation-threshold', type=float, default=None, help='Minimum absolute correlation to report (default: 0.3, Cohen\'s medium effect). Range: 0.0-1.0')
 @click.option('--verbose', '-v', is_flag=True, help='Show detailed progress with timestamps for debugging')
-def profile(file_path, format, delimiter, encoding, skip_rows, database, table, query, html_output, json_output, config_output, chunk_size, sample, no_memory_check, log_level,
+def profile(file_path, format, delimiter, encoding, quoting, skip_rows, database, table, query, html_output, json_output, config_output, chunk_size, sample, no_memory_check, log_level,
             disable_temporal, disable_pii, disable_correlation, disable_all_enhancements, no_ml, full_analysis, analysis_sample_size, field_descriptions, correlation_threshold, verbose):
     """
     Profile a data file or database table to understand its structure and quality.
@@ -1067,6 +1068,18 @@ def profile(file_path, format, delimiter, encoding, skip_rows, database, table, 
             if encoding:
                 loader_kwargs['encoding'] = encoding
                 po.info(f"Using encoding: {encoding}")
+
+            # Handle CSV quoting mode
+            if quoting:
+                import csv
+                quoting_map = {
+                    'minimal': csv.QUOTE_MINIMAL,
+                    'all': csv.QUOTE_ALL,
+                    'none': csv.QUOTE_NONE,
+                    'nonnumeric': csv.QUOTE_NONNUMERIC,
+                }
+                loader_kwargs['quoting'] = quoting_map[quoting.lower()]
+                po.info(f"Using quoting mode: {quoting}")
 
             # Handle skip rows (for files with metadata/identifier lines before headers)
             if skip_rows:
