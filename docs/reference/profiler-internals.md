@@ -624,9 +624,9 @@ DataK9 profiler uses established open source libraries for data processing and a
 
 **License**: Apache 2.0
 
-#### Polars (Optional)
-**Purpose**: Alternative to Pandas for even faster processing
-**Used for** (when installed):
+#### Polars (Required)
+**Purpose**: Primary DataFrame engine for high-performance processing
+**Used for**:
 - 2-5x faster DataFrame operations
 - Lower memory usage
 - Better multi-core utilization
@@ -840,7 +840,7 @@ DataK9 profiler uses established open source libraries for data processing and a
 | jsonschema | ✅ Yes | Schema validation | ~1MB | Negligible |
 | python-dateutil | ✅ Yes | Date parsing | ~1MB | Negligible |
 | **Total** | | | **~165MB** | |
-| **Polars** | ❌ Optional | Faster engine | ~60MB | High - 2-5x speedup |
+| **Polars** | ✅ Yes | Primary engine | ~60MB | High - 2-5x speedup |
 | **Dask** | ❌ Optional | Very large files | ~20MB | High - enables 100GB+ files |
 | **SQLAlchemy** | ❌ Optional | Database support | ~5MB | N/A - database only |
 

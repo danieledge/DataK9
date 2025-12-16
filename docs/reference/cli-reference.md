@@ -206,10 +206,7 @@ python3 -m validation_framework.cli validate config.yaml
 | **Polars** | **8x faster** | **50% less** | CSV, Parquet, JSON (auto-selected) |
 | pandas | Baseline | Baseline | Excel files (auto-selected) |
 
-**To use Polars** (recommended for large files):
-```bash
-pip install polars
-```
+**Polars is included** with DataK9 (installed via requirements.txt).
 
 **Performance Benchmark** (179M rows, 5.1GB Parquet):
 - **Polars**: 5 minutes, 10.2GB memory, 15/15 validations completed

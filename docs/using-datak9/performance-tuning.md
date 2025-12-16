@@ -237,10 +237,7 @@ Polars is automatically selected when installed for:
 - ✅ **Parquet files** (native support, very fast)
 
 ```bash
-# Ensure Polars is installed for best performance
-pip install polars
-
-# DataK9 will use Polars automatically
+# DataK9 uses Polars automatically (installed with requirements.txt)
 python3 -m validation_framework.cli validate large_data.yaml
 ```
 
@@ -249,7 +246,7 @@ python3 -m validation_framework.cli validate large_data.yaml
 pandas is automatically selected for:
 
 - ✅ **Excel files** (.xlsx, .xls) - Polars doesn't support Excel
-- ✅ **Fallback** when Polars is not installed
+- ✅ **Fallback** for unsupported formats
 
 ```bash
 # pandas used automatically for Excel
@@ -282,32 +279,21 @@ START: Need to validate data
 │  ├─ YES → Polars used automatically ⚡ RECOMMENDED
 │  └─ NO → pandas used as fallback
 │
-└─ Tip: Install Polars for best performance on large files
+└─ Polars is the default backend (installed with requirements.txt)
 ```
 
-### Installation
+### Verify Polars Installation
 
-**Install Polars:**
-```bash
-pip install polars
-```
-
-**Verify:**
 ```bash
 python3 -c "import polars; print(f'Polars {polars.__version__} installed')"
-```
-
-**Optional: PyArrow for Parquet**
-```bash
-pip install pyarrow
 ```
 
 ### Troubleshooting
 
 **"Polars backend not available" warning:**
 ```bash
-# Install Polars
-pip install polars
+# Reinstall dependencies
+pip install -r requirements.txt
 ```
 
 **Excel validation fails with Polars:**

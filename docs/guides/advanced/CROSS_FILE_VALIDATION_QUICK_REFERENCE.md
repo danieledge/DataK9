@@ -334,7 +334,7 @@ def validate(self, data_iterator, context):
 ## Performance Optimization Checklist
 
 - [ ] Use Parquet format for large files (10x faster than CSV)
-- [ ] Enable Polars backend when available (5-10x faster)
+- [x] Polars backend enabled by default (5-10x faster)
 - [ ] Load only required columns (column projection)
 - [ ] Adjust chunk size based on operation complexity
 - [ ] Use MemoryBoundedTracker for large key sets
