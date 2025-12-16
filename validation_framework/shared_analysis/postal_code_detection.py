@@ -163,10 +163,14 @@ def detect_postal_codes(
 
     try:
         # Detect backend (Polars vs Pandas)
-        is_polars = hasattr(series, 'to_list') and hasattr(series, 'filter')
+        is_polars = hasattr(series, 'drop_nulls')
 
         if is_polars:
-            values = series.drop_nulls().to_list()
+            try:
+                values = series.drop_nulls().to_list()
+            except AttributeError:
+                # Fallback for pandas
+                values = series.dropna().tolist()
         else:
             values = series.dropna().tolist()
 

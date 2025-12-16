@@ -172,38 +172,43 @@ def detect_credit_cards(
                 return 0
 
     try:
-        # Detect backend (Polars vs Pandas)
-        is_polars = hasattr(series, 'to_list') and hasattr(series, 'filter')
+        # Detect backend (Polars vs Pandas) - check for Polars-specific method
+        is_polars = hasattr(series, 'drop_nulls') and not hasattr(series, 'dropna')
 
         if is_polars:
             # Polars path
             import polars as pl
 
-            # Filter to non-null string values
-            str_series = series.cast(pl.Utf8, strict=False).drop_nulls()
+            try:
+                # Filter to non-null string values
+                str_series = series.cast(pl.Utf8, strict=False).drop_nulls()
 
-            # Pattern match
-            pattern_matches = str_series.filter(
-                str_series.str.contains(CREDIT_CARD_PATTERN)
-            )
+                # Pattern match
+                pattern_matches = str_series.filter(
+                    str_series.str.contains(CREDIT_CARD_PATTERN)
+                )
 
-            if pattern_matches.len() == 0:
-                if return_details:
-                    return {'count': 0, 'pattern_matches': 0, 'luhn_valid': 0}
-                return 0
+                if pattern_matches.len() == 0:
+                    if return_details:
+                        return {'count': 0, 'pattern_matches': 0, 'luhn_valid': 0}
+                    return 0
 
-            # Luhn validation
-            luhn_valid = sum(1 for v in pattern_matches.to_list() if luhn_check(v))
+                # Luhn validation
+                luhn_valid = sum(1 for v in pattern_matches.to_list() if luhn_check(v))
+            except Exception:
+                # Fallback to pandas-style processing
+                is_polars = False
 
-        else:
+        if not is_polars:
             # Pandas path
             import pandas as pd
 
             # Convert to string and drop nulls
             str_series = series.astype(str).replace(['nan', 'None', ''], pd.NA).dropna()
 
-            # Pattern match
-            pattern_mask = str_series.str.contains(CREDIT_CARD_PATTERN, regex=True, na=False)
+            # Pattern match - extract digits only for pattern matching
+            digits_only = str_series.str.replace(r'\D', '', regex=True)
+            pattern_mask = digits_only.str.match(r'^[0-9]{13,19}$', na=False)
             pattern_matches = str_series[pattern_mask]
 
             if len(pattern_matches) == 0:

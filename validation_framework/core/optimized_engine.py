@@ -384,7 +384,11 @@ class OptimizedValidationEngine:
 
             return True
 
-        except psutil.Error as e:
+        except MemoryError:
+            # Re-raise MemoryError - this is intentional
+            raise
+        except (AttributeError, TypeError, OSError) as e:
+            # Handle psutil-related errors gracefully
             logger.warning(f"Could not check memory usage: {e}")
             return True
 
