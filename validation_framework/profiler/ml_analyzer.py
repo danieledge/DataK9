@@ -4137,7 +4137,12 @@ class MLAnalyzer:
             subset = subset[non_constant_cols]
             numeric_cols = non_constant_cols
 
-            corr_matrix = subset.corr()
+            # Suppress warnings for edge cases
+            import warnings
+            with warnings.catch_warnings():
+                warnings.filterwarnings('ignore', message='.*constant.*')
+                warnings.filterwarnings('ignore', message='.*invalid value.*')
+                corr_matrix = subset.corr()
 
             # Find highly correlated pairs
             high_corr_pairs = []

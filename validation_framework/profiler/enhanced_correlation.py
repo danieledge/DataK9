@@ -212,8 +212,12 @@ class EnhancedCorrelationAnalyzer(BackendAwareProfiler):
         df = df[non_constant_cols]
         columns = non_constant_cols
 
-        # Calculate correlation matrix
-        corr_matrix = df.corr(method='pearson')
+        # Calculate correlation matrix (suppress warnings for edge cases)
+        import warnings
+        with warnings.catch_warnings():
+            warnings.filterwarnings('ignore', message='.*constant.*')
+            warnings.filterwarnings('ignore', message='.*invalid value.*')
+            corr_matrix = df.corr(method='pearson')
 
         matrix_data = corr_matrix.to_dict()
         pairs = []
@@ -272,8 +276,12 @@ class EnhancedCorrelationAnalyzer(BackendAwareProfiler):
         df = df[non_constant_cols]
         columns = non_constant_cols
 
-        # Calculate correlation matrix
-        corr_matrix = df.corr(method='spearman')
+        # Calculate correlation matrix (suppress warnings for edge cases)
+        import warnings
+        with warnings.catch_warnings():
+            warnings.filterwarnings('ignore', message='.*constant.*')
+            warnings.filterwarnings('ignore', message='.*invalid value.*')
+            corr_matrix = df.corr(method='spearman')
 
         matrix_data = corr_matrix.to_dict()
         pairs = []
@@ -336,7 +344,12 @@ class EnhancedCorrelationAnalyzer(BackendAwareProfiler):
             logger.info("Limiting Kendall correlation to first 10 columns (performance)")
             columns = columns[:10]
 
-        corr_matrix = df[columns].corr(method='kendall')
+        # Suppress warnings for edge cases
+        import warnings
+        with warnings.catch_warnings():
+            warnings.filterwarnings('ignore', message='.*constant.*')
+            warnings.filterwarnings('ignore', message='.*invalid value.*')
+            corr_matrix = df[columns].corr(method='kendall')
 
         matrix_data = corr_matrix.to_dict()
         pairs = []
@@ -658,8 +671,12 @@ class EnhancedCorrelationAnalyzer(BackendAwareProfiler):
         df = df[non_constant_cols]
         numeric_columns = non_constant_cols
 
-        # Basic Pearson correlation
-        corr_matrix = df.corr()
+        # Basic Pearson correlation (suppress warnings for edge cases)
+        import warnings
+        with warnings.catch_warnings():
+            warnings.filterwarnings('ignore', message='.*constant.*')
+            warnings.filterwarnings('ignore', message='.*invalid value.*')
+            corr_matrix = df.corr()
 
         pairs = []
         for i, col1 in enumerate(numeric_columns):

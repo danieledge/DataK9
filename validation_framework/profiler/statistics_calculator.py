@@ -423,8 +423,12 @@ class StatisticsCalculator:
             df = df[non_constant_cols]
             numeric_columns = non_constant_cols
 
-            # Calculate correlation matrix
-            corr_matrix = df.corr()
+            # Calculate correlation matrix (suppress warnings for edge cases)
+            import warnings
+            with warnings.catch_warnings():
+                warnings.filterwarnings('ignore', message='.*constant.*')
+                warnings.filterwarnings('ignore', message='.*invalid value.*')
+                corr_matrix = df.corr()
 
             # Extract significant correlations (|r| > threshold, default 0.3 = Cohen's medium effect size)
             for i, col1 in enumerate(numeric_columns):
