@@ -29,7 +29,7 @@ from validation_framework.profiler.visualization_fallbacks import (
     is_numeric_for_analysis,
     should_apply_benford_generic,
 )
-from validation_framework.profiler.parquet_type_handler import to_hashable
+from validation_framework.profiler.parquet_type_handler import to_hashable, safe_value_counts
 
 # Re-open the import block for remaining imports
 from validation_framework.profiler.visualization_fallbacks import (
@@ -2391,10 +2391,16 @@ class MLAnalyzer:
             target_result["total_rows_analyzed"] = len(target_series)
 
             # Get target distribution
-            target_counts = target_series.value_counts()
+            # Use safe_value_counts to handle unhashable types from parquet
+            try:
+                target_counts = target_series.value_counts()
+            except TypeError:
+                # Fall back to safe_value_counts for unhashable types
+                target_counts = safe_value_counts(target_series)
+                target_counts = pd.Series(target_counts)
             total = len(target_series)
             for val, count in target_counts.head(10).items():
-                target_result["target_distribution"][str(val)] = {
+                target_result["target_distribution"][str(to_hashable(val))] = {
                     "count": int(count),
                     "percentage": round(count / total * 100, 2)
                 }
@@ -2890,7 +2896,8 @@ class MLAnalyzer:
                         detection_reasons = target_info.get('reasons', []) if isinstance(target_info, dict) else []
 
                         viz_data["class_imbalance"][col] = {
-                            "classes": [{"value": str(v), "count": int(c), "percentage": round(c/total*100, 2)}
+                            # Use to_hashable to handle numpy arrays from parquet
+                            "classes": [{"value": str(to_hashable(v)), "count": int(c), "percentage": round(c/total*100, 2)}
                                        for v, c in value_counts.items()],
                             "is_binary": unique_count == 2,
                             "is_target_like": is_target,
@@ -3161,7 +3168,8 @@ class MLAnalyzer:
             for idx in top_anomaly_indices[:5]:
                 if idx < len(non_null_df):
                     row = non_null_df.iloc[idx]
-                    row_dict = {str(k)[:25]: str(v)[:50] for k, v in row.items()}
+                    # Use to_hashable to handle numpy arrays from parquet
+                    row_dict = {str(k)[:25]: str(to_hashable(v))[:50] for k, v in row.items()}
                     sample_rows.append(row_dict)
 
             anomaly_pct = len(anomaly_values) / len(values) * 100
@@ -3238,7 +3246,8 @@ class MLAnalyzer:
         for idx in anomaly_indices:
             if idx < len(non_null_df):
                 row = non_null_df.iloc[idx]
-                row_dict = {str(k)[:25]: str(v)[:50] for k, v in row.items()}
+                # Use to_hashable to handle numpy arrays from parquet
+                row_dict = {str(k)[:25]: str(to_hashable(v))[:50] for k, v in row.items()}
                 sample_rows.append(row_dict)
 
         return {
@@ -3351,7 +3360,8 @@ class MLAnalyzer:
             for i in sorted_by_score:
                 if i < len(anomaly_data):
                     row = subset_df.iloc[anomaly_indices[i]]
-                    row_dict = {str(k)[:25]: f"{v:.2f}" if isinstance(v, float) else str(v)[:50]
+                    # Use to_hashable to handle numpy arrays from parquet
+                    row_dict = {str(k)[:25]: f"{v:.2f}" if isinstance(v, (int, float)) and not isinstance(v, bool) else str(to_hashable(v))[:50]
                                for k, v in row.items()}
                     # Add reconstruction error for sorting/display
                     row_dict['_reconstruction_error'] = float(scores[anomaly_indices[i]])
@@ -3506,7 +3516,8 @@ class MLAnalyzer:
                 noise_indices = np.where(labels == -1)[0][:5]
                 for idx in noise_indices:
                     row = subset_df.iloc[idx]
-                    row_dict = {str(k)[:25]: f"{v:.2f}" if isinstance(v, float) else str(v)[:50]
+                    # Use to_hashable to handle numpy arrays from parquet
+                    row_dict = {str(k)[:25]: f"{v:.2f}" if isinstance(v, (int, float)) and not isinstance(v, bool) else str(to_hashable(v))[:50]
                                for k, v in row.items()}
                     sample_noise_rows.append(row_dict)
 
@@ -3828,7 +3839,13 @@ class MLAnalyzer:
         - default: Normal rare category detection
         """
         series = df[col_name]
-        freq = series.value_counts()
+        # Use try-except to handle unhashable types from parquet
+        try:
+            freq = series.value_counts()
+        except TypeError:
+            # Fall back to safe_value_counts for unhashable types
+            freq_dict = safe_value_counts(series)
+            freq = pd.Series(freq_dict)
         total = len(series.dropna())
 
         if total < MIN_ROWS_FOR_ML:
@@ -3885,7 +3902,8 @@ class MLAnalyzer:
         for val, count in freq.items():
             pct = count / total
             if pct < threshold:
-                val_str = str(val).strip()
+                # Use to_hashable to handle numpy arrays from parquet
+                val_str = str(to_hashable(val)).strip()
                 val_upper = val_str.upper()
 
                 # Reference validate mode: only flag values NOT in valid reference list
@@ -4154,7 +4172,8 @@ class MLAnalyzer:
                     for idx in anomaly_indices:
                         if idx < len(subset):
                             row = subset.iloc[idx]
-                            row_dict = {str(k)[:25]: f"{v:.2f}" if isinstance(v, (int, float)) else str(v)[:50]
+                            # Use to_hashable to handle numpy arrays from parquet
+                            row_dict = {str(k)[:25]: f"{v:.2f}" if isinstance(v, (int, float)) and not isinstance(v, bool) else str(to_hashable(v))[:50]
                                        for k, v in row.items()}
                             sample_rows.append(row_dict)
 
@@ -4267,7 +4286,8 @@ class MLAnalyzer:
             sample_rows = []
             sample_df = df.head(5)
             for _, row in sample_df.iterrows():
-                row_dict = {str(k)[:25]: str(v)[:50] for k, v in row.items()}
+                # Use to_hashable to handle numpy arrays from parquet
+                row_dict = {str(k)[:25]: str(to_hashable(v))[:50] for k, v in row.items()}
                 sample_rows.append(row_dict)
             findings["sample_rows"] = sample_rows
 
@@ -5006,7 +5026,8 @@ class MLAnalyzer:
             for idx in selected_indices:
                 if idx < len(subset_df):
                     row = subset_df.iloc[idx]
-                    row_dict = {str(k)[:25]: f"{v:.2f}" if isinstance(v, (int, float)) else str(v)[:50]
+                    # Use to_hashable to handle numpy arrays from parquet
+                    row_dict = {str(k)[:25]: f"{v:.2f}" if isinstance(v, (int, float)) and not isinstance(v, bool) else str(to_hashable(v))[:50]
                                for k, v in row.items()}
                     row_dict["_reconstruction_error"] = f"{reconstruction_errors[idx]:.4f}"
                     row_dict["_primary_driver"] = idx_to_category.get(idx, "Multi-field")
@@ -5452,7 +5473,8 @@ class MLAnalyzer:
         if reference_data:
             for col, valid_values in reference_data.items():
                 if col in df.columns:
-                    col_values = set(df[col].dropna().unique())
+                    # Use to_hashable to handle numpy arrays and other unhashable types from parquet
+                    col_values = set(to_hashable(v) for v in df[col].dropna().unique())
                     orphans = col_values - valid_values
                     if orphans:
                         results["orphan_analysis"].append({
@@ -5470,8 +5492,9 @@ class MLAnalyzer:
             for id_col in id_cols:
                 if parent_col != id_col:
                     try:
-                        valid_ids = set(df[id_col].dropna().unique())
-                        parent_values = set(df[parent_col].dropna().unique())
+                        # Use to_hashable to handle numpy arrays from parquet
+                        valid_ids = set(to_hashable(v) for v in df[id_col].dropna().unique())
+                        parent_values = set(to_hashable(v) for v in df[parent_col].dropna().unique())
                         invalid_parents = parent_values - valid_ids - {0, None, '', 'NULL', 'null'}
 
                         if invalid_parents and len(invalid_parents) < len(parent_values) * 0.5:
