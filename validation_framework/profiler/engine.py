@@ -148,7 +148,8 @@ except ImportError:
     logger.debug("Visions library not available - using fallback type inference")
 
 
-def check_csv_format(file_path: str, sample_rows: int = 1000, skip_rows: int = None) -> Dict[str, Any]:
+def check_csv_format(file_path: str, sample_rows: int = 1000, skip_rows: int = None,
+                     delimiter: str = None, encoding: str = None) -> Dict[str, Any]:
     """
     Check CSV file for structural issues before profiling.
 
@@ -156,6 +157,8 @@ def check_csv_format(file_path: str, sample_rows: int = 1000, skip_rows: int = N
         file_path: Path to CSV file
         sample_rows: Number of rows to check
         skip_rows: Number of rows to skip before header (None = auto-detect)
+        delimiter: Column delimiter (None = auto-detect)
+        encoding: File encoding (None = auto-detect)
 
     Returns:
         Dict with 'valid', 'issues', 'delimiter', 'encoding', 'column_count', 'skip_rows'
@@ -166,39 +169,44 @@ def check_csv_format(file_path: str, sample_rows: int = 1000, skip_rows: int = N
     result = {
         'valid': True,
         'issues': [],
-        'delimiter': ',',
-        'encoding': 'utf-8',
+        'delimiter': delimiter or ',',
+        'encoding': encoding or 'utf-8',
         'column_count': 0,
         'rows_checked': 0,
         'inconsistent_rows': [],
         'skip_rows': skip_rows if skip_rows is not None else 0
     }
 
-    # Auto-detect delimiter
-    encodings = ['utf-8', 'utf-8-sig', 'cp1252', 'latin-1']
-    detected_encoding = 'utf-8'
+    # Use explicit encoding or auto-detect
+    if encoding:
+        detected_encoding = encoding
+        result['encoding'] = encoding
+    else:
+        encodings = ['utf-8', 'utf-8-sig', 'cp1252', 'latin-1']
+        detected_encoding = 'utf-8'
+        for enc in encodings:
+            try:
+                with open(file_path, 'r', newline='', encoding=enc) as f:
+                    sample = f.read(8192)
+                detected_encoding = enc
+                break
+            except UnicodeDecodeError:
+                continue
+        result['encoding'] = detected_encoding
 
-    for encoding in encodings:
+    # Use explicit delimiter or auto-detect
+    if delimiter:
+        result['delimiter'] = delimiter
+    else:
         try:
-            with open(file_path, 'r', newline='', encoding=encoding) as f:
+            with open(file_path, 'r', newline='', encoding=detected_encoding) as f:
                 sample = f.read(8192)
-            detected_encoding = encoding
-            break
-        except UnicodeDecodeError:
-            continue
-
-    result['encoding'] = detected_encoding
-
-    # Detect delimiter
-    try:
-        with open(file_path, 'r', newline='', encoding=detected_encoding) as f:
-            sample = f.read(8192)
-        sniffer = csv.Sniffer()
-        dialect = sniffer.sniff(sample, delimiters=',\t|;:')
-        result['delimiter'] = dialect.delimiter
-    except (csv.Error, UnicodeDecodeError, IOError) as e:
-        logger.debug(f"Delimiter auto-detection failed, defaulting to comma: {e}")
-        result['delimiter'] = ','
+            sniffer = csv.Sniffer()
+            dialect = sniffer.sniff(sample, delimiters=',\t|;:')
+            result['delimiter'] = dialect.delimiter
+        except (csv.Error, UnicodeDecodeError, IOError) as e:
+            logger.debug(f"Delimiter auto-detection failed, defaulting to comma: {e}")
+            result['delimiter'] = ','
 
     # Use explicit skip_rows if provided, otherwise auto-detect
     if skip_rows is None:
@@ -1251,9 +1259,13 @@ class DataProfiler:
         # CSV format check for CSV files
         csv_format_check = None
         if file_format.lower() == 'csv':
-            # Pass explicit skip_rows if provided in loader_kwargs
-            explicit_skip_rows = loader_kwargs.get('skiprows', None)
-            csv_format_check = check_csv_format(file_path, skip_rows=explicit_skip_rows)
+            # Pass explicit options if provided in loader_kwargs
+            csv_format_check = check_csv_format(
+                file_path,
+                skip_rows=loader_kwargs.get('skiprows'),
+                delimiter=loader_kwargs.get('delimiter'),
+                encoding=loader_kwargs.get('encoding')
+            )
             if not csv_format_check['valid']:
                 logger.warning(f"CSV format issues detected: {csv_format_check['issues']}")
 
@@ -1903,6 +1915,8 @@ class DataProfiler:
                             csv_kwargs['delimiter'] = loader_kwargs['delimiter']
                         if 'encoding' in loader_kwargs:
                             csv_kwargs['encoding'] = loader_kwargs['encoding']
+                        if 'skiprows' in loader_kwargs:
+                            csv_kwargs['skiprows'] = loader_kwargs['skiprows']
 
                         # Suppress pandas warnings about skipped lines
                         import warnings
