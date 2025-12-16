@@ -9,6 +9,7 @@ Provides commands for:
 
 import click
 import csv
+import os
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -75,7 +76,10 @@ def cli():
               default='WARNING', help='Logging level')
 @click.option('--log-file', type=click.Path(), help='Optional log file path')
 @click.option('--no-optimize', is_flag=True, help='Disable single-pass optimization (use standard engine)')
-def validate(config_file, html_output, json_output, verbose, fail_on_warning, delimiter, log_level, log_file, no_optimize):
+@click.option('--timeout', type=int, default=0, help='Timeout in seconds (0=no timeout). For batch/Autosys scheduling.')
+@click.option('--lock-file', type=click.Path(), help='Lock file to prevent concurrent runs. For batch/Autosys.')
+@click.option('--exit-file', type=click.Path(), help='Write exit code to file on completion. For batch/Autosys.')
+def validate(config_file, html_output, json_output, verbose, fail_on_warning, delimiter, log_level, log_file, no_optimize, timeout, lock_file, exit_file):
     """
     Run data validation from a configuration file.
 
@@ -109,7 +113,37 @@ def validate(config_file, html_output, json_output, verbose, fail_on_warning, de
     \b
     # With custom log level and file
     data-validate validate config.yaml --log-level DEBUG --log-file "logs/{timestamp}.log"
+
+    \b
+    # Batch/Autosys mode with timeout and lock file
+    data-validate validate config.yaml --timeout 3600 --lock-file /tmp/validation.lock
+
+    Exit Codes:
+      0 = Passed (no errors, warnings only if --fail-on-warning not set)
+      1 = Failed (validation errors or unexpected errors)
+      2 = Warnings treated as failure (--fail-on-warning set)
+      3 = Timeout exceeded
+      4 = Lock file conflict (another instance running)
+      130 = Interrupted (Ctrl+C / SIGINT)
+      137 = Memory limit exceeded
     """
+    import signal
+    import fcntl
+
+    # Helper to write exit code to file (for batch systems)
+    def write_exit_code(code: int):
+        if exit_file:
+            try:
+                Path(exit_file).parent.mkdir(parents=True, exist_ok=True)
+                Path(exit_file).write_text(str(code))
+            except Exception as e:
+                logger.warning(f"Failed to write exit file: {e}")
+
+    # Helper for clean exit with exit file writing
+    def clean_exit(code: int):
+        write_exit_code(code)
+        sys.exit(code)
+
     # Create pattern expander with consistent timestamp for this run
     run_timestamp = datetime.now()
     expander = PathPatternExpander(run_timestamp=run_timestamp)
@@ -122,6 +156,64 @@ def validate(config_file, html_output, json_output, verbose, fail_on_warning, de
     setup_logging(level=log_level, log_file=log_file)
     logger.info(f"Starting validation: {config_file}")
     logger.info(f"Log level: {log_level}")
+
+    # Lock file handling for batch/Autosys (prevent concurrent runs)
+    lock_fd = None
+    if lock_file:
+        try:
+            Path(lock_file).parent.mkdir(parents=True, exist_ok=True)
+            lock_fd = open(lock_file, 'w')
+            fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            lock_fd.write(f"{os.getpid()}\n{datetime.now().isoformat()}\n")
+            lock_fd.flush()
+            logger.info(f"Acquired lock file: {lock_file}")
+        except BlockingIOError:
+            po.error(f"Another validation instance is running (lock file: {lock_file})")
+            po.info("If this is incorrect, delete the lock file and retry")
+            clean_exit(4)
+        except Exception as e:
+            po.warning(f"Could not create lock file: {e}")
+
+    # Timeout handling for batch/Autosys
+    def timeout_handler(signum, frame):
+        po.progress_done()
+        po.blank_line()
+        po.error(f"Validation timed out after {timeout} seconds")
+        logger.error(f"Validation timed out after {timeout} seconds")
+        if lock_fd:
+            try:
+                fcntl.flock(lock_fd, fcntl.LOCK_UN)
+                lock_fd.close()
+                os.unlink(lock_file)
+            except Exception:
+                pass
+        clean_exit(3)
+
+    if timeout > 0:
+        signal.signal(signal.SIGALRM, timeout_handler)
+        signal.alarm(timeout)
+        logger.info(f"Timeout set: {timeout} seconds")
+
+    # Signal handling for graceful shutdown
+    def signal_handler(signum, frame):
+        signal_name = signal.Signals(signum).name
+        po.progress_done()
+        po.blank_line()
+        po.warning(f"Received {signal_name}, shutting down gracefully...")
+        logger.warning(f"Received {signal_name}, shutting down")
+        if lock_fd:
+            try:
+                fcntl.flock(lock_fd, fcntl.LOCK_UN)
+                lock_fd.close()
+                os.unlink(lock_file)
+            except Exception:
+                pass
+        clean_exit(130)
+
+    signal.signal(signal.SIGTERM, signal_handler)
+
+    # Create progress reporter for verbose mode
+    reporter = VerboseProgressReporter(verbose=verbose)
 
     try:
         # Create and run validation engine (optimized by default)
@@ -149,16 +241,20 @@ def validate(config_file, html_output, json_output, verbose, fail_on_warning, de
             if file_config.get("format") == "database":
                 continue
 
-            file_path = file_config["path"]
-            if Path(file_path).exists():
-                analysis = advisor.analyze_file(file_path, operation='validation')
+            file_path_check = file_config["path"]
+            if Path(file_path_check).exists():
+                analysis = advisor.analyze_file(file_path_check, operation='validation')
                 warnings_output = advisor.format_warnings_for_cli(analysis)
                 if warnings_output:
                     for line in warnings_output:
                         po.info(line)
                     po.blank_line()
 
-        report = engine.run(verbose=verbose)
+        report = engine.run(verbose=verbose, progress_callback=reporter.callback)
+
+        # Cancel timeout alarm on successful completion
+        if timeout > 0:
+            signal.alarm(0)
 
         # Build context for pattern expansion
         context = {'job_name': engine.config.job_name}
@@ -181,35 +277,99 @@ def validate(config_file, html_output, json_output, verbose, fail_on_warning, de
             if engine.config.json_summary_path:
                 engine.generate_json_report(report, engine.config.json_summary_path)
 
+        # Release lock file
+        if lock_fd:
+            try:
+                fcntl.flock(lock_fd, fcntl.LOCK_UN)
+                lock_fd.close()
+                os.unlink(lock_file)
+                logger.info(f"Released lock file: {lock_file}")
+            except Exception as e:
+                logger.warning(f"Failed to release lock file: {e}")
+
+        # Log summary for headless/batch mode
+        logger.info(f"Validation complete: Errors={report.total_errors}, Warnings={report.total_warnings}")
+        logger.info(f"Duration: {report.duration_seconds:.2f}s")
+        logger.info(f"HTML Report: {engine.config.html_report_path}")
+
         # Determine exit code based on results
         if report.has_errors():
             if engine.config.fail_on_error:
                 po.blank_line()
                 po.error("VALIDATION FAILED WITH ERRORS")
                 po.info(f"HTML Report: {engine.config.html_report_path}")
-                sys.exit(1)
+                po.key_value("Errors", report.total_errors, indent=2, value_color=po.ERROR)
+                po.key_value("Warnings", report.total_warnings, indent=2, value_color=po.WARNING if report.total_warnings > 0 else po.DIM)
+                clean_exit(1)
 
         if report.has_warnings() and (fail_on_warning or engine.config.fail_on_warning):
             po.blank_line()
             po.warning("Validation completed with warnings (treating as failure)")
             po.info(f"HTML Report: {engine.config.html_report_path}")
-            sys.exit(2)
+            po.key_value("Warnings", report.total_warnings, indent=2, value_color=po.WARNING)
+            clean_exit(2)
 
         if report.has_errors() or report.has_warnings():
             po.blank_line()
             po.warning("Validation completed with issues (warnings only)")
             po.info(f"HTML Report: {engine.config.html_report_path}")
-            sys.exit(0)
+            po.key_value("Warnings", report.total_warnings, indent=2, value_color=po.WARNING)
+            clean_exit(0)
 
         po.blank_line()
         po.success("VALIDATION PASSED")
         po.info(f"HTML Report: {engine.config.html_report_path}")
-        sys.exit(0)
+        clean_exit(0)
+
+    except KeyboardInterrupt:
+        po.progress_done()
+        po.blank_line()
+        po.warning("Validation interrupted by user")
+        logger.warning("Validation interrupted by user (Ctrl+C)")
+        if lock_fd:
+            try:
+                fcntl.flock(lock_fd, fcntl.LOCK_UN)
+                lock_fd.close()
+                os.unlink(lock_file)
+            except Exception:
+                pass
+        clean_exit(130)
+
+    except MemoryError as e:
+        po.progress_done()
+        po.blank_line()
+        po.error("Memory limit exceeded - validation terminated")
+        error_msg = str(e)
+        if error_msg:
+            click.echo(f"   {error_msg}", err=True)
+        logger.error(f"Memory limit exceeded: {e}")
+        po.blank_line()
+        po.info("Solutions:")
+        click.echo("   1. Process smaller files or sample data")
+        click.echo("   2. Use smaller chunk size in config: chunk_size: 10000")
+        click.echo("   3. Close other applications to free memory")
+        click.echo("   4. Convert large CSV files to Parquet format")
+        if lock_fd:
+            try:
+                fcntl.flock(lock_fd, fcntl.LOCK_UN)
+                lock_fd.close()
+                os.unlink(lock_file)
+            except Exception:
+                pass
+        clean_exit(137)
 
     except FileNotFoundError as e:
         po.blank_line()
         po.error(f"File not found: {str(e)}")
-        sys.exit(1)
+        logger.error(f"File not found: {e}")
+        if lock_fd:
+            try:
+                fcntl.flock(lock_fd, fcntl.LOCK_UN)
+                lock_fd.close()
+                os.unlink(lock_file)
+            except Exception:
+                pass
+        clean_exit(1)
 
     except RuntimeError as e:
         # Graceful error from loaders (CSV parsing, encoding issues)
@@ -217,26 +377,73 @@ def validate(config_file, html_output, json_output, verbose, fail_on_warning, de
         po.blank_line()
         po.error("Error processing file:")
         click.echo(f"   {error_msg}", err=True)
+        logger.error(f"Runtime error: {error_msg}")
         if "delimiter" in error_msg.lower():
             po.blank_line()
             po.info("Tip: Try specifying the delimiter with -d option or in config:")
-            click.echo("   Command line: python -m validation_framework.cli validate config.yaml -d \"|\"")
+            click.echo("   Command line: data-validate validate config.yaml -d \"|\"")
             click.echo("   YAML config:  delimiter: \"|\"  (under files section)")
-        sys.exit(1)
+        if lock_fd:
+            try:
+                fcntl.flock(lock_fd, fcntl.LOCK_UN)
+                lock_fd.close()
+                os.unlink(lock_file)
+            except Exception:
+                pass
+        clean_exit(1)
 
     except Exception as e:
+        po.progress_done()
         po.blank_line()
-        po.error(f"Unexpected error: {str(e)}")
+
+        # Get exception type for context-aware error messages
+        error_type = type(e).__name__
+        error_msg = str(e)
+
+        po.error(f"Unexpected error: {error_type}")
+        if error_msg:
+            click.echo(f"   {error_msg}", err=True)
+        logger.error(f"Unexpected error ({error_type}): {error_msg}", exc_info=True)
+
         po.blank_line()
-        po.info("If this is a CSV parsing issue, try:")
-        click.echo("   - Check the file encoding (UTF-8, CP1252, etc.)")
-        click.echo("   - Verify the delimiter is correct (-d option or in YAML)")
-        click.echo("   - Check for malformed rows (unquoted delimiters in data)")
+
+        # Context-aware help based on error type
+        if "encoding" in error_msg.lower() or "codec" in error_msg.lower():
+            po.info("This looks like an encoding issue. Try:")
+            click.echo("   - Specify encoding in config: encoding: \"utf-8\" or \"cp1252\"")
+            click.echo("   - Convert file to UTF-8 before validation")
+        elif "delimiter" in error_msg.lower() or "parse" in error_msg.lower():
+            po.info("This looks like a parsing issue. Try:")
+            click.echo("   - Specify delimiter: data-validate validate config.yaml -d \"|\"")
+            click.echo("   - Check for malformed rows (unquoted delimiters in data)")
+        elif "memory" in error_msg.lower() or "allocate" in error_msg.lower():
+            po.info("This looks like a memory issue. Try:")
+            click.echo("   - Use smaller chunk size: chunk_size: 10000")
+            click.echo("   - Process files individually")
+        else:
+            po.info("Troubleshooting:")
+            click.echo("   - Check log file for details (use --log-file)")
+            click.echo("   - Run with --log-level DEBUG for more info")
+            click.echo("   - Report issue: https://github.com/danieledge/DataK9/issues")
+
+        # Only show traceback in verbose mode
         if verbose:
-            import traceback
             po.blank_line()
+            po.warning("Traceback (verbose mode):")
+            import traceback
             traceback.print_exc()
-        sys.exit(1)
+        else:
+            po.blank_line()
+            po.info("Run with -v flag to see full error traceback")
+
+        if lock_fd:
+            try:
+                fcntl.flock(lock_fd, fcntl.LOCK_UN)
+                lock_fd.close()
+                os.unlink(lock_file)
+            except Exception:
+                pass
+        clean_exit(1)
 
 
 @cli.command()

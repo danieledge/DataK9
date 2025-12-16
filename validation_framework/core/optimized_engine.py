@@ -41,7 +41,7 @@ import validation_framework.validations.builtin.registry  # noqa
 logger = get_logger(__name__)
 
 # Import for terminal output
-from validation_framework.core.pretty_output import PrettyOutput as po
+from validation_framework.core.pretty_output import PrettyOutput as po, VerboseProgressReporter
 
 
 class ReservoirSampler:
@@ -340,16 +340,30 @@ class OptimizedValidationEngine:
         config = ValidationConfig.from_yaml(config_path)
         return cls(config, use_single_pass=use_single_pass)
 
-    def run(self, verbose: bool = True) -> ValidationReport:
+    def run(self, verbose: bool = True, progress_callback: callable = None) -> ValidationReport:
         """
         Execute all validations defined in the configuration.
 
         Args:
             verbose: If True, print progress information
+            progress_callback: Optional callback for progress reporting.
+                               Signature: callback(phase: str, current: int = 0, total: int = 0)
 
         Returns:
             ValidationReport with complete validation results
         """
+        # Store progress callback for use in file validation methods
+        self._progress_callback = progress_callback
+
+        def _progress(phase: str, current: int = 0, total: int = 0):
+            """Helper to call progress callback if provided."""
+            if progress_callback:
+                try:
+                    progress_callback(phase, current, total)
+                except Exception:
+                    pass  # Don't let callback errors stop validation
+
+        _progress("Starting validation job...")
         logger.info(f"Starting optimized validation job: {self.config.job_name}")
         logger.info(f"Single-pass mode: {self.use_single_pass}")
         logger.debug(f"Number of files to validate: {len(self.config.files)}")
@@ -439,6 +453,14 @@ class OptimizedValidationEngine:
         Returns:
             FileValidationReport with all validation results for this file
         """
+        def _progress(phase: str, current: int = 0, total: int = 0):
+            """Helper to call progress callback if provided."""
+            if hasattr(self, '_progress_callback') and self._progress_callback:
+                try:
+                    self._progress_callback(phase, current, total)
+                except Exception:
+                    pass
+
         start_time = time.time()
 
         # Create file report
@@ -537,12 +559,16 @@ class OptimizedValidationEngine:
             if verbose and validation_states:
                 po.blank_line()
                 po.subsection(f"Processing Data (Single-Pass Mode)")
-                print(f"  {po.INFO}Reading file once, applying {len(validation_states)} validations per chunk...{po.RESET}")
+                po.info(f"Reading file once, applying {len(validation_states)} validations per chunk...", indent=2)
+
+            _progress(f"Validating {file_config['name']}...")
 
             # SINGLE-PASS EXECUTION: Read file once, apply all validations per chunk
             chunk_count = 0
+            rows_processed = 0
             for chunk_idx, chunk in enumerate(loader.load()):
                 chunk_count += 1
+                rows_processed += len(chunk)
 
                 # Apply all validations to this chunk
                 for state in validation_states:
@@ -551,14 +577,17 @@ class OptimizedValidationEngine:
                     except Exception as e:
                         logger.error(f"Error processing chunk {chunk_idx} for validation {state.validation.name}: {str(e)}")
 
-                if verbose and chunk_idx % 10 == 0:
-                    rows_processed = (chunk_idx + 1) * self.config.chunk_size
-                    print(f"  {po.DIM}Processed {chunk_count} chunks ({rows_processed:,} rows)...{po.RESET}", end='\r', flush=True)
+                # Update progress bar
+                if verbose:
+                    po.progress_bar(rows_processed, 0, "Validating")  # Indeterminate progress
+                _progress("Validating", rows_processed, 0)
 
             if verbose:
-                print()  # New line after progress
+                po.progress_done()  # Clear progress bar
                 po.blank_line()
                 po.subsection("Finalizing Validation Results")
+
+            _progress("Finalizing results...")
 
             # Finalize all validations
             for val_idx, state in enumerate(validation_states, 1):
