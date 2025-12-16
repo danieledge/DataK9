@@ -16,6 +16,8 @@ import re
 from typing import Dict, Any, Optional, List, Tuple
 import logging
 
+from .parquet_type_handler import to_hashable
+
 logger = logging.getLogger(__name__)
 
 
@@ -62,7 +64,10 @@ def coerce_to_numeric(series: pd.Series) -> Tuple[pd.Series, bool]:
     if len(valid_values) < 2:
         return coerced, False
 
-    unique_count = valid_values.nunique()
+    try:
+        unique_count = valid_values.nunique()
+    except TypeError:
+        unique_count = len(set(str(to_hashable(v)) for v in valid_values))
 
     # Binary/low-cardinality check (≤ 3 unique values = likely categorical encoded as numeric)
     if unique_count <= 3:
@@ -90,7 +95,10 @@ def is_numeric_for_analysis(series: pd.Series, min_unique: int = 4) -> bool:
         return False
 
     coerced = pd.to_numeric(series, errors='coerce').dropna()
-    return coerced.nunique() >= min_unique
+    try:
+        return coerced.nunique() >= min_unique
+    except TypeError:
+        return len(set(str(to_hashable(v)) for v in coerced)) >= min_unique
 
 
 # ============================================================================
@@ -439,13 +447,19 @@ def validate_chart_data(
 
 def is_binary_column(series: pd.Series) -> bool:
     """Check if column is binary (exactly 2 unique non-null values)."""
-    unique = series.dropna().nunique()
+    try:
+        unique = series.dropna().nunique()
+    except TypeError:
+        unique = len(set(str(to_hashable(v)) for v in series.dropna()))
     return unique == 2
 
 
 def is_low_cardinality(series: pd.Series, threshold: int = 10) -> bool:
     """Check if column has low cardinality (few unique values)."""
-    unique = series.dropna().nunique()
+    try:
+        unique = series.dropna().nunique()
+    except TypeError:
+        unique = len(set(str(to_hashable(v)) for v in series.dropna()))
     return unique <= threshold
 
 
@@ -466,7 +480,11 @@ def is_identifier_like(col_name: str, series: pd.Series) -> bool:
     # Data-based patterns
     if series.dtype == 'object':
         # High uniqueness ratio for strings suggests identifier
-        unique_ratio = series.nunique() / len(series.dropna()) if len(series.dropna()) > 0 else 0
+        try:
+            n_unique = series.nunique()
+        except TypeError:
+            n_unique = len(set(str(to_hashable(v)) for v in series.dropna()))
+        unique_ratio = n_unique / len(series.dropna()) if len(series.dropna()) > 0 else 0
         if unique_ratio > 0.9:
             return True
 
