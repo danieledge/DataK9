@@ -150,7 +150,10 @@ class ChunkedMLAccumulator:
             # Check if it's binary/low-cardinality (likely categorical encoded as numeric)
             valid = series.dropna()
             if len(valid) > 0:
-                unique_count = valid.nunique()
+                try:
+                    unique_count = valid.nunique()
+                except TypeError:
+                    unique_count = len(set(str(to_hashable(v)) for v in valid))
                 if unique_count <= 3:
                     # Binary or very low cardinality - treat as categorical
                     return False
@@ -1673,7 +1676,10 @@ class MLAnalyzer:
         for col in native_numeric:
             # Check for binary/near-binary exclusion
             if exclude_binary:
-                unique_vals = df[col].dropna().nunique()
+                try:
+                    unique_vals = df[col].dropna().nunique()
+                except TypeError:
+                    unique_vals = len(set(str(to_hashable(v)) for v in df[col].dropna()))
                 if unique_vals <= 3:
                     logger.debug(f"Excluding {col}: near-binary ({unique_vals} unique values)")
                     coerced_info[col] = f"excluded: near-binary ({unique_vals} unique values)"
@@ -1700,7 +1706,10 @@ class MLAnalyzer:
                 if success_rate >= 0.80:
                     # Check for binary exclusion
                     if exclude_binary:
-                        unique_vals = converted.dropna().nunique()
+                        try:
+                            unique_vals = converted.dropna().nunique()
+                        except TypeError:
+                            unique_vals = len(set(str(to_hashable(v)) for v in converted.dropna()))
                         if unique_vals <= 3:
                             logger.debug(f"Excluding coerced {col}: near-binary ({unique_vals} unique values)")
                             coerced_info[col] = f"excluded: near-binary ({unique_vals} unique values)"
@@ -2323,7 +2332,10 @@ class MLAnalyzer:
             if col_parts & id_patterns or col_lower.endswith('id') or col_lower.endswith('_id'):
                 continue
 
-            n_unique = df[c].nunique()
+            try:
+                n_unique = df[c].nunique()
+            except TypeError:
+                n_unique = len(set(str(to_hashable(v)) for v in df[c].dropna()))
 
             # Skip high-cardinality columns (>50 unique OR >90% unique values)
             # High uniqueness ratio indicates identifier-like behavior
@@ -2444,7 +2456,10 @@ class MLAnalyzer:
                     continue
 
                 # Skip high-uniqueness columns (>90% unique = identifier-like)
-                n_unique = df[col].nunique()
+                try:
+                    n_unique = df[col].nunique()
+                except TypeError:
+                    n_unique = len(set(str(to_hashable(v)) for v in df[col].dropna()))
                 uniqueness_ratio = n_unique / len(df) if len(df) > 0 else 0
                 if uniqueness_ratio > 0.9:
                     continue
@@ -5499,12 +5514,16 @@ class MLAnalyzer:
         for col in df.columns:
             col_lower = str(col).lower() if col is not None else ''
             if any(pattern in col_lower for pattern in fk_patterns):
-                unique_ratio = df[col].nunique() / len(df) if len(df) > 0 else 0
+                try:
+                    n_unique = df[col].nunique()
+                except TypeError:
+                    n_unique = len(set(str(to_hashable(v)) for v in df[col].dropna()))
+                unique_ratio = n_unique / len(df) if len(df) > 0 else 0
                 null_ratio = df[col].isna().sum() / len(df) if len(df) > 0 else 0
 
                 potential_fks.append({
                     "column": col,
-                    "unique_values": df[col].nunique(),
+                    "unique_values": n_unique,
                     "unique_ratio": round(unique_ratio, 4),
                     "null_ratio": round(null_ratio, 4),
                     "likely_type": "foreign_key" if unique_ratio < 0.5 else "primary_key"
