@@ -36,7 +36,7 @@ python3 -m validation_framework.cli validate config.yaml
 
 ## Features
 
-- **37 validations** - Schema, field, record, cross-file, database, statistical
+- **36 validations** - Schema, field, record, cross-file, database, statistical
 - **200GB+ files** - Memory-efficient chunked processing
 - **Visual IDE** - DataK9 Studio, no coding required
 - **CI/CD ready** - Exit codes, JSON output, AutoSys support
