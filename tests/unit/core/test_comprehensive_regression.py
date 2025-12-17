@@ -102,15 +102,14 @@ class TestComprehensiveRegression:
         # Check for required top-level keys
         assert 'validation_job' in config_data, "Config must have validation_job"
         assert 'files' in config_data, "Config must have files section"
-        assert 'validations' in config_data, "Config must have validations section"
 
         # Check files section
         files = config_data['files']
         assert isinstance(files, list), "Files must be a list"
         assert len(files) > 0, "Must have at least one file"
 
-        # Check validations section
-        validations = config_data['validations']
+        # Check validations section (in files)
+        validations = files[0].get('validations', [])
         assert isinstance(validations, list), "Validations must be a list"
         assert len(validations) >= 25, f"Should have at least 25 validations, got {len(validations)}"
 
@@ -125,7 +124,8 @@ class TestComprehensiveRegression:
         with open(regression_config_path, 'r') as f:
             config_data = yaml.safe_load(f)
 
-        validation_types = [v['type'] for v in config_data['validations']]
+        validations = config_data['files'][0].get('validations', [])
+        validation_types = [v['type'] for v in validations]
 
         # Check coverage of major categories
         expected_types = [

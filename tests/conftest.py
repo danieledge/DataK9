@@ -11,6 +11,7 @@ import pandas as pd
 import tempfile
 import yaml
 import sqlite3
+import logging
 from pathlib import Path
 from typing import Iterator, Dict, Any
 

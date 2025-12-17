@@ -1,0 +1,127 @@
+validation_job:
+  name: Comprehensive Test Suite - All 34 Validation Types
+  description: Tests all available validation types with designed quality issues
+files:
+- name: employees
+  path: /home/user/www/dqa/data-validation-tool/tests/unit/core/test_data/comprehensive_test_data.csv
+  format: csv
+  validations:
+  - type: EmptyFileCheck
+    name: EmptyFileCheck
+  - type: RecordCountCheck
+    name: RecordCountCheck
+    min_count: 20
+    max_count: 30
+  - type: FileSizeCheck
+    name: FileSizeCheck
+    min_size_kb: 1
+  - type: RowCountRangeCheck
+    name: RowCountRangeCheck
+    min_rows: 20
+    max_rows: 30
+  - type: SchemaMatchCheck
+    name: SchemaMatchCheck
+    expected_schema:
+      employee_id: int64
+      first_name: object
+      email: object
+  - type: ColumnExistenceCheck
+    name: ColumnPresenceCheck
+    columns:
+    - employee_id
+    - first_name
+    - email
+  - type: DataTypeConsistencyCheck
+    name: DataTypeConsistencyCheck
+  - type: ColumnCountCheck
+    name: ColumnCountCheck
+    expected_count: 13
+  - type: MandatoryFieldCheck
+    name: MandatoryFieldCheck
+    column: first_name
+  - type: CompletenessCheck
+    name: CompletenessCheck
+    column: email
+    threshold: 0.7
+  - type: RangeCheck
+    name: RangeCheck
+    column: salary
+    min_value: 20000
+    max_value: 150000
+  - type: ValueSetCheck
+    name: ValidValuesCheck
+    column: status
+    allowed_values:
+    - Active
+    - Inactive
+  - type: PatternCheck
+    name: RegexCheck
+    column: email
+    pattern: ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$
+  - type: LengthCheck
+    name: StringLengthCheck
+    column: first_name
+    min_length: 2
+    max_length: 50
+  - type: UniqueConstraintCheck
+    name: UniqueKeyCheck
+    column: employee_id
+  - type: DataFreshnessCheck
+    name: DateFormatCheck
+    date_column: hire_date
+    max_age_days: 3650
+  - type: DuplicateCheck
+    name: DuplicateRowCheck
+  - type: BlankRecordCheck
+    name: BlankRecordCheck
+  - type: StatisticalOutlierCheck
+    name: StatisticalOutlierCheck
+    column: salary
+  - type: CorrelationCheck
+    name: CorrelationCheck
+  - type: DistributionCheck
+    name: DistributionCheck
+  - type: EntropyCheck
+    name: EntropyCheck
+  - type: NumericPrecisionCheck
+    name: NumericPrecisionCheck
+    column: performance_score
+    decimal_places: 1
+  - type: CrossFieldValidation
+    name: CrossFieldValidation
+    field1: hire_date
+    field2: last_review_date
+    condition: field1 <= field2
+  - type: ConditionalValidation
+    name: ConditionalValidation
+    condition: status == 'Active'
+    validation:
+      type: MandatoryFieldCheck
+      column: last_review_date
+  - type: NullCheck
+    name: NullCheck
+    column: employee_id
+  - type: WhitespaceCheck
+    name: WhitespaceCheck
+    column: first_name
+  - type: CaseConsistencyCheck
+    name: CaseConsistencyCheck
+    column: status
+  - type: CompletenessCheck
+    name: Overall Completeness
+    threshold: 0.8
+  - type: RangeCheck
+    name: Experience Range
+    column: years_experience
+    min_value: 0
+    max_value: 50
+  - type: RangeCheck
+    name: Performance Range
+    column: performance_score
+    min_value: 1.0
+    max_value: 5.0
+  - type: CardinalityCheck
+    name: CardinalityCheck
+    column: dept_id
+    min_unique: 2
+    max_unique: 10

@@ -1,0 +1,102 @@
+validation_job:
+  name: Regression Test Suite
+  description: Comprehensive regression testing configuration
+files:
+- name: employees
+  path: /home/user/www/dqa/data-validation-tool/tests/unit/core/test_data/regression_test_data.csv
+  format: csv
+  validations:
+  - type: EmptyFileCheck
+    name: File not empty
+  - type: RecordCountCheck
+    name: Record count check
+    min_count: 20
+    max_count: 30
+  - type: FileSizeCheck
+    name: File size check
+    min_size_kb: 1
+  - type: SchemaMatchCheck
+    name: Schema matches expected
+    expected_schema:
+      employee_id: int64
+      first_name: object
+      email: object
+      salary: int64
+  - type: ColumnExistenceCheck
+    name: Required columns exist
+    columns:
+    - employee_id
+    - first_name
+    - last_name
+    - email
+    - salary
+  - type: DataTypeConsistencyCheck
+    name: Data types consistent
+  - type: MandatoryFieldCheck
+    name: Employee ID required
+    column: employee_id
+  - type: MandatoryFieldCheck
+    name: First name required
+    column: first_name
+  - type: CompletenessCheck
+    name: Email completeness
+    column: email
+    threshold: 0.8
+  - type: CompletenessCheck
+    name: Phone completeness
+    column: phone
+    threshold: 0.85
+  - type: RangeCheck
+    name: Salary range
+    column: salary
+    min_value: 30000
+    max_value: 200000
+  - type: ValueSetCheck
+    name: Status valid values
+    column: status
+    allowed_values:
+    - Active
+    - Inactive
+    - On Leave
+  - type: PatternCheck
+    name: Email format
+    column: email
+    pattern: ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$
+  - type: LengthCheck
+    name: First name length
+    column: first_name
+    min_length: 2
+    max_length: 50
+  - type: UniqueConstraintCheck
+    name: Employee ID unique
+    column: employee_id
+  - type: DuplicateCheck
+    name: No duplicate records
+  - type: BlankRecordCheck
+    name: No blank records
+  - type: StatisticalOutlierCheck
+    name: Salary outliers
+    column: salary
+  - type: CorrelationCheck
+    name: Correlation check
+  - type: DistributionCheck
+    name: Distribution check
+  - type: DataFreshnessCheck
+    name: Data freshness
+    date_column: hire_date
+    max_age_days: 3650
+  - type: EntropyCheck
+    name: Entropy check
+  - type: RowCountRangeCheck
+    name: Row count in range
+    min_rows: 20
+    max_rows: 30
+  - type: ColumnCountCheck
+    name: Column count check
+    expected_count: 13
+  - type: ConditionalValidation
+    name: Manager ID for non-managers
+    condition: dept_id != 101
+    validation:
+      type: MandatoryFieldCheck
+      column: manager_id
