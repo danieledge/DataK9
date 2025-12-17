@@ -1,6 +1,6 @@
 # Validation Reference
 
-**Quick Reference Guide for All 37 Validation Types**
+**Quick Reference Guide for All 36 Validation Types**
 
 This reference provides a comprehensive, quick-lookup guide for every DataK9 validation rule organized across 10 categories. Use this when you need fast answers about parameters, examples, and behavior.
 
@@ -29,7 +29,7 @@ This reference provides a comprehensive, quick-lookup guide for every DataK9 val
 
 ### Validation Categories
 
-DataK9 provides **37 built-in validation types** organized into **10 categories**:
+DataK9 provides **36 built-in validation types** organized into **10 categories**:
 
 | Category | Count | Purpose |
 |----------|-------|---------|

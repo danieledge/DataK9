@@ -38,7 +38,7 @@ Welcome to **DataK9** - a data quality framework that guards your data pipelines
 **Data Analysis & Validation:**
 - [Data Profiling](using-datak9/data-profiling.md) - Analyze data quality
 - [Data Validation](using-datak9/validator.md) - Execute validation rules
-- [Validation Catalog](using-datak9/validation-catalog.md) - All 37 validation types
+- [Validation Catalog](using-datak9/validation-catalog.md) - All 36 validation types
 - [Reading Reports](using-datak9/reading-reports.md) - Understand validation results
 
 **Integration & Deployment:**
@@ -90,7 +90,7 @@ Power user features and complex scenarios:
 
 #### Complete References
 - **[CLI Reference](reference/cli-reference.md)** - All command-line options
-- **[Validation Reference](reference/validation-reference.md)** - Complete validation catalog (37 types)
+- **[Validation Reference](reference/validation-reference.md)** - Complete validation catalog (36 types)
 - **[YAML Reference](reference/yaml-reference.md)** - Configuration file syntax
 - **[Error Codes](reference/error-codes.md)** - Error messages and solutions
 - **[Glossary](reference/glossary.md)** - Terminology and definitions
@@ -311,7 +311,7 @@ docs/
 - **[Troubleshooting](using-datak9/troubleshooting.md)** - Common issues and solutions
 - **[Error Codes](reference/error-codes.md)** - Error messages explained
 - **[Examples](examples/)** - Real-world configurations
-- **[GitHub Issues](https://github.com/danieledge/data-validation-tool/issues)** - Report bugs or request features
+- **[GitHub Issues](https://github.com/danieledge/datak9/issues)** - Report bugs or request features
 
 ---
 
@@ -335,4 +335,4 @@ DataK9 is a data quality framework that:
 
 **Copyright © 2025 Daniel Edge**
 **License:** MIT
-**Repository:** https://github.com/danieledge/data-validation-tool
+**Repository:** https://github.com/danieledge/datak9
