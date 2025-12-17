@@ -430,5 +430,5 @@ python3 -m validation_framework.utils.chunk_size_calculator
 ```
 
 **For questions or issues:**
-- GitHub Issues: https://github.com/danieledge/DataK9/issues
+- GitHub Issues: https://github.com/danieledge/datak9/issues
 - Documentation: docs/USER_GUIDE.md
