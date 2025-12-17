@@ -21,13 +21,13 @@ Step-by-step checklist to get up and running with DataK9.
   ```bash
   python3 -m validation_framework.cli --version
   ```
-  Expected: `DataK9 Data Quality Framework v0.2.0-beta`
+  Expected: `python -m validation_framework.cli, version 0.1.0`
 
 - [ ] **List available validations**
   ```bash
   python3 -m validation_framework.cli list-validations
   ```
-  Expected: 37 validation types listed
+  Expected: 36 validation types listed
 
 ---
 

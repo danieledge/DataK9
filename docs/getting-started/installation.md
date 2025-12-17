@@ -27,8 +27,8 @@ This guide covers installing **DataK9** - your K9 guardian for data quality.
 **Step 1:** Clone the repository
 
 ```bash
-git clone https://github.com/danieledge/data-validation-tool.git
-cd data-validation-tool
+git clone https://github.com/danieledge/datak9.git
+cd datak9/data-validation-tool
 ```
 
 **Step 2:** Install dependencies
@@ -70,8 +70,8 @@ source datak9-env/bin/activate  # On Windows: datak9-env\Scripts\activate
 **Step 2:** Clone and install
 
 ```bash
-git clone https://github.com/danieledge/data-validation-tool.git
-cd data-validation-tool
+git clone https://github.com/danieledge/datak9.git
+cd datak9/data-validation-tool
 pip install -r requirements.txt
 pip install -e .
 ```
