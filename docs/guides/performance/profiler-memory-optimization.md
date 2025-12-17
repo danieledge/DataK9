@@ -467,5 +467,5 @@ The DataK9 Profiler achieves memory-efficient profiling through:
 
 **Related Documentation:**
 - [Performance Optimization Guide](./profiler-performance.md)
-- [Large Dataset Guide](../advanced/large-datasets.md)
+- [Large Files Guide](../../using-datak9/large-files.md)
 - [Profiler CLI Reference](../../reference/cli-reference.md#profile)

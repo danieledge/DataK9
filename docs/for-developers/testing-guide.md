@@ -18,6 +18,7 @@ Quality testing is critical for a data quality framework. This guide covers test
 8. [Coverage and Quality](#coverage-and-quality)
 9. [CI/CD Integration](#cicd-integration)
 10. [Best Practices](#best-practices)
+11. [Test Inventory](#test-inventory)
 
 ---
 
@@ -1084,6 +1085,211 @@ def test_with_files(tmp_path):
 
 ---
 
+## Test Inventory
+
+This section provides a reference to the actual test files in the DataK9 test suite.
+
+### Test Statistics
+
+```
+Total test files: 85+
+Test categories:
+- Unit tests: 50+ files
+- Integration tests: 10+ files
+- CLI tests: 5+ files
+- Dataset/E2E tests: 5+ files
+```
+
+### Directory Structure
+
+```
+tests/
+├── conftest.py                          # Shared fixtures and configuration
+├── __init__.py
+│
+├── cli/                                 # CLI-specific tests
+│   ├── test_cli.py                     # Main CLI command tests
+│   └── test_pattern_integration.py     # Pattern matching tests
+│
+├── datasets/                            # Dataset-specific tests
+│   ├── test_dataset_profiling.py       # Profiling various datasets
+│   └── test_large_dataset_e2e.py       # Large dataset end-to-end tests
+│
+├── integration/                         # Integration tests
+│   ├── test_expression_security.py     # Expression security tests
+│   ├── test_integration.py             # Full workflow tests
+│   └── test_profiler_enhancements.py   # Profiler integration tests
+│
+├── testsuite/                           # Test data and generators
+│   ├── generators/                     # Test data generators
+│   ├── data/                           # Sample test data files
+│   │   ├── profiler/
+│   │   ├── samples/
+│   │   ├── validation/
+│   │   ├── regression/
+│   │   ├── cross_file/
+│   │   └── json/
+│   └── generate_validation_test_data.py
+│
+└── unit/                                # Unit tests by component
+    ├── cli/                            # CLI unit tests
+    │   ├── test_delimiter_mapping.py
+    │   └── test_file_lock.py
+    │
+    ├── core/                           # Core framework tests
+    │   ├── test_async_engine.py
+    │   ├── test_config.py
+    │   ├── test_constants.py
+    │   ├── test_engine.py
+    │   ├── test_exceptions.py
+    │   ├── test_expression_validator.py
+    │   ├── test_optimized_engine.py
+    │   ├── test_registry.py
+    │   ├── test_reporters.py
+    │   ├── test_results.py
+    │   ├── test_sampling_engine.py
+    │   ├── test_security.py
+    │   ├── test_code_quality_regression.py
+    │   └── test_comprehensive_regression.py
+    │
+    ├── loaders/                        # Data loader tests
+    │   ├── test_loaders.py             # General loader tests
+    │   ├── test_async_loaders.py       # Async loading tests
+    │   ├── test_csv_loader_debug.py
+    │   ├── test_database_integration.py
+    │   ├── test_database_loader_comprehensive.py
+    │   ├── test_database_profiling_json.py
+    │   └── test_resource_management.py
+    │
+    ├── profiler/                       # Profiler tests
+    │   ├── test_profiler.py            # Core profiler tests
+    │   ├── test_polars_profiler.py     # Polars backend tests
+    │   ├── test_polars_engine_comprehensive.py
+    │   ├── test_pii_detector.py        # PII detection tests
+    │   ├── test_ml_analyzer.py         # ML analyzer tests
+    │   ├── test_ml_analyzer_comprehensive.py
+    │   ├── test_enhanced_correlation.py
+    │   ├── test_enhanced_correlation_extended.py
+    │   ├── test_temporal_analysis.py
+    │   ├── test_semantic_tagger.py
+    │   ├── test_context_discovery.py
+    │   ├── test_validation_suggester.py
+    │   ├── test_sampling_utils.py
+    │   ├── test_streaming_and_sampling.py
+    │   ├── test_data_generator.py
+    │   ├── test_amount_max_consistency.py
+    │   ├── test_benchmark_fixes.py
+    │   ├── test_false_positive_regression.py
+    │   └── test_missing_statistical_temporal.py
+    │
+    ├── validations/                    # Validation tests
+    │   ├── test_validations.py         # General validation tests
+    │   ├── test_field_validations.py   # Field-level validations
+    │   ├── test_file_validations.py    # File-level validations
+    │   ├── test_record_validations.py  # Record-level validations
+    │   ├── test_schema_validations.py  # Schema validations
+    │   ├── test_advanced_validations.py
+    │   ├── test_conditional_validations.py
+    │   ├── test_cross_file_validations.py
+    │   ├── test_cross_file_advanced.py
+    │   ├── test_database_validations.py
+    │   ├── test_inline_validations.py
+    │   ├── test_async_validators_comprehensive.py
+    │   ├── test_cda.py                 # CDA validation tests
+    │   └── test_policy.py
+    │
+    └── utils/                          # Utility tests
+        └── test_path_patterns.py
+```
+
+### Running Tests by Category
+
+```bash
+# Run all tests
+pytest
+
+# Run only unit tests
+pytest tests/unit/
+
+# Run only integration tests
+pytest tests/integration/
+
+# Run CLI tests
+pytest tests/cli/
+
+# Run profiler tests
+pytest tests/unit/profiler/
+
+# Run validation tests
+pytest tests/unit/validations/
+
+# Run loader tests
+pytest tests/unit/loaders/
+
+# Run core framework tests
+pytest tests/unit/core/
+
+# Run with specific marker
+pytest -m unit
+pytest -m integration
+pytest -m slow
+pytest -m security
+```
+
+### Available Fixtures
+
+The `conftest.py` provides these shared fixtures:
+
+| Fixture | Description |
+|---------|-------------|
+| `sample_dataframe` | 5-row DataFrame with mixed types and some nulls |
+| `clean_dataframe` | 5-row DataFrame with all valid data |
+| `large_dataframe` | 10,000-row DataFrame for performance tests |
+| `dataframe_with_duplicates` | DataFrame with intentional duplicates |
+| `dataframe_with_outliers` | DataFrame with statistical outliers |
+| `temp_csv_file` | Temporary CSV file (auto-cleaned) |
+| `temp_large_csv_file` | Large temporary CSV file |
+| `temp_empty_file` | Empty (0-byte) file |
+| `temp_json_file` | Temporary JSON file |
+| `temp_excel_file` | Temporary Excel file |
+| `temp_parquet_file` | Temporary Parquet file |
+| `temp_yaml_config` | Temporary validation config YAML |
+| `sqlite_database` | Temporary SQLite database |
+
+### Custom Pytest Markers
+
+```python
+@pytest.mark.unit          # Unit tests for individual components
+@pytest.mark.integration   # Integration tests for full workflows
+@pytest.mark.slow          # Tests that take significant time
+@pytest.mark.security      # Security-related tests
+@pytest.mark.cli           # Command-line interface tests
+@pytest.mark.performance   # Performance and load tests
+@pytest.mark.requires_data # Tests that require sample data files
+```
+
+### Adding New Tests
+
+When adding new tests:
+
+1. **Choose the right location**:
+   - Unit tests go in `tests/unit/<component>/`
+   - Integration tests go in `tests/integration/`
+   - CLI tests go in `tests/cli/`
+
+2. **Follow naming conventions**:
+   - Test files: `test_<feature>.py`
+   - Test classes: `Test<Feature>`
+   - Test functions: `test_<behavior>`
+
+3. **Use appropriate fixtures** from `conftest.py`
+
+4. **Add markers** for test categorization
+
+5. **Include docstrings** explaining what the test validates
+
+---
+
 ## Next Steps
 
 - **[Custom Validations](custom-validations.md)** - Build and test custom validations
@@ -1092,4 +1298,4 @@ def test_with_files(tmp_path):
 
 ---
 
-**🐕 Trust through testing - DataK9 guards your data with confidence**
+**Trust through testing - DataK9 guards your data with confidence**

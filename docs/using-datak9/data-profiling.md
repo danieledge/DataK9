@@ -1550,7 +1550,7 @@ python3 -m validation_framework.cli profile non_financial_data.csv --disable-all
 **You've learned data profiling! Now:**
 
 1. **[Configuration Guide](configuration-guide.md)** - Customize your validation config
-2. **[Validation Catalog](validation-catalog.md)** - Explore all 36 validations
+2. **[Validation Catalog](validation-catalog.md)** - Explore all 37 validations
 3. **[Best Practices](best-practices.md)** - Production deployment tips
 4. **[DEPENDENCIES.md](../for-developers/DEPENDENCIES.md)** - Licensing and FIBO details
 

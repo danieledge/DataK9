@@ -110,7 +110,7 @@ Display DataK9 version.
 
 ```bash
 python3 -m validation_framework.cli --version
-# Output: DataK9 version 1.0.0
+# Output: DataK9 version 0.1.0
 ```
 
 ### `--verbose` / `-v`
@@ -868,7 +868,7 @@ Field-Level (5)
        Validates field values match a regular expression
   ...
 
-Total: 36 validations
+Total: 37 validations
   📁 File-compatible: 34
   🗄️  Database-compatible: 33
 ```
@@ -1836,7 +1836,7 @@ wait
 **You've mastered the DataK9 CLI! Now:**
 
 1. **[YAML Reference](yaml-reference.md)** - Complete configuration syntax
-2. **[Validation Reference](validation-reference.md)** - All 36 validation types
+2. **[Validation Reference](validation-reference.md)** - All 37 validation types
 3. **[Error Codes Reference](error-codes.md)** - Detailed error messages
 4. **[Best Practices](../using-datak9/best-practices.md)** - Production deployment guidance
 

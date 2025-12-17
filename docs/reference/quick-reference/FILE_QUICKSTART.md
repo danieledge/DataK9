@@ -119,7 +119,7 @@ files:
 - Files use `path`, databases use `connection_string`
 - Files have format-specific options (delimiter, encoding, header)
 - Databases have table/query and max_rows
-- Both support all 36 validation types
+- Both support all 37 validation types
 
 ---
 
@@ -165,7 +165,7 @@ files:
 
 ## All Validations Work with Files
 
-All 36 validation types work with file sources. Here are common ones:
+All 37 validation types work with file sources. Here are common ones:
 
 ### Field Validations
 - **MandatoryFieldCheck** - Required fields not null/empty

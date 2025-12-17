@@ -236,7 +236,7 @@ Each file can have its own set of validations.
 
 ### Validation Catalog
 
-Click **"+ Add Validation"** to open the catalog with 36 validation types organized into 10 categories:
+Click **"+ Add Validation"** to open the catalog with 37 validation types organized into 10 categories:
 
 #### File-Level Validations (3)
 
@@ -1024,7 +1024,7 @@ Validations:
 **You've learned DataK9 Studio! Now:**
 
 1. **[Configuration Guide](configuration-guide.md)** - Deep dive into YAML configuration
-2. **[Validation Catalog](validation-catalog.md)** - Complete reference of all 36 validations
+2. **[Validation Catalog](validation-catalog.md)** - Complete reference of all 37 validations
 3. **[Best Practices](best-practices.md)** - Production deployment guidance
 4. **[Reading Reports](reading-reports.md)** - Understanding validation results
 

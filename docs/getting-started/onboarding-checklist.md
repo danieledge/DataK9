@@ -27,7 +27,7 @@ Step-by-step checklist to get up and running with DataK9.
   ```bash
   python3 -m validation_framework.cli list-validations
   ```
-  Expected: 36 validation types listed
+  Expected: 37 validation types listed
 
 ---
 

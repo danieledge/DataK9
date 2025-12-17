@@ -1226,7 +1226,7 @@ python3 -m validation_framework.cli profile sample.csv
 
 **You've mastered YAML configuration! Now:**
 
-1. **[Validation Reference](validation-reference.md)** - All 36 validation types
+1. **[Validation Reference](validation-reference.md)** - All 37 validation types
 2. **[CLI Reference](cli-reference.md)** - Command-line usage
 3. **[Configuration Guide](../using-datak9/configuration-guide.md)** - Detailed examples
 4. **[Best Practices](../using-datak9/best-practices.md)** - Production patterns

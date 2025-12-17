@@ -130,7 +130,7 @@ files:
 
 ## Database-Compatible Validations
 
-**All 36 validation types work with databases**, but these are database-specific:
+**All 37 validation types work with databases**, but these are database-specific:
 
 ### Database-Specific Validations
 

@@ -522,7 +522,7 @@ python3 -m validation_framework.cli validate data_validation.yaml
 
 ## Next Steps
 
-- **[Validation Catalog](validation-catalog.md)** - Complete reference of all 36 validations
+- **[Validation Catalog](validation-catalog.md)** - Complete reference of all 37 validations
 - **[Configuration Guide](configuration-guide.md)** - Detailed YAML syntax
 - **[Best Practices](best-practices.md)** - Production deployment tips
 - **[CDA Gap Analysis](../guides/advanced/CDA_GAP_ANALYSIS_GUIDE.md)** - Compliance tracking

@@ -1088,7 +1088,7 @@ settings:
 
 ## Next Steps
 
-- **[Validation Catalog](validation-catalog.md)** - Complete reference of all 36 validation types
+- **[Validation Catalog](validation-catalog.md)** - Complete reference of all 37 validation types
 - **[Best Practices](best-practices.md)** - ERROR vs WARNING, production tips
 - **[Examples](../examples/)** - Real-world scenarios and recipes
 - **[DataK9 Studio Guide](studio-guide.md)** - Visual configuration builder

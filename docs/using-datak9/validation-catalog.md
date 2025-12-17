@@ -1,6 +1,6 @@
 # DataK9 Validation Catalog
 
-**Complete reference of all 36 validation types** 🐕
+**Complete reference of all 37 validation types** 🐕
 
 This catalog provides comprehensive documentation for every validation check available in DataK9. Each entry includes purpose, parameters, examples, and use cases. Like a well-trained K9, these validations sniff out data quality issues with precision!
 
