@@ -30,8 +30,8 @@ Build custom components:
 
 ```bash
 # Clone repository
-git clone https://github.com/danieledge/data-validation-tool.git
-cd data-validation-tool
+git clone https://github.com/danieledge/datak9.git
+cd datak9/data-validation-tool
 
 # Create virtual environment
 python3 -m venv venv
@@ -415,14 +415,14 @@ We welcome contributions! Please see:
 
 - **[Contributing Guide](contributing.md)** - How to contribute
 - **[Code of Conduct](contributing.md#code-of-conduct)** - Community guidelines
-- **[GitHub Issues](https://github.com/danieledge/data-validation-tool/issues)** - Bug reports and feature requests
+- **[GitHub Issues](https://github.com/danieledge/datak9/issues)** - Bug reports and feature requests
 
 ---
 
 ## 🆘 Need Help?
 
 - **[Developer FAQ](api-reference.md#faq)** - Common developer questions
-- **[GitHub Discussions](https://github.com/danieledge/data-validation-tool/discussions)** - Ask questions
+- **[GitHub Discussions](https://github.com/danieledge/datak9/discussions)** - Ask questions
 - **[Architecture Docs](architecture.md)** - Deep dive into design
 
 ---

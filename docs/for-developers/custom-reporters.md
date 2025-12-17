@@ -1449,7 +1449,7 @@ Now that you understand custom reporters, explore:
 - **JSON Reporter**: `validation_framework/reporters/json_reporter.py` for simple example
 - **Results Classes**: `validation_framework/core/results.py` for data structures
 
-**Found a bug?** Report it on [GitHub Issues](https://github.com/danieledge/data-validation-tool/issues)
+**Found a bug?** Report it on [GitHub Issues](https://github.com/danieledge/datak9/issues)
 
 **Want to contribute?** See **[Contributing Guide](contributing.md)**
 

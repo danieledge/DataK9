@@ -1448,7 +1448,7 @@ Now that you understand custom loaders, explore:
 - **Factory**: `validation_framework/loaders/factory.py` for registration
 - **Tests**: `tests/test_loaders.py` for test examples
 
-**Found a bug?** Report it on [GitHub Issues](https://github.com/danieledge/data-validation-tool/issues)
+**Found a bug?** Report it on [GitHub Issues](https://github.com/danieledge/datak9/issues)
 
 **Want to contribute?** See **[Contributing Guide](contributing.md)**
 

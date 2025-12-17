@@ -63,18 +63,18 @@ You can contribute to DataK9 in many ways:
 
 ```bash
 # Fork the repository on GitHub, then clone your fork
-git clone https://github.com/YOUR_USERNAME/data-validation-tool.git
-cd data-validation-tool
+git clone https://github.com/YOUR_USERNAME/datak9.git
+cd datak9/data-validation-tool
 
 # Add upstream remote
-git remote add upstream https://github.com/danieledge/data-validation-tool.git
+git remote add upstream https://github.com/danieledge/datak9.git
 
 # Verify remotes
 git remote -v
-# origin    https://github.com/YOUR_USERNAME/data-validation-tool.git (fetch)
-# origin    https://github.com/YOUR_USERNAME/data-validation-tool.git (push)
-# upstream  https://github.com/danieledge/data-validation-tool.git (fetch)
-# upstream  https://github.com/danieledge/data-validation-tool.git (push)
+# origin    https://github.com/YOUR_USERNAME/datak9.git (fetch)
+# origin    https://github.com/YOUR_USERNAME/datak9.git (push)
+# upstream  https://github.com/danieledge/datak9.git (fetch)
+# upstream  https://github.com/danieledge/datak9.git (push)
 ```
 
 ### 2. Set Up Development Environment
