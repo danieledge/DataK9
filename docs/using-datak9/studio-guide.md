@@ -36,7 +36,7 @@ DataK9 Studio brings IDE-level productivity to data validation configuration. In
 - 🎨 **Visual Configuration Builder** - Form-based validation creation
 - 💻 **Monaco Code Editor** - VS Code's editor with syntax highlighting
 - 🔄 **Two-Way Sync** - Visual ↔ YAML real-time synchronization
-- 📦 **35+ Validations** - Complete validation library built-in
+- 📦 **36 Validations** - Complete validation library built-in
 - 💾 **Auto-Save** - Never lose your work
 - 📖 **Context-Sensitive Help** - Documentation when you need it
 - ⌨️ **Keyboard Shortcuts** - Power-user workflows

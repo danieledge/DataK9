@@ -1879,7 +1879,7 @@ wait
 **You've mastered the DataK9 CLI! Now:**
 
 1. **[YAML Reference](yaml-reference.md)** - Complete configuration syntax
-2. **[Validation Reference](validation-reference.md)** - All 35+ validation types
+2. **[Validation Reference](validation-reference.md)** - All 36 validation types
 3. **[Error Codes Reference](error-codes.md)** - Detailed error messages
 4. **[Best Practices](../using-datak9/best-practices.md)** - Production deployment guidance
 

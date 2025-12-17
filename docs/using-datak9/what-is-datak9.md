@@ -202,7 +202,7 @@ DataK9 uses **chunked processing** to handle massive files:
 | Maintenance | Framework maintained | You maintain code |
 | Configuration | YAML (no coding) | Python code required |
 | Reports | Professional HTML/JSON | DIY |
-| Validation library | 35+ built-in | Build everything |
+| Validation library | 36 built-in | Build everything |
 | Testing | 115+ tests included | You write tests |
 
 ---

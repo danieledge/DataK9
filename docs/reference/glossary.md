@@ -52,7 +52,7 @@ Number of rows processed together in memory. Configurable via `chunk_size` setti
 A single check applied to data. Examples: MandatoryFieldCheck, RegexCheck, RangeCheck.
 
 ### Validation Type
-The category or kind of validation rule. DataK9 has 35+ types organized in 10 categories.
+The category or kind of validation rule. DataK9 has 36 types organized in 10 categories.
 
 ### Severity
 Importance level of a validation result. Two levels:

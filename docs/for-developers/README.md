@@ -95,9 +95,9 @@ black validation_framework/ && flake8 validation_framework/
               │              │              │
               ▼              ▼              ▼
          ┌─────────┐    ┌──────────┐  ┌──────────┐
-         │CSV/Excel│    │35+ Built │  │HTML/JSON │
-         │JSON/Parq│    │   -in    │  │  Output  │
-         │Database │    │Rules     │  │          │
+         │CSV/Excel│    │36 Built- │  │HTML/JSON │
+         │JSON/Parq│    │in Rules  │  │  Output  │
+         │Database │    │          │  │          │
          └─────────┘    └──────────┘  └──────────┘
 ```
 

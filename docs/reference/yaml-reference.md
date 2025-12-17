@@ -546,7 +546,7 @@ validations:
 
 **Description:** Validation rule type
 
-**Values:** See [Validation Reference](validation-reference.md) for all 35+ types
+**Values:** See [Validation Reference](validation-reference.md) for all 36 types
 
 **Common Types:**
 ```yaml

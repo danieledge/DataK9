@@ -183,7 +183,7 @@ else:
 
 ## Validation Compatibility
 
-### ✅ Database-Compatible (34/37 validations)
+### ✅ Database-Compatible (33/36 validations)
 
 These validations work identically on files and databases:
 
