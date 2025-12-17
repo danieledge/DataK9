@@ -1,8 +1,22 @@
 # API Reference
 
-**Complete DataK9 Python API Documentation**
+**DataK9 Python API Documentation**
 
-This reference documents all public classes, methods, and interfaces in DataK9. Use this when creating custom validations, loaders, reporters, or integrating DataK9 into your applications.
+> **Status: Work in Progress**
+>
+> The Python API is functional but not fully tested for all use cases. **For production use, we recommend using the CLI interface** which is thoroughly tested and documented.
+>
+> ```bash
+> # Recommended approach
+> python3 -m validation_framework.cli validate config.yaml
+> python3 -m validation_framework.cli profile data.csv
+> ```
+>
+> See the [CLI Reference](../reference/cli-reference.md) for complete command documentation.
+
+---
+
+This reference documents the public classes and interfaces in DataK9. Use this when creating custom validations, loaders, or reporters.
 
 ---
 

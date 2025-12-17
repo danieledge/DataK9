@@ -17,7 +17,8 @@ Welcome to **DataK9** - a data quality framework that guards your data pipelines
 
 1. **[5-Minute Quickstart](getting-started/quickstart-5min.md)** - Get running in 5 minutes
 2. **[Installation Guide](getting-started/installation.md)** - Complete setup instructions
-3. **[What is DataK9?](using-datak9/what-is-datak9.md)** - Overview and key concepts
+3. **[Onboarding Checklist](getting-started/onboarding-checklist.md)** - Step-by-step setup checklist
+4. **[What is DataK9?](using-datak9/what-is-datak9.md)** - Overview and key concepts
 
 **Quick Reference Guides:**
 - 📁 **[File Validation Quick Start](reference/quick-reference/FILE_QUICKSTART.md)** - CSV, Excel, JSON, Parquet
@@ -89,7 +90,7 @@ Power user features and complex scenarios:
 
 #### Complete References
 - **[CLI Reference](reference/cli-reference.md)** - All command-line options
-- **[Validation Reference](reference/validation-reference.md)** - Complete validation catalog (35 types)
+- **[Validation Reference](reference/validation-reference.md)** - Complete validation catalog (37 types)
 - **[YAML Reference](reference/yaml-reference.md)** - Configuration file syntax
 - **[Error Codes](reference/error-codes.md)** - Error messages and solutions
 - **[Glossary](reference/glossary.md)** - Terminology and definitions
@@ -128,6 +129,22 @@ Real-world validation configurations:
 
 ---
 
+### 📑 Topic Indexes
+
+Find all documentation on a specific topic:
+
+- **[Profiler Index](topics/profiler.md)** - All profiler documentation
+- **[Performance Index](topics/performance.md)** - All performance documentation
+- **[Database Index](topics/database.md)** - All database documentation
+
+---
+
+### 🔒 Security
+
+- **[Security Guidelines](SECURITY.md)** - PII handling, credentials, compliance
+
+---
+
 ## 🔍 Quick Navigation by Task
 
 | I want to... | Go here |
@@ -158,6 +175,9 @@ Real-world validation configurations:
 | Common issues | [Troubleshooting](using-datak9/troubleshooting.md) |
 | Error messages | [Error Codes](reference/error-codes.md) |
 | FAQ | [FAQ](using-datak9/faq.md) |
+| **Security** |
+| Security guidelines | [Security](SECURITY.md) |
+| Credential management | [Database Credentials Security](guides/database/DATABASE_CREDENTIALS_SECURITY.md) |
 | **Advanced** |
 | Understand Critical Data Attributes | [Understanding CDAs](guides/advanced/UNDERSTANDING_CDAS.md) |
 | Track CDA validation coverage | [CDA Gap Analysis](guides/advanced/CDA_GAP_ANALYSIS_GUIDE.md) |
