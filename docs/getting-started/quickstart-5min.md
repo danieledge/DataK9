@@ -18,8 +18,8 @@ Clone the repository and install dependencies:
 
 ```bash
 # Clone the repository
-git clone https://github.com/danieledge/data-validation-tool.git
-cd data-validation-tool
+git clone https://github.com/danieledge/datak9.git
+cd datak9/data-validation-tool
 
 # Install dependencies (includes Polars for high performance)
 pip install -r requirements.txt
@@ -241,7 +241,7 @@ python3 -m validation_framework.cli profile customers.csv \
 ### Continue Learning:
 - **[What is DataK9?](../using-datak9/what-is-datak9.md)** - Understand DataK9's capabilities
 - **[Configuration Guide](../using-datak9/configuration-guide.md)** - Complete guide to writing validations
-- **[Validation Catalog](../reference/validation-reference.md)** - All 37 validation types
+- **[Validation Catalog](../reference/validation-reference.md)** - All 36 validation types
 - **[Examples](../examples/)** - Real-world validation scenarios
 
 ### For Developers:
@@ -334,7 +334,7 @@ Perfect for AutoSys, Airflow, and other orchestration tools!
 - Check the **[FAQ](../using-datak9/faq.md)** for common questions
 - See **[Troubleshooting Guide](../using-datak9/troubleshooting.md)** for solutions
 - Review **[Validation Catalog](../reference/validation-reference.md)** for all validation types
-- Open an issue on [GitHub](https://github.com/danieledge/data-validation-tool/issues)
+- Open an issue on [GitHub](https://github.com/danieledge/datak9/issues)
 
 ---
 
