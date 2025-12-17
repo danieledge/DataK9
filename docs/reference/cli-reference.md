@@ -68,7 +68,7 @@ python3 -m validation_framework.cli list-validations
 ### Prerequisites
 
 ```bash
-# Python 3.7+
+# Python 3.9+
 python3 --version
 
 # Install DataK9
@@ -214,52 +214,35 @@ python3 -m validation_framework.cli validate config.yaml
 
 **See:** [Performance Tuning](../using-datak9/performance-tuning.md)
 
-#### `--output-dir` / `-o`
+#### `--html-output` / `-o`
 
-Specify custom output directory for reports.
+Specify path for HTML report output.
 
 ```bash
-python3 -m validation_framework.cli validate config.yaml --output-dir reports/
+python3 -m validation_framework.cli validate config.yaml -o report.html
 ```
-
-**Default:** Current working directory
 
 **Examples:**
 ```bash
-# Output to specific directory
-python3 -m validation_framework.cli validate config.yaml -o /var/reports/
+# Output to specific file
+python3 -m validation_framework.cli validate config.yaml -o /var/reports/validation.html
 
-# Output to timestamped directory
-python3 -m validation_framework.cli validate config.yaml -o "reports/$(date +%Y%m%d)"
-
-# Output to shared network location
-python3 -m validation_framework.cli validate config.yaml -o /mnt/shared/validation/
+# Output with date pattern
+python3 -m validation_framework.cli validate config.yaml -o "reports/{date}/validation.html"
 ```
 
-#### `--no-html`
+#### `--json-output` / `-j`
 
-Skip HTML report generation (JSON only).
+Specify path for JSON report output.
 
 ```bash
-python3 -m validation_framework.cli validate config.yaml --no-html
+python3 -m validation_framework.cli validate config.yaml -j results.json
 ```
 
 **Use Cases:**
-- CI/CD pipelines (only need JSON for programmatic access)
-- Automated processing (reduce file generation)
-- Disk space constraints
-
-#### `--no-json`
-
-Skip JSON report generation (HTML only).
-
-```bash
-python3 -m validation_framework.cli validate config.yaml --no-json
-```
-
-**Use Cases:**
-- Manual review only (don't need machine-readable output)
-- Simplified output
+- CI/CD pipelines (machine-readable output)
+- Automated processing and integration
+- Programmatic access to validation results
 
 ### CSV Processing Options
 
@@ -318,53 +301,30 @@ python3 -m validation_framework.cli validate config.yaml --skip-rows 3
 
 **Note:** These options override any encoding/quoting/skip-rows settings in the YAML configuration file for all files in the job.
 
-#### `--fail-fast`
+#### `--fail-on-warning`
 
-Stop validation on first ERROR-severity failure.
+Treat WARNING-severity failures as errors (exit code 2).
 
 ```bash
-python3 -m validation_framework.cli validate config.yaml --fail-fast
+python3 -m validation_framework.cli validate config.yaml --fail-on-warning
 ```
 
 **Behavior:**
-- Stops immediately on first ERROR failure
-- Does NOT stop on WARNING failures
-- Useful for quick feedback in development
+- By default, only ERROR-severity failures cause non-zero exit
+- With this flag, WARNING failures also cause validation to fail
+- Useful for strict quality gates in CI/CD pipelines
 
-**Example:**
-```bash
-# Normal mode: validates all files, all rules
-python3 -m validation_framework.cli validate config.yaml
-# Result: 5 ERROR failures found across 3 files
+#### `--no-optimize`
 
-# Fail-fast mode: stops at first ERROR
-python3 -m validation_framework.cli validate config.yaml --fail-fast
-# Result: Stopped after 1 ERROR failure
-```
-
-#### `--config-only`
-
-Validate configuration file syntax without executing validations.
+Disable single-pass optimization (use standard validation engine).
 
 ```bash
-python3 -m validation_framework.cli validate config.yaml --config-only
-```
-
-**Output:**
-```
-✅ Configuration is valid
-Files: 2
-Validations: 15
+python3 -m validation_framework.cli validate config.yaml --no-optimize
 ```
 
 **Use Cases:**
-- Pre-deployment configuration checks
-- CI/CD configuration linting
-- Quick syntax verification
-
-**Exit Codes:**
-- `0` - Configuration valid
-- `2` - Configuration invalid
+- Debugging validation issues
+- When optimization causes unexpected behavior
 
 ### Exit Codes
 
