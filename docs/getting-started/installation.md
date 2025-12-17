@@ -51,7 +51,7 @@ python3 -m validation_framework.cli --version
 
 Expected output:
 ```
-DataK9 Data Quality Framework v0.2.0-beta
+python -m validation_framework.cli, version 0.1.0
 ```
 
 If you see `command not found`, ensure you ran `pip install -e .` from the `data-validation-tool` directory.
@@ -95,15 +95,17 @@ Docker support is planned for future releases.
 DataK9 requires the following Python packages (automatically installed):
 
 ### Core Dependencies
-- **pandas** (>= 1.3.0) - Data processing
-- **pyyaml** (>= 5.4) - Configuration parsing
-- **click** (>= 8.0) - CLI interface
-- **jinja2** (>= 3.0) - HTML report generation
+- **polars** (>= 0.20.0) - High-performance data processing
+- **pandas** (>= 2.0.0) - Data processing
+- **numpy** (>= 1.24.0) - Numerical operations
+- **pyarrow** (>= 12.0.0) - Parquet file support
+- **pyyaml** (>= 6.0) - Configuration parsing
+- **click** (>= 8.1.0) - CLI interface
+- **jinja2** (>= 3.1.0) - HTML report generation
 
 ### Optional Dependencies
-- **pyarrow** (>= 6.0) - Parquet file support (recommended)
-- **openpyxl** (>= 3.0) - Excel file support
-- **sqlalchemy** (>= 1.4) - Database validation support
+- **openpyxl** (>= 3.1.0) - Excel file support
+- **sqlalchemy** (>= 2.0.0) - Database validation support
 - **psycopg2-binary** (>= 2.9) - PostgreSQL support
 - **pymysql** (>= 1.0) - MySQL support
 
@@ -128,7 +130,7 @@ python3 -m validation_framework.cli --version
 python3 -m validation_framework.cli list-validations
 ```
 
-You should see a list of 37 validation types.
+You should see a list of 36 validation types.
 
 ### Run Sample Validation
 
