@@ -152,10 +152,18 @@ def detect_header_skip_rows(file_path: str, delimiter: str = ',', encoding: str 
             if len(lines) < 2:
                 return 0
 
-            # Count columns in first few lines
+            # Count columns in first few lines using proper CSV parsing
             def count_cols(line):
-                # Simple column count (doesn't handle all quoting edge cases)
-                return len(line.split(delimiter))
+                # Use csv.reader to properly handle quoted fields with delimiters
+                import csv
+                import io
+                reader = csv.reader(io.StringIO(line), delimiter=delimiter)
+                try:
+                    row = next(reader)
+                    return len(row)
+                except (StopIteration, csv.Error):
+                    # Fallback to simple split if CSV parsing fails
+                    return len(line.split(delimiter))
 
             first_line_cols = count_cols(lines[0])
             second_line_cols = count_cols(lines[1])

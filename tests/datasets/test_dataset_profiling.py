@@ -38,7 +38,7 @@ TRANSACTIONS_PARQUET = TEST_DATA_DIR / "parquet" / "transactions.parquet"
 class TestTitanicDataset:
     """Test profiling of Titanic dataset - passenger survival data."""
 
-    @pytest.fixture
+    @pytest.fixture(scope="class")
     def profiler(self):
         """Create profiler instance with all features enabled."""
         return DataProfiler(
@@ -47,14 +47,14 @@ class TestTitanicDataset:
             enable_enhanced_correlation=True
         )
 
-    @pytest.fixture
+    @pytest.fixture(scope="class")
     def titanic_csv_profile(self, profiler):
-        """Profile Titanic CSV file."""
+        """Profile Titanic CSV file (cached per class)."""
         return profiler.profile_file(str(TITANIC_CSV))
 
-    @pytest.fixture
+    @pytest.fixture(scope="class")
     def titanic_parquet_profile(self, profiler):
-        """Profile Titanic Parquet file."""
+        """Profile Titanic Parquet file (cached per class)."""
         return profiler.profile_file(str(TITANIC_PARQUET))
 
     # =========================================================================
@@ -233,7 +233,7 @@ class TestTitanicDataset:
 class TestTransactionsDataset:
     """Test profiling of Transactions dataset - e-commerce transaction data."""
 
-    @pytest.fixture
+    @pytest.fixture(scope="class")
     def profiler(self):
         """Create profiler instance."""
         return DataProfiler(
@@ -242,14 +242,14 @@ class TestTransactionsDataset:
             enable_enhanced_correlation=True
         )
 
-    @pytest.fixture
+    @pytest.fixture(scope="class")
     def transactions_csv_profile(self, profiler):
-        """Profile Transactions CSV file."""
+        """Profile Transactions CSV file (cached per class)."""
         return profiler.profile_file(str(TRANSACTIONS_CSV))
 
-    @pytest.fixture
+    @pytest.fixture(scope="class")
     def transactions_parquet_profile(self, profiler):
-        """Profile Transactions Parquet file."""
+        """Profile Transactions Parquet file (cached per class)."""
         return profiler.profile_file(str(TRANSACTIONS_PARQUET))
 
     # =========================================================================
@@ -354,7 +354,7 @@ class TestTransactionsDataset:
 class TestEdgeCases:
     """Test profiler behavior with edge cases and synthetic data."""
 
-    @pytest.fixture
+    @pytest.fixture(scope="class")
     def profiler(self):
         """Create profiler instance."""
         return DataProfiler()
@@ -452,34 +452,45 @@ class TestEdgeCases:
 class TestFormatComparison:
     """Test that CSV and Parquet formats produce consistent results."""
 
-    @pytest.fixture
+    @pytest.fixture(scope="class")
     def profiler(self):
         """Create profiler instance."""
         return DataProfiler()
 
-    def test_titanic_quality_scores_match(self, profiler):
+    @pytest.fixture(scope="class")
+    def titanic_csv_profile(self, profiler):
+        """Profile Titanic CSV file (cached per class)."""
+        return profiler.profile_file(str(TITANIC_CSV))
+
+    @pytest.fixture(scope="class")
+    def titanic_parquet_profile(self, profiler):
+        """Profile Titanic Parquet file (cached per class)."""
+        return profiler.profile_file(str(TITANIC_PARQUET))
+
+    @pytest.fixture(scope="class")
+    def transactions_csv_profile(self, profiler):
+        """Profile Transactions CSV file (cached per class)."""
+        return profiler.profile_file(str(TRANSACTIONS_CSV))
+
+    @pytest.fixture(scope="class")
+    def transactions_parquet_profile(self, profiler):
+        """Profile Transactions Parquet file (cached per class)."""
+        return profiler.profile_file(str(TRANSACTIONS_PARQUET))
+
+    def test_titanic_quality_scores_match(self, titanic_csv_profile, titanic_parquet_profile):
         """Titanic CSV and Parquet should have similar quality scores."""
-        csv_result = profiler.profile_file(str(TITANIC_CSV))
-        parquet_result = profiler.profile_file(str(TITANIC_PARQUET))
-
         # Allow 5% tolerance for floating point differences
-        assert abs(csv_result.overall_quality_score - parquet_result.overall_quality_score) < 5.0
+        assert abs(titanic_csv_profile.overall_quality_score - titanic_parquet_profile.overall_quality_score) < 5.0
 
-    def test_transactions_quality_scores_match(self, profiler):
+    def test_transactions_quality_scores_match(self, transactions_csv_profile, transactions_parquet_profile):
         """Transactions CSV and Parquet should have similar quality scores."""
-        csv_result = profiler.profile_file(str(TRANSACTIONS_CSV))
-        parquet_result = profiler.profile_file(str(TRANSACTIONS_PARQUET))
+        assert abs(transactions_csv_profile.overall_quality_score - transactions_parquet_profile.overall_quality_score) < 5.0
 
-        assert abs(csv_result.overall_quality_score - parquet_result.overall_quality_score) < 5.0
-
-    def test_column_statistics_consistent(self, profiler):
+    def test_column_statistics_consistent(self, titanic_csv_profile, titanic_parquet_profile):
         """Column statistics should be consistent between formats."""
-        csv_result = profiler.profile_file(str(TITANIC_CSV))
-        parquet_result = profiler.profile_file(str(TITANIC_PARQUET))
-
-        for csv_col in csv_result.columns:
+        for csv_col in titanic_csv_profile.columns:
             parquet_col = next(
-                (c for c in parquet_result.columns if c.name == csv_col.name),
+                (c for c in titanic_parquet_profile.columns if c.name == csv_col.name),
                 None
             )
             if parquet_col:
@@ -493,7 +504,7 @@ class TestFormatComparison:
 class TestErrorHandling:
     """Test profiler error handling for invalid inputs."""
 
-    @pytest.fixture
+    @pytest.fixture(scope="class")
     def profiler(self):
         """Create profiler instance."""
         return DataProfiler()
@@ -601,7 +612,7 @@ class TestErrorHandling:
 class TestValidationIntegration:
     """Test that profile correctly identifies validation needs."""
 
-    @pytest.fixture
+    @pytest.fixture(scope="class")
     def profiler(self):
         """Create profiler instance."""
         return DataProfiler()

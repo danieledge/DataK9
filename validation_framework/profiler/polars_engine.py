@@ -26,6 +26,7 @@ import logging
 from validation_framework.profiler.backend_aware_base import BackendAwareProfiler
 from validation_framework.profiler.vectorized_patterns import VectorizedPatternDetector
 from validation_framework.profiler.vectorized_anomaly import VectorizedAnomalyDetector
+from validation_framework.profiler.streaming_correlation import StreamingCorrelationMatrix
 from validation_framework.loaders.factory import LoaderFactory
 from validation_framework.core.backend import DataFrameBackend
 
@@ -456,7 +457,16 @@ class PolarsDataProfiler(BackendAwareProfiler):
         """
         Calculate correlations between numeric columns.
 
-        Optimized for Polars with lazy evaluation.
+        Uses streaming correlation for large files to avoid memory issues.
+        For smaller datasets (< 500K rows), uses standard correlation for speed.
+
+        Args:
+            file_path: Path to data file
+            file_format: File format (csv, parquet, etc.)
+            backend: DataFrame backend to use
+
+        Returns:
+            Dictionary containing correlations, numeric columns, and metadata
         """
         try:
             # Load full dataset (or sample if too large)
@@ -467,61 +477,226 @@ class PolarsDataProfiler(BackendAwareProfiler):
                 backend=backend
             )
 
-            # Collect all chunks (for correlation we need full data)
-            # TODO: Implement streaming correlation for very large files
-            chunks = []
-            total_rows = 0
-            max_rows_for_correlation = 1000000  # Limit to 1M rows
-
+            # Determine numeric columns from first chunk
+            first_chunk = None
             for chunk in loader.load():
-                chunks.append(chunk)
-                total_rows += self.get_row_count(chunk)
-                if total_rows >= max_rows_for_correlation:
-                    self.logger.warning(f"Correlation limited to first {max_rows_for_correlation:,} rows")
-                    break
+                first_chunk = chunk
+                break
 
-            # Concatenate chunks
-            if self.is_polars(chunks[0]):
-                df = pl.concat(chunks)
-            else:
-                df = pd.concat(chunks)
+            if first_chunk is None:
+                return {'error': 'No data found in file'}
 
             # Select only numeric columns
-            numeric_columns = [col for col in self.get_columns(df) if self.is_numeric_column(df, col)]
+            numeric_columns = [col for col in self.get_columns(first_chunk)
+                             if self.is_numeric_column(first_chunk, col)]
 
             if len(numeric_columns) < 2:
                 return {'error': 'Not enough numeric columns for correlation'}
 
-            # Calculate correlation matrix
-            if self.is_polars(df):
-                # Polars correlation (faster with lazy evaluation)
-                corr_df = df.select(numeric_columns).select([
-                    pl.corr(pl.col(c1), pl.col(c2)).alias(f"{c1}__{c2}")
-                    for i, c1 in enumerate(numeric_columns)
-                    for c2 in numeric_columns[i+1:]
-                ])
+            self.logger.info(f"Calculating correlations for {len(numeric_columns)} numeric columns")
 
-                # Convert to dict
-                correlations = {}
-                for col in corr_df.columns:
-                    col1, col2 = col.split('__')
-                    correlations[f"{col1}|{col2}"] = float(corr_df[col][0])
+            # Determine strategy based on file size estimate
+            streaming_threshold = 500000  # Use streaming for files > 500K rows
+            total_rows = 0
+
+            # Reload data with appropriate strategy
+            loader = LoaderFactory.create_loader(
+                file_path=file_path,
+                file_format=file_format,
+                chunk_size=self.chunk_size,
+                backend=backend
+            )
+
+            # Try to estimate total rows quickly
+            use_streaming = self._should_use_streaming_correlation(file_path, file_format, streaming_threshold)
+
+            if use_streaming:
+                self.logger.info("Using streaming correlation for large dataset")
+                return self._calculate_streaming_correlations(
+                    loader, numeric_columns, file_path, streaming_threshold
+                )
             else:
-                # Pandas correlation
-                corr_matrix = df[numeric_columns].corr()
-                correlations = {}
-                for i, col1 in enumerate(numeric_columns):
-                    for col2 in numeric_columns[i+1:]:
-                        correlations[f"{col1}|{col2}"] = float(corr_matrix.loc[col1, col2])
+                self.logger.info("Using standard correlation for small/medium dataset")
+                return self._calculate_standard_correlations(
+                    loader, numeric_columns, streaming_threshold
+                )
 
-            return {
-                'correlations': correlations,
-                'numeric_columns': numeric_columns,
-                'sample_size': total_rows
-            }
         except Exception as e:
             self.logger.error(f"Error calculating correlations: {e}")
             return {'error': str(e)}
+
+    def _should_use_streaming_correlation(
+        self,
+        file_path: str,
+        file_format: str,
+        threshold: int
+    ) -> bool:
+        """
+        Determine if streaming correlation should be used based on file size.
+
+        Args:
+            file_path: Path to data file
+            file_format: File format
+            threshold: Row count threshold for streaming
+
+        Returns:
+            True if streaming should be used, False otherwise
+        """
+        try:
+            # Quick row count for Parquet files
+            if file_format.lower() == 'parquet':
+                if HAS_POLARS:
+                    row_count = pl.read_parquet(file_path).height
+                else:
+                    row_count = len(pd.read_parquet(file_path))
+
+                self.logger.info(f"Detected {row_count:,} rows in Parquet file")
+                return row_count > threshold
+
+            # For CSV and other formats, use file size as heuristic
+            # Better estimate for CSV: ~100 bytes per row (accounting for numeric data + delimiters)
+            file_size = Path(file_path).stat().st_size
+            estimated_rows = file_size / 100
+
+            self.logger.info(f"File size {file_size:,} bytes, estimated {estimated_rows:,.0f} rows")
+
+            if estimated_rows > threshold:
+                self.logger.info(f"Estimated rows > threshold ({threshold:,}), using streaming")
+                return True
+
+        except Exception as e:
+            self.logger.warning(f"Could not estimate file size: {e}, defaulting to streaming")
+            return True
+
+        return False
+
+    def _calculate_streaming_correlations(
+        self,
+        loader,
+        numeric_columns: List[str],
+        file_path: str,
+        max_rows: Optional[int] = None
+    ) -> Dict[str, Any]:
+        """
+        Calculate correlations using streaming algorithm.
+
+        Args:
+            loader: Data loader providing chunks
+            numeric_columns: List of numeric column names
+            file_path: Path to file (for logging)
+            max_rows: Optional maximum rows to process
+
+        Returns:
+            Dictionary with correlations, columns, and metadata
+        """
+        # Initialize streaming correlation matrix
+        corr_matrix = StreamingCorrelationMatrix(numeric_columns)
+        total_rows = 0
+        chunk_count = 0
+
+        self.logger.info(f"Starting streaming correlation for {len(numeric_columns)} columns...")
+
+        # Process chunks
+        for chunk in loader.load():
+            chunk_count += 1
+            chunk_rows = self.get_row_count(chunk)
+            total_rows += chunk_rows
+
+            self.logger.debug(f"Processing chunk {chunk_count}: {chunk_rows:,} rows (total: {total_rows:,})")
+
+            # Update correlations with chunk
+            try:
+                # Select only numeric columns from chunk
+                if self.is_polars(chunk):
+                    chunk_numeric = chunk.select(numeric_columns)
+                else:
+                    chunk_numeric = chunk[numeric_columns]
+
+                corr_matrix.update_from_dataframe(chunk_numeric)
+            except Exception as e:
+                self.logger.warning(f"Error processing chunk {chunk_count} for correlations: {e}")
+
+            # Check max rows limit
+            if max_rows and total_rows >= max_rows:
+                self.logger.warning(f"Correlation limited to first {total_rows:,} rows (max: {max_rows:,})")
+                break
+
+        self.logger.info(f"Processed {chunk_count} chunks, {total_rows:,} total rows for correlations")
+
+        # Get final correlations
+        correlations = corr_matrix.get_correlation_dict()
+        sample_counts = corr_matrix.get_sample_counts()
+
+        return {
+            'correlations': correlations,
+            'numeric_columns': numeric_columns,
+            'sample_size': total_rows,
+            'method': 'streaming',
+            'sample_counts': sample_counts
+        }
+
+    def _calculate_standard_correlations(
+        self,
+        loader,
+        numeric_columns: List[str],
+        max_rows: int
+    ) -> Dict[str, Any]:
+        """
+        Calculate correlations using standard method (load all data).
+
+        Args:
+            loader: Data loader providing chunks
+            numeric_columns: List of numeric column names
+            max_rows: Maximum rows to load
+
+        Returns:
+            Dictionary with correlations, columns, and metadata
+        """
+        # Collect all chunks
+        chunks = []
+        total_rows = 0
+
+        for chunk in loader.load():
+            chunks.append(chunk)
+            total_rows += self.get_row_count(chunk)
+            if total_rows >= max_rows:
+                self.logger.warning(f"Correlation limited to first {total_rows:,} rows")
+                break
+
+        # Concatenate chunks
+        if self.is_polars(chunks[0]):
+            df = pl.concat(chunks)
+        else:
+            df = pd.concat(chunks)
+
+        # Calculate correlation matrix
+        if self.is_polars(df):
+            # Polars correlation (faster with lazy evaluation)
+            corr_df = df.select(numeric_columns).select([
+                pl.corr(pl.col(c1), pl.col(c2)).alias(f"{c1}__{c2}")
+                for i, c1 in enumerate(numeric_columns)
+                for c2 in numeric_columns[i+1:]
+            ])
+
+            # Convert to dict
+            correlations = {}
+            for col in corr_df.columns:
+                col1, col2 = col.split('__')
+                correlations[f"{col1}|{col2}"] = float(corr_df[col][0])
+        else:
+            # Pandas correlation
+            corr_matrix = df[numeric_columns].corr()
+            correlations = {}
+            for i, col1 in enumerate(numeric_columns):
+                for col2 in numeric_columns[i+1:]:
+                    correlations[f"{col1}|{col2}"] = float(corr_matrix.loc[col1, col2])
+
+        return {
+            'correlations': correlations,
+            'numeric_columns': numeric_columns,
+            'sample_size': total_rows,
+            'method': 'standard'
+        }
 
     def profile_dataframe(self, df, name: str = "dataframe") -> ProfileResult:
         """

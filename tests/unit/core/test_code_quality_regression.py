@@ -77,13 +77,18 @@ class TestImportStability:
 class TestProfilerConsistency:
     """Test profiler output consistency using Titanic dataset."""
 
-    @pytest.fixture
+    @pytest.fixture(scope="class")
     def profiler(self):
         """Create profiler instance."""
         from validation_framework.profiler.engine import DataProfiler
         return DataProfiler()
 
-    @pytest.fixture
+    @pytest.fixture(scope="class")
+    def titanic_profile(self, profiler):
+        """Profile Titanic file (cached per class)."""
+        return profiler.profile_file(str(TITANIC_PATH))
+
+    @pytest.fixture(scope="class")
     def baseline_profile(self) -> Optional[Dict[str, Any]]:
         """Load baseline profile if available."""
         baseline_path = BASELINE_DIR / "titanic_profile.json"
@@ -92,50 +97,45 @@ class TestProfilerConsistency:
                 return json.load(f)
         return None
 
-    def test_profile_titanic_succeeds(self, profiler):
+    def test_profile_titanic_succeeds(self, titanic_profile):
         """Test that profiling Titanic completes without error."""
-        result = profiler.profile_file(str(TITANIC_PATH))
-        assert result is not None
-        assert result.row_count == 891
-        assert result.column_count == 12
+        assert titanic_profile is not None
+        assert titanic_profile.row_count == 891
+        assert titanic_profile.column_count == 12
 
-    def test_profile_row_count_matches_baseline(self, profiler, baseline_profile):
+    def test_profile_row_count_matches_baseline(self, titanic_profile, baseline_profile):
         """Test row count matches baseline."""
         if baseline_profile is None:
             pytest.skip("No baseline available - run baseline creation first")
 
-        result = profiler.profile_file(str(TITANIC_PATH))
-        assert result.row_count == baseline_profile.get("row_count"), \
-            f"Row count mismatch: {result.row_count} vs {baseline_profile.get('row_count')}"
+        assert titanic_profile.row_count == baseline_profile.get("row_count"), \
+            f"Row count mismatch: {titanic_profile.row_count} vs {baseline_profile.get('row_count')}"
 
-    def test_profile_column_count_matches_baseline(self, profiler, baseline_profile):
+    def test_profile_column_count_matches_baseline(self, titanic_profile, baseline_profile):
         """Test column count matches baseline."""
         if baseline_profile is None:
             pytest.skip("No baseline available")
 
-        result = profiler.profile_file(str(TITANIC_PATH))
-        assert result.column_count == baseline_profile.get("column_count"), \
-            f"Column count mismatch: {result.column_count} vs {baseline_profile.get('column_count')}"
+        assert titanic_profile.column_count == baseline_profile.get("column_count"), \
+            f"Column count mismatch: {titanic_profile.column_count} vs {baseline_profile.get('column_count')}"
 
-    def test_profile_columns_match_baseline(self, profiler, baseline_profile):
+    def test_profile_columns_match_baseline(self, titanic_profile, baseline_profile):
         """Test column names match baseline."""
         if baseline_profile is None:
             pytest.skip("No baseline available")
 
-        result = profiler.profile_file(str(TITANIC_PATH))
-        result_cols = {c.name for c in result.columns}
+        result_cols = {c.name for c in titanic_profile.columns}
         baseline_cols = {c["name"] for c in baseline_profile.get("columns", [])}
 
         assert result_cols == baseline_cols, \
             f"Column mismatch: extra={result_cols - baseline_cols}, missing={baseline_cols - result_cols}"
 
-    def test_profile_quality_score_within_tolerance(self, profiler, baseline_profile):
+    def test_profile_quality_score_within_tolerance(self, titanic_profile, baseline_profile):
         """Test overall quality score is within 5% of baseline."""
         if baseline_profile is None:
             pytest.skip("No baseline available")
 
-        result = profiler.profile_file(str(TITANIC_PATH))
-        result_quality = result.overall_quality_score
+        result_quality = titanic_profile.overall_quality_score
         baseline_quality = baseline_profile.get("overall_quality_score", 0)
 
         assert abs(result_quality - baseline_quality) <= 5, \

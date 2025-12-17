@@ -557,7 +557,7 @@ class TestValidationSuggestions:
         assert "id" in unique_suggestions[0].params["fields"]
 
     def test_suggest_range_check(self):
-        """Test suggestion for range check."""
+        """Test suggestion for range check with semantic awareness."""
         columns = [
             ColumnProfile(
                 name="age",
@@ -578,11 +578,10 @@ class TestValidationSuggestions:
         range_suggestions = [s for s in suggestions if s.validation_type == "RangeCheck"]
         assert len(range_suggestions) > 0
         assert range_suggestions[0].params["field"] == "age"
-        # Smart range adds 20% buffer: range=47, buffer=9.4
-        # "age" field is likely-positive so min is clamped to 0 or above
-        # min = max(0, 18 - 9.4) = 8.6, max = 65 + 9.4 = 74.4
-        assert range_suggestions[0].params["min_value"] == 8.6
-        assert range_suggestions[0].params["max_value"] == 74.4
+        # Semantic-aware range: "age" field uses human lifespan bounds (0-120)
+        # instead of data-driven buffer expansion
+        assert range_suggestions[0].params["min_value"] == 0
+        assert range_suggestions[0].params["max_value"] == 120
 
     def test_suggest_valid_values_check(self):
         """Test suggestion for valid values check."""

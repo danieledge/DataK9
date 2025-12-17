@@ -15,6 +15,7 @@ from validation_framework.validations.builtin.schema_checks import (
     ColumnPresenceCheck
 )
 from validation_framework.core.results import Severity
+from validation_framework.core.exceptions import ParameterValidationError
 from tests.conftest import create_data_iterator
 
 
@@ -279,13 +280,13 @@ class TestColumnPresenceCheck:
         assert result.passed is True
 
     def test_empty_required_columns_list(self):
-        """Test validation with empty required columns list."""
+        """Test validation with empty required columns list raises exception."""
         df = pd.DataFrame({
             "id": [1, 2, 3],
             "name": ["Alice", "Bob", "Charlie"]
         })
 
-        # This should raise a ParameterValidationError, so expect False result
+        # This should raise a ParameterValidationError for misconfiguration
         validation = ColumnPresenceCheck(
             name="ColumnPresenceCheck",
             severity=Severity.ERROR,
@@ -293,10 +294,12 @@ class TestColumnPresenceCheck:
         )
 
         context = {"columns": list(df.columns)}
-        result = validation.validate(create_data_iterator(df), context)
 
-        # Empty requirements should fail validation (ParameterValidationError)
-        assert result.passed is False
+        # Empty requirements should raise ParameterValidationError
+        with pytest.raises(ParameterValidationError) as exc_info:
+            validation.validate(create_data_iterator(df), context)
+
+        assert "No required columns specified" in str(exc_info.value)
 
     def test_single_column_requirement(self):
         """Test validation with single required column."""

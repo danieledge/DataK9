@@ -13,6 +13,7 @@ from validation_framework.validations.builtin.inline_checks import (
     InlineLookupCheck
 )
 from validation_framework.core.results import Severity
+from validation_framework.core.exceptions import ParameterValidationError
 from tests.conftest import create_data_iterator
 
 
@@ -355,7 +356,7 @@ class TestInlineLookupCheck:
         assert "not found" in result.message.lower()
 
     def test_lookup_no_reference_values(self):
-        """Test lookup without reference values."""
+        """Test lookup without reference values raises exception."""
         df = pd.DataFrame({"field": ["A", "B"]})
 
         validation = InlineLookupCheck(
@@ -367,10 +368,11 @@ class TestInlineLookupCheck:
             }
         )
 
-        result = validation.validate(create_data_iterator(df), {})
+        # Should raise ParameterValidationError for missing required params
+        with pytest.raises(ParameterValidationError) as exc_info:
+            validation.validate(create_data_iterator(df), {})
 
-        assert result.passed is False
-        assert "Missing required parameters" in result.message
+        assert "Missing required parameters" in str(exc_info.value)
 
 
 @pytest.mark.integration

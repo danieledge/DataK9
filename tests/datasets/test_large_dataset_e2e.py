@@ -34,6 +34,7 @@ from datetime import datetime
 # Import DataK9 components
 from validation_framework.profiler.polars_engine import PolarsDataProfiler as PolarsProfiler
 from validation_framework.core.engine import ValidationEngine
+from validation_framework.profiler.json_utils import NumpyJSONEncoder
 
 
 # Dataset configuration
@@ -200,7 +201,7 @@ class TestLargeDatasetEndToEnd:
 
         # Save profile to JSON
         with open(TEMP_PROFILE_JSON, 'w') as f:
-            json.dump(profile.to_dict(), f, indent=2)
+            json.dump(profile.to_dict(), f, indent=2, cls=NumpyJSONEncoder)
         print(f"Profile saved: {TEMP_PROFILE_JSON}")
 
         # Assertions

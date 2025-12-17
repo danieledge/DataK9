@@ -9,6 +9,8 @@ from pathlib import Path
 from validation_framework.loaders.async_base import AsyncDataLoader
 from validation_framework.loaders.async_csv_loader import AsyncCSVLoader
 from validation_framework.loaders.async_json_loader import AsyncJSONLoader
+from validation_framework.loaders.async_parquet_loader import AsyncParquetLoader
+from validation_framework.loaders.async_excel_loader import AsyncExcelLoader
 
 
 class AsyncLoaderFactory:
@@ -22,8 +24,8 @@ class AsyncLoaderFactory:
     Supported formats:
         - CSV and delimited text files (csv, tsv, txt)
         - JSON files (json, jsonl)
-        - Parquet files (parquet) - coming soon
-        - Excel files (xls, xlsx) - coming soon
+        - Parquet files (parquet)
+        - Excel files (xls, xlsx)
 
     Benefits of async loaders:
         - Concurrent validation of multiple files
@@ -36,8 +38,8 @@ class AsyncLoaderFactory:
     _async_loaders: Dict[str, Type[AsyncDataLoader]] = {
         "csv": AsyncCSVLoader,
         "json": AsyncJSONLoader,
-        # "parquet": AsyncParquetLoader,  # TODO: Implement
-        # "excel": AsyncExcelLoader,  # TODO: Implement
+        "parquet": AsyncParquetLoader,
+        "excel": AsyncExcelLoader,
     }
 
     @classmethod
@@ -63,6 +65,8 @@ class AsyncLoaderFactory:
                 - header: Row number to use as column names (default: 0)
                 - lines: For JSON files, True for JSON Lines format (default: auto-detect)
                 - flatten: For JSON files, flatten nested structures (default: True)
+                - columns: For Parquet files, list of columns to read (default: None for all)
+                - sheet_name: For Excel files, sheet name or index (default: 0)
 
         Returns:
             AsyncDataLoader: An instance of the appropriate async loader class
@@ -148,9 +152,9 @@ class AsyncLoaderFactory:
             ".txt": "csv",
             ".json": "json",
             ".jsonl": "json",
-            # ".parquet": "parquet",  # TODO: Add when AsyncParquetLoader implemented
-            # ".xls": "excel",  # TODO: Add when AsyncExcelLoader implemented
-            # ".xlsx": "excel",
+            ".parquet": "parquet",
+            ".xls": "excel",
+            ".xlsx": "excel",
         }
 
         inferred_format = extension_map.get(suffix)

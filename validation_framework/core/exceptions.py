@@ -522,6 +522,63 @@ class ColumnNotFoundError(ValidationExecutionError):
 
 
 # ============================================================================
+# Security Errors (Critical)
+# ============================================================================
+
+class SecurityError(DataK9Exception):
+    """
+    Security-related errors (critical - stop processing to prevent attacks).
+
+    Raised when:
+    - Path traversal attempts detected
+    - Unauthorized file access attempts
+    - Injection attack patterns detected
+    - Security policy violations
+
+    These are critical errors that stop processing to prevent security breaches.
+
+    Attributes:
+        violation_type (str): Type of security violation
+        attempted_action (str): What action was attempted
+
+    Example:
+        >>> raise SecurityError(
+        ...     "Path traversal detected",
+        ...     violation_type="path_traversal",
+        ...     attempted_action="../../etc/passwd"
+        ... )
+    """
+
+    def __init__(
+        self,
+        message: str,
+        violation_type: Optional[str] = None,
+        attempted_action: Optional[str] = None,
+        original_exception: Optional[Exception] = None
+    ):
+        """
+        Initialize security error.
+
+        Args:
+            message: Error description
+            violation_type: Type of security violation
+            attempted_action: Action that was attempted
+            original_exception: Original exception if wrapping
+        """
+        super().__init__(
+            message,
+            severity=ErrorSeverity.CRITICAL,
+            details={
+                'violation_type': violation_type,
+                'attempted_action': attempted_action
+            },
+            original_exception=original_exception
+        )
+        self.violation_type = violation_type
+        self.attempted_action = attempted_action
+
+
+# ============================================================================
 # Database Errors
 # ============================================================================
 

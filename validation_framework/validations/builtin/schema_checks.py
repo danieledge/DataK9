@@ -11,11 +11,14 @@ Author: Daniel Edge
 
 from typing import Iterator, Dict, Any
 import pandas as pd
+import logging
 from validation_framework.validations.base import FileValidationRule, ValidationResult
 from validation_framework.core.exceptions import (
     ParameterValidationError,
     ValidationExecutionError
 )
+
+logger = logging.getLogger(__name__)
 
 
 class SchemaMatchCheck(FileValidationRule):
@@ -138,11 +141,23 @@ class SchemaMatchCheck(FileValidationRule):
                 total_count=len(expected_schema),
             )
 
-        except Exception as e:
+        except ParameterValidationError:
+            # Re-raise parameter errors without wrapping
+            raise
+        except (KeyError, AttributeError, TypeError, ValueError) as e:
+            # Catch specific expected exceptions from schema processing
+            logger.debug(f"Schema validation error details: {e}", exc_info=True)
             return self._create_result(
                 passed=False,
                 message=f"Error during schema validation: {str(e)}",
                 failed_count=1,
+            )
+        except Exception as e:
+            # Unexpected exceptions should be logged with full stack trace
+            logger.error(f"Unexpected error in schema validation: {e}", exc_info=True)
+            raise ValidationExecutionError(
+                f"Unexpected error during schema validation: {str(e)}",
+                validation_name=self.name
             )
 
     def _types_match(self, expected: str, actual: str) -> bool:
@@ -258,9 +273,21 @@ class ColumnPresenceCheck(FileValidationRule):
                 total_count=len(required_columns),
             )
 
-        except Exception as e:
+        except ParameterValidationError:
+            # Re-raise parameter errors without wrapping
+            raise
+        except (AttributeError, TypeError) as e:
+            # Catch specific expected exceptions from column processing
+            logger.debug(f"Column presence check error details: {e}", exc_info=True)
             return self._create_result(
                 passed=False,
                 message=f"Error checking column presence: {str(e)}",
                 failed_count=1,
+            )
+        except Exception as e:
+            # Unexpected exceptions should be logged with full stack trace
+            logger.error(f"Unexpected error in column presence check: {e}", exc_info=True)
+            raise ValidationExecutionError(
+                f"Unexpected error checking column presence: {str(e)}",
+                validation_name=self.name
             )

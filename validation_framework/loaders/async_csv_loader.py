@@ -129,8 +129,9 @@ class AsyncCSVLoader(AsyncFileLoader):
                 **self.kwargs
             )
 
-            # Count total rows (reading file sequentially)
-            row_count = sum(1 for _ in open(self.file_path, encoding=self.encoding)) - (1 if self.header == 0 else 0)
+            # Count total rows (reading file sequentially with proper resource management)
+            with open(self.file_path, encoding=self.encoding) as f:
+                row_count = sum(1 for _ in f) - (1 if self.header == 0 else 0)
 
             return {
                 "columns": list(first_chunk.columns),

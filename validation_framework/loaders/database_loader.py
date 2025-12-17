@@ -315,14 +315,25 @@ class DatabaseLoader:
 
             # Count total rows if max_rows is set (production safety check)
             if self.max_rows is not None:
+                # Security: Explicit type validation to prevent SQL injection via type confusion
+                if not isinstance(self.max_rows, int) or self.max_rows <= 0:
+                    raise TypeError(
+                        f"max_rows must be a positive integer, got {type(self.max_rows).__name__}: {self.max_rows}"
+                    )
+
                 count_query = f"SELECT COUNT(*) as row_count FROM ({sql_query}) AS subquery"
-                total_rows = pd.read_sql_query(count_query, engine).iloc[0]['row_count']
+                # Security: Add query-level timeout for count query
+                total_rows = pd.read_sql_query(
+                    count_query,
+                    engine.execution_options(timeout=60)  # 1 minute timeout for count
+                ).iloc[0]['row_count']
 
                 if total_rows > self.max_rows:
                     logger.warning(
                         f"Table/query has {total_rows:,} rows but max_rows={self.max_rows:,}. "
                         f"Only processing first {self.max_rows:,} rows for safety."
                     )
+                    # Security: max_rows is validated as int above, safe to use in string formatting
                     # Add LIMIT to query
                     if self.db_type in ["postgresql", "mysql", "sqlite"]:
                         sql_query = f"{sql_query} LIMIT {self.max_rows}"
@@ -334,10 +345,11 @@ class DatabaseLoader:
                     logger.info(f"Processing {total_rows:,} rows (within max_rows limit)")
 
             # Read in chunks using pandas
+            # Security: Add query-level timeout to prevent long-running queries from blocking
             rows_processed = 0
             for chunk in pd.read_sql_query(
                 sql_query,
-                engine,
+                engine.execution_options(timeout=300),  # 5 minute query timeout
                 chunksize=self.chunk_size
             ):
                 # Enforce max_rows limit strictly (trim last chunk if needed)

@@ -542,3 +542,172 @@ class TestCrossFileKeyCheckFormats:
         result = validation.validate(create_data_iterator(df), {})
 
         assert result.passed is True
+
+# ============================================================================
+# SECURITY TESTS
+# ============================================================================
+
+@pytest.mark.unit
+class TestCrossFileKeyCheckSecurity:
+    """Test security protections in CrossFileKeyCheck."""
+
+    def test_path_traversal_blocked_relative_path(self, tmp_path):
+        """Test that path traversal attempts using .. are blocked."""
+        # Create a valid reference file
+        reference_path = tmp_path / "reference.csv"
+        reference_df = pd.DataFrame({"id": [101, 102]})
+        reference_df.to_csv(reference_path, index=False)
+
+        df = pd.DataFrame({
+            "customer_id": [101, 102]
+        })
+
+        # Attempt path traversal with ../
+        validation = CrossFileKeyCheck(
+            name="CustomerFK",
+            severity=Severity.ERROR,
+            params={
+                "foreign_key": "customer_id",
+                "reference_file": "../../etc/passwd",
+                "reference_key": "id",
+                "check_mode": "exact_match"
+            }
+        )
+
+        result = validation.validate(create_data_iterator(df), {})
+
+        # Should fail with security error message
+        assert result.passed is False
+        assert "traversal" in result.message.lower() or "security" in result.message.lower()
+
+    def test_path_traversal_blocked_with_valid_context(self, tmp_path):
+        """Test path traversal prevention even with valid base path context."""
+        # Create reference file in tmp directory
+        reference_path = tmp_path / "reference.csv"
+        reference_df = pd.DataFrame({"id": [101, 102]})
+        reference_df.to_csv(reference_path, index=False)
+
+        # Create a data file
+        data_file = tmp_path / "data.csv"
+        df = pd.DataFrame({
+            "customer_id": [101, 102]
+        })
+        df.to_csv(data_file, index=False)
+
+        # Attempt to escape the tmp_path directory using ../
+        validation = CrossFileKeyCheck(
+            name="CustomerFK",
+            severity=Severity.ERROR,
+            params={
+                "foreign_key": "customer_id",
+                "reference_file": "../../../etc/passwd",
+                "reference_key": "id",
+                "check_mode": "exact_match"
+            }
+        )
+
+        # Provide context with file_path
+        context = {"file_path": str(data_file)}
+        result = validation.validate(create_data_iterator(df), context)
+
+        # Should fail with security error
+        assert result.passed is False
+        assert "traversal" in result.message.lower() or "security" in result.message.lower()
+
+    def test_path_traversal_blocked_complex_pattern(self, tmp_path):
+        """Test blocking of complex path traversal patterns."""
+        df = pd.DataFrame({
+            "customer_id": [101, 102]
+        })
+
+        # Various path traversal patterns
+        traversal_patterns = [
+            "../../../etc/passwd",
+            "../../secret.txt",
+            "subdir/../../etc/hosts",
+            "./../../sensitive.dat",
+        ]
+
+        for pattern in traversal_patterns:
+            validation = CrossFileKeyCheck(
+                name="CustomerFK",
+                severity=Severity.ERROR,
+                params={
+                    "foreign_key": "customer_id",
+                    "reference_file": pattern,
+                    "reference_key": "id",
+                    "check_mode": "exact_match"
+                }
+            )
+
+            result = validation.validate(create_data_iterator(df), {})
+
+            # All should be blocked
+            assert result.passed is False, f"Pattern {pattern} should be blocked"
+            assert "traversal" in result.message.lower() or "security" in result.message.lower(), \
+                f"Pattern {pattern} should have security error message"
+
+    def test_valid_relative_path_allowed(self, tmp_path):
+        """Test that valid relative paths without .. work correctly."""
+        # Create subdirectory structure
+        subdir = tmp_path / "data"
+        subdir.mkdir()
+
+        # Create reference file in subdirectory
+        reference_path = subdir / "reference.csv"
+        reference_df = pd.DataFrame({"id": [101, 102]})
+        reference_df.to_csv(reference_path, index=False)
+
+        # Create data file in same directory
+        data_file = subdir / "current.csv"
+        df = pd.DataFrame({
+            "customer_id": [101, 102]
+        })
+        df.to_csv(data_file, index=False)
+
+        # Valid relative path (no traversal)
+        validation = CrossFileKeyCheck(
+            name="CustomerFK",
+            severity=Severity.ERROR,
+            params={
+                "foreign_key": "customer_id",
+                "reference_file": "reference.csv",
+                "reference_key": "id",
+                "check_mode": "exact_match"
+            }
+        )
+
+        # Provide context with file_path
+        context = {"file_path": str(data_file)}
+        result = validation.validate(create_data_iterator(df), context)
+
+        # Should succeed (valid relative path)
+        assert result.passed is True
+
+    def test_absolute_path_allowed(self, tmp_path):
+        """Test that absolute paths are allowed and work correctly."""
+        # Create reference file
+        reference_path = tmp_path / "reference.csv"
+        reference_df = pd.DataFrame({"id": [101, 102]})
+        reference_df.to_csv(reference_path, index=False)
+
+        df = pd.DataFrame({
+            "customer_id": [101, 102]
+        })
+
+        # Use absolute path
+        validation = CrossFileKeyCheck(
+            name="CustomerFK",
+            severity=Severity.ERROR,
+            params={
+                "foreign_key": "customer_id",
+                "reference_file": str(reference_path),  # Absolute path
+                "reference_key": "id",
+                "check_mode": "exact_match"
+            }
+        )
+
+        result = validation.validate(create_data_iterator(df), {})
+
+        # Should succeed (valid absolute path)
+        assert result.passed is True

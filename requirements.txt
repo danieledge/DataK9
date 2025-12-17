@@ -1,6 +1,7 @@
 # Core dependencies
 polars>=0.20.0
-pandas>=2.0.0
+pandas>=2.0.0,<2.3.0  # Pin pandas to avoid numpy compatibility issues
+numpy>=1.24.0,<2.3.0  # Ensure numpy compatibility with scipy and pandas
 pyarrow>=12.0.0
 openpyxl>=3.1.0
 pyyaml>=6.0

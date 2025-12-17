@@ -7,7 +7,7 @@ memory usage when profiling large datasets.
 
 import numpy as np
 import random
-from typing import List, Any, Optional, Dict
+from typing import List, Any, Optional, Dict, Iterator
 
 from .parquet_type_handler import to_hashable
 
@@ -281,14 +281,323 @@ class OnlineStatistics:
         }
 
 
+class P2Quantile:
+    """
+    P² algorithm for single quantile estimation.
+
+    Implements the Piecewise-Parabolic (P²) algorithm from Jain & Chlamtac (1985)
+    for dynamic calculation of a single quantile with O(1) memory.
+
+    The algorithm maintains 5 markers (positions and heights) and adjusts them
+    as new observations arrive, using parabolic interpolation to estimate
+    the quantile value.
+
+    Reference:
+        Jain, R., & Chlamtac, I. (1985). The P² algorithm for dynamic calculation
+        of quantiles and histograms without storing observations.
+        Communications of the ACM, 28(10), 1076-1085.
+    """
+
+    def __init__(self, p: float):
+        """
+        Initialize P² quantile estimator for a single quantile.
+
+        Args:
+            p: Target quantile (0.0 to 1.0)
+        """
+        if not 0 <= p <= 1:
+            raise ValueError(f"Quantile must be between 0 and 1, got {p}")
+
+        self.p = p
+        self.count = 0
+
+        # Marker positions (n) - indices in sorted order
+        self.positions = [0.0] * 5
+
+        # Marker heights (q) - actual observed values
+        self.heights = [0.0] * 5
+
+        # Desired marker positions (n')
+        self.desired_positions = [0.0] * 5
+
+        # Desired position increments (dn')
+        self.desired_increments = [
+            0.0,
+            p / 2.0,
+            p,
+            (1.0 + p) / 2.0,
+            1.0
+        ]
+
+    def update(self, value: float) -> None:
+        """
+        Update quantile estimate with new observation.
+
+        Args:
+            value: New numeric value
+        """
+        if self.count < 5:
+            # Initialize: collect first 5 observations
+            self.heights[self.count] = value
+            self.count += 1
+
+            if self.count == 5:
+                # Sort initial observations
+                self.heights.sort()
+                # Initialize positions
+                for i in range(5):
+                    self.positions[i] = float(i)
+                    self.desired_positions[i] = float(i)
+
+        else:
+            # Find cell k where observation falls
+            k = self._find_cell(value)
+
+            # Increment positions of markers k+1 through 4
+            for i in range(k + 1, 5):
+                self.positions[i] += 1.0
+
+            # Update desired positions for all markers
+            for i in range(5):
+                self.desired_positions[i] += self.desired_increments[i]
+
+            # Adjust marker heights if needed
+            self._adjust_markers()
+
+            self.count += 1
+
+    def _find_cell(self, value: float) -> int:
+        """
+        Find which cell the new value falls into and update heights if needed.
+
+        Args:
+            value: New observation value
+
+        Returns:
+            Cell index (0-4) where value falls
+        """
+        if value < self.heights[0]:
+            self.heights[0] = value
+            return 0
+        elif value >= self.heights[4]:
+            self.heights[4] = value
+            return 3
+        else:
+            # Find cell k such that q[k] <= value < q[k+1]
+            for k in range(1, 4):
+                if value < self.heights[k]:
+                    return k - 1
+            return 3
+
+    def _adjust_markers(self) -> None:
+        """
+        Adjust marker heights using P² algorithm.
+
+        For each marker (except min/max), check if actual position differs
+        from desired position by more than 1, and adjust using parabolic
+        or linear interpolation.
+        """
+        for i in range(1, 4):  # Don't adjust extreme markers (0 and 4)
+            # Calculate difference between desired and actual position
+            d = self.desired_positions[i] - self.positions[i]
+
+            # Check if adjustment needed (difference >= 1 in either direction)
+            if (d >= 1.0 and self.positions[i + 1] - self.positions[i] > 1.0) or \
+               (d <= -1.0 and self.positions[i - 1] - self.positions[i] < -1.0):
+
+                # Determine direction of adjustment
+                direction = 1.0 if d >= 0 else -1.0
+
+                # Try parabolic formula (P²)
+                q_new = self._parabolic(i, direction)
+
+                # Check if parabolic estimate is valid (between adjacent markers)
+                if self.heights[i - 1] < q_new < self.heights[i + 1]:
+                    self.heights[i] = q_new
+                else:
+                    # Fall back to linear interpolation
+                    self.heights[i] = self._linear(i, direction)
+
+                # Update position
+                self.positions[i] += direction
+
+    def _parabolic(self, i: int, d: float) -> float:
+        """
+        Parabolic formula for adjusting marker height.
+
+        Args:
+            i: Marker index (1, 2, or 3)
+            d: Direction of adjustment (+1 or -1)
+
+        Returns:
+            New height estimate using parabolic interpolation
+        """
+        # Extract positions and heights for readability
+        n = self.positions
+        q = self.heights
+
+        # Parabolic formula from P² paper
+        numerator = (
+            (n[i] - n[i - 1] + d) * (q[i + 1] - q[i]) / (n[i + 1] - n[i]) +
+            (n[i + 1] - n[i] - d) * (q[i] - q[i - 1]) / (n[i] - n[i - 1])
+        )
+        denominator = n[i + 1] - n[i - 1]
+
+        return q[i] + d * numerator / denominator
+
+    def _linear(self, i: int, d: float) -> float:
+        """
+        Linear interpolation for adjusting marker height.
+
+        Used as fallback when parabolic estimate is invalid.
+
+        Args:
+            i: Marker index (1, 2, or 3)
+            d: Direction of adjustment (+1 or -1)
+
+        Returns:
+            New height estimate using linear interpolation
+        """
+        # Extract positions and heights for readability
+        n = self.positions
+        q = self.heights
+
+        if d > 0:
+            # Linear interpolation towards right marker
+            return q[i] + d * (q[i + 1] - q[i]) / (n[i + 1] - n[i])
+        else:
+            # Linear interpolation towards left marker
+            return q[i] - d * (q[i - 1] - q[i]) / (n[i] - n[i - 1])
+
+    @property
+    def quantile(self) -> Optional[float]:
+        """
+        Get current quantile estimate.
+
+        Returns:
+            Current quantile estimate, or None if < 5 observations
+        """
+        if self.count < 5:
+            # Not enough data - return exact quantile if available
+            if self.count == 0:
+                return None
+            sorted_vals = sorted(self.heights[:self.count])
+            idx = int(self.p * (self.count - 1))
+            return sorted_vals[idx]
+        else:
+            # Return middle marker (index 2) which tracks the target quantile
+            return self.heights[2]
+
+    def get_count(self) -> int:
+        """Get number of observations processed."""
+        return self.count
+
+
+class StreamingQuantiles:
+    """
+    Memory-efficient streaming quantile tracker using P² algorithm.
+
+    Tracks multiple quantiles simultaneously with O(1) memory per quantile,
+    making it suitable for processing large datasets where storing all values
+    is impractical.
+
+    Each quantile uses a separate P2Quantile instance, providing independent
+    O(1) memory tracking with good accuracy for most distributions.
+    """
+
+    def __init__(self, quantiles: List[float] = [0.25, 0.50, 0.75, 0.95, 0.99]):
+        """
+        Initialize streaming quantile tracker.
+
+        Args:
+            quantiles: List of quantiles to track (each between 0.0 and 1.0)
+        """
+        self.quantile_values = sorted(quantiles)
+        self.estimators = {q: P2Quantile(q) for q in self.quantile_values}
+
+    def update(self, value: float) -> None:
+        """
+        Update all quantile estimates with new observation.
+
+        Args:
+            value: New numeric value
+        """
+        for estimator in self.estimators.values():
+            estimator.update(value)
+
+    def update_batch(self, values: List[float]) -> None:
+        """
+        Update with batch of values.
+
+        Args:
+            values: List of numeric values
+        """
+        for value in values:
+            self.update(value)
+
+    def get_quantiles(self) -> Dict[str, float]:
+        """
+        Get current quantile estimates.
+
+        Returns:
+            Dict mapping quantile label (e.g., 'p25', 'p50') to estimated value
+        """
+        result = {}
+        for q in self.quantile_values:
+            estimate = self.estimators[q].quantile
+            if estimate is not None:
+                result[f'p{int(q * 100)}'] = estimate
+        return result
+
+    def get_count(self) -> int:
+        """Get number of observations processed."""
+        if self.estimators:
+            # All estimators should have same count
+            return next(iter(self.estimators.values())).get_count()
+        return 0
+
+
+def compute_streaming_quantiles(
+    values_iterator,
+    quantiles: List[float] = [0.25, 0.50, 0.75, 0.95, 0.99]
+) -> Dict[str, float]:
+    """
+    Compute approximate quantiles from an iterator of values.
+
+    This function uses the P² algorithm to compute quantiles in a single pass
+    with O(1) memory, making it ideal for large datasets or streaming data.
+
+    Args:
+        values_iterator: Iterator yielding numeric values
+        quantiles: List of quantiles to compute (default: quartiles + 95th/99th percentiles)
+
+    Returns:
+        Dict mapping quantile labels to estimated values
+
+    Example:
+        >>> values = iter([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+        >>> quantiles = compute_streaming_quantiles(values, [0.5, 0.9])
+        >>> print(quantiles['p50'])  # Median
+        5.5
+    """
+    tracker = StreamingQuantiles(quantiles)
+
+    for value in values_iterator:
+        if value is not None and not np.isnan(value):
+            tracker.update(float(value))
+
+    return tracker.get_quantiles()
+
+
 class QuantileTracker:
     """
     Approximate quantile tracking for streaming data.
 
-    Uses P² algorithm for dynamic calculation of quantiles without
-    storing all data points.
+    Now uses P² algorithm for memory-efficient dynamic calculation of quantiles
+    without storing all data points. Falls back to exact calculation for small
+    datasets (< 1000 observations).
 
-    For exact quantiles, use ReservoirSampler instead.
+    For guaranteed exact quantiles on small datasets, use ReservoirSampler instead.
     """
 
     def __init__(self, quantiles: List[float] = [0.25, 0.50, 0.75, 0.95, 0.99]):
@@ -301,7 +610,8 @@ class QuantileTracker:
         self.quantiles = sorted(quantiles)
         self.values: List[float] = []
         self.initialized = False
-        self.init_samples = 1000  # Number of samples before using approximation
+        self.init_samples = 1000  # Number of samples before switching to P²
+        self.p2_tracker: Optional[StreamingQuantiles] = None
 
     def add(self, value: float) -> None:
         """
@@ -311,15 +621,19 @@ class QuantileTracker:
             value: Numeric value to add
         """
         if len(self.values) < self.init_samples:
-            # Collecting initial samples for bootstrapping
+            # Collecting initial samples for exact calculation
             self.values.append(value)
         else:
-            # TODO: Implement P² algorithm for approximate quantiles
-            # For now, using exact calculation with reservoir sample
-            if len(self.values) > 10000:
-                # Subsample to limit memory
-                self.values = random.sample(self.values, 5000)
-            self.values.append(value)
+            if not self.initialized:
+                # Initialize P² algorithm with collected samples
+                self.p2_tracker = StreamingQuantiles(self.quantiles)
+                # Seed P² with initial samples
+                self.p2_tracker.update_batch(self.values)
+                self.values = []  # Free memory
+                self.initialized = True
+
+            # Use P² algorithm for ongoing updates
+            self.p2_tracker.update(value)
 
     def get_quantiles(self) -> dict:
         """
@@ -328,18 +642,21 @@ class QuantileTracker:
         Returns:
             Dict mapping quantile to estimated value
         """
-        if not self.values:
+        if self.initialized and self.p2_tracker:
+            # Using P² algorithm
+            return self.p2_tracker.get_quantiles()
+        elif not self.values:
             return {}
+        else:
+            # Calculate exact quantiles from sample
+            result = {}
+            percentiles = [q * 100 for q in self.quantiles]
+            quantile_values = np.percentile(self.values, percentiles)
 
-        # Calculate exact quantiles from current sample
-        result = {}
-        percentiles = [q * 100 for q in self.quantiles]
-        quantile_values = np.percentile(self.values, percentiles)
+            for q, val in zip(self.quantiles, quantile_values):
+                result[f'p{int(q*100)}'] = float(val)
 
-        for q, val in zip(self.quantiles, quantile_values):
-            result[f'p{int(q*100)}'] = float(val)
-
-        return result
+            return result
 
 
 class CardinalityEstimator:

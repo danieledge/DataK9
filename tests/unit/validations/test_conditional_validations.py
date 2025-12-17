@@ -378,7 +378,8 @@ class TestConditionEvaluationError:
             validation.validate(data_iter(), context)
 
         # Verify error details
-        assert "nonexistent_column" in str(exc_info.value)
+        # Note: Error message is sanitized for security - column names are masked
+        assert "Expression evaluation failed" in str(exc_info.value)
         assert exc_info.value.condition == "nonexistent_column == 'VALUE'"
         assert exc_info.value.validation_name == "Test"
 

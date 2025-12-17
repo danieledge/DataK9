@@ -13,6 +13,7 @@ import tempfile
 import os
 import logging
 import hashlib
+import json
 from typing import Any, Optional, Tuple, Dict
 from pathlib import Path
 
@@ -99,6 +100,13 @@ class MemoryBoundedTracker:
         else:
             logger.info(f"Using specified database for spillover: {self.db_path}")
 
+        # Security: Set restrictive file permissions (owner read/write only)
+        # This prevents other users from reading potentially sensitive key data
+        try:
+            os.chmod(self.db_path, 0o600)  # rw-------
+        except OSError as e:
+            logger.warning(f"Could not set restrictive permissions on database file: {e}")
+
         # Connect to database
         self.db_conn = sqlite3.connect(self.db_path)
         self.db_conn.execute("PRAGMA journal_mode=WAL")  # Write-Ahead Logging for better performance
@@ -123,19 +131,33 @@ class MemoryBoundedTracker:
 
     def _hash_key(self, key: Any) -> str:
         """
-        Generate a hash for a key.
+        Generate a deterministic hash for a key.
 
         Uses SHA256 to generate a fixed-size hash from any Python object.
-        The key is serialized to a string representation before hashing.
+        The key is serialized using JSON with sorted keys for determinism.
 
         Args:
-            key: Any hashable Python object
+            key: Any JSON-serializable Python object (str, int, dict, list, etc.)
 
         Returns:
             Hex-encoded SHA256 hash string
         """
-        # Convert key to string representation
-        key_str = str(key)
+        # Security: Use JSON with sorted keys for deterministic serialization
+        # This prevents hash collisions from dict key ordering issues
+        try:
+            if isinstance(key, dict):
+                # Ensure deterministic ordering for dicts
+                key_str = json.dumps(key, sort_keys=True, default=str)
+            elif isinstance(key, (list, tuple)):
+                # Convert to JSON array
+                key_str = json.dumps(key, default=str)
+            else:
+                # Primitive types (str, int, float, bool, None)
+                key_str = json.dumps(key, default=str)
+        except (TypeError, ValueError) as e:
+            # Fallback for non-JSON-serializable objects
+            logger.warning(f"Key type {type(key)} not JSON-serializable, using str(): {e}")
+            key_str = str(key)
 
         # Generate hash
         return hashlib.sha256(key_str.encode('utf-8')).hexdigest()
@@ -144,14 +166,47 @@ class MemoryBoundedTracker:
         """
         Serialize a key to bytes for database storage.
 
+        Security: Uses JSON instead of pickle to prevent deserialization attacks.
+        JSON is safer as it only deserializes to basic Python types.
+
         Args:
-            key: Key to serialize
+            key: Key to serialize (must be JSON-serializable)
 
         Returns:
-            Serialized key as bytes
+            Serialized key as UTF-8 encoded JSON bytes
         """
-        import pickle
-        return pickle.dumps(key)
+        try:
+            # Security: Use JSON instead of pickle to prevent arbitrary code execution
+            if isinstance(key, dict):
+                json_str = json.dumps(key, sort_keys=True, default=str)
+            else:
+                json_str = json.dumps(key, default=str)
+            return json_str.encode('utf-8')
+        except (TypeError, ValueError) as e:
+            # If JSON serialization fails, store string representation as fallback
+            logger.warning(f"Key type {type(key)} not JSON-serializable, using str(): {e}")
+            return str(key).encode('utf-8')
+
+    def _deserialize_key(self, key_bytes: bytes) -> Any:
+        """
+        Deserialize a key from bytes.
+
+        Security: Uses JSON instead of pickle to prevent deserialization attacks.
+
+        Args:
+            key_bytes: Serialized key bytes
+
+        Returns:
+            Deserialized key
+        """
+        try:
+            # Security: Use JSON instead of pickle
+            json_str = key_bytes.decode('utf-8')
+            return json.loads(json_str)
+        except (json.JSONDecodeError, UnicodeDecodeError) as e:
+            # Fallback: return as string if not valid JSON
+            logger.warning(f"Could not deserialize key as JSON: {e}")
+            return key_bytes.decode('utf-8', errors='replace')
 
     def _spill_to_disk(self) -> None:
         """

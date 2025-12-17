@@ -5,6 +5,11 @@ from validation_framework.core.async_engine import AsyncValidationEngine, run_as
 from validation_framework.core.config import ValidationConfig, ConfigError
 from validation_framework.core.registry import ValidationRegistry
 from validation_framework.core.results import ValidationResult, FileValidationReport, ValidationReport, Severity
+from validation_framework.core.expression_validator import (
+    validate_expression,
+    ExpressionValidationError,
+    get_safe_error_message
+)
 
 __all__ = [
     # Sync engine
@@ -23,4 +28,8 @@ __all__ = [
     "FileValidationReport",
     "ValidationReport",
     "Severity",
+    # Expression validation
+    "validate_expression",
+    "ExpressionValidationError",
+    "get_safe_error_message",
 ]

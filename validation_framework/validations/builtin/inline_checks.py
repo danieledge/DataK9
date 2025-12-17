@@ -10,12 +10,21 @@ Author: daniel edge
 from typing import Iterator, Dict, Any, List
 import pandas as pd
 import re
+import logging
 from validation_framework.validations.base import DataValidationRule, ValidationResult
 from validation_framework.core.exceptions import (
     ColumnNotFoundError,
-    ParameterValidationError
+    ParameterValidationError,
+    ValidationExecutionError
 )
 from validation_framework.core.constants import MAX_SAMPLE_FAILURES
+from validation_framework.core.expression_validator import (
+    validate_expression,
+    ExpressionValidationError,
+    get_safe_error_message
+)
+
+logger = logging.getLogger(__name__)
 
 
 class InlineRegexCheck(DataValidationRule):
@@ -167,11 +176,23 @@ class InlineRegexCheck(DataValidationRule):
                 total_count=total_rows,
             )
 
-        except Exception as e:
+        except ParameterValidationError:
+            # Re-raise parameter errors without wrapping
+            raise
+        except (KeyError, TypeError, AttributeError) as e:
+            # Catch specific expected exceptions from regex validation
+            logger.debug(f"Regex validation error details: {e}", exc_info=True)
             return self._create_result(
                 passed=False,
                 message=f"Error during validation: {str(e)}",
                 failed_count=1,
+            )
+        except Exception as e:
+            # Unexpected exceptions should be logged with full stack trace
+            logger.error(f"Unexpected error in regex validation: {e}", exc_info=True)
+            raise ValidationExecutionError(
+                f"Unexpected error during regex validation: {str(e)}",
+                validation_name=self.name
             )
 
 
@@ -238,6 +259,21 @@ class InlineBusinessRuleCheck(DataValidationRule):
                     failed_count=1,
                 )
 
+            # Convert SQL-like syntax to pandas query
+            pandas_query = self._convert_to_pandas_query(rule)
+
+            # Security: Validate expression before evaluation
+            try:
+                validate_expression(pandas_query, validation_name=self.name)
+            except ExpressionValidationError as e:
+                # Expression failed security validation
+                logger.error(f"Expression validation failed for {self.name}: {e.message}")
+                return self._create_result(
+                    passed=False,
+                    message=f"Business rule expression failed security validation: {e.message}",
+                    failed_count=1,
+                )
+
             total_rows = 0
             failed_rows = []
             max_samples = context.get("max_sample_failures", MAX_SAMPLE_FAILURES)
@@ -248,15 +284,14 @@ class InlineBusinessRuleCheck(DataValidationRule):
                     # Prepare evaluation context
                     eval_context = self._prepare_eval_context(chunk)
 
-                    # Convert SQL-like syntax to pandas query
-                    pandas_query = self._convert_to_pandas_query(rule)
-
                     # Execute query - rows that PASS the rule
+                    # Security: Expression already validated above
                     try:
-                        passing_mask = chunk.eval(pandas_query)
-                    except Exception:
-                        # Fallback: try as direct eval
-                        passing_mask = eval(pandas_query, {"__builtins__": {}}, eval_context)
+                        passing_mask = chunk.eval(pandas_query, local_dict=eval_context)
+                    except Exception as e:
+                        # If pandas eval fails, provide safe error message
+                        safe_message = get_safe_error_message(pandas_query, e)
+                        raise ValueError(safe_message)
 
                     # Find failing rows (NOT passing)
                     failing_indices = chunk[~passing_mask].index.tolist()
@@ -271,11 +306,23 @@ class InlineBusinessRuleCheck(DataValidationRule):
                                 "message": error_message
                             })
 
-                except Exception as e:
+                except ValueError:
+                    # Re-raise ValueError from eval() failure (security-related)
+                    raise
+                except (KeyError, TypeError, AttributeError) as e:
+                    # Catch specific expected exceptions from rule evaluation
+                    logger.debug(f"Business rule evaluation error: {e}", exc_info=True)
                     return self._create_result(
                         passed=False,
                         message=f"Error evaluating rule: {str(e)}",
                         failed_count=1,
+                    )
+                except Exception as e:
+                    # Unexpected exceptions should be logged
+                    logger.error(f"Unexpected error evaluating business rule: {e}", exc_info=True)
+                    raise ValidationExecutionError(
+                        f"Unexpected error evaluating business rule: {str(e)}",
+                        validation_name=self.name
                     )
 
                 total_rows += len(chunk)
@@ -296,11 +343,18 @@ class InlineBusinessRuleCheck(DataValidationRule):
                 total_count=total_rows,
             )
 
+        except (ValueError, ValidationExecutionError):
+            # Re-raise specific exceptions from inner processing
+            raise
+        except ParameterValidationError:
+            # Re-raise parameter errors without wrapping
+            raise
         except Exception as e:
-            return self._create_result(
-                passed=False,
-                message=f"Error during business rule check: {str(e)}",
-                failed_count=1,
+            # Unexpected top-level exceptions should be logged
+            logger.error(f"Unexpected error in business rule check: {e}", exc_info=True)
+            raise ValidationExecutionError(
+                f"Unexpected error during business rule check: {str(e)}",
+                validation_name=self.name
             )
 
     def _prepare_eval_context(self, df: pd.DataFrame) -> dict:
@@ -447,9 +501,21 @@ class InlineLookupCheck(DataValidationRule):
                 total_count=total_rows,
             )
 
-        except Exception as e:
+        except ParameterValidationError:
+            # Re-raise parameter errors without wrapping
+            raise
+        except (KeyError, TypeError, AttributeError) as e:
+            # Catch specific expected exceptions from lookup validation
+            logger.debug(f"Lookup check error details: {e}", exc_info=True)
             return self._create_result(
                 passed=False,
                 message=f"Error during lookup check: {str(e)}",
                 failed_count=1,
+            )
+        except Exception as e:
+            # Unexpected exceptions should be logged with full stack trace
+            logger.error(f"Unexpected error in lookup check: {e}", exc_info=True)
+            raise ValidationExecutionError(
+                f"Unexpected error during lookup check: {str(e)}",
+                validation_name=self.name
             )

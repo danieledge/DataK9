@@ -14,10 +14,12 @@ from datetime import datetime
 
 from validation_framework.core.config import ValidationConfig
 from validation_framework.core.registry import get_registry
-from validation_framework.core.results import ValidationReport, FileValidationReport, Severity, Status
+from validation_framework.core.results import ValidationReport, FileValidationReport, ValidationResult, Severity, Status
 from validation_framework.loaders.async_factory import AsyncLoaderFactory
 from validation_framework.reporters.html_reporter import HTMLReporter
 from validation_framework.reporters.json_reporter import JSONReporter
+from validation_framework.validations.async_base import AsyncValidationRule, create_async_validator
+from validation_framework.core.async_orchestrator import AsyncValidationOrchestrator
 
 # Import builtin validations to populate registry
 import validation_framework.validations.builtin.registry
@@ -204,10 +206,10 @@ class AsyncValidationEngine:
         file_config: Dict[str, Any]
     ) -> List:
         """
-        Execute all validations for a file.
+        Execute all validations for a file using async validators.
 
-        Note: Currently runs validations sequentially to maintain data consistency.
-        Future enhancement: Run independent validations concurrently.
+        Intelligently routes to async or sync validators based on type,
+        running independent validations concurrently for improved throughput.
 
         Args:
             validations: List of validation configurations
@@ -217,7 +219,15 @@ class AsyncValidationEngine:
         Returns:
             List of ValidationResult objects
         """
-        results = []
+        context = {
+            "file_name": file_config["name"],
+            "file_path": file_config["path"],
+            "max_sample_failures": self.config.max_sample_failures,
+        }
+
+        # Separate async and sync validators
+        async_validators = []
+        sync_validators = []
 
         for val_config in validations:
             if not val_config.get("enabled", True):
@@ -240,62 +250,106 @@ class AsyncValidationEngine:
                     condition=condition
                 )
 
-                # Execute validation
-                # Convert async loader to sync iterator for compatibility with existing validators
-                # TODO: Create async validators for full async support
-                data_iterator = await self._async_loader_to_sync(loader)
-
-                context = {
-                    "file_name": file_config["name"],
-                    "file_path": file_config["path"],
-                    "max_sample_failures": self.config.max_sample_failures,
-                }
-
-                # Run validation in thread pool to avoid blocking
-                loop = asyncio.get_event_loop()
-                result = await loop.run_in_executor(
-                    None,
-                    validation.validate,
-                    data_iterator,
-                    context
-                )
-
-                results.append(result)
-
-                logger.debug(f"Validation {validation_type}: {'PASSED' if result.passed else 'FAILED'}")
+                # Convert to async validator
+                async_validator = create_async_validator(validation)
+                async_validators.append((validation_type, async_validator))
 
             except Exception as e:
-                logger.error(f"Error in validation {validation_type}: {str(e)}", exc_info=True)
-                # Create error result directly without validation object
+                logger.error(f"Error creating validator {validation_type}: {str(e)}", exc_info=True)
+                # Create error result
                 from validation_framework.core.results import ValidationResult
-                error_result = ValidationResult(
+                sync_validators.append(ValidationResult(
                     rule_name=validation_type,
                     severity=Severity[severity] if isinstance(severity, str) else severity,
                     passed=False,
-                    message=f"Validation error: {str(e)}",
+                    message=f"Validation setup error: {str(e)}",
                     failed_count=1,
                     total_count=1
+                ))
+
+        # Execute async validators concurrently
+        results = []
+        if async_validators:
+            # Create async iterator factory for validators
+            async def data_iterator_factory():
+                """Create a fresh async iterator from loader."""
+                return loader.load()
+
+            # Run validators concurrently
+            validation_tasks = []
+            for validation_type, validator in async_validators:
+                task = self._execute_single_async_validation(
+                    validator,
+                    validation_type,
+                    data_iterator_factory,
+                    context
                 )
-                results.append(error_result)
+                validation_tasks.append(task)
+
+            # Gather results with exception handling
+            validation_results = await asyncio.gather(*validation_tasks, return_exceptions=True)
+
+            # Process results
+            for i, result in enumerate(validation_results):
+                validation_type, _ = async_validators[i]
+                if isinstance(result, Exception):
+                    logger.error(f"Error in validation {validation_type}: {str(result)}", exc_info=True)
+                    from validation_framework.core.results import ValidationResult
+                    results.append(ValidationResult(
+                        rule_name=validation_type,
+                        severity=Severity.ERROR,
+                        passed=False,
+                        message=f"Validation error: {str(result)}",
+                        failed_count=1,
+                        total_count=1
+                    ))
+                else:
+                    results.append(result)
+                    logger.debug(f"Validation {validation_type}: {'PASSED' if result.passed else 'FAILED'}")
+
+        # Add any sync validation results (from setup errors)
+        results.extend(sync_validators)
 
         return results
+
+    async def _execute_single_async_validation(
+        self,
+        validator: AsyncValidationRule,
+        validation_type: str,
+        data_iterator_factory,
+        context: Dict[str, Any]
+    ) -> ValidationResult:
+        """
+        Execute a single async validation.
+
+        Args:
+            validator: Async validator instance
+            validation_type: Validation type name
+            data_iterator_factory: Factory to create fresh data iterators
+            context: Validation context
+
+        Returns:
+            ValidationResult
+        """
+        # Create fresh data iterator for this validation
+        data_iterator = await data_iterator_factory()
+
+        # Execute validation
+        result = await validator.validate_async(data_iterator, context)
+        return result
 
     async def _async_loader_to_sync(self, async_loader):
         """
         Convert async loader to synchronous iterator.
 
-        This is a compatibility layer until we implement fully async validators.
-        Loads all chunks into memory then returns sync iterator.
+        Deprecated: Use async validators instead via SyncValidatorAdapter.
+        Kept for backwards compatibility with legacy code.
 
         Args:
             async_loader: Async data loader
 
         Returns:
             Iterator of DataFrames
-
-        Note:
-            This temporarily defeats the memory efficiency of chunking.
-            Future enhancement: Implement async validators that work with async iterators.
         """
         chunks = []
         async for chunk in async_loader.load():

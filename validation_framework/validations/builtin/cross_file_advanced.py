@@ -23,12 +23,12 @@ from validation_framework.loaders.factory import LoaderFactory
 from validation_framework.core.exceptions import (
     ColumnNotFoundError,
     ParameterValidationError,
-    DataLoadError
+    DataLoadError,
+    SecurityError
 )
 from validation_framework.core.constants import MAX_SAMPLE_FAILURES
 from validation_framework.profiler.parquet_type_handler import to_hashable
 import logging
-import pickle
 
 if HAS_POLARS:
     import polars as pl
@@ -268,14 +268,18 @@ class CrossFileKeyCheck(BackendAwareValidationRule):
                 failed_count=1
             )
         except Exception as e:
-            # Unexpected errors - log full traceback
-            logger.error(
-                f"Unexpected error in CrossFileKeyCheck: {str(e)}",
+            # Unexpected errors - log full traceback at DEBUG level for debugging
+            logger.debug(
+                f"Unexpected error in CrossFileKeyCheck - full traceback:",
                 exc_info=True
+            )
+            # Log summary at ERROR level
+            logger.error(
+                f"Unexpected error in CrossFileKeyCheck: {type(e).__name__}: {str(e)}"
             )
             return self._create_result(
                 passed=False,
-                message="Unexpected error checking keys. Check logs for details.",
+                message=f"Unexpected error checking keys: {type(e).__name__}: {str(e)}. Check logs for details.",
                 failed_count=1
             )
 
@@ -403,17 +407,29 @@ class CrossFileKeyCheck(BackendAwareValidationRule):
             return tracker
 
         except (IOError, OSError) as e:
-            logger.error(f"File access error loading reference keys from {reference_path}: {str(e)}")
-            raise
+            logger.debug(f"File access error loading reference keys from {reference_path} - full traceback:", exc_info=True)
+            logger.error(f"File access error loading reference keys from {reference_path}: {type(e).__name__}: {str(e)}")
+            raise DataLoadError(
+                f"Failed to load reference file: {str(e)}",
+                file_path=reference_path,
+                original_exception=e
+            ) from e
         except (KeyError, ValueError) as e:
-            logger.error(f"Data parsing error loading reference keys from {reference_path}: {str(e)}")
-            raise
+            logger.debug(f"Data parsing error loading reference keys from {reference_path} - full traceback:", exc_info=True)
+            logger.error(f"Data parsing error loading reference keys from {reference_path}: {type(e).__name__}: {str(e)}")
+            raise DataLoadError(
+                f"Failed to parse reference file: {str(e)}",
+                file_path=reference_path,
+                original_exception=e
+            ) from e
         except Exception as e:
-            logger.error(
-                f"Unexpected error loading reference keys from {reference_path}: {str(e)}",
-                exc_info=True
-            )
-            raise
+            logger.debug(f"Unexpected error loading reference keys from {reference_path} - full traceback:", exc_info=True)
+            logger.error(f"Unexpected error loading reference keys from {reference_path}: {type(e).__name__}: {str(e)}")
+            raise DataLoadError(
+                f"Unexpected error loading reference file: {str(e)}",
+                file_path=reference_path,
+                original_exception=e
+            ) from e
 
     def _create_composite_keys(
         self,
@@ -757,7 +773,8 @@ class CrossFileKeyCheck(BackendAwareValidationRule):
                 "SELECT key_value FROM seen_keys"
             )
             for row in cursor:
-                key = pickle.loads(row[0])
+                # Security: Use safe JSON deserialization instead of pickle
+                key = current_keys_tracker._deserialize_key(row[0])
                 if reference_tracker.has_seen(key):
                     matching_keys += 1
         else:
@@ -904,7 +921,8 @@ class CrossFileKeyCheck(BackendAwareValidationRule):
                 "SELECT key_value FROM seen_keys"
             )
             for row in cursor:
-                key = pickle.loads(row[0])
+                # Security: Use safe JSON deserialization instead of pickle
+                key = reference_tracker._deserialize_key(row[0])
                 if not current_keys_tracker.has_seen(key):
                     if len(missing_keys) < max_samples:
                         missing_keys.append(str(key))
@@ -951,27 +969,65 @@ class CrossFileKeyCheck(BackendAwareValidationRule):
 
         Raises:
             ValueError: If path is invalid or attempts path traversal
+            SecurityError: If path traversal is detected
         """
+        # Security: Check for path traversal sequences before processing
+        if ".." in reference_file:
+            raise SecurityError(
+                f"Path traversal detected in reference file path: '{reference_file}'. "
+                "Paths containing '..' are not allowed."
+            )
+
         ref_path = Path(reference_file)
 
-        # If already absolute, return as-is
+        # If already absolute, validate and return
         if ref_path.is_absolute():
-            return str(ref_path)
+            # Security: Resolve to canonical path and verify it matches expected
+            try:
+                resolved = ref_path.resolve(strict=False)
+                # Ensure resolved path doesn't escape to unexpected locations
+                if ".." in str(resolved):
+                    raise SecurityError(
+                        f"Path traversal detected after resolution: '{reference_file}' -> '{resolved}'"
+                    )
+                return str(resolved)
+            except (OSError, RuntimeError) as e:
+                logger.debug(f"Failed to resolve absolute path {reference_file}: {e}", exc_info=True)
+                raise ValueError(f"Invalid reference file path: {reference_file}")
 
         # Try to resolve relative to current file's directory
         current_file = context.get("file_path")
         if current_file:
-            base_dir = Path(current_file).parent
-            resolved = base_dir / ref_path
+            base_dir = Path(current_file).parent.resolve()
+            resolved = (base_dir / ref_path).resolve(strict=False)
+
+            # Security: Verify resolved path stays within base directory
+            try:
+                resolved.relative_to(base_dir)
+            except ValueError:
+                raise SecurityError(
+                    f"Reference file path '{reference_file}' attempts to escape base directory"
+                )
+
             if resolved.exists():
                 return str(resolved)
 
         # Try to resolve relative to base_path
         base_path = context.get("base_path")
         if base_path:
-            resolved = Path(base_path) / ref_path
+            base_dir = Path(base_path).resolve()
+            resolved = (base_dir / ref_path).resolve(strict=False)
+
+            # Security: Verify resolved path stays within base directory
+            try:
+                resolved.relative_to(base_dir)
+            except ValueError:
+                raise SecurityError(
+                    f"Reference file path '{reference_file}' attempts to escape base directory"
+                )
+
             if resolved.exists():
                 return str(resolved)
 
-        # Return as-is and let it fail later if not found
-        return str(ref_path)
+        # Return resolved path (no traversal possible since we checked ".." above)
+        return str(Path(reference_file).resolve(strict=False))

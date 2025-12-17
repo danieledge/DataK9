@@ -5,6 +5,11 @@ from typing import Iterator, Dict, Any, Optional
 import pandas as pd
 from validation_framework.core.results import ValidationResult, Severity
 from validation_framework.core.exceptions import ConditionEvaluationError
+from validation_framework.core.expression_validator import (
+    validate_expression,
+    ExpressionValidationError,
+    get_safe_error_message
+)
 import logging
 
 logger = logging.getLogger(__name__)
@@ -73,20 +78,39 @@ class ValidationRule(ABC):
             # Convert SQL-like syntax to pandas query syntax
             query = self._convert_condition_syntax(self.condition)
 
-            # Evaluate using pandas query
+            # Security: Validate expression before evaluation
+            try:
+                validate_expression(query, validation_name=self.name)
+            except ExpressionValidationError as e:
+                # Expression failed security validation
+                error_msg = (
+                    f"Condition expression failed security validation: {e.message}"
+                )
+                logger.error(f"Expression validation failed for {self.name}: {e.message}")
+                raise ConditionEvaluationError(
+                    message=error_msg,
+                    validation_name=self.name,
+                    condition=self.condition,
+                    original_exception=e
+                )
+
+            # Evaluate using pandas query - expression already validated
             matching_mask = df.eval(query)
             return matching_mask
 
+        except ExpressionValidationError:
+            # Re-raise validation errors (already converted to ConditionEvaluationError above)
+            raise
+        except ConditionEvaluationError:
+            # Re-raise condition evaluation errors
+            raise
         except Exception as e:
             # Do NOT silently run validation on all rows - this could cause
             # incorrect pass/fail results in production ETL pipelines
-            error_msg = (
-                f"Cannot evaluate condition '{self.condition}': {str(e)}. "
-                f"Check that all referenced columns exist and the syntax is valid."
-            )
-            logger.error(error_msg)
+            safe_message = get_safe_error_message(self.condition, e)
+            logger.error(f"Condition evaluation failed for {self.name}: {safe_message}")
             raise ConditionEvaluationError(
-                message=error_msg,
+                message=safe_message,
                 validation_name=self.name,
                 condition=self.condition,
                 original_exception=e
