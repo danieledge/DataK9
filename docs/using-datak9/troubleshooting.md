@@ -601,7 +601,7 @@ If you're still experiencing issues:
 
 1. **Check the [FAQ](faq.md)** - Common questions answered
 2. **Review [Examples](../examples/)** - See working configurations
-3. **Search [GitHub Issues](https://github.com/danieledge/data-validation-tool/issues)** - Someone may have had the same issue
+3. **Search [GitHub Issues](https://github.com/danieledge/datak9/issues)** - Someone may have had the same issue
 4. **Open a new issue** - Provide:
    - DataK9 version
    - Error message (full traceback)

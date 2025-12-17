@@ -15,7 +15,7 @@ Start here if you're new to DataK9:
 ### Configuration & Validation
 Learn how to configure DataK9:
 - **[Configuration Guide](configuration-guide.md)** - Complete YAML reference
-- **[Validation Catalog](validation-catalog.md)** - All 35+ validation types
+- **[Validation Catalog](validation-catalog.md)** - All 36 validation types
 - **[Best Practices](best-practices.md)** - ERROR vs WARNING, production tips
 
 ### DataK9 Studio
@@ -134,7 +134,7 @@ Connect DataK9 to your pipeline:
 - **Quick Questions:** Check the **[FAQ](faq.md)**
 - **Issues:** See **[Troubleshooting Guide](troubleshooting.md)**
 - **Examples:** Browse **[Examples](../examples/)**
-- **Support:** [GitHub Issues](https://github.com/danieledge/data-validation-tool/issues)
+- **Support:** [GitHub Issues](https://github.com/danieledge/datak9/issues)
 
 ---
 

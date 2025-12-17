@@ -271,7 +271,7 @@ Ready to let DataK9 guard your data?
 1. **[Install DataK9](../getting-started/installation.md)** - 5-minute setup
 2. **[Quickstart Guide](../getting-started/quickstart-5min.md)** - Your first validation
 3. **[Configuration Guide](configuration-guide.md)** - Learn YAML configuration
-4. **[Validation Catalog](../reference/validation-reference.md)** - Browse all 35+ validations
+4. **[Validation Catalog](../reference/validation-reference.md)** - Browse all 36 validations
 
 ---
 
@@ -280,7 +280,7 @@ Ready to let DataK9 guard your data?
 - **[FAQ](faq.md)** - Frequently asked questions
 - **[Troubleshooting](troubleshooting.md)** - Common issues and solutions
 - **[Examples](../examples/)** - Real-world scenarios
-- **[GitHub Issues](https://github.com/danieledge/data-validation-tool/issues)** - Report bugs
+- **[GitHub Issues](https://github.com/danieledge/datak9/issues)** - Report bugs
 
 ---
 

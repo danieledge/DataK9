@@ -507,7 +507,7 @@ This generates `customers_validation.yaml` with suggested validations!
 
 **A:** Several options:
 - **[Troubleshooting Guide](troubleshooting.md)** - Common issues and solutions
-- **[GitHub Issues](https://github.com/danieledge/data-validation-tool/issues)** - Report bugs or request features
+- **[GitHub Issues](https://github.com/danieledge/datak9/issues)** - Report bugs or request features
 - **[Examples](../examples/)** - Real-world scenarios
 - **This FAQ** - Common questions
 
@@ -530,7 +530,7 @@ This generates `customers_validation.yaml` with suggested validations!
 ## Still Have Questions?
 
 - **[Troubleshooting Guide](troubleshooting.md)** - Detailed problem solutions
-- **[GitHub Issues](https://github.com/danieledge/data-validation-tool/issues)** - Ask the community
+- **[GitHub Issues](https://github.com/danieledge/datak9/issues)** - Ask the community
 - **[Examples](../examples/)** - See real-world scenarios
 
 ---
