@@ -567,6 +567,7 @@ class CrossFieldComparisonCheck(BackendAwareValidationRule):
         field_a (str): First field name
         operator (str): Comparison operator - '>', '<', '>=', '<=', '==', '!='
         field_b (str): Second field name
+        message (str, optional): Custom error message for failures
 
     Example YAML - Date Comparison:
         - type: "CrossFieldComparisonCheck"
@@ -575,6 +576,7 @@ class CrossFieldComparisonCheck(BackendAwareValidationRule):
             field_a: "end_date"
             operator: ">"
             field_b: "start_date"
+            message: "End date must be after start date"
 
     Example YAML - Numeric Comparison:
         - type: "CrossFieldComparisonCheck"
@@ -583,6 +585,7 @@ class CrossFieldComparisonCheck(BackendAwareValidationRule):
             field_a: "discount_amount"
             operator: "<="
             field_b: "product_price"
+            message: "Discount cannot exceed product price"
     """
 
     VALID_OPERATORS = ['>', '<', '>=', '<=', '==', '!=']
@@ -618,6 +621,7 @@ class CrossFieldComparisonCheck(BackendAwareValidationRule):
         total_rows = 0
         failed_rows = []
         max_samples = context.get("max_sample_failures", MAX_SAMPLE_FAILURES)
+        custom_message = self.params.get("message")
 
         for chunk in data_iterator:
             # Backend-agnostic column checks
@@ -664,7 +668,7 @@ class CrossFieldComparisonCheck(BackendAwareValidationRule):
                                 "row": int(total_rows + len(failed_rows)),
                                 "fields": f"{field_a} vs {field_b}",
                                 "value": f"{val_a} {operator} {val_b}",
-                                "message": f"Comparison failed: {val_a} not {operator} {val_b}"
+                                "message": custom_message or f"Comparison failed: {val_a} not {operator} {val_b}"
                             })
                 else:
                     # Pandas: Use index-based access
@@ -678,7 +682,7 @@ class CrossFieldComparisonCheck(BackendAwareValidationRule):
                                 "row": int(total_rows + idx),
                                 "fields": f"{field_a} vs {field_b}",
                                 "value": f"{val_a} {operator} {val_b}",
-                                "message": f"Comparison failed: {val_a} not {operator} {val_b}"
+                                "message": custom_message or f"Comparison failed: {val_a} not {operator} {val_b}"
                             })
 
             except Exception as e:

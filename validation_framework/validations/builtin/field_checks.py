@@ -41,6 +41,7 @@ class MandatoryFieldCheck(DataValidationRule):
         params:
             fields (list): List of field names to check
             allow_whitespace (bool): If False, whitespace-only values fail (default: False)
+            message (str, optional): Custom error message for failures
 
     Example YAML:
         - type: "MandatoryFieldCheck"
@@ -48,6 +49,7 @@ class MandatoryFieldCheck(DataValidationRule):
           params:
             fields: ["customer_id", "email", "transaction_date"]
             allow_whitespace: false
+            message: "Required field is missing"
     """
 
     def get_description(self) -> str:
@@ -76,6 +78,7 @@ class MandatoryFieldCheck(DataValidationRule):
                 )
 
             allow_whitespace = self.params.get("allow_whitespace", False)
+            custom_message = self.params.get("message")
 
             total_rows = 0
             failed_rows = []
@@ -125,7 +128,7 @@ class MandatoryFieldCheck(DataValidationRule):
                                 "row": int(total_rows + idx),
                                 "field": field,
                                 "value": str(chunk.loc[idx, field]),
-                                "message": f"Missing or empty value in mandatory field '{field}'"
+                                "message": custom_message or f"Missing or empty value in mandatory field '{field}'"
                             })
 
                 total_rows += len(chunk)
@@ -354,6 +357,7 @@ class ValidValuesCheck(DataValidationRule):
             field (str): Field name to validate
             valid_values (list): List of acceptable values
             case_sensitive (bool): Whether comparison is case-sensitive (default: True)
+            message (str, optional): Custom error message for failures
 
     Example YAML:
         - type: "ValidValuesCheck"
@@ -362,6 +366,7 @@ class ValidValuesCheck(DataValidationRule):
             field: "status"
             valid_values: ["ACTIVE", "INACTIVE", "PENDING"]
             case_sensitive: true
+            message: "Status must be ACTIVE, INACTIVE, or PENDING"
     """
 
     def __init__(self, name: str, severity, params: Dict[str, Any] = None, condition: str = None):
@@ -424,6 +429,7 @@ class ValidValuesCheck(DataValidationRule):
             # Use pre-computed valid set (computed in __init__ for performance)
             valid_set = self.valid_set
             case_sensitive = self.case_sensitive
+            custom_message = self.params.get("message")
 
             total_rows = 0
             failed_rows = []
@@ -466,7 +472,7 @@ class ValidValuesCheck(DataValidationRule):
                                 "row": int(total_rows + idx),
                                 "field": field,
                                 "value": str(value),
-                                "message": f"Invalid value '{value}'. Expected one of: {', '.join(map(str, valid_values))}"
+                                "message": custom_message or f"Invalid value '{value}'. Expected one of: {', '.join(map(str, valid_values))}"
                             })
 
                 total_rows += len(chunk)
@@ -509,6 +515,7 @@ class RangeCheck(DataValidationRule):
             field (str): Field name to validate
             min_value (float, optional): Minimum acceptable value (inclusive)
             max_value (float, optional): Maximum acceptable value (inclusive)
+            message (str, optional): Custom error message for failures
 
     Example YAML:
         - type: "RangeCheck"
@@ -517,6 +524,7 @@ class RangeCheck(DataValidationRule):
             field: "transaction_amount"
             min_value: 0
             max_value: 1000000
+            message: "Transaction amount must be between 0 and 1,000,000"
     """
 
     def get_description(self) -> str:
@@ -556,6 +564,7 @@ class RangeCheck(DataValidationRule):
 
             min_value = self.params.get("min_value")
             max_value = self.params.get("max_value")
+            custom_message = self.params.get("message")
 
             if min_value is None and max_value is None:
                 return self._create_result(
@@ -603,21 +612,21 @@ class RangeCheck(DataValidationRule):
                 # Check range violations (skip nulls)
                 for idx, value in field_values.dropna().items():
                     out_of_range = False
-                    message = ""
+                    default_message = ""
 
                     if min_value is not None and value < min_value:
                         out_of_range = True
-                        message = f"Value {value} is below minimum {min_value}"
+                        default_message = f"Value {value} is below minimum {min_value}"
                     elif max_value is not None and value > max_value:
                         out_of_range = True
-                        message = f"Value {value} exceeds maximum {max_value}"
+                        default_message = f"Value {value} exceeds maximum {max_value}"
 
                     if out_of_range and len(failed_rows) < max_samples:
                         failed_rows.append({
                             "row": int(total_rows + idx),
                             "field": field,
                             "value": float(value),
-                            "message": message
+                            "message": custom_message or default_message
                         })
 
                 total_rows += len(chunk)
@@ -661,6 +670,7 @@ class DateFormatCheck(DataValidationRule):
             format (str): Expected date format (strftime format)
                          Examples: "%Y-%m-%d", "%d/%m/%Y", "%Y-%m-%d %H:%M:%S"
             allow_null (bool): Whether null values are acceptable (default: True)
+            message (str, optional): Custom error message for failures
 
     Example YAML:
         - type: "DateFormatCheck"
@@ -669,6 +679,7 @@ class DateFormatCheck(DataValidationRule):
             field: "transaction_date"
             format: "%Y-%m-%d"
             allow_null: false
+            message: "Date must be in YYYY-MM-DD format"
     """
 
     def get_description(self) -> str:
@@ -706,6 +717,7 @@ class DateFormatCheck(DataValidationRule):
                 )
 
             allow_null = self.params.get("allow_null", True)
+            custom_message = self.params.get("message")
 
             total_rows = 0
             failed_rows = []
@@ -742,7 +754,7 @@ class DateFormatCheck(DataValidationRule):
                                 "row": int(total_rows + idx),
                                 "field": field,
                                 "value": str(value),
-                                "message": "Null value not allowed"
+                                "message": custom_message or "Null value not allowed"
                             })
                         continue
 
@@ -755,7 +767,7 @@ class DateFormatCheck(DataValidationRule):
                                 "row": int(total_rows + idx),
                                 "field": field,
                                 "value": str(value),
-                                "message": f"Invalid date format. Expected: {date_format}"
+                                "message": custom_message or f"Invalid date format. Expected: {date_format}"
                             })
 
                 total_rows += len(chunk)

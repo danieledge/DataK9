@@ -46,6 +46,7 @@ class DuplicateRowCheck(DataValidationRule):
             hash_table_size (int): In-memory hash table size (default: 10,000,000)
             enable_early_termination (bool): Stop after finding N duplicates (default: False)
             max_duplicates (int): Max duplicates before stopping (default: 1000)
+            message (str, optional): Custom error message for failures
 
     Example YAML - Default (Optimized):
         # Check for duplicate customer IDs
@@ -123,6 +124,7 @@ class DuplicateRowCheck(DataValidationRule):
                 total_rows = 0
                 failed_rows = []
                 max_samples = context.get("max_sample_failures", MAX_SAMPLE_FAILURES)
+                custom_message = self.params.get("message")
                 duplicate_count = 0
 
                 # Initialize bloom filter for fast pre-filtering (optional)
@@ -186,7 +188,7 @@ class DuplicateRowCheck(DataValidationRule):
                                 failed_rows.append({
                                     "row": int(total_rows + idx),
                                     "key_values": {k: row_data[k] for k in check_cols},
-                                    "message": f"Duplicate row detected"
+                                    "message": custom_message or "Duplicate row detected"
                                 })
 
                             # Early termination if requested
@@ -245,12 +247,14 @@ class BlankRecordCheck(DataValidationRule):
     Configuration:
         params:
             exclude_fields (list, optional): Fields to ignore when checking for blanks
+            message (str, optional): Custom error message for failures
 
     Example YAML:
         - type: "BlankRecordCheck"
           severity: "WARNING"
           params:
             exclude_fields: ["optional_notes"]
+            message: "Row contains no data"
     """
 
     def get_description(self) -> str:
@@ -273,6 +277,7 @@ class BlankRecordCheck(DataValidationRule):
         """
         try:
             exclude_fields = self.params.get("exclude_fields", [])
+            custom_message = self.params.get("message")
 
             total_rows = 0
             failed_rows = []
@@ -308,7 +313,7 @@ class BlankRecordCheck(DataValidationRule):
                         break
                     failed_rows.append({
                         "row": int(total_rows + idx),
-                        "message": "Completely blank row detected"
+                        "message": custom_message or "Completely blank row detected"
                     })
 
                 total_rows += len(chunk)
@@ -359,6 +364,7 @@ class UniqueKeyCheck(DataValidationRule):
             hash_table_size (int): In-memory hash table size (default: 10,000,000)
             enable_early_termination (bool): Stop after finding N duplicates (default: False)
             max_duplicates (int): Maximum duplicates to find before stopping (default: 1000)
+            message (str, optional): Custom error message for failures
 
     Example YAML - Default (Optimized):
         - type: "UniqueKeyCheck"
@@ -430,6 +436,7 @@ class UniqueKeyCheck(DataValidationRule):
                 total_rows = 0
                 failed_rows = []
                 max_samples = context.get("max_sample_failures", MAX_SAMPLE_FAILURES)
+                custom_message = self.params.get("message")
                 duplicate_count = 0
 
                 # Track first occurrence of keys for better error messages
@@ -513,7 +520,7 @@ class UniqueKeyCheck(DataValidationRule):
                                     "row": int(total_rows + chunk_pos),
                                     "key_values": key_dict,
                                     "first_seen_row": first_row,
-                                    "message": f"Duplicate key found (first occurrence at row {first_row})"
+                                    "message": custom_message or f"Duplicate key found (first occurrence at row {first_row})"
                                 })
 
                             # Early termination if requested

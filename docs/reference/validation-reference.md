@@ -55,8 +55,29 @@ validations:
     params:
       parameter1: value1
       parameter2: value2
+      message: "Custom error message"  # Optional - overrides default error message
     condition: "optional_condition"  # Optional inline condition
 ```
+
+### Custom Error Messages
+
+Most validations support an optional `message` parameter that overrides the default error message shown in reports:
+
+```yaml
+- type: "MandatoryFieldCheck"
+  params:
+    fields: ["customer_id"]
+    message: "Customer ID is required for all records"
+
+- type: "RangeCheck"
+  params:
+    field: "age"
+    min_value: 0
+    max_value: 120
+    message: "Age must be between 0 and 120"
+```
+
+Validations supporting `message`: MandatoryFieldCheck, RegexCheck, ValidValuesCheck, RangeCheck, DateFormatCheck, DuplicateRowCheck, BlankRecordCheck, UniqueKeyCheck, CrossFieldComparisonCheck.
 
 ---
 
