@@ -824,52 +824,21 @@ python3 -m validation_framework.cli profile data.csv \
 
 ## list-validations
 
-Display all available validation types and their descriptions.
+Display all available validation types grouped by category with file/database compatibility icons.
 
 ### Syntax
 
 ```bash
-python3 -m validation_framework.cli list-validations [options]
+python3 -m validation_framework.cli list-validations
 ```
 
-### Options
+### Output Format
 
-#### `--category` / `-c`
+Validations are grouped into 10 categories with compatibility icons:
+- 📁 = Works with files (CSV, Excel, Parquet, JSON)
+- 🗄️ = Works with databases (PostgreSQL, MySQL, SQLite, etc.)
 
-Filter by validation category.
-
-```bash
-python3 -m validation_framework.cli list-validations --category field-level
-```
-
-**Categories:**
-- `file-level`
-- `schema`
-- `field-level`
-- `record-level`
-- `conditional`
-- `advanced`
-- `cross-file`
-- `database`
-- `temporal`
-- `statistical`
-
-#### `--format` / `-f`
-
-Output format.
-
-```bash
-python3 -m validation_framework.cli list-validations --format json
-```
-
-**Formats:**
-- `table` (default) - Human-readable table
-- `json` - Machine-readable JSON
-- `yaml` - YAML format
-
-### Examples
-
-#### List All Validations
+### Example
 
 ```bash
 python3 -m validation_framework.cli list-validations
@@ -877,59 +846,47 @@ python3 -m validation_framework.cli list-validations
 
 **Output:**
 ```
-Available Validation Types (36):
+File-Level (5)
+----------------------------------------
+  📁   EmptyFileCheck
+       Validates that the file is not empty
+  📁🗄️ RowCountRangeCheck
+       Validates that the number of rows falls within bounds
 
-FILE-LEVEL VALIDATIONS (3)
-  EmptyFileCheck              - Validates file is not empty
-  RowCountRangeCheck         - Validates row count within expected range
-  FileSizeCheck              - Validates file size within limits
+Schema (2)
+----------------------------------------
+  📁🗄️ ColumnPresenceCheck
+       Checks that required columns exist in the file
+  📁🗄️ SchemaMatchCheck
+       Validates columns match expected schema
 
-SCHEMA VALIDATIONS (2)
-  SchemaMatchCheck           - Validates columns match expected schema
-  ColumnPresenceCheck        - Validates required columns are present
+Field-Level (5)
+----------------------------------------
+  📁🗄️ MandatoryFieldCheck
+       Validates that specified fields are not null or empty
+  📁🗄️ RegexCheck
+       Validates field values match a regular expression
+  ...
 
-FIELD-LEVEL VALIDATIONS (5)
-  MandatoryFieldCheck        - Validates required fields are not null
-  RegexCheck                 - Validates field values match regex pattern
-  ValidValuesCheck           - Validates field values are in allowed list
-  RangeCheck                 - Validates numeric values within range
-  DateFormatCheck            - Validates date field format
-
-... (30 more validations)
+Total: 36 validations
+  📁 File-compatible: 34
+  🗄️  Database-compatible: 33
 ```
 
-#### List Field-Level Validations Only
+### Categories
 
-```bash
-python3 -m validation_framework.cli list-validations --category field-level
-```
-
-#### JSON Output for Programmatic Use
-
-```bash
-python3 -m validation_framework.cli list-validations --format json > validations.json
-```
-
-**Output:**
-```json
-{
-  "file-level": [
-    {
-      "name": "EmptyFileCheck",
-      "description": "Validates file is not empty",
-      "parameters": []
-    },
-    {
-      "name": "RowCountRangeCheck",
-      "description": "Validates row count within expected range",
-      "parameters": ["min_rows", "max_rows"]
-    }
-  ],
-  "field-level": [
-    ...
-  ]
-}
-```
+| Category | Count | Purpose |
+|----------|-------|---------|
+| File-Level | 5 | File properties (size, format, row count) |
+| Schema | 2 | Column structure validation |
+| Field-Level | 5 | Individual field value checks |
+| Record-Level | 3 | Row-level checks (duplicates, blanks) |
+| Conditional | 1 | IF-THEN validation logic |
+| Advanced | 9 | Complex validations (cross-field, business rules) |
+| Cross-File | 4 | Multi-file relationship checks |
+| Database | 3 | Database-specific validations |
+| Temporal | 2 | Time-based comparisons |
+| Statistical | 3 | Statistical analysis (outliers, distributions) |
 
 ---
 

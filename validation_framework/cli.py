@@ -630,125 +630,71 @@ def validate(config_file, html_output, json_output, verbose, fail_on_warning, de
         lock_context.__exit__(None, None, None)
 
 
-@cli.command()
-@click.option('--category', '-c', type=click.Choice(['all', 'file', 'schema', 'field', 'record']),
-              default='all', help='Filter by validation category')
-@click.option('--source', '-s', type=click.Choice(['file', 'database']),
-              help='Filter by source compatibility (file or database)')
-@click.option('--show-compatibility', is_flag=True,
-              help='Show source compatibility for each validation')
-def list_validations(category, source, show_compatibility):
+@cli.command('list-validations')
+def list_validations():
     """
-    List all available validation types.
+    List all available validation types grouped by category.
 
-    Use --category to filter by validation category:
-    - file: File-level checks (empty files, row counts, etc.)
-    - schema: Schema validation (columns, types, etc.)
-    - field: Field-level checks (mandatory, regex, ranges, etc.)
-    - record: Record-level checks (duplicates, blanks, etc.)
+    Shows all 36 validations organized into 10 categories with
+    file/database compatibility icons.
 
-    Use --source to filter by source compatibility:
-    - file: Validations that work with file sources
-    - database: Validations that work with database sources
+    Icons:
+      📁 = Works with files (CSV, Excel, Parquet, JSON)
+      🗄️ = Works with databases (PostgreSQL, MySQL, etc.)
 
-    Examples:
+    Example:
 
     \b
-    # List all validations
     data-validate list-validations
-
-    \b
-    # List only field-level validations
-    data-validate list-validations --category field
-
-    \b
-    # List validations that work with databases
-    data-validate list-validations --source database
-
-    \b
-    # Show source compatibility for all validations
-    data-validate list-validations --show-compatibility
     """
     from validation_framework.utils.definition_loader import ValidationDefinitionLoader
     from pathlib import Path
 
-    registry = get_registry()
-
-    # Create fresh loader to avoid singleton cache issues
-    # Get path relative to this file
+    # Load definitions
     cli_dir = Path(__file__).parent
     def_file = cli_dir / "validation_definitions.json"
-    definition_loader = ValidationDefinitionLoader(def_file)
+    loader = ValidationDefinitionLoader(def_file)
 
-    # Get validations from registry
-    validations = sorted(registry.list_available())
+    # Get all definitions and group by category
+    by_category = {}
+    for name, defn in loader.get_all_definitions().items():
+        cat = defn.get('category', 'Other')
+        by_category.setdefault(cat, []).append((name, defn))
 
-    # Filter by source compatibility if specified
-    if source:
-        compatible = definition_loader.get_by_source_compatibility(source)
-        validations = [v for v in validations if v in compatible]
+    # Category display order
+    category_order = [
+        'File-Level', 'Schema', 'Field-Level', 'Record-Level',
+        'Conditional', 'Advanced', 'Cross-File', 'Database',
+        'Temporal', 'Statistical'
+    ]
 
-    # Category filtering (simple string matching)
-    if category != 'all':
-        category_keywords = {
-            'file': ['file', 'size', 'row'],
-            'schema': ['schema', 'column'],
-            'field': ['field', 'mandatory', 'regex', 'values', 'range', 'date', 'format'],
-            'record': ['duplicate', 'blank', 'unique', 'record'],
-        }
-        keywords = category_keywords.get(category, [])
-        validations = [v for v in validations if any(k.lower() in v.lower() for k in keywords)]
-
-    # Show header with filter info
-    filter_info = []
-    if category != 'all':
-        filter_info.append(f"category={category}")
-    if source:
-        filter_info.append(f"source={source}")
-    filter_str = f" ({', '.join(filter_info)})" if filter_info else ""
-
-    click.echo(f"\nAvailable Validations{filter_str}: {len(validations)}\n")
-
-    # Show compatibility summary if requested
-    if show_compatibility and not source:
-        summary = definition_loader.get_compatibility_summary()
-        click.echo("📊 Source Compatibility Summary:")
-        click.echo(f"   Total validations: {summary['total']}")
-        click.echo(f"   📁 File-compatible: {summary['file_compatible']}")
-        click.echo(f"   🗄️  Database-compatible: {summary['database_compatible']}")
-        click.echo(f"   Both: {summary['both_compatible']}")
+    # Print grouped by category
+    total = 0
+    click.echo()
+    for category in category_order:
+        if category not in by_category:
+            continue
+        items = sorted(by_category[category], key=lambda x: x[0])
+        click.echo(f"{category} ({len(items)})")
+        click.echo("-" * 40)
+        for name, defn in items:
+            # Compatibility icons
+            compat = defn.get('source_compatibility', {})
+            file_icon = '📁' if compat.get('file', True) else '  '
+            db_icon = '🗄️' if compat.get('database', False) else '  '
+            desc = defn.get('description', '')[:55]
+            if len(defn.get('description', '')) > 55:
+                desc += '...'
+            click.echo(f"  {file_icon}{db_icon} {name}")
+            click.echo(f"       {desc}")
         click.echo()
+        total += len(items)
 
-    for validation in validations:
-        try:
-            # Get source compatibility badges
-            compat = definition_loader.get_source_compatibility(validation)
-            badges = []
-            if compat.get('file'):
-                badges.append('📁')
-            if compat.get('database'):
-                badges.append('🗄️')
-            badge_str = ' '.join(badges) if (show_compatibility or source) else ''
-
-            # Get validation class to show description
-            validation_class = registry.get(validation)
-            # Create temporary instance to get description
-            from validation_framework.core.results import Severity
-            instance = validation_class(name=validation, severity=Severity.ERROR, params={})
-            description = instance.get_description()
-
-            # Format output
-            name_with_badge = f"{badge_str} {validation}" if badge_str else f"  • {validation}"
-            click.echo(name_with_badge)
-            click.echo(f"    {description}")
-
-            # Show compatibility notes if available
-            if show_compatibility and compat.get('notes'):
-                click.echo(f"    💡 {compat['notes']}")
-
-            click.echo()
-        except Exception:
-            click.echo(f"  • {validation}\n")
+    # Summary
+    summary = loader.get_compatibility_summary()
+    click.echo(f"Total: {total} validations")
+    click.echo(f"  📁 File-compatible: {summary['file_compatible']}")
+    click.echo(f"  🗄️  Database-compatible: {summary['database_compatible']}")
 
 
 @cli.command()
