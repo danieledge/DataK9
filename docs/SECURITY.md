@@ -174,6 +174,38 @@ DataK9 can help with compliance but is not a compliance solution itself.
 
 ---
 
+## Security Controls
+
+### Expression Validation (v0.1.0+)
+
+Business rule expressions are validated before execution:
+- Maximum expression length: 1000 characters
+- Maximum operator count: 50
+- Maximum nesting depth: 10 levels
+- Blocked patterns: `__import__`, `exec`, `eval`, `compile`, `open`, `globals`, `locals`, `getattr`, `setattr`, `lambda`, `def`, `class`
+
+### Resource Management (v0.1.1+)
+
+File resources are properly managed:
+- Lock files use context managers with guaranteed cleanup
+- File descriptors released even on exceptions
+- Debug logging for cleanup operations
+
+### SQL Injection Prevention
+
+Database queries are protected:
+- SQL identifiers validated with whitelist pattern
+- Query keywords blocked (INSERT, UPDATE, DELETE, DROP, etc.)
+- Parameterized queries for user-supplied values
+
+### Path Traversal Prevention
+
+File paths are validated:
+- `..` sequences rejected in reference file paths
+- Resolved paths verified to stay within base directories
+
+---
+
 ## Security Checklist
 
 Before production deployment:

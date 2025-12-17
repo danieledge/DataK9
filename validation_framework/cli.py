@@ -90,6 +90,7 @@ import csv
 import os
 from datetime import datetime
 from pathlib import Path
+from contextlib import contextmanager
 
 try:
     from validation_framework.core.engine import ValidationEngine
@@ -114,6 +115,75 @@ except ImportError as e:
 logger = get_logger(__name__)
 
 
+@contextmanager
+def file_lock(lock_file_path: str, is_windows: bool):
+    """
+    Context manager for file-based locking to prevent concurrent runs.
+
+    Ensures proper cleanup of file descriptors and lock files even if
+    exceptions occur during execution.
+
+    Args:
+        lock_file_path: Path to the lock file
+        is_windows: Whether running on Windows (file locking not supported)
+
+    Yields:
+        None
+
+    Raises:
+        BlockingIOError: If lock cannot be acquired (another instance running)
+
+    Example:
+        with file_lock("/tmp/my.lock", False):
+            # Protected code here
+            pass
+    """
+    if is_windows:
+        # Windows: Lock files not supported
+        po.warning("Lock files (--lock-file) are not supported on Windows")
+        po.info("For Windows batch processing, use external job scheduling to prevent concurrent runs")
+        yield
+        return
+
+    import fcntl
+
+    lock_fd = None
+    try:
+        # Create parent directory if needed
+        Path(lock_file_path).parent.mkdir(parents=True, exist_ok=True)
+
+        # Open lock file and acquire exclusive lock
+        lock_fd = open(lock_file_path, 'w')
+        fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+
+        # Write process info to lock file
+        lock_fd.write(f"{os.getpid()}\n{datetime.now().isoformat()}\n")
+        lock_fd.flush()
+
+        logger.info(f"Acquired lock file: {lock_file_path}")
+
+        # Yield control to caller
+        yield
+
+    finally:
+        # Always release lock and clean up, even on exception
+        if lock_fd:
+            try:
+                fcntl.flock(lock_fd, fcntl.LOCK_UN)
+                lock_fd.close()
+                logger.info(f"Released lock file: {lock_file_path}")
+            except Exception as e:
+                # Log cleanup errors but don't raise - original exception takes precedence
+                logger.debug(f"Error releasing lock: {e}", exc_info=True)
+
+            # Remove lock file
+            try:
+                os.unlink(lock_file_path)
+            except Exception as e:
+                # Log but don't fail if lock file removal fails
+                logger.debug(f"Error removing lock file: {e}", exc_info=True)
+
+
 def detect_csv_delimiter(file_path: str, sample_size: int = 8192) -> str:
     """
     Auto-detect the delimiter used in a CSV file.
@@ -135,6 +205,9 @@ def detect_csv_delimiter(file_path: str, sample_size: int = 8192) -> str:
         except (UnicodeDecodeError, csv.Error):
             continue
         except Exception:
+            # Intentional broad catch: Delimiter detection is non-critical, fall back to comma
+            # This catches rare edge cases like IOErrors, OSErrors, or unexpected Sniffer failures
+            logger.debug(f"Delimiter detection failed for encoding {encoding}", exc_info=True)
             break
 
     # Fall back to comma if detection fails
@@ -245,18 +318,6 @@ def validate(config_file, html_output, json_output, verbose, fail_on_warning, de
         write_exit_code(code)
         sys.exit(code)
 
-    # Helper to release lock file (used in multiple exception handlers)
-    def release_lock():
-        nonlocal lock_fd
-        if lock_fd and not IS_WINDOWS:
-            try:
-                fcntl.flock(lock_fd, fcntl.LOCK_UN)
-                lock_fd.close()
-                os.unlink(lock_file)
-            except Exception:
-                pass
-            lock_fd = None
-
     # Create pattern expander with consistent timestamp for this run
     run_timestamp = datetime.now()
     expander = PathPatternExpander(run_timestamp=run_timestamp)
@@ -270,29 +331,6 @@ def validate(config_file, html_output, json_output, verbose, fail_on_warning, de
     logger.info(f"Starting validation: {config_file}")
     logger.info(f"Log level: {log_level}")
 
-    # Lock file handling for batch/Autosys (prevent concurrent runs)
-    # Note: Full locking only supported on Unix/Linux/macOS
-    lock_fd = None
-    if lock_file:
-        if IS_WINDOWS:
-            # Windows: Lock files not supported, warn user
-            po.warning("Lock files (--lock-file) are not supported on Windows")
-            po.info("For Windows batch processing, use external job scheduling to prevent concurrent runs")
-        else:
-            try:
-                Path(lock_file).parent.mkdir(parents=True, exist_ok=True)
-                lock_fd = open(lock_file, 'w')
-                fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                lock_fd.write(f"{os.getpid()}\n{datetime.now().isoformat()}\n")
-                lock_fd.flush()
-                logger.info(f"Acquired lock file: {lock_file}")
-            except BlockingIOError:
-                po.error(f"Another validation instance is running (lock file: {lock_file})")
-                po.info("If this is incorrect, delete the lock file and retry")
-                clean_exit(4)
-            except Exception as e:
-                po.warning(f"Could not create lock file: {e}")
-
     # Timeout handling for batch/Autosys
     # Note: Uses SIGALRM on Unix, threading.Timer on Windows
     timeout_timer = None
@@ -303,7 +341,6 @@ def validate(config_file, html_output, json_output, verbose, fail_on_warning, de
         po.blank_line()
         po.error(f"Validation timed out after {timeout} seconds")
         logger.error(f"Validation timed out after {timeout} seconds")
-        release_lock()
         clean_exit(3)
 
     def timeout_handler_windows():
@@ -338,7 +375,6 @@ def validate(config_file, html_output, json_output, verbose, fail_on_warning, de
         # Cancel timeout timer if active (Windows)
         if timeout_timer and timeout_timer.is_alive():
             timeout_timer.cancel()
-        release_lock()
         clean_exit(130)
 
     # SIGTERM works on both Unix and Windows
@@ -346,6 +382,21 @@ def validate(config_file, html_output, json_output, verbose, fail_on_warning, de
 
     # Create progress reporter for verbose mode
     reporter = VerboseProgressReporter(verbose=verbose)
+
+    # Use context manager for lock file handling (if specified)
+    # This ensures proper cleanup even if exceptions occur
+    lock_context = file_lock(lock_file, IS_WINDOWS) if lock_file else contextmanager(lambda: (yield))()
+
+    try:
+        # Acquire lock file (if specified)
+        lock_context.__enter__()
+    except BlockingIOError:
+        po.error(f"Another validation instance is running (lock file: {lock_file})")
+        po.info("If this is incorrect, delete the lock file and retry")
+        clean_exit(4)
+    except Exception as e:
+        po.warning(f"Could not create lock file: {e}")
+        # Continue without lock
 
     try:
         # Create and run validation engine (optimized by default)
@@ -451,11 +502,6 @@ def validate(config_file, html_output, json_output, verbose, fail_on_warning, de
             if engine.config.json_summary_path:
                 engine.generate_json_report(report, engine.config.json_summary_path)
 
-        # Release lock file
-        if lock_fd and not IS_WINDOWS:
-            logger.info(f"Releasing lock file: {lock_file}")
-        release_lock()
-
         # Log summary for headless/batch mode
         logger.info(f"Validation complete: Errors={report.total_errors}, Warnings={report.total_warnings}")
         logger.info(f"Duration: {report.duration_seconds:.2f}s")
@@ -495,7 +541,6 @@ def validate(config_file, html_output, json_output, verbose, fail_on_warning, de
         po.blank_line()
         po.warning("Validation interrupted by user")
         logger.warning("Validation interrupted by user (Ctrl+C)")
-        release_lock()
         clean_exit(130)
 
     except MemoryError as e:
@@ -512,14 +557,12 @@ def validate(config_file, html_output, json_output, verbose, fail_on_warning, de
         click.echo("   2. Use smaller chunk size in config: chunk_size: 10000")
         click.echo("   3. Close other applications to free memory")
         click.echo("   4. Convert large CSV files to Parquet format")
-        release_lock()
         clean_exit(137)
 
     except FileNotFoundError as e:
         po.blank_line()
         po.error(f"File not found: {str(e)}")
         logger.error(f"File not found: {e}")
-        release_lock()
         clean_exit(1)
 
     except RuntimeError as e:
@@ -534,7 +577,6 @@ def validate(config_file, html_output, json_output, verbose, fail_on_warning, de
             po.info("Tip: Try specifying the delimiter with -d option or in config:")
             click.echo("   Command line: data-validate validate config.yaml -d \"|\"")
             click.echo("   YAML config:  delimiter: \"|\"  (under files section)")
-        release_lock()
         clean_exit(1)
 
     except Exception as e:
@@ -581,8 +623,11 @@ def validate(config_file, html_output, json_output, verbose, fail_on_warning, de
             po.blank_line()
             po.info("Run with -v flag to see full error traceback")
 
-        release_lock()
         clean_exit(1)
+
+    finally:
+        # Always release lock file, even on exception
+        lock_context.__exit__(None, None, None)
 
 
 @cli.command()
@@ -938,37 +983,20 @@ def profile(file_path, format, delimiter, encoding, quoting, skip_rows, database
         write_exit_code(code)
         sys.exit(code)
 
-    # Helper to release lock file
-    lock_fd = None
-    def release_lock():
-        nonlocal lock_fd
-        if lock_fd and not IS_WINDOWS:
-            try:
-                fcntl.flock(lock_fd, fcntl.LOCK_UN)
-                lock_fd.close()
-                os.unlink(lock_file)
-            except Exception:
-                pass
-            lock_fd = None
+    # Use context manager for lock file handling (if specified)
+    # This ensures proper cleanup even if exceptions occur
+    lock_context = file_lock(lock_file, IS_WINDOWS) if lock_file else contextmanager(lambda: (yield))()
 
-    # Lock file handling for batch/Autosys (prevent concurrent runs)
-    if lock_file:
-        if IS_WINDOWS:
-            po.warning("Lock files (--lock-file) are not supported on Windows")
-        else:
-            try:
-                Path(lock_file).parent.mkdir(parents=True, exist_ok=True)
-                lock_fd = open(lock_file, 'w')
-                fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                lock_fd.write(f"{os.getpid()}\n{datetime.now().isoformat()}\n")
-                lock_fd.flush()
-                logger.info(f"Acquired lock file: {lock_file}")
-            except BlockingIOError:
-                po.error(f"Another profiler instance is running (lock file: {lock_file})")
-                po.info("If this is incorrect, delete the lock file and retry")
-                clean_exit(4)
-            except Exception as e:
-                po.warning(f"Could not create lock file: {e}")
+    try:
+        # Acquire lock file (if specified)
+        lock_context.__enter__()
+    except BlockingIOError:
+        po.error(f"Another profiler instance is running (lock file: {lock_file})")
+        po.info("If this is incorrect, delete the lock file and retry")
+        clean_exit(4)
+    except Exception as e:
+        po.warning(f"Could not create lock file: {e}")
+        # Continue without lock
 
     # Timeout handling for batch/Autosys
     timeout_timer = None
@@ -978,7 +1006,6 @@ def profile(file_path, format, delimiter, encoding, quoting, skip_rows, database
         po.blank_line()
         po.error(f"Profiling timed out after {timeout} seconds")
         logger.error(f"Profiling timed out after {timeout} seconds")
-        release_lock()
         clean_exit(3)
 
     def timeout_handler_windows():
@@ -1008,7 +1035,6 @@ def profile(file_path, format, delimiter, encoding, quoting, skip_rows, database
         logger.warning(f"Received {signal_name}, shutting down")
         if timeout_timer and timeout_timer.is_alive():
             timeout_timer.cancel()
-        release_lock()
         clean_exit(130)
 
     signal.signal(signal.SIGTERM, signal_handler)
@@ -1415,9 +1441,6 @@ def profile(file_path, format, delimiter, encoding, quoting, skip_rows, database
             else:
                 signal.alarm(0)
 
-        # Release lock file
-        release_lock()
-
         po.blank_line()
         clean_exit(0)
 
@@ -1426,7 +1449,6 @@ def profile(file_path, format, delimiter, encoding, quoting, skip_rows, database
         po.progress_done()  # Clear any progress line
         po.blank_line()
         po.warning("Profiling cancelled by user (Ctrl+C)")
-        release_lock()
         clean_exit(130)  # Standard exit code for Ctrl+C
 
     except MemoryError as e:
@@ -1446,13 +1468,11 @@ def profile(file_path, format, delimiter, encoding, quoting, skip_rows, database
         click.echo("   4. Convert large CSV files to Parquet format (more efficient)")
         if not no_memory_check:
             click.echo("   5. Use --no-memory-check to disable safety limits (USE WITH CAUTION)")
-        release_lock()
         clean_exit(137)  # Standard exit code for OOM-killed processes
 
     except FileNotFoundError as e:
         po.blank_line()
         po.error(f"File not found: {str(e)}")
-        release_lock()
         clean_exit(1)
 
     except RuntimeError as e:
@@ -1466,7 +1486,6 @@ def profile(file_path, format, delimiter, encoding, quoting, skip_rows, database
             po.info("Tip: Try specifying the delimiter with -d option:")
             click.echo(f"   python -m validation_framework.cli profile {file_path} -d \"|\"")
             click.echo(f"   python -m validation_framework.cli profile {file_path} -d \"\\t\"  # for tabs")
-        release_lock()
         clean_exit(1)
 
     except Exception as e:
@@ -1512,8 +1531,11 @@ def profile(file_path, format, delimiter, encoding, quoting, skip_rows, database
             po.blank_line()
             po.info("Run with -v flag to see full error traceback")
 
-        release_lock()
         clean_exit(1)
+
+    finally:
+        # Always release lock file, even on exception
+        lock_context.__exit__(None, None, None)
 
 
 @cli.command('cda-analysis')

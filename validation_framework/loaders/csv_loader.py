@@ -34,6 +34,9 @@ def detect_delimiter(file_path: str, sample_size: int = 8192) -> str:
         except (UnicodeDecodeError, csv.Error):
             continue
         except Exception:
+            # Intentional broad catch: Delimiter detection is non-critical, fall back to comma
+            # This catches rare edge cases like IOErrors, OSErrors, or unexpected Sniffer failures
+            logger.debug(f"Delimiter detection failed for encoding {encoding}", exc_info=True)
             break
 
     return ','
@@ -71,6 +74,9 @@ def detect_encoding(file_path: str) -> str:
             logger.debug("Detected UTF-16 BE BOM")
             return 'utf-16-be'
     except Exception:
+        # Intentional broad catch: BOM detection is non-critical for encoding fallback
+        # This catches IOErrors, OSErrors, or other file access issues
+        logger.debug(f"BOM detection failed for {file_path}", exc_info=True)
         pass
 
     # Try encodings in order of likelihood, validating each
@@ -308,6 +314,9 @@ class CSVLoader(DataLoader):
                     logger.warning("CSV loaded with some rows skipped due to parsing errors")
                     return
                 except Exception:
+                    # Intentional broad catch: Recovery attempt failed, fall through to raise original error
+                    # This catches any unexpected errors during recovery, original error is more helpful
+                    logger.debug("CSV recovery attempt failed", exc_info=True)
                     pass  # Recovery failed, raise original error
 
                 raise RuntimeError(

@@ -5,6 +5,30 @@ All notable changes to the DataK9 Data Validation Framework will be documented i
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.1] - 2025-12-17
+
+### Security Fixes
+
+- **File Lock Resource Management** - Fixed file descriptor leak in CLI lock file handling
+  - Implemented `file_lock` context manager with guaranteed cleanup via try/finally
+  - Lock files now properly released even on exceptions or abnormal termination
+  - Reusable implementation for both validate and profile commands
+  - Addresses AUDIT-2025-0001 (CWE-755)
+
+- **Exception Handler Logging** - Added debug logging to broad exception handlers
+  - All `except Exception` blocks now include `logger.debug(..., exc_info=True)`
+  - Full stack traces available at DEBUG level for troubleshooting
+  - Comments document why broad catches are intentional
+  - Addresses AUDIT-2025-0002 (CWE-755)
+
+### Added
+
+- **Security Test Suite** - 30 new tests for security fixes
+  - 13 tests for file lock context manager (creation, cleanup, exceptions, concurrency)
+  - 17 tests for debug logging in exception handlers
+
+---
+
 ## [Unreleased]
 
 ### Added
