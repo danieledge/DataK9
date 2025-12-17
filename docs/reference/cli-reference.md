@@ -877,7 +877,7 @@ python3 -m validation_framework.cli list-validations
 
 **Output:**
 ```
-Available Validation Types (35):
+Available Validation Types (36):
 
 FILE-LEVEL VALIDATIONS (3)
   EmptyFileCheck              - Validates file is not empty
