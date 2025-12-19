@@ -430,7 +430,10 @@ class OptimizedValidationEngine:
             if progress_callback:
                 try:
                     progress_callback(phase, current, total)
-                except Exception:
+                except Exception as e:
+                    # Intentional broad catch: User-provided callbacks should never break validation
+                    # Log but continue - callback errors are caller's responsibility
+                    logger.debug(f"Progress callback error (ignored): {type(e).__name__}: {e}")
                     pass  # Don't let callback errors stop validation
 
         _progress("Starting validation job...")
@@ -528,7 +531,10 @@ class OptimizedValidationEngine:
             if hasattr(self, '_progress_callback') and self._progress_callback:
                 try:
                     self._progress_callback(phase, current, total)
-                except Exception:
+                except Exception as e:
+                    # Intentional broad catch: User-provided callbacks should never break validation
+                    # Log but continue - callback errors are caller's responsibility
+                    logger.debug(f"Progress callback error (ignored): {type(e).__name__}: {e}")
                     pass
 
         start_time = time.time()

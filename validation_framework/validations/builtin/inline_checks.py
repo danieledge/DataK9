@@ -23,6 +23,11 @@ from validation_framework.core.expression_validator import (
     ExpressionValidationError,
     get_safe_error_message
 )
+from validation_framework.utils.regex_security import (
+    validate_regex_pattern,
+    safe_regex_compile,
+    RegexSecurityError
+)
 
 logger = logging.getLogger(__name__)
 
@@ -70,6 +75,8 @@ class InlineRegexCheck(DataValidationRule):
         """
         Initialize InlineRegexCheck with pre-compiled regex pattern for performance.
 
+        Performs security validation on the regex pattern to prevent ReDoS attacks.
+
         Args:
             name: Validation rule name
             severity: Severity level (ERROR or WARNING)
@@ -78,15 +85,28 @@ class InlineRegexCheck(DataValidationRule):
         """
         super().__init__(name, severity, params, condition)
 
-        # Pre-compile regex pattern for performance (avoids recompilation on each chunk)
+        # Pre-compile regex pattern with security validation
+        # This prevents ReDoS (Regular Expression Denial of Service) attacks from:
+        # 1. Nested quantifiers like (a+)+ causing catastrophic backtracking
+        # 2. Excessively long patterns
+        # 3. Invalid regex syntax
         pattern = self.params.get("pattern")
         if pattern:
             try:
-                self.compiled_regex = re.compile(pattern)
+                # Validate pattern security before compilation
+                validate_regex_pattern(pattern)
+                # Compile with security-validated pattern
+                self.compiled_regex = safe_regex_compile(pattern, validate=False)  # Already validated above
                 self.regex_error = None
-            except re.error as e:
+            except RegexSecurityError as e:
+                # Security validation failed - pattern is potentially dangerous
                 self.compiled_regex = None
-                self.regex_error = str(e)
+                self.regex_error = f"Security validation failed: {str(e)}"
+                logger.warning(f"Regex pattern security validation failed for {name}: {e}")
+            except re.error as e:
+                # Pattern compilation failed (shouldn't happen after validation, but handle anyway)
+                self.compiled_regex = None
+                self.regex_error = f"Compilation error: {str(e)}"
         else:
             self.compiled_regex = None
             self.regex_error = "No pattern specified"

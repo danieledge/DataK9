@@ -20,6 +20,7 @@ from .sla_models import (
     DEFAULT_TIERS, DEFAULT_WARNING_AT
 )
 from .sla_evaluator import SLAEvaluator, format_sla_cli_output
+from .sla_reporter import SLAHTMLReporter, generate_sla_report
 
 __all__ = [
     # CDA Gap Analysis
@@ -37,4 +38,7 @@ __all__ = [
     'format_sla_cli_output',
     'DEFAULT_TIERS',
     'DEFAULT_WARNING_AT',
+    # SLA Reporting
+    'SLAHTMLReporter',
+    'generate_sla_report',
 ]

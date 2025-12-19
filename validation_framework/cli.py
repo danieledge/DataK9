@@ -153,8 +153,17 @@ def file_lock(lock_file_path: str, is_windows: bool):
         Path(lock_file_path).parent.mkdir(parents=True, exist_ok=True)
 
         # Open lock file and acquire exclusive lock
+        # File descriptor management: Open and flock in nested try blocks to prevent fd leak
+        # If mkdir fails, no fd opened. If open fails, exception propagates normally.
+        # If flock fails, we close fd in inner except before re-raising.
         lock_fd = open(lock_file_path, 'w')
-        fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        try:
+            fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except (BlockingIOError, OSError):
+            # Flock failed - close fd before re-raising to prevent leak
+            lock_fd.close()
+            lock_fd = None
+            raise
 
         # Write process info to lock file
         lock_fd.write(f"{os.getpid()}\n{datetime.now().isoformat()}\n")
@@ -204,10 +213,15 @@ def detect_csv_delimiter(file_path: str, sample_size: int = 8192) -> str:
             return dialect.delimiter
         except (UnicodeDecodeError, csv.Error):
             continue
-        except Exception:
+        except (IOError, OSError) as e:
+            # File access errors during delimiter detection - non-critical, fall back to comma
+            logger.debug(f"File access error during delimiter detection with encoding {encoding}: {e}", exc_info=True)
+            break
+        except Exception as e:
             # Intentional broad catch: Delimiter detection is non-critical, fall back to comma
-            # This catches rare edge cases like IOErrors, OSErrors, or unexpected Sniffer failures
-            logger.debug(f"Delimiter detection failed for encoding {encoding}", exc_info=True)
+            # Catches unexpected Sniffer failures or other edge cases not covered above
+            # Examples: MemoryError on huge files, AttributeError on malformed data
+            logger.debug(f"Unexpected error in delimiter detection for encoding {encoding}: {type(e).__name__}", exc_info=True)
             break
 
     # Fall back to comma if detection fails

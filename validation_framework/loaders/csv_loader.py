@@ -33,10 +33,15 @@ def detect_delimiter(file_path: str, sample_size: int = 8192) -> str:
             return dialect.delimiter
         except (UnicodeDecodeError, csv.Error):
             continue
-        except Exception:
+        except (IOError, OSError) as e:
+            # File access errors during delimiter detection - non-critical, fall back to comma
+            logger.debug(f"File access error during delimiter detection with encoding {encoding}: {e}", exc_info=True)
+            break
+        except Exception as e:
             # Intentional broad catch: Delimiter detection is non-critical, fall back to comma
-            # This catches rare edge cases like IOErrors, OSErrors, or unexpected Sniffer failures
-            logger.debug(f"Delimiter detection failed for encoding {encoding}", exc_info=True)
+            # Catches unexpected Sniffer failures or other edge cases not covered above
+            # Examples: MemoryError on huge files, AttributeError on malformed data
+            logger.debug(f"Unexpected error in delimiter detection for encoding {encoding}: {type(e).__name__}", exc_info=True)
             break
 
     return ','
@@ -73,10 +78,14 @@ def detect_encoding(file_path: str) -> str:
         elif raw.startswith(b'\xfe\xff'):
             logger.debug("Detected UTF-16 BE BOM")
             return 'utf-16-be'
-    except Exception:
+    except (IOError, OSError, PermissionError) as e:
+        # File access errors during BOM detection - non-critical, fall through to encoding detection
+        logger.debug(f"File access error during BOM detection for {file_path}: {e}", exc_info=True)
+        pass
+    except Exception as e:
         # Intentional broad catch: BOM detection is non-critical for encoding fallback
-        # This catches IOErrors, OSErrors, or other file access issues
-        logger.debug(f"BOM detection failed for {file_path}", exc_info=True)
+        # Catches unexpected edge cases like file being deleted mid-read, or truncated files
+        logger.debug(f"Unexpected error in BOM detection for {file_path}: {type(e).__name__}", exc_info=True)
         pass
 
     # Try encodings in order of likelihood, validating each

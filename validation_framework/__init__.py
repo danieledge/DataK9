@@ -1,6 +1,6 @@
 """Data Validation Framework - A robust tool for pre-load data quality checks."""
 
-__version__ = "0.1.1"
+__version__ = "0.1.2"
 
 from validation_framework.core.engine import ValidationEngine
 from validation_framework.core.results import ValidationResult, ValidationReport

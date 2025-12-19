@@ -1,0 +1,61 @@
+id,customer_id,email,phone,amount,transaction_date,status,category,description,quantity,unit_price,total,discount_pct,is_active,created_at,updated_at,region,priority
+1,CUST001,john@example.com,555-0101,150.00,2024-01-15,COMPLETED,retail,Product purchase,2,75.00,150.00,0.00,true,2024-01-15 10:30:00,2024-01-15 10:30:00,US,high
+2,CUST002,jane@example.com,555-0102,275.50,2024-01-15,COMPLETED,grocery,Weekly groceries,5,55.10,275.50,0.00,true,2024-01-15 11:00:00,2024-01-15 11:00:00,US,standard
+3,CUST003,,555-0103,89.99,2024-01-15,COMPLETED,retail,Electronics,1,89.99,89.99,0.00,true,2024-01-15 12:00:00,2024-01-15 12:00:00,UK,low
+4,CUST004,invalid-email,555-0104,1250.00,2024-01-16,PENDING,electronics,Large purchase,1,1250.00,1250.00,0.00,true,2024-01-16 09:00:00,2024-01-16 09:00:00,US,critical
+5,CUST005,bob@example.com,,320.00,2024-01-16,COMPLETED,grocery,Bulk order,10,32.00,320.00,0.00,true,2024-01-16 10:00:00,2024-01-16 10:00:00,CA,high
+6,CUST006,alice@example.com,555-0106,45.00,2024-01-16,COMPLETED,retail,Small item,3,15.00,45.00,0.00,true,2024-01-16 11:00:00,2024-01-16 11:00:00,US,standard
+7,CUST007,charlie@example.com,555-0107,890.00,2024-01-17,FAILED,electronics,Failed transaction,2,445.00,890.00,0.00,false,2024-01-17 08:00:00,2024-01-17 08:30:00,UK,high
+8,,mary@example.com,555-0108,67.50,2024-01-17,COMPLETED,grocery,Regular order,3,22.50,67.50,0.00,true,2024-01-17 09:00:00,2024-01-17 09:00:00,US,low
+9,CUST009,david@example.com,555-0109,450.00,2024-01-17,COMPLETED,retail,Premium item,1,450.00,450.00,0.00,true,2024-01-17 10:00:00,2024-01-17 10:00:00,CA,standard
+10,CUST010,emma@example.com,555-0110,125.00,2024-01-18,COMPLETED,grocery,Household items,5,25.00,125.00,0.00,true,2024-01-18 08:30:00,2024-01-18 08:30:00,US,low
+11,CUST011,,555-0111,780.00,2024-01-18,PENDING,electronics,Pending order,2,390.00,780.00,0.00,true,2024-01-18 09:00:00,2024-01-18 09:00:00,UK,high
+12,CUST012,frank@example.com,555-0112,95.00,2024-01-18,COMPLETED,retail,Regular purchase,1,95.00,95.00,0.00,true,2024-01-18 10:00:00,2024-01-18 10:00:00,US,standard
+13,CUST013,grace@example.com,,230.00,2024-01-19,COMPLETED,grocery,Bulk grocery,10,23.00,230.00,0.00,true,2024-01-19 08:00:00,2024-01-19 08:00:00,CA,low
+14,CUST014,henry@example.com,555-0114,1100.00,2024-01-19,COMPLETED,electronics,Premium electronics,1,1100.00,1100.00,0.00,true,2024-01-19 09:00:00,2024-01-19 09:00:00,US,critical
+15,CUST015,ivy@example.com,555-0115,55.00,2024-01-19,COMPLETED,retail,Small purchase,1,55.00,55.00,0.00,true,2024-01-19 10:00:00,2024-01-19 10:00:00,UK,low
+16,CUST016,jack@example.com,555-0116,340.00,2024-01-20,COMPLETED,grocery,Family groceries,10,34.00,340.00,0.00,true,2024-01-20 08:00:00,2024-01-20 08:00:00,US,standard
+17,CUST017,kate@example.com,555-0117,670.00,2024-01-20,COMPLETED,retail,Quality item,1,670.00,670.00,0.00,true,2024-01-20 09:00:00,2024-01-20 09:00:00,CA,high
+18,CUST018,leo@example.com,555-0118,890.00,2024-01-20,COMPLETED,electronics,Tech purchase,1,890.00,890.00,0.00,true,2024-01-20 10:00:00,2024-01-20 10:00:00,US,high
+19,CUST019,mia@example.com,555-0119,120.00,2024-01-21,COMPLETED,grocery,Weekly order,4,30.00,120.00,0.00,true,2024-01-21 08:00:00,2024-01-21 08:00:00,UK,low
+20,CUST020,noah@example.com,555-0120,450.00,2024-01-21,COMPLETED,retail,Medium purchase,3,150.00,450.00,0.00,true,2024-01-21 09:00:00,2024-01-21 09:00:00,US,standard
+21,CUST021,olivia@example.com,555-0121,780.00,2024-01-21,PENDING,electronics,Pending approval,1,780.00,780.00,0.00,true,2024-01-21 10:00:00,2024-01-21 10:00:00,CA,high
+22,CUST022,peter@example.com,555-0122,95.00,2024-01-22,COMPLETED,grocery,Regular items,2,47.50,95.00,0.00,true,2024-01-22 08:00:00,2024-01-22 08:00:00,US,low
+23,CUST023,,555-0123,230.00,2024-01-22,COMPLETED,retail,No email customer,1,230.00,230.00,0.00,true,2024-01-22 09:00:00,2024-01-22 09:00:00,UK,standard
+24,CUST024,quinn@example.com,555-0124,1100.00,2024-01-22,COMPLETED,electronics,High value,1,1100.00,1100.00,0.00,true,2024-01-22 10:00:00,2024-01-22 10:00:00,US,critical
+25,CUST025,ryan@example.com,555-0125,55.00,2024-01-23,COMPLETED,grocery,Basic items,2,27.50,55.00,0.00,true,2024-01-23 08:00:00,2024-01-23 08:00:00,CA,low
+26,CUST026,sarah@example.com,,340.00,2024-01-23,COMPLETED,retail,No phone order,5,68.00,340.00,0.00,true,2024-01-23 09:00:00,2024-01-23 09:00:00,US,standard
+27,CUST027,tom@example.com,555-0127,670.00,2024-01-23,COMPLETED,electronics,Standard tech,1,670.00,670.00,0.00,true,2024-01-23 10:00:00,2024-01-23 10:00:00,UK,high
+28,CUST028,uma@example.com,555-0128,890.00,2024-01-24,COMPLETED,grocery,Large grocery,20,44.50,890.00,0.00,true,2024-01-24 08:00:00,2024-01-24 08:00:00,US,standard
+29,CUST029,victor@example.com,555-0129,120.00,2024-01-24,COMPLETED,retail,Small retail,2,60.00,120.00,0.00,true,2024-01-24 09:00:00,2024-01-24 09:00:00,CA,low
+30,CUST030,wendy@example.com,555-0130,450.00,2024-01-24,COMPLETED,electronics,Medium tech,1,450.00,450.00,0.00,true,2024-01-24 10:00:00,2024-01-24 10:00:00,US,standard
+31,CUST031,xavier@example.com,555-0131,780.00,2024-01-25,COMPLETED,grocery,Premium grocery,10,78.00,780.00,0.00,true,2024-01-25 08:00:00,2024-01-25 08:00:00,UK,high
+32,CUST032,yolanda@example.com,555-0132,95.00,2024-01-25,COMPLETED,retail,Basic retail,1,95.00,95.00,0.00,true,2024-01-25 09:00:00,2024-01-25 09:00:00,US,low
+33,CUST033,zach@example.com,555-0133,230.00,2024-01-25,COMPLETED,electronics,Tech accessory,2,115.00,230.00,0.00,true,2024-01-25 10:00:00,2024-01-25 10:00:00,CA,standard
+34,CUST034,amy@example.com,555-0134,1100.00,2024-01-26,COMPLETED,grocery,Bulk order,25,44.00,1100.00,0.00,true,2024-01-26 08:00:00,2024-01-26 08:00:00,US,high
+35,CUST035,ben@example.com,555-0135,55.00,2024-01-26,COMPLETED,retail,Quick buy,1,55.00,55.00,0.00,true,2024-01-26 09:00:00,2024-01-26 09:00:00,UK,low
+36,CUST036,cathy@example.com,555-0136,340.00,2024-01-26,COMPLETED,electronics,Gaming item,1,340.00,340.00,0.00,true,2024-01-26 10:00:00,2024-01-26 10:00:00,US,standard
+37,CUST037,dan@example.com,555-0137,670.00,2024-01-27,COMPLETED,grocery,Restaurant supply,15,44.67,670.00,0.00,true,2024-01-27 08:00:00,2024-01-27 08:00:00,CA,high
+38,CUST038,ella@example.com,555-0138,890.00,2024-01-27,COMPLETED,retail,Fashion item,2,445.00,890.00,0.00,true,2024-01-27 09:00:00,2024-01-27 09:00:00,US,standard
+39,CUST039,fred@example.com,555-0139,120.00,2024-01-27,COMPLETED,electronics,Cable purchase,4,30.00,120.00,0.00,true,2024-01-27 10:00:00,2024-01-27 10:00:00,UK,low
+40,CUST040,gina@example.com,555-0140,450.00,2024-01-28,COMPLETED,grocery,Weekly bulk,10,45.00,450.00,0.00,true,2024-01-28 08:00:00,2024-01-28 08:00:00,US,standard
+41,CUST041,harry@example.com,555-0141,780.00,2024-01-28,COMPLETED,retail,Furniture item,1,780.00,780.00,0.00,true,2024-01-28 09:00:00,2024-01-28 09:00:00,CA,high
+42,CUST042,irene@example.com,555-0142,95.00,2024-01-28,COMPLETED,electronics,Accessory,2,47.50,95.00,0.00,true,2024-01-28 10:00:00,2024-01-28 10:00:00,US,low
+43,CUST043,james@example.com,555-0143,230.00,2024-01-29,COMPLETED,grocery,Standard order,5,46.00,230.00,0.00,true,2024-01-29 08:00:00,2024-01-29 08:00:00,UK,standard
+44,CUST044,kelly@example.com,555-0144,1100.00,2024-01-29,COMPLETED,retail,Luxury item,1,1100.00,1100.00,0.00,true,2024-01-29 09:00:00,2024-01-29 09:00:00,US,critical
+45,CUST045,larry@example.com,555-0145,55.00,2024-01-29,COMPLETED,electronics,Small tech,1,55.00,55.00,0.00,true,2024-01-29 10:00:00,2024-01-29 10:00:00,CA,low
+46,CUST046,monica@example.com,555-0146,340.00,2024-01-30,COMPLETED,grocery,Party supplies,10,34.00,340.00,0.00,true,2024-01-30 08:00:00,2024-01-30 08:00:00,US,standard
+47,CUST047,nick@example.com,555-0147,670.00,2024-01-30,COMPLETED,retail,Home goods,5,134.00,670.00,0.00,true,2024-01-30 09:00:00,2024-01-30 09:00:00,UK,high
+48,CUST048,olivia2@example.com,555-0148,890.00,2024-01-30,COMPLETED,electronics,Computer part,1,890.00,890.00,0.00,true,2024-01-30 10:00:00,2024-01-30 10:00:00,US,high
+49,CUST049,paul@example.com,555-0149,120.00,2024-01-31,COMPLETED,grocery,Final order,3,40.00,120.00,0.00,true,2024-01-31 08:00:00,2024-01-31 08:00:00,CA,low
+50,CUST050,rachel@example.com,555-0150,450.00,2024-01-31,COMPLETED,retail,Month end buy,2,225.00,450.00,0.00,true,2024-01-31 09:00:00,2024-01-31 09:00:00,US,standard
+51,CUST051,sam@example.com,555-0151,-50.00,2024-01-31,COMPLETED,retail,Refund,1,-50.00,-50.00,0.00,true,2024-01-31 10:00:00,2024-01-31 10:00:00,UK,low
+52,CUST052,tina@example.com,555-0152,0.00,2024-01-31,COMPLETED,retail,Free sample,1,0.00,0.00,0.00,true,2024-01-31 11:00:00,2024-01-31 11:00:00,US,low
+53,CUST001,john@example.com,555-0101,200.00,2024-01-31,COMPLETED,retail,Second purchase,1,200.00,200.00,0.00,true,2024-01-31 12:00:00,2024-01-31 12:00:00,US,standard
+54,CUST054,vera@example.com,555-0154,999999.99,2024-01-31,PENDING,electronics,Outlier amount,1,999999.99,999999.99,0.00,true,2024-01-31 13:00:00,2024-01-31 13:00:00,CA,critical
+55,CUST055,will@example.com,555-0155,100.00,2024-01-31,INVALID,retail,Invalid status,1,100.00,100.00,0.00,true,2024-01-31 14:00:00,2024-01-31 14:00:00,US,standard
+56,CUST056,xena@example.com,12345,75.00,2024-01-31,COMPLETED,grocery,Short phone,1,75.00,75.00,0.00,true,2024-01-31 15:00:00,2024-01-31 15:00:00,UK,low
+57,CUST057,yuri@example.com,555-0157,150.00,invalid-date,COMPLETED,retail,Bad date,1,150.00,150.00,0.00,true,2024-01-31 16:00:00,2024-01-31 16:00:00,US,standard
+58,CUST058,zara@example.com,555-0158,abc,2024-01-31,COMPLETED,electronics,Bad amount,1,0.00,0.00,0.00,true,2024-01-31 17:00:00,2024-01-31 17:00:00,CA,high
+59,CUST059,adam2@example.com,555-0159,125.00,2024-01-31,COMPLETED,grocery,Normal order,2,62.50,125.00,0.00,true,2024-01-31 18:00:00,2024-01-31 18:00:00,US,standard
+60,CUST060,beth@example.com,555-0160,300.00,2024-01-31,COMPLETED,retail,End of month,3,100.00,300.00,0.00,true,2024-01-31 19:00:00,2024-01-31 19:00:00,UK,high
