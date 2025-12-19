@@ -89,7 +89,6 @@ Validations supporting `message`: MandatoryFieldCheck, RegexCheck, ValidValuesCh
 | **RowCountRangeCheck** | File | Row count validation | `min_rows`, `max_rows` | WARNING |
 | **FileSizeCheck** | File | File size validation | `min_size_mb`, `max_size_mb` | WARNING |
 | **CSVFormatCheck** | File | CSV format integrity | `delimiter`, `sample_rows` | ERROR |
-| **SkippedRowsCheck** | File | Unparseable row limits | `max_skipped_percentage` | ERROR |
 | **SchemaMatchCheck** | Schema | Exact schema match | `expected_columns`, `allow_extra` | ERROR |
 | **ColumnPresenceCheck** | Schema | Required columns | `columns` | ERROR |
 | **MandatoryFieldCheck** | Field | Non-null fields | `fields` | ERROR |
@@ -212,30 +211,6 @@ Validations supporting `message`: MandatoryFieldCheck, RegexCheck, ValidValuesCh
 
 **Passes:** CSV format is valid and consistent
 **Fails:** Inconsistent column counts, delimiter issues, or encoding problems
-
----
-
-### SkippedRowsCheck
-
-**Purpose:** Validates that skipped/unparseable rows are within acceptable limits
-
-**Parameters:**
-- `max_skipped_count` (integer, optional): Maximum number of skipped rows allowed
-- `max_skipped_percentage` (float, optional): Maximum percentage of skipped rows (0-100). Default: `5.0`
-- `delimiter` (string, optional): Expected delimiter character. Auto-detected if not specified.
-
-**Example:**
-```yaml
-- type: "SkippedRowsCheck"
-  severity: "ERROR"
-  params:
-    max_skipped_percentage: 1.0
-```
-
-**Passes:** Skipped rows within acceptable limits
-**Fails:** Too many rows skipped due to parsing errors
-
-**Note:** Unlike CSVFormatCheck which samples rows, this checks ALL rows for accurate counts.
 
 ---
 

@@ -159,6 +159,8 @@ class AsyncValidationEngine:
                 "delimiter": file_config.get("delimiter", ","),
                 "encoding": file_config.get("encoding", "utf-8"),
                 "header": file_config.get("header", 0),
+                "quoting": file_config.get("quoting"),
+                "skiprows": file_config.get("skip_rows"),
             }
 
             loader = await AsyncLoaderFactory.create_loader(

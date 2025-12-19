@@ -24,6 +24,7 @@ from validation_framework.core.results import (
 )
 from validation_framework.loaders.factory import LoaderFactory
 from validation_framework.core.logging_config import get_logger
+from validation_framework.cda import SLAEvaluator, format_sla_cli_output
 
 # Import to trigger registration of built-in validations
 import validation_framework.validations.builtin.registry  # noqa
@@ -257,6 +258,8 @@ class ValidationEngine:
                     encoding=file_config.get("encoding"),
                     header=file_config.get("header"),
                     sheet_name=file_config.get("sheet_name"),
+                    quoting=file_config.get("quoting"),
+                    skiprows=file_config.get("skip_rows"),
                 )
 
             # Get file metadata (or database metadata)
@@ -379,11 +382,89 @@ class ValidationEngine:
             )
             file_report.add_result(error_result)
 
+        # Evaluate SLA compliance if CDAs are defined for this file
+        self._evaluate_sla(file_config, file_report, verbose)
+
         # Update file report status and duration
         file_report.update_status()
         file_report.execution_time = time.time() - start_time
 
         return file_report
+
+    def _evaluate_sla(
+        self,
+        file_config: Dict[str, Any],
+        file_report: FileValidationReport,
+        verbose: bool
+    ) -> None:
+        """
+        Evaluate SLA compliance for CDAs defined in the file config.
+
+        Args:
+            file_config: File configuration dictionary
+            file_report: File validation report to attach SLA results to
+            verbose: Whether to print SLA results
+        """
+        # Get CDAs from file config
+        cdas = file_config.get('file_config', {}).get('critical_data_attributes', [])
+
+        # Also check raw config for file-level CDAs
+        if not cdas and hasattr(self.config, 'raw_config'):
+            raw_config = self.config.raw_config
+            job_config = raw_config.get('validation_job', raw_config)
+
+            # Look for CDAs in files list
+            for file_def in job_config.get('files', []):
+                if file_def.get('name') == file_config['name']:
+                    cdas = file_def.get('critical_data_attributes', [])
+                    break
+
+        if not cdas:
+            logger.debug(f"No CDAs defined for {file_config['name']} - skipping SLA evaluation")
+            return
+
+        # Get SLA defaults from job config
+        sla_defaults = {}
+        if hasattr(self.config, 'raw_config'):
+            raw_config = self.config.raw_config
+            job_config = raw_config.get('validation_job', raw_config)
+            sla_defaults = job_config.get('sla_defaults', {})
+
+        # Get row count from metadata or validation results
+        dataset_row_count = file_report.metadata.get('row_count', 0)
+
+        # Fallback: try estimated_rows from metadata
+        if dataset_row_count == 0:
+            dataset_row_count = file_report.metadata.get('estimated_rows', 0)
+
+        # Fallback: use max total_count from validation results
+        if dataset_row_count == 0 and file_report.validation_results:
+            dataset_row_count = max(
+                (r.total_count for r in file_report.validation_results if r.total_count > 0),
+                default=0
+            )
+
+        if dataset_row_count == 0:
+            logger.warning(f"Cannot evaluate SLA - row count is 0 for {file_config['name']}")
+            return
+
+        # Evaluate SLA
+        evaluator = SLAEvaluator(logger=logger)
+        sla_report = evaluator.evaluate(
+            file_name=file_config['name'],
+            dataset_row_count=dataset_row_count,
+            cdas=cdas,
+            validation_results=file_report.validation_results,
+            sla_defaults=sla_defaults
+        )
+
+        # Attach to file report
+        file_report.sla_report = sla_report
+
+        # Print CLI output if verbose
+        if verbose and sla_report.results:
+            print()
+            print(format_sla_cli_output(sla_report))
 
     def generate_html_report(self, report: ValidationReport, output_path: str) -> None:
         """

@@ -449,7 +449,7 @@ class ProfileResult:
     enhanced_correlations: Optional[Dict[str, Any]] = None
     dataset_privacy_risk: Optional[Dict[str, Any]] = None
     file_metadata: Optional[Dict[str, Any]] = None
-    ml_findings: Optional[Dict[str, Any]] = None  # Beta ML analysis results
+    ml_findings: Optional[Dict[str, Any]] = None  # ML-based anomaly detection results
     data_lineage: Optional[DataLineage] = None  # Data lineage and provenance tracking
     csv_format_issues: Optional[Dict[str, Any]] = None  # CSV structural issues detected
     categorical_analysis: Optional[Dict[str, Any]] = None  # Categorical association analysis

@@ -35,5 +35,9 @@ All documentation related to the DataK9 Profiler.
 
 **Quick Command:**
 ```bash
-python3 -m validation_framework.cli profile data.csv -o report.html --beta-ml
+# Profile with all features enabled (ML, PII detection, correlations, temporal analysis)
+python3 -m validation_framework.cli profile data.csv -o report.html
+
+# Minimal profiling (disable ML and enhancements for speed)
+python3 -m validation_framework.cli profile data.csv -o report.html --no-ml --disable-all-enhancements
 ```

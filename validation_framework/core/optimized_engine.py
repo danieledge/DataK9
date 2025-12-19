@@ -551,6 +551,8 @@ class OptimizedValidationEngine:
                 encoding=file_config.get("encoding"),
                 header=file_config.get("header"),
                 sheet_name=file_config.get("sheet_name"),
+                quoting=file_config.get("quoting"),
+                skiprows=file_config.get("skip_rows"),
             )
 
             # Get file metadata

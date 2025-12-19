@@ -231,8 +231,11 @@ def cli():
 @click.argument('config_file', type=click.Path(exists=True))
 @click.option('--html-output', '-o', help='Path for HTML report output')
 @click.option('--json-output', '-j', help='Path for JSON report output')
+@click.option('--output-dir', help='Directory for all output files (reports written here)')
 @click.option('--verbose/--quiet', '-v/-q', default=True, help='Verbose output')
 @click.option('--fail-on-warning', is_flag=True, help='Fail if warnings are found')
+@click.option('--fail-on-error/--no-fail-on-error', default=None, help='Override config fail_on_error setting')
+@click.option('--dry-run', is_flag=True, help='Validate configuration without running validations')
 @click.option('--delimiter', '-d', default=None, help='Column delimiter for CSV files. Use "tab", "pipe", "semicolon", or any single character.')
 @click.option('--encoding', '-e', default=None, help='File encoding (default: auto-detect). Common: utf-8, utf-8-sig, cp1252, latin-1, iso-8859-1')
 @click.option('--quoting', type=click.Choice(['minimal', 'all', 'none', 'nonnumeric'], case_sensitive=False), default=None, help='CSV quoting mode. Use "none" if file has unescaped quotes causing parse errors.')
@@ -244,7 +247,7 @@ def cli():
 @click.option('--timeout', type=int, default=0, help='Timeout in seconds (0=no timeout). For batch/Autosys scheduling.')
 @click.option('--lock-file', type=click.Path(), help='Lock file to prevent concurrent runs. For batch/Autosys.')
 @click.option('--exit-file', type=click.Path(), help='Write exit code to file on completion. For batch/Autosys.')
-def validate(config_file, html_output, json_output, verbose, fail_on_warning, delimiter, encoding, quoting, skip_rows, log_level, log_file, no_optimize, timeout, lock_file, exit_file):
+def validate(config_file, html_output, json_output, output_dir, verbose, fail_on_warning, fail_on_error, dry_run, delimiter, encoding, quoting, skip_rows, log_level, log_file, no_optimize, timeout, lock_file, exit_file):
     """
     Run data validation from a configuration file.
 
@@ -264,8 +267,20 @@ def validate(config_file, html_output, json_output, verbose, fail_on_warning, de
     data-validate validate config.yaml
 
     \b
+    # Validate config without running (dry run)
+    data-validate validate config.yaml --dry-run
+
+    \b
     # With custom output paths
     data-validate validate config.yaml -o report.html -j results.json
+
+    \b
+    # All outputs to a specific directory
+    data-validate validate config.yaml --output-dir /var/reports/validation/
+
+    \b
+    # Override fail-on-error from config
+    data-validate validate config.yaml --no-fail-on-error
 
     \b
     # With date/time patterns
@@ -409,6 +424,28 @@ def validate(config_file, html_output, json_output, verbose, fail_on_warning, de
             engine = OptimizedValidationEngine.from_config(config_file, use_single_pass=True)
         logger.info(f"Configuration loaded: {engine.config.job_name}")
 
+        # Handle --dry-run: validate config and exit without running
+        if dry_run:
+            po.success("Configuration is valid")
+            po.key_value("Job Name", engine.config.job_name, indent=2)
+            po.key_value("Files", len(engine.config.files), indent=2)
+            total_validations = sum(len(f.get('validations', [])) for f in engine.config.files)
+            po.key_value("Total Validations", total_validations, indent=2)
+            if engine.config.policy:
+                po.key_value("Policy", engine.config.policy.name, indent=2)
+            clean_exit(0)
+
+        # Handle --fail-on-error CLI override
+        if fail_on_error is not None:
+            engine.config.fail_on_error = fail_on_error
+            logger.info(f"CLI override: fail_on_error={fail_on_error}")
+
+        # Handle --output-dir: prepend directory to output paths
+        if output_dir:
+            output_dir_path = Path(output_dir)
+            output_dir_path.mkdir(parents=True, exist_ok=True)
+            logger.info(f"Output directory: {output_dir}")
+
         # Override delimiter for all files if specified on CLI
         if delimiter:
             # Handle named delimiters for cross-platform compatibility (Windows doesn't handle \t well)
@@ -487,20 +524,31 @@ def validate(config_file, html_output, json_output, verbose, fail_on_warning, de
         # Generate HTML report (expand patterns in CLI override)
         if html_output:
             html_output = expander.expand(html_output, context)
+            if output_dir:
+                html_output = str(Path(output_dir) / Path(html_output).name)
             engine.generate_html_report(report, html_output)
+            engine.config.html_report_path = html_output  # Update for status messages
         else:
             # Use default from config (already expanded in config.py)
             html_path = engine.config.html_report_path
+            if output_dir:
+                html_path = str(Path(output_dir) / Path(html_path).name)
+                engine.config.html_report_path = html_path
             engine.generate_html_report(report, html_path)
 
         # Generate JSON report (expand patterns in CLI override)
         if json_output:
             json_output = expander.expand(json_output, context)
+            if output_dir:
+                json_output = str(Path(output_dir) / Path(json_output).name)
             engine.generate_json_report(report, json_output)
         else:
             # Check if config specifies JSON output (already expanded in config.py)
             if engine.config.json_summary_path:
-                engine.generate_json_report(report, engine.config.json_summary_path)
+                json_path = engine.config.json_summary_path
+                if output_dir:
+                    json_path = str(Path(output_dir) / Path(json_path).name)
+                engine.generate_json_report(report, json_path)
 
         # Log summary for headless/batch mode
         logger.info(f"Validation complete: Errors={report.total_errors}, Warnings={report.total_warnings}")
@@ -824,6 +872,7 @@ def version():
 @click.option('--html-output', '-o', help='Path for HTML profile report (default: {file_name}_profile_{date}.html)')
 @click.option('--json-output', '-j', help='Path for JSON profile output')
 @click.option('--config-output', '-c', help='Path to save generated validation config (default: {file_name}_validation_{timestamp}.yaml)')
+@click.option('--output-dir', help='Directory for all output files (reports written here)')
 @click.option('--chunk-size', type=int, default=None, help='Number of rows per chunk (default: auto-calculate based on available memory)')
 @click.option('--sample', '-s', type=int, default=None, help='Profile only the first N rows (useful for quick analysis of large files)')
 @click.option('--no-memory-check', is_flag=True, help='Disable memory usage warnings for large files')
@@ -843,7 +892,7 @@ def version():
 @click.option('--field-descriptions', type=click.Path(exists=True), help='YAML file with friendly field names and descriptions for better anomaly explanations')
 @click.option('--correlation-threshold', type=float, default=None, help='Minimum absolute correlation to report (default: 0.3, Cohen\'s medium effect). Range: 0.0-1.0')
 @click.option('--verbose', '-v', is_flag=True, help='Show detailed progress with timestamps for debugging')
-def profile(file_path, format, delimiter, encoding, quoting, skip_rows, database, table, query, html_output, json_output, config_output, chunk_size, sample, no_memory_check, log_level, log_file, timeout, lock_file, exit_file,
+def profile(file_path, format, delimiter, encoding, quoting, skip_rows, database, table, query, html_output, json_output, config_output, output_dir, chunk_size, sample, no_memory_check, log_level, log_file, timeout, lock_file, exit_file,
             disable_temporal, disable_pii, disable_correlation, disable_all_enhancements, no_ml, full_analysis, analysis_sample_size, field_descriptions, correlation_threshold, verbose):
     """
     Profile a data file or database table to understand its structure and quality.
@@ -1068,6 +1117,13 @@ def profile(file_path, format, delimiter, encoding, quoting, skip_rows, database
             html_output = expander.expand(html_output, context)
             config_output = expander.expand(config_output, context)
 
+            # Handle --output-dir: prepend directory to output paths
+            if output_dir:
+                output_dir_path = Path(output_dir)
+                output_dir_path.mkdir(parents=True, exist_ok=True)
+                html_output = str(output_dir_path / Path(html_output).name)
+                config_output = str(output_dir_path / Path(config_output).name)
+
             po.task_start(f"Profiling database: {table if table else 'query'}")
 
             # Create database loader
@@ -1120,6 +1176,13 @@ def profile(file_path, format, delimiter, encoding, quoting, skip_rows, database
             # Expand patterns
             html_output = expander.expand(html_output, context)
             config_output = expander.expand(config_output, context)
+
+            # Handle --output-dir: prepend directory to output paths
+            if output_dir:
+                output_dir_path = Path(output_dir)
+                output_dir_path.mkdir(parents=True, exist_ok=True)
+                html_output = str(output_dir_path / Path(html_output).name)
+                config_output = str(output_dir_path / Path(config_output).name)
 
             # Performance advisory: Recommend Parquet if large CSV (unless --no-memory-check specified)
             if not no_memory_check:
@@ -1368,6 +1431,9 @@ def profile(file_path, format, delimiter, encoding, quoting, skip_rows, database
             # Expand patterns in JSON output path
             context = {'file_name': Path(file_path).stem if file_path else (table or 'query_result')}
             json_output = expander.expand(json_output, context)
+            # Handle --output-dir
+            if output_dir:
+                json_output = str(Path(output_dir) / Path(json_output).name)
 
             with open(json_output, 'w') as f:
                 json.dump(profile_result.to_dict(), f, indent=2)

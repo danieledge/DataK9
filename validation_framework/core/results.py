@@ -10,7 +10,7 @@ Author: Daniel Edge
 """
 
 from dataclasses import dataclass, field
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Set
 from datetime import datetime
 from enum import Enum
 
@@ -101,6 +101,13 @@ class ValidationResult:
     sample_failures: List[Dict[str, Any]] = field(default_factory=list)
     execution_time: float = 0.0
 
+    # SLA tracking fields
+    covered_fields: List[str] = field(default_factory=list)
+    """Fields this validation covers - required for SLA evaluation."""
+
+    failed_row_ids: Optional[Set[int]] = None
+    """Row IDs that failed - enables accurate SLA aggregation via union."""
+
     def to_dict(self) -> Dict[str, Any]:
         """
         Convert validation result to dictionary for JSON serialization.
@@ -122,7 +129,7 @@ class ValidationResult:
                 'execution_time': 0.523
             }
         """
-        return {
+        result = {
             "rule_name": self.rule_name,
             "severity": self.severity.value,
             "passed": self.passed,
@@ -133,6 +140,9 @@ class ValidationResult:
             "sample_failures": self.sample_failures[:10],  # Limit to 10 samples
             "execution_time": round(self.execution_time, 3),
         }
+        if self.covered_fields:
+            result["covered_fields"] = self.covered_fields
+        return result
 
     def _calculate_success_rate(self) -> float:
         """Calculate success rate percentage.
@@ -168,6 +178,7 @@ class FileValidationReport:
     warning_count: int = 0
     total_validations: int = 0
     metadata: Dict[str, Any] = field(default_factory=dict)
+    sla_report: Optional[Any] = None  # SLAReport - imported at runtime to avoid circular imports
 
     def add_result(self, result: ValidationResult) -> None:
         """Add a validation result and update counts."""
@@ -191,7 +202,7 @@ class FileValidationReport:
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
-        return {
+        result = {
             "file_name": self.file_name,
             "file_path": self.file_path,
             "file_format": self.file_format,
@@ -203,6 +214,9 @@ class FileValidationReport:
             "validation_results": [r.to_dict() for r in self.validation_results],
             "metadata": self.metadata,
         }
+        if self.sla_report is not None:
+            result["sla_report"] = self.sla_report.to_dict()
+        return result
 
 
 @dataclass

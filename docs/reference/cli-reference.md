@@ -110,7 +110,7 @@ Display DataK9 version.
 
 ```bash
 python3 -m validation_framework.cli --version
-# Output: DataK9 version 0.1.0
+# Output: DataK9 version 0.1.1
 ```
 
 ### `--verbose` / `-v`
@@ -244,6 +244,71 @@ python3 -m validation_framework.cli validate config.yaml -j results.json
 - Automated processing and integration
 - Programmatic access to validation results
 
+#### `--output-dir`
+
+Specify directory for all output files. HTML and JSON reports are written here with default names.
+
+```bash
+python3 -m validation_framework.cli validate config.yaml --output-dir /var/reports/validation/
+```
+
+**Examples:**
+```bash
+# Write reports to artifacts directory
+python3 -m validation_framework.cli validate config.yaml --output-dir artifacts/
+
+# Combined with verbose
+python3 -m validation_framework.cli validate config.yaml --output-dir logs/validation/ --verbose
+```
+
+**Behavior:**
+- Creates directory if it doesn't exist
+- HTML report: `<output-dir>/validation_report.html`
+- JSON report: `<output-dir>/validation_summary.json`
+- Can be combined with `--html-output` and `--json-output` to override default names
+
+#### `--dry-run`
+
+Validate configuration without running validations. Useful for checking config syntax before execution.
+
+```bash
+python3 -m validation_framework.cli validate config.yaml --dry-run
+```
+
+**Output shows:**
+- Configuration validity
+- Job name
+- Number of files to validate
+- Total validation count
+- Policy name (if defined)
+
+**Use Cases:**
+- CI/CD config validation before deployment
+- Syntax checking during development
+- Verifying config changes before long-running jobs
+
+#### `--fail-on-error` / `--no-fail-on-error`
+
+Override config file `fail_on_error` setting. Controls exit code behavior for validations with errors.
+
+```bash
+# Force exit code 1 on any validation errors
+python3 -m validation_framework.cli validate config.yaml --fail-on-error
+
+# Never fail on errors (exit 0 regardless of results)
+python3 -m validation_framework.cli validate config.yaml --no-fail-on-error
+```
+
+**Behavior:**
+- `--fail-on-error`: Exit code 1 if any validation fails (overrides config)
+- `--no-fail-on-error`: Always exit 0 (overrides config)
+- Neither specified: Use config file setting (default: `true`)
+
+**Use Cases:**
+- CI/CD pipelines requiring specific exit codes
+- Testing configurations without failing builds
+- Override config for one-off runs
+
 ### CSV Processing Options
 
 These options allow fine-grained control over CSV file parsing, matching the profiler's capabilities.
@@ -371,19 +436,18 @@ python3 -m validation_framework.cli validate config.yaml \
     --output-dir /var/reports/validation/
 ```
 
-#### CI/CD Pipeline (JSON only, fail-fast)
+#### CI/CD Pipeline (JSON output to artifacts directory)
 
 ```bash
 python3 -m validation_framework.cli validate config.yaml \
-    --no-html \
-    --fail-fast \
+    --json-output artifacts/validation_results.json \
     --output-dir artifacts/
 ```
 
-#### Configuration Validation Only
+#### Configuration Validation Only (Dry Run)
 
 ```bash
-python3 -m validation_framework.cli validate config.yaml --config-only
+python3 -m validation_framework.cli validate config.yaml --dry-run
 ```
 
 #### Production Validation with Logging
@@ -464,6 +528,21 @@ python3 -m validation_framework.cli profile data.csv -c validation_config.yaml
 ```
 
 **Default:** `<filename>_validation_<timestamp>.yaml`
+
+#### `--output-dir`
+
+Specify directory for all output files. Reports are written here with default names.
+
+```bash
+python3 -m validation_framework.cli profile data.csv --output-dir /var/reports/profiles/
+```
+
+**Behavior:**
+- Creates directory if it doesn't exist
+- HTML report: `<output-dir>/<filename>_profile_report_<date>.html`
+- JSON output: `<output-dir>/<filename>_profile.json` (if `--json-output` enabled without path)
+- Config output: `<output-dir>/<filename>_validation_<timestamp>.yaml`
+- Can be combined with explicit output paths to override
 
 ### Data Source Options
 
@@ -868,7 +947,7 @@ Field-Level (5)
        Validates field values match a regular expression
   ...
 
-Total: 37 validations
+Total: 36 validations
   📁 File-compatible: 34
   🗄️  Database-compatible: 33
 ```
@@ -1299,11 +1378,11 @@ DataK9 searches for configuration files in this order:
 Always validate configuration before deployment:
 
 ```bash
-# Test configuration syntax
-python3 -m validation_framework.cli validate config.yaml --config-only
+# Test configuration syntax (dry run)
+python3 -m validation_framework.cli validate config.yaml --dry-run
 
 # Dry run with verbose output
-python3 -m validation_framework.cli validate config.yaml --verbose --fail-fast
+python3 -m validation_framework.cli validate config.yaml --dry-run --verbose
 ```
 
 ---
@@ -1477,9 +1556,8 @@ mkdir -p artifacts/validation
 # Run validation
 python3 -m validation_framework.cli validate \
     config.yaml \
-    --no-html \
-    --output-dir artifacts/validation \
-    --fail-fast
+    --json-output artifacts/validation/results.json \
+    --output-dir artifacts/validation
 
 # Extract key metrics from JSON
 jq -r '.overall_status' artifacts/validation/validation_summary.json
@@ -1596,9 +1674,9 @@ Exit code: 2
      - type: "MandatoryFieldCheck"
    ```
 
-3. **Use config validation:**
+3. **Use config validation (dry run):**
    ```bash
-   python3 -m validation_framework.cli validate config.yaml --config-only
+   python3 -m validation_framework.cli validate config.yaml --dry-run
    ```
 
 #### Issue: "File not found" during validation
@@ -1693,7 +1771,7 @@ Validation running for hours on large file
    ```bash
    # Profile sample first
    python3 -m validation_framework.cli profile large_file.csv \
-       --sample-size 100000
+       --sample 100000
    ```
 
 #### Issue: Out of memory errors
@@ -1724,9 +1802,9 @@ MemoryError: Unable to allocate array
        format: "parquet"
    ```
 
-4. **Disable HTML report:**
+4. **Use JSON output only (smaller file):**
    ```bash
-   python3 -m validation_framework.cli validate config.yaml --no-html
+   python3 -m validation_framework.cli validate config.yaml --json-output results.json
    ```
 
 ### Debugging Commands
@@ -1743,14 +1821,14 @@ python3 -m validation_framework.cli validate config.yaml --verbose
 
 ```bash
 # Validate config without running validations
-python3 -m validation_framework.cli validate config.yaml --config-only
+python3 -m validation_framework.cli validate config.yaml --dry-run
 ```
 
 #### Test with Small Sample
 
 ```bash
 # Profile sample first
-python3 -m validation_framework.cli profile data.csv --sample-size 1000
+python3 -m validation_framework.cli profile data.csv --sample 1000
 
 # Edit auto-generated config to use sample
 # Then validate
@@ -1761,9 +1839,6 @@ python3 -m validation_framework.cli profile data.csv --sample-size 1000
 ```bash
 # List all available validations
 python3 -m validation_framework.cli list-validations
-
-# Check specific category
-python3 -m validation_framework.cli list-validations --category field-level
 ```
 
 ---
@@ -1802,18 +1877,18 @@ settings:
 - **Large files (>100 MB):** Use 100,000
 - **Very large files (>10 GB):** Use 200,000
 
-### 3. Use Fail-Fast in Development
+### 3. Use Dry Run in Development
 
 ```bash
-# Get quick feedback
-python3 -m validation_framework.cli validate config.yaml --fail-fast
+# Validate config syntax quickly
+python3 -m validation_framework.cli validate config.yaml --dry-run
 ```
 
 ### 4. Profile Before Full Validation
 
 ```bash
 # Quick profile with sample
-python3 -m validation_framework.cli profile data.csv --sample-size 10000
+python3 -m validation_framework.cli profile data.csv --sample 10000
 
 # Review profile, adjust config
 # Then run full validation
@@ -1836,7 +1911,7 @@ wait
 **You've mastered the DataK9 CLI! Now:**
 
 1. **[YAML Reference](yaml-reference.md)** - Complete configuration syntax
-2. **[Validation Reference](validation-reference.md)** - All 37 validation types
+2. **[Validation Reference](validation-reference.md)** - All 36 validation types
 3. **[Error Codes Reference](error-codes.md)** - Detailed error messages
 4. **[Best Practices](../using-datak9/best-practices.md)** - Production deployment guidance
 

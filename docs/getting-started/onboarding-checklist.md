@@ -27,7 +27,7 @@ Step-by-step checklist to get up and running with DataK9.
   ```bash
   python3 -m validation_framework.cli list-validations
   ```
-  Expected: 37 validation types listed
+  Expected: 36 validation types listed
 
 ---
 
@@ -95,7 +95,7 @@ Step-by-step checklist to get up and running with DataK9.
 ## Phase 4: Customize Validations
 
 - [ ] **Review validation catalog**
-  See [Validation Reference](../reference/validation-reference.md) for all 37 types
+  See [Validation Reference](../reference/validation-reference.md) for all 36 types
 
 - [ ] **Add field validations**
   ```yaml
@@ -145,9 +145,13 @@ Step-by-step checklist to get up and running with DataK9.
   - Build configs visually
   - See [Studio Guide](../using-datak9/studio-guide.md)
 
-- [ ] **Enable ML Analysis** in profiler
+- [ ] **ML Analysis** (enabled by default)
   ```bash
-  python3 -m validation_framework.cli profile data.csv --beta-ml
+  # ML analysis runs automatically - no flag needed
+  python3 -m validation_framework.cli profile data.csv
+
+  # To disable ML for faster profiling:
+  python3 -m validation_framework.cli profile data.csv --no-ml
   ```
 
 - [ ] **Cross-file validation**

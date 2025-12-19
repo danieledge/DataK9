@@ -188,6 +188,58 @@ validation_job:
   description: "Validates customer data from CRM system before warehouse load"
 ```
 
+#### sla_defaults
+
+**Type:** Object
+**Required:** No
+**Default:** Built-in tier values
+
+**Description:** Global SLA (Service Level Agreement) settings for CDA (Critical Data Attribute) compliance tracking. See [SLA Reference](sla-reference.md) for full details.
+
+**Structure:**
+```yaml
+sla_defaults:
+  warning_at: float       # Optional: Fraction of tolerance for AMBER (0.0-1.0)
+  default_tier: string    # Optional: Default tier when not specified
+  tiers:                  # Optional: Override built-in tier tolerances
+    critical: float
+    high: float
+    standard: float
+    low: float
+```
+
+**Parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `warning_at` | float | 0.8 | AMBER triggers at this fraction of tolerance |
+| `default_tier` | string | "standard" | Default tier for CDAs without explicit tier |
+| `tiers` | object | Built-in values | Override tolerance values for tiers |
+
+**Built-in Tiers:**
+
+| Tier | Tolerance | Accuracy | Use Case |
+|------|-----------|----------|----------|
+| `critical` | 0% | 100% | Primary keys, regulated fields |
+| `high` | 0.1% | 99.9% | Financial data, audit fields |
+| `standard` | 1% | 99% | Most business fields |
+| `low` | 5% | 95% | Non-critical data |
+
+**Example:**
+```yaml
+validation_job:
+  name: "Transaction Validation"
+
+  sla_defaults:
+    warning_at: 0.8
+    default_tier: standard
+    tiers:
+      critical: 0.0
+      high: 0.001
+      standard: 0.01
+      low: 0.05
+```
+
 ---
 
 ## settings
@@ -272,10 +324,19 @@ files:
     # Format-specific options
     delimiter: string         # CSV only
     encoding: string          # CSV/text only
+    header: integer           # CSV/Excel: Row number of header (0-indexed)
+    quoting: integer          # CSV only: Quoting mode (0-3)
+    skip_rows: integer|list   # CSV only: Rows to skip
     sheet_name: string|int    # Excel only
     flatten: boolean          # JSON only
     lines: boolean            # JSON only
     columns: list             # Parquet only
+
+    # SLA compliance (optional)
+    critical_data_attributes:
+      - field: string         # Field name
+        tier: string          # OR tier name (critical/high/standard/low)
+        tolerance: float      # OR explicit tolerance (0.0-1.0)
 
     # Validations for this file
     validations:
@@ -385,6 +446,45 @@ header: 0   # First row is header (default)
 header: 1   # Second row is header
 header: -1  # No header
 ```
+
+#### quoting
+
+**Type:** Integer
+**Default:** `0` (QUOTE_MINIMAL)
+
+**Description:** CSV quoting behavior following Python csv module constants.
+
+**Values:**
+```yaml
+quoting: 0   # QUOTE_MINIMAL - quote only when necessary (default)
+quoting: 1   # QUOTE_ALL - quote all fields
+quoting: 2   # QUOTE_NONNUMERIC - quote all non-numeric fields
+quoting: 3   # QUOTE_NONE - never quote
+```
+
+**When to Use:**
+- Use `quoting: 1` for files with many special characters
+- Use `quoting: 3` for simple numeric data
+- Default works for most cases
+
+#### skip_rows
+
+**Type:** Integer or List of Integers
+**Default:** None
+
+**Description:** Rows to skip when reading CSV. Useful for files with metadata headers or comment lines.
+
+**Examples:**
+```yaml
+skip_rows: 1         # Skip first row (e.g., metadata header)
+skip_rows: 5         # Skip first 5 rows
+skip_rows: [0, 2, 4] # Skip specific rows (0-indexed)
+```
+
+**Common Use Cases:**
+- Files with title/metadata before the actual header
+- Files with comment lines at the top
+- Exported reports with summary rows
 
 ### Excel-Specific Parameters
 
@@ -516,6 +616,79 @@ columns:
     - "order_date"
   validations:
     # ...
+```
+
+---
+
+## critical_data_attributes
+
+Define SLA compliance requirements for Critical Data Attributes (CDAs) within each file. See [SLA Reference](sla-reference.md) for complete details.
+
+### Structure
+
+```yaml
+critical_data_attributes:
+  - field: string         # Required: Field name
+    tier: string          # Option 1: Named tier (critical/high/standard/low)
+    tolerance: float      # Option 2: Explicit tolerance (0.0-1.0)
+```
+
+### Parameters
+
+#### field
+
+**Type:** String
+**Required:** Yes
+
+**Description:** Name of the column/field to track for SLA compliance
+
+#### tier
+
+**Type:** String
+**Required:** No (use tier OR tolerance, not both)
+**Values:** `critical`, `high`, `standard`, `low`
+
+**Description:** Named tier with predefined tolerance
+
+| Tier | Tolerance | Use Case |
+|------|-----------|----------|
+| `critical` | 0% | Must be 100% accurate |
+| `high` | 0.1% | Near-perfect accuracy |
+| `standard` | 1% | Standard business fields |
+| `low` | 5% | Non-critical fields |
+
+#### tolerance
+
+**Type:** Float
+**Required:** No (use tier OR tolerance, not both)
+**Range:** 0.0 to 1.0
+
+**Description:** Custom tolerance as a decimal (0.02 = 2%)
+
+### Examples
+
+```yaml
+files:
+  - name: "transactions"
+    path: "data/transactions.csv"
+
+    critical_data_attributes:
+      # Named tier
+      - field: transaction_id
+        tier: critical
+
+      # Explicit tolerance
+      - field: email
+        tolerance: 0.02
+
+      # Uses default_tier from sla_defaults
+      - field: phone
+
+    validations:
+      - type: MandatoryFieldCheck
+        severity: ERROR
+        params:
+          fields: [transaction_id, email, phone]
 ```
 
 ---
@@ -1226,7 +1399,7 @@ python3 -m validation_framework.cli profile sample.csv
 
 **You've mastered YAML configuration! Now:**
 
-1. **[Validation Reference](validation-reference.md)** - All 37 validation types
+1. **[Validation Reference](validation-reference.md)** - All 36 validation types
 2. **[CLI Reference](cli-reference.md)** - Command-line usage
 3. **[Configuration Guide](../using-datak9/configuration-guide.md)** - Detailed examples
 4. **[Best Practices](../using-datak9/best-practices.md)** - Production patterns

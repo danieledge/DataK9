@@ -130,7 +130,7 @@ python3 -m validation_framework.cli --version
 python3 -m validation_framework.cli list-validations
 ```
 
-You should see a list of 37 validation types.
+You should see a list of 36 validation types.
 
 ### Run Sample Validation
 

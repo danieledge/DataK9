@@ -29,7 +29,7 @@ DataK9 validates data **before** it enters your data warehouse, analytics platfo
 ### Define Rules Easily 📝
 - Write validation rules in simple YAML configuration
 - Or use DataK9 Studio visual IDE (no coding required!)
-- 37 built-in validation types across 10 categories ready to use
+- 36 built-in validation types across 10 categories ready to use
 
 ### Handle Massive Datasets 💪
 - Process 200GB+ files efficiently with Polars backend
@@ -271,7 +271,7 @@ Ready to let DataK9 guard your data?
 1. **[Install DataK9](../getting-started/installation.md)** - 5-minute setup
 2. **[Quickstart Guide](../getting-started/quickstart-5min.md)** - Your first validation
 3. **[Configuration Guide](configuration-guide.md)** - Learn YAML configuration
-4. **[Validation Catalog](../reference/validation-reference.md)** - Browse all 37 validations
+4. **[Validation Catalog](../reference/validation-reference.md)** - Browse all 36 validations
 
 ---
 

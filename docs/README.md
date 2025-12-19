@@ -38,7 +38,7 @@ Welcome to **DataK9** - a data quality framework that guards your data pipelines
 **Data Analysis & Validation:**
 - [Data Profiling](using-datak9/data-profiling.md) - Analyze data quality
 - [Data Validation](using-datak9/validator.md) - Execute validation rules
-- [Validation Catalog](using-datak9/validation-catalog.md) - All 37 validation types
+- [Validation Catalog](using-datak9/validation-catalog.md) - All 36 validation types
 - [Reading Reports](using-datak9/reading-reports.md) - Understand validation results
 
 **Integration & Deployment:**
@@ -321,7 +321,7 @@ DataK9 is a data quality framework that:
 
 - ✅ **Validates both files and databases** - CSV, Excel, JSON, Parquet, PostgreSQL, MySQL, SQL Server, Oracle, SQLite
 - ✅ **Handles massive datasets** - 200GB+ files with memory-efficient processing
-- ✅ **37 built-in validations** - File, Schema, Field, Record, Advanced, Cross-File, Database, Temporal, Statistical
+- ✅ **36 built-in validations** - File, Schema, Field, Record, Advanced, Cross-File, Database, Temporal, Statistical
 - ✅ **Visual IDE** - DataK9 Studio for point-and-click configuration
 - ✅ **High performance** - Polars backend for 5-10x faster processing
 - ✅ **Integration support** - AutoSys/CI/CD integration, proper exit codes, JSON output

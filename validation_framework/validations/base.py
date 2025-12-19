@@ -1,7 +1,7 @@
 """Base classes for validation rules."""
 
 from abc import ABC, abstractmethod
-from typing import Iterator, Dict, Any, Optional
+from typing import Iterator, Dict, Any, Optional, List, Set
 import pandas as pd
 from validation_framework.core.results import ValidationResult, Severity
 from validation_framework.core.exceptions import ConditionEvaluationError
@@ -142,6 +142,8 @@ class ValidationRule(ABC):
         failed_count: int = 0,
         total_count: int = 0,
         sample_failures: list = None,
+        covered_fields: List[str] = None,
+        failed_row_ids: Set[int] = None,
     ) -> ValidationResult:
         """
         Helper method to create a ValidationResult.
@@ -152,6 +154,8 @@ class ValidationRule(ABC):
             failed_count: Number of failures
             total_count: Total number of records checked
             sample_failures: Sample of failed records
+            covered_fields: Fields this validation covers (for SLA tracking)
+            failed_row_ids: Row IDs that failed (for accurate SLA aggregation)
 
         Returns:
             ValidationResult object
@@ -164,6 +168,8 @@ class ValidationRule(ABC):
             failed_count=failed_count,
             total_count=total_count,
             sample_failures=sample_failures or [],
+            covered_fields=covered_fields or [],
+            failed_row_ids=failed_row_ids,
         )
 
 

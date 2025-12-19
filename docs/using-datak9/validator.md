@@ -183,7 +183,7 @@ Use patterns in output paths to prevent file overwrites:
 
 ## Validation Categories
 
-DataK9 includes **37 built-in validation types** organized into 10 categories:
+DataK9 includes **36 built-in validation types** organized into 10 categories:
 
 ### File-Level Validations
 Check properties of the entire file before processing rows.
@@ -522,7 +522,7 @@ python3 -m validation_framework.cli validate data_validation.yaml
 
 ## Next Steps
 
-- **[Validation Catalog](validation-catalog.md)** - Complete reference of all 37 validations
+- **[Validation Catalog](validation-catalog.md)** - Complete reference of all 36 validations
 - **[Configuration Guide](configuration-guide.md)** - Detailed YAML syntax
 - **[Best Practices](best-practices.md)** - Production deployment tips
 - **[CDA Gap Analysis](../guides/advanced/CDA_GAP_ANALYSIS_GUIDE.md)** - Compliance tracking

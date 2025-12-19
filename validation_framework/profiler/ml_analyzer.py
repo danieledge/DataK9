@@ -11,7 +11,7 @@ Provides machine learning-based analysis for detecting:
 - Temporal pattern anomalies
 - Correlation-based anomaly detection
 
-Enable with --beta-ml flag.
+ML analysis is enabled by default. Use --no-ml to disable.
 """
 
 import numpy as np

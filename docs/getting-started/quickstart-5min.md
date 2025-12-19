@@ -241,7 +241,7 @@ python3 -m validation_framework.cli profile customers.csv \
 ### Continue Learning:
 - **[What is DataK9?](../using-datak9/what-is-datak9.md)** - Understand DataK9's capabilities
 - **[Configuration Guide](../using-datak9/configuration-guide.md)** - Complete guide to writing validations
-- **[Validation Catalog](../reference/validation-reference.md)** - All 37 validation types
+- **[Validation Catalog](../reference/validation-reference.md)** - All 36 validation types
 - **[Examples](../examples/)** - Real-world validation scenarios
 
 ### For Developers:

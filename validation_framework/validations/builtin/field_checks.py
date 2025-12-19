@@ -82,7 +82,9 @@ class MandatoryFieldCheck(DataValidationRule):
 
             total_rows = 0
             failed_rows = []
+            failed_row_ids: Set[int] = set()  # Track unique row IDs for SLA
             max_samples = context.get("max_sample_failures", MAX_SAMPLE_FAILURES)
+            base_row_offset = 0  # Track row offset across chunks
 
             # Process each chunk
             for chunk_idx, chunk in enumerate(data_iterator):
@@ -104,6 +106,7 @@ class MandatoryFieldCheck(DataValidationRule):
                     # If no rows match condition in this chunk, skip validation
                     if len(rows_to_check) == 0:
                         total_rows += len(chunk)
+                        base_row_offset += len(chunk)
                         continue
                 else:
                     rows_to_check = chunk
@@ -121,8 +124,12 @@ class MandatoryFieldCheck(DataValidationRule):
                     # Find failed row indices
                     failed_indices = rows_to_check[mask].index.tolist()
 
-                    # Collect samples
+                    # Collect samples and track failed row IDs
                     for idx in failed_indices:
+                        # Calculate absolute row ID for SLA tracking
+                        absolute_row_id = base_row_offset + idx
+                        failed_row_ids.add(absolute_row_id)
+
                         if len(failed_rows) < max_samples:
                             failed_rows.append({
                                 "row": int(total_rows + idx),
@@ -132,23 +139,27 @@ class MandatoryFieldCheck(DataValidationRule):
                             })
 
                 total_rows += len(chunk)
+                base_row_offset += len(chunk)
 
-            # Create result
-            failed_count = len(failed_rows)
+            # Create result with SLA tracking fields
+            failed_count = len(failed_row_ids)  # Use unique rows, not field*rows
 
             if failed_count > 0:
                 return self._create_result(
                     passed=False,
                     message=f"Found {failed_count} rows with missing mandatory field values",
                     failed_count=failed_count,
-                    total_count=total_rows * len(fields),  # Total checks performed
+                    total_count=total_rows,
                     sample_failures=failed_rows,
+                    covered_fields=fields,
+                    failed_row_ids=failed_row_ids,
                 )
 
             return self._create_result(
                 passed=True,
                 message=f"All mandatory fields contain values across {total_rows} rows",
-                total_count=total_rows * len(fields),
+                total_count=total_rows,
+                covered_fields=fields,
             )
 
         except (ColumnNotFoundError, ConditionEvaluationError):
@@ -273,7 +284,9 @@ class RegexCheck(DataValidationRule):
 
             total_rows = 0
             failed_rows = []
+            failed_row_ids: Set[int] = set()  # Track unique row IDs for SLA
             max_samples = context.get("max_sample_failures", MAX_SAMPLE_FAILURES)
+            base_row_offset = 0
 
             # Process each chunk
             for chunk_idx, chunk in enumerate(data_iterator):
@@ -293,6 +306,7 @@ class RegexCheck(DataValidationRule):
                     # If no rows match condition in this chunk, skip validation
                     if len(rows_to_check) == 0:
                         total_rows += len(chunk)
+                        base_row_offset += len(chunk)
                         continue
                 else:
                     rows_to_check = chunk
@@ -307,18 +321,23 @@ class RegexCheck(DataValidationRule):
                     # Check if validation fails (considering invert flag)
                     failed = (matches and invert) or (not matches and not invert)
 
-                    if failed and len(failed_rows) < max_samples:
-                        failed_rows.append({
-                            "row": int(total_rows + idx),
-                            "field": field,
-                            "value": value,
-                            "message": custom_message
-                        })
+                    if failed:
+                        absolute_row_id = base_row_offset + idx
+                        failed_row_ids.add(absolute_row_id)
+
+                        if len(failed_rows) < max_samples:
+                            failed_rows.append({
+                                "row": int(total_rows + idx),
+                                "field": field,
+                                "value": value,
+                                "message": custom_message
+                            })
 
                 total_rows += len(chunk)
+                base_row_offset += len(chunk)
 
-            # Create result
-            failed_count = len(failed_rows)
+            # Create result with SLA tracking
+            failed_count = len(failed_row_ids)
 
             if failed_count > 0:
                 return self._create_result(
@@ -327,12 +346,15 @@ class RegexCheck(DataValidationRule):
                     failed_count=failed_count,
                     total_count=total_rows,
                     sample_failures=failed_rows,
+                    covered_fields=[field],
+                    failed_row_ids=failed_row_ids,
                 )
 
             return self._create_result(
                 passed=True,
                 message=f"All {total_rows} values match the expected pattern",
                 total_count=total_rows,
+                covered_fields=[field],
             )
 
         except (ColumnNotFoundError, ConditionEvaluationError):
@@ -433,8 +455,10 @@ class ValidValuesCheck(DataValidationRule):
 
             total_rows = 0
             failed_rows = []
+            failed_row_ids: Set[int] = set()  # Track unique row IDs for SLA
             max_samples = context.get("max_sample_failures", MAX_SAMPLE_FAILURES)
             invalid_values_found: Set[str] = set()
+            base_row_offset = 0
 
             # Process each chunk
             for chunk_idx, chunk in enumerate(data_iterator):
@@ -454,6 +478,7 @@ class ValidValuesCheck(DataValidationRule):
                     # If no rows match condition in this chunk, skip validation
                     if len(rows_to_check) == 0:
                         total_rows += len(chunk)
+                        base_row_offset += len(chunk)
                         continue
                 else:
                     rows_to_check = chunk
@@ -466,6 +491,8 @@ class ValidValuesCheck(DataValidationRule):
 
                     if check_value not in valid_set:
                         invalid_values_found.add(str(value))
+                        absolute_row_id = base_row_offset + idx
+                        failed_row_ids.add(absolute_row_id)
 
                         if len(failed_rows) < max_samples:
                             failed_rows.append({
@@ -476,9 +503,10 @@ class ValidValuesCheck(DataValidationRule):
                             })
 
                 total_rows += len(chunk)
+                base_row_offset += len(chunk)
 
-            # Create result
-            failed_count = len(failed_rows)
+            # Create result with SLA tracking
+            failed_count = len(failed_row_ids)
 
             if failed_count > 0:
                 return self._create_result(
@@ -487,12 +515,15 @@ class ValidValuesCheck(DataValidationRule):
                     failed_count=failed_count,
                     total_count=total_rows,
                     sample_failures=failed_rows,
+                    covered_fields=[field],
+                    failed_row_ids=failed_row_ids,
                 )
 
             return self._create_result(
                 passed=True,
                 message=f"All {total_rows} values are valid",
                 total_count=total_rows,
+                covered_fields=[field],
             )
 
         except (ColumnNotFoundError, ConditionEvaluationError):
@@ -575,7 +606,9 @@ class RangeCheck(DataValidationRule):
 
             total_rows = 0
             failed_rows = []
+            failed_row_ids: Set[int] = set()  # Track unique row IDs for SLA
             max_samples = context.get("max_sample_failures", MAX_SAMPLE_FAILURES)
+            base_row_offset = 0
 
             # Process each chunk
             for chunk_idx, chunk in enumerate(data_iterator):
@@ -595,6 +628,7 @@ class RangeCheck(DataValidationRule):
                     # If no rows match condition in this chunk, skip validation
                     if len(rows_to_check) == 0:
                         total_rows += len(chunk)
+                        base_row_offset += len(chunk)
                         continue
                 else:
                     rows_to_check = chunk
@@ -621,18 +655,23 @@ class RangeCheck(DataValidationRule):
                         out_of_range = True
                         default_message = f"Value {value} exceeds maximum {max_value}"
 
-                    if out_of_range and len(failed_rows) < max_samples:
-                        failed_rows.append({
-                            "row": int(total_rows + idx),
-                            "field": field,
-                            "value": float(value),
-                            "message": custom_message or default_message
-                        })
+                    if out_of_range:
+                        absolute_row_id = base_row_offset + idx
+                        failed_row_ids.add(absolute_row_id)
+
+                        if len(failed_rows) < max_samples:
+                            failed_rows.append({
+                                "row": int(total_rows + idx),
+                                "field": field,
+                                "value": float(value),
+                                "message": custom_message or default_message
+                            })
 
                 total_rows += len(chunk)
+                base_row_offset += len(chunk)
 
-            # Create result
-            failed_count = len(failed_rows)
+            # Create result with SLA tracking
+            failed_count = len(failed_row_ids)
 
             if failed_count > 0:
                 return self._create_result(
@@ -641,12 +680,15 @@ class RangeCheck(DataValidationRule):
                     failed_count=failed_count,
                     total_count=total_rows,
                     sample_failures=failed_rows,
+                    covered_fields=[field],
+                    failed_row_ids=failed_row_ids,
                 )
 
             return self._create_result(
                 passed=True,
                 message=f"All {total_rows} values are within acceptable range",
                 total_count=total_rows,
+                covered_fields=[field],
             )
 
         except (ColumnNotFoundError, ConditionEvaluationError):
@@ -721,7 +763,9 @@ class DateFormatCheck(DataValidationRule):
 
             total_rows = 0
             failed_rows = []
+            failed_row_ids: Set[int] = set()  # Track unique row IDs for SLA
             max_samples = context.get("max_sample_failures", MAX_SAMPLE_FAILURES)
+            base_row_offset = 0
 
             # Process each chunk
             for chunk_idx, chunk in enumerate(data_iterator):
@@ -741,6 +785,7 @@ class DateFormatCheck(DataValidationRule):
                     # If no rows match condition in this chunk, skip validation
                     if len(rows_to_check) == 0:
                         total_rows += len(chunk)
+                        base_row_offset += len(chunk)
                         continue
                 else:
                     rows_to_check = chunk
@@ -749,19 +794,26 @@ class DateFormatCheck(DataValidationRule):
                 for idx, value in rows_to_check[field].items():
                     # Handle nulls
                     if pd.isna(value):
-                        if not allow_null and len(failed_rows) < max_samples:
-                            failed_rows.append({
-                                "row": int(total_rows + idx),
-                                "field": field,
-                                "value": str(value),
-                                "message": custom_message or "Null value not allowed"
-                            })
+                        if not allow_null:
+                            absolute_row_id = base_row_offset + idx
+                            failed_row_ids.add(absolute_row_id)
+
+                            if len(failed_rows) < max_samples:
+                                failed_rows.append({
+                                    "row": int(total_rows + idx),
+                                    "field": field,
+                                    "value": str(value),
+                                    "message": custom_message or "Null value not allowed"
+                                })
                         continue
 
                     # Try to parse date with specified format
                     try:
                         datetime.strptime(str(value), date_format)
                     except (ValueError, TypeError) as e:
+                        absolute_row_id = base_row_offset + idx
+                        failed_row_ids.add(absolute_row_id)
+
                         if len(failed_rows) < max_samples:
                             failed_rows.append({
                                 "row": int(total_rows + idx),
@@ -771,9 +823,10 @@ class DateFormatCheck(DataValidationRule):
                             })
 
                 total_rows += len(chunk)
+                base_row_offset += len(chunk)
 
-            # Create result
-            failed_count = len(failed_rows)
+            # Create result with SLA tracking
+            failed_count = len(failed_row_ids)
 
             if failed_count > 0:
                 return self._create_result(
@@ -782,12 +835,15 @@ class DateFormatCheck(DataValidationRule):
                     failed_count=failed_count,
                     total_count=total_rows,
                     sample_failures=failed_rows,
+                    covered_fields=[field],
+                    failed_row_ids=failed_row_ids,
                 )
 
             return self._create_result(
                 passed=True,
                 message=f"All {total_rows} dates match expected format {date_format}",
                 total_count=total_rows,
+                covered_fields=[field],
             )
 
         except (ColumnNotFoundError, ConditionEvaluationError):

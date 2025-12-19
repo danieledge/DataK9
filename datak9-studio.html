@@ -3304,14 +3304,14 @@ files:
                This library is now loaded from validation_definitions.json at startup.
                This ensures the Studio stays in sync with the framework's validation types.
 
-               Total validations: 35 types across 10 categories
+               Total validations: 36 types across 10 categories
                Database-compatible validations (marked with database_compatible: true):
                  - DatabaseConstraintCheck
                  - DatabaseReferentialIntegrityCheck
                  - SQLCustomCheck
 
                Fallback definitions are maintained below for offline/error scenarios.
-               NOTE: Fallback contains 22 core validations. Full 35 loaded from JSON.
+               NOTE: Fallback contains all 36 validations for complete offline support.
             */
             validationLibrary: {},  // Will be populated from JSON
 
@@ -4119,6 +4119,226 @@ files:
                     ],
                     examples: 'No duplicate IDs across files: columns: [customer_id], reference_files: [archive1.csv, archive2.csv]',
                     tips: 'Useful for preventing duplicates in incremental loads'
+                },
+
+                // File-Level - CSVFormatCheck
+                'CSVFormatCheck': {
+                    icon: '📋',
+                    name: 'CSV Format Check',
+                    type: 'CSVFormatCheck',
+                    category: 'File-Level',
+                    description: 'Validates CSV file format integrity before processing',
+                    params: [
+                        { name: 'delimiter', label: 'Delimiter', type: 'text', required: false, help: 'Expected delimiter character (auto-detected if not specified)' },
+                        { name: 'sample_rows', label: 'Sample Rows', type: 'number', required: false, help: 'Number of rows to check for consistency' },
+                        { name: 'max_errors', label: 'Max Errors', type: 'number', required: false, help: 'Maximum errors before failing validation' }
+                    ],
+                    examples: 'Detect malformed CSV files with inconsistent column counts',
+                    tips: 'Run this check first to catch delimiter mismatches and quoting issues'
+                },
+
+                // Conditional
+                'ConditionalValidation': {
+                    icon: '🔀',
+                    name: 'Conditional Validation',
+                    type: 'ConditionalValidation',
+                    category: 'Conditional',
+                    description: 'Executes validation rules conditionally based on SQL-like expression',
+                    params: [
+                        { name: 'condition', label: 'Condition (SQL-like)', type: 'text', required: true, help: 'SQL-like WHERE clause to evaluate' },
+                        { name: 'validations', label: 'Validations (JSON)', type: 'json', required: true, help: 'List of validations to run when condition is true' }
+                    ],
+                    examples: 'IF status=Active THEN validate email field',
+                    tips: 'Powerful for complex business rules with conditional logic'
+                },
+
+                // Advanced - Inline checks
+                'InlineBusinessRuleCheck': {
+                    icon: '💼',
+                    name: 'Inline Business Rule Check',
+                    type: 'InlineBusinessRuleCheck',
+                    category: 'Advanced',
+                    description: 'Custom business rule expressed as Python-like expression',
+                    params: [
+                        { name: 'expression', label: 'Business Rule Expression', type: 'textarea', required: true, help: 'Python-like expression to evaluate' },
+                        { name: 'message', label: 'Error Message', type: 'text', required: false, help: 'Custom error message when rule fails' }
+                    ],
+                    examples: 'Validate calculated fields: (quantity * unit_price) == total_amount',
+                    tips: 'Flexible business logic validation without writing code'
+                },
+
+                'InlineLookupCheck': {
+                    icon: '🔍',
+                    name: 'Inline Lookup Check',
+                    type: 'InlineLookupCheck',
+                    category: 'Advanced',
+                    description: 'Validates field values against inline lookup list',
+                    params: [
+                        { name: 'field', label: 'Field Name', type: 'text', required: true, help: 'Field to validate' },
+                        { name: 'lookup_values', label: 'Lookup Values (JSON array)', type: 'json', required: true, help: 'Valid values as JSON array' }
+                    ],
+                    examples: 'Validate against inline list: lookup_values: ["US", "UK", "CA"]',
+                    tips: 'Quick alternative to ValidValuesCheck with JSON syntax'
+                },
+
+                'InlineRegexCheck': {
+                    icon: '🔤',
+                    name: 'Inline Regex Check',
+                    type: 'InlineRegexCheck',
+                    category: 'Advanced',
+                    description: 'Inline regex validation with custom pattern and field',
+                    params: [
+                        { name: 'field', label: 'Field Name', type: 'text', required: true, help: 'Field to validate' },
+                        { name: 'pattern', label: 'Regex Pattern', type: 'text', required: true, help: 'Regular expression pattern' }
+                    ],
+                    examples: 'Quick regex check without full RegexCheck configuration',
+                    tips: 'Lightweight alternative to RegexCheck for simple patterns'
+                },
+
+                // Cross-File - CrossFileKeyCheck
+                'CrossFileKeyCheck': {
+                    icon: '🔗',
+                    name: 'Cross-File Key Check',
+                    type: 'CrossFileKeyCheck',
+                    category: 'Cross-File',
+                    description: 'Advanced cross-file referential integrity check with multiple check modes',
+                    params: [
+                        { name: 'foreign_key', label: 'Foreign Key Column(s)', type: 'text', required: true, help: 'Column(s) to validate (comma-separated for composite keys)' },
+                        { name: 'reference_file', label: 'Reference File Path', type: 'text', required: true, help: 'Path to reference file containing valid keys' },
+                        { name: 'reference_key', label: 'Reference Key Column(s)', type: 'text', required: true, help: 'Column(s) in reference file to check against' },
+                        { name: 'check_mode', label: 'Check Mode', type: 'select', required: false, help: 'Type of referential integrity check', options: ['exact_match', 'subset', 'superset', 'overlap'] },
+                        { name: 'allow_null', label: 'Allow Null Values', type: 'boolean', required: false, help: 'Whether to allow NULL foreign key values' }
+                    ],
+                    examples: 'Validate customer_id exists in customers.csv',
+                    tips: 'Memory-efficient validation supporting billions of keys'
+                },
+
+                // Database validations
+                'SQLCustomCheck': {
+                    icon: '💾',
+                    name: 'SQL Custom Check',
+                    type: 'SQLCustomCheck',
+                    category: 'Database',
+                    description: 'Executes custom SQL query for validation',
+                    params: [
+                        { name: 'connection_string', label: 'Database Connection String', type: 'text', required: true, help: 'Database connection string' },
+                        { name: 'query', label: 'SQL Query', type: 'textarea', required: true, help: 'Custom SQL query to execute' },
+                        { name: 'expected_result', label: 'Expected Result', type: 'text', required: false, help: 'Expected query result for validation' }
+                    ],
+                    examples: 'Custom business rule validation via SQL',
+                    tips: 'Maximum flexibility for complex database-driven validations'
+                },
+
+                'DatabaseConstraintCheck': {
+                    icon: '🗄️',
+                    name: 'Database Constraint Check',
+                    type: 'DatabaseConstraintCheck',
+                    category: 'Database',
+                    description: 'Validates data against database constraints (PK, FK, unique, not null)',
+                    params: [
+                        { name: 'connection_string', label: 'Database Connection String', type: 'text', required: true, help: 'Database connection string' },
+                        { name: 'table_name', label: 'Table Name', type: 'text', required: true, help: 'Target database table' },
+                        { name: 'constraints', label: 'Constraints to Check', type: 'select', required: true, help: 'Which constraints to validate', options: ['all', 'primary_key', 'foreign_key', 'unique', 'not_null'] }
+                    ],
+                    examples: 'Validate all constraints before insert',
+                    tips: 'Catch constraint violations before attempting database load'
+                },
+
+                'DatabaseReferentialIntegrityCheck': {
+                    icon: '🔗',
+                    name: 'Database Referential Integrity Check',
+                    type: 'DatabaseReferentialIntegrityCheck',
+                    category: 'Database',
+                    description: 'Validates foreign key relationships against actual database',
+                    params: [
+                        { name: 'connection_string', label: 'Database Connection String', type: 'text', required: true, help: 'Database connection string' },
+                        { name: 'local_field', label: 'Local Field', type: 'text', required: true, help: 'Foreign key field in data' },
+                        { name: 'reference_table', label: 'Reference Table', type: 'text', required: true, help: 'Database table containing valid values' },
+                        { name: 'reference_column', label: 'Reference Column', type: 'text', required: true, help: 'Column in reference table (primary key)' }
+                    ],
+                    examples: 'Validate customer_id exists in database',
+                    tips: 'Real-time validation against live database'
+                },
+
+                // Temporal validations
+                'BaselineComparisonCheck': {
+                    icon: '📅',
+                    name: 'Baseline Comparison Check',
+                    type: 'BaselineComparisonCheck',
+                    category: 'Temporal',
+                    description: 'Compares current data against historical baseline',
+                    params: [
+                        { name: 'metric', label: 'Metric', type: 'select', required: true, help: 'What to compare', options: ['row_count', 'sum', 'mean', 'min', 'max'] },
+                        { name: 'field', label: 'Field', type: 'text', required: false, help: 'Field to measure (not needed for row_count)' },
+                        { name: 'baseline_file', label: 'Baseline File', type: 'text', required: true, help: 'Historical baseline file path' },
+                        { name: 'tolerance_percent', label: 'Tolerance (%)', type: 'number', required: true, help: 'Acceptable variance from baseline' }
+                    ],
+                    examples: 'Compare to yesterdays row count with 10% tolerance',
+                    tips: 'Detect unusual data volumes or metric changes'
+                },
+
+                'TrendDetectionCheck': {
+                    icon: '📈',
+                    name: 'Trend Detection Check',
+                    type: 'TrendDetectionCheck',
+                    category: 'Temporal',
+                    description: 'Detects trends and anomalies in time-series data',
+                    params: [
+                        { name: 'timestamp_field', label: 'Timestamp Field', type: 'text', required: true, help: 'Field containing timestamp' },
+                        { name: 'value_field', label: 'Value Field', type: 'text', required: true, help: 'Numeric field to analyze for trends' },
+                        { name: 'trend_type', label: 'Trend Type', type: 'select', required: true, help: 'Type of trend to detect', options: ['increasing', 'decreasing', 'stable', 'anomaly'] },
+                        { name: 'sensitivity', label: 'Sensitivity', type: 'select', required: false, help: 'Detection sensitivity', options: ['low', 'medium', 'high'] }
+                    ],
+                    examples: 'Detect anomalous sales trends',
+                    tips: 'Useful for monitoring KPIs and detecting unusual patterns'
+                },
+
+                // Statistical validations
+                'DistributionCheck': {
+                    icon: '📊',
+                    name: 'Distribution Check',
+                    type: 'DistributionCheck',
+                    category: 'Statistical',
+                    description: 'Validates data distribution matches expected pattern',
+                    params: [
+                        { name: 'field', label: 'Field Name', type: 'text', required: true, help: 'Field to analyze distribution' },
+                        { name: 'distribution_type', label: 'Expected Distribution', type: 'select', required: true, help: 'Expected statistical distribution', options: ['normal', 'uniform', 'exponential', 'poisson'] },
+                        { name: 'significance_level', label: 'Significance Level', type: 'number', required: false, help: 'P-value threshold for statistical test' }
+                    ],
+                    examples: 'Validate ages follow normal distribution',
+                    tips: 'Advanced statistical validation for data scientists'
+                },
+
+                'CorrelationCheck': {
+                    icon: '🔗',
+                    name: 'Correlation Check',
+                    type: 'CorrelationCheck',
+                    category: 'Statistical',
+                    description: 'Validates correlation between two numeric fields',
+                    params: [
+                        { name: 'field_a', label: 'Field A', type: 'text', required: true, help: 'First numeric field' },
+                        { name: 'field_b', label: 'Field B', type: 'text', required: true, help: 'Second numeric field' },
+                        { name: 'min_correlation', label: 'Minimum Correlation', type: 'number', required: false, help: 'Minimum acceptable correlation coefficient' },
+                        { name: 'max_correlation', label: 'Maximum Correlation', type: 'number', required: false, help: 'Maximum acceptable correlation coefficient' },
+                        { name: 'method', label: 'Correlation Method', type: 'select', required: false, help: 'Statistical correlation method', options: ['pearson', 'spearman', 'kendall'] }
+                    ],
+                    examples: 'Validate price and quantity are negatively correlated',
+                    tips: 'Detect unexpected relationships between variables'
+                },
+
+                'AdvancedAnomalyDetectionCheck': {
+                    icon: '🤖',
+                    name: 'Advanced Anomaly Detection Check',
+                    type: 'AdvancedAnomalyDetectionCheck',
+                    category: 'Statistical',
+                    description: 'ML-based anomaly detection using isolation forest or local outlier factor',
+                    params: [
+                        { name: 'fields', label: 'Fields (comma-separated)', type: 'text', required: true, help: 'Numeric fields to analyze for anomalies' },
+                        { name: 'method', label: 'Detection Method', type: 'select', required: false, help: 'Machine learning algorithm', options: ['isolation_forest', 'local_outlier_factor', 'one_class_svm'] },
+                        { name: 'contamination', label: 'Expected Outlier Rate', type: 'number', required: false, help: 'Expected proportion of outliers (0.0-0.5)' }
+                    ],
+                    examples: 'Detect fraudulent transactions using isolation forest',
+                    tips: 'Advanced ML-based detection for complex patterns'
                 }
             },  // End of fallbackValidationLibrary
 

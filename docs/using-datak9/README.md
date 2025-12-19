@@ -15,7 +15,7 @@ Start here if you're new to DataK9:
 ### Configuration & Validation
 Learn how to configure DataK9:
 - **[Configuration Guide](configuration-guide.md)** - Complete YAML reference
-- **[Validation Catalog](validation-catalog.md)** - All 37 validation types
+- **[Validation Catalog](validation-catalog.md)** - All 36 validation types
 - **[Best Practices](best-practices.md)** - ERROR vs WARNING, production tips
 
 ### DataK9 Studio

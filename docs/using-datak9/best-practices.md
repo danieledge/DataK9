@@ -770,7 +770,7 @@ files:
 
 ## Next Steps
 
-- **[Validation Catalog](validation-catalog.md)** - Complete list of 37 validations
+- **[Validation Catalog](validation-catalog.md)** - Complete list of 36 validations
 - **[Configuration Guide](configuration-guide.md)** - Complete YAML reference
 - **[Examples](../examples/)** - More real-world scenarios
 - **[DataK9 Studio Guide](studio-guide.md)** - Visual configuration builder
