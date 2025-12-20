@@ -737,7 +737,7 @@ SLA_HTML_TEMPLATE = """
             text-decoration: none;
         }
 
-        /* Responsive */
+        /* Responsive - Tablet */
         @media (max-width: 768px) {
             .container { padding: 16px; }
             .header { padding: 20px; }
@@ -747,6 +747,72 @@ SLA_HTML_TEMPLATE = """
             .kpi-grid { grid-template-columns: repeat(2, 1fr); }
             .results-table { font-size: 0.875rem; }
             .results-table th, .results-table td { padding: 10px 8px; }
+        }
+
+        /* Responsive - Mobile */
+        @media (max-width: 480px) {
+            body { font-size: 14px; }
+            .container { padding: 12px; }
+
+            .header { padding: 16px; border-radius: 12px; }
+            .header-left h1 { font-size: 1.25rem; flex-wrap: wrap; }
+            .header-meta { flex-direction: column; gap: 8px; font-size: 0.75rem; }
+
+            .status-indicator { width: 60px; height: 60px; font-size: 1.5rem; }
+            .status-text .value { font-size: 1.125rem; }
+
+            .kpi-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
+            .kpi-card { padding: 14px; }
+            .kpi-value { font-size: 1.5rem; }
+            .kpi-label { font-size: 0.7rem; }
+
+            .health-bar-container { padding: 14px; }
+            .health-bar-header { flex-direction: column; gap: 8px; align-items: flex-start; }
+            .health-bar-segments { font-size: 0.65rem; }
+
+            .section { border-radius: 10px; }
+            .section-header { padding: 12px 14px; }
+            .section-title { font-size: 1rem; }
+
+            .tier-breakdown { grid-template-columns: 1fr 1fr; gap: 8px; padding: 12px; }
+            .tier-card { padding: 10px; }
+            .tier-card-name { font-size: 0.65rem; }
+            .tier-card-counts { font-size: 0.75rem; }
+
+            /* Mobile table - horizontal scroll */
+            .section-content { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+            .results-table { min-width: 600px; font-size: 0.8rem; }
+            .results-table th, .results-table td { padding: 10px 8px; white-space: nowrap; }
+            .field-name { font-size: 0.8rem; }
+            .tier-badge { font-size: 0.65rem; padding: 3px 6px; }
+            .status-badge { font-size: 0.7rem; padding: 4px 8px; }
+            .accuracy-bar-track { min-width: 50px; }
+            .accuracy-value { font-size: 0.75rem; min-width: 45px; }
+            .record-count { font-size: 0.7rem; }
+            .validation-tag { font-size: 0.6rem; padding: 2px 5px; }
+
+            /* Breach cards mobile */
+            .section-content > div[style*="red-soft"] {
+                padding: 12px;
+                margin-bottom: 10px;
+            }
+            .section-content > div[style*="red-soft"] > div {
+                flex-direction: column;
+                gap: 8px;
+            }
+            .section-content > div[style*="red-soft"] > div > div:last-child {
+                text-align: left;
+            }
+
+            .footer { padding: 16px; font-size: 0.7rem; }
+        }
+
+        /* Extra small phones */
+        @media (max-width: 360px) {
+            .kpi-grid { grid-template-columns: 1fr; }
+            .tier-breakdown { grid-template-columns: 1fr; }
+            .header-left h1 { font-size: 1.1rem; }
+            .kpi-value { font-size: 1.25rem; }
         }
 
         /* Print styles */
