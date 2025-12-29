@@ -737,14 +737,114 @@ SLA_HTML_TEMPLATE = """
             text-decoration: none;
         }
 
+        /* Executive Summary - Simplified */
+        .exec-summary {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 32px;
+            margin-bottom: 24px;
+            text-align: center;
+        }
+
+        .exec-status {
+            display: inline-flex;
+            flex-direction: column;
+            align-items: center;
+            margin-bottom: 24px;
+        }
+
+        .exec-icon {
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 3rem;
+            margin-bottom: 12px;
+        }
+
+        .exec-status.green .exec-icon {
+            background: var(--green-soft);
+            box-shadow: 0 0 40px var(--green-glow);
+        }
+        .exec-status.amber .exec-icon {
+            background: var(--amber-soft);
+            box-shadow: 0 0 40px var(--amber-glow);
+        }
+        .exec-status.red .exec-icon {
+            background: var(--red-soft);
+            box-shadow: 0 0 40px var(--red-glow);
+            animation: pulse-red 2s infinite;
+        }
+        .exec-status.grey .exec-icon {
+            background: var(--grey-soft);
+        }
+
+        .exec-label {
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+        .exec-status.green .exec-label { color: var(--green); }
+        .exec-status.amber .exec-label { color: var(--amber); }
+        .exec-status.red .exec-label { color: var(--red); }
+        .exec-status.grey .exec-label { color: var(--grey); }
+
+        .exec-counts {
+            display: flex;
+            justify-content: center;
+            gap: 32px;
+            margin-bottom: 20px;
+        }
+
+        .count-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 12px 24px;
+            border-radius: 12px;
+        }
+        .count-item.green { background: var(--green-soft); }
+        .count-item.amber { background: var(--amber-soft); }
+        .count-item.red { background: var(--red-soft); }
+
+        .count-num {
+            font-size: 2rem;
+            font-weight: 700;
+        }
+        .count-item.green .count-num { color: var(--green); }
+        .count-item.amber .count-num { color: var(--amber); }
+        .count-item.red .count-num { color: var(--red); }
+
+        .count-label {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-secondary);
+        }
+
+        .exec-meta {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            flex-wrap: wrap;
+            color: var(--text-muted);
+            font-size: 0.8rem;
+        }
+
+        .exec-meta span {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
         /* Responsive - Tablet */
         @media (max-width: 768px) {
             .container { padding: 16px; }
-            .header { padding: 20px; }
-            .header-content { flex-direction: column; }
-            .overall-status { width: 100%; justify-content: center; }
-            .status-text { text-align: center; }
-            .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+            .exec-summary { padding: 24px; }
+            .exec-counts { gap: 20px; }
+            .count-item { padding: 10px 18px; }
             .results-table { font-size: 0.875rem; }
             .results-table th, .results-table td { padding: 10px 8px; }
         }
@@ -754,9 +854,14 @@ SLA_HTML_TEMPLATE = """
             body { font-size: 14px; }
             .container { padding: 12px; }
 
-            .header { padding: 16px; border-radius: 12px; }
-            .header-left h1 { font-size: 1.25rem; flex-wrap: wrap; }
-            .header-meta { flex-direction: column; gap: 8px; font-size: 0.75rem; }
+            .exec-summary { padding: 20px 16px; border-radius: 12px; }
+            .exec-icon { width: 80px; height: 80px; font-size: 2.5rem; }
+            .exec-label { font-size: 1.25rem; }
+            .exec-counts { gap: 12px; }
+            .count-item { padding: 10px 16px; }
+            .count-num { font-size: 1.5rem; }
+            .count-label { font-size: 0.65rem; }
+            .exec-meta { gap: 12px; font-size: 0.7rem; }
 
             .status-indicator { width: 60px; height: 60px; font-size: 1.5rem; }
             .status-text .value { font-size: 1.125rem; }
@@ -825,78 +930,32 @@ SLA_HTML_TEMPLATE = """
 </head>
 <body>
     <div class="container">
-        <!-- Header -->
-        <header class="header">
-            <div class="header-content">
-                <div class="header-left">
-                    <h1>
-                        <span class="shield">&#128737;</span>
-                        {{ title }}
-                    </h1>
-                    <div class="header-meta">
-                        <span>&#128196; {{ report.file_name }}</span>
-                        <span>&#128202; {{ report.dataset_row_count | default(0) }} records</span>
-                        <span>&#128337; {{ generated_at }}</span>
-                    </div>
+        <!-- Executive Summary -->
+        <header class="exec-summary">
+            <div class="exec-status {{ overall_status.lower() }}">
+                <div class="exec-icon">
+                    {% if overall_status == 'GREEN' %}&#10004;{% elif overall_status == 'AMBER' %}&#9888;{% elif overall_status == 'RED' %}&#10060;{% else %}&#8212;{% endif %}
                 </div>
-                <div class="overall-status">
-                    <div class="status-text">
-                        <div class="label">Overall Status</div>
-                        <div class="value">{{ overall_message }}</div>
-                    </div>
-                    <div class="status-indicator">
-                        {% if overall_status == 'GREEN' %}&#10004;{% elif overall_status == 'AMBER' %}&#9888;{% elif overall_status == 'RED' %}&#10060;{% else %}&#8212;{% endif %}
-                    </div>
-                </div>
+                <div class="exec-label">{{ overall_message }}</div>
+            </div>
+            <div class="exec-counts">
+                <div class="count-item green"><span class="count-num">{{ report.green_count }}</span><span class="count-label">Pass</span></div>
+                <div class="count-item amber"><span class="count-num">{{ report.amber_count }}</span><span class="count-label">Warn</span></div>
+                <div class="count-item red"><span class="count-num">{{ report.red_count }}</span><span class="count-label">Fail</span></div>
+            </div>
+            <div class="exec-meta">
+                <span>{{ report.file_name }}</span>
+                <span>{{ report.dataset_row_count | default(0) | int }} rows</span>
+                <span>{{ generated_at }}</span>
             </div>
         </header>
 
-        <!-- KPI Cards -->
-        <div class="kpi-grid">
-            <div class="kpi-card green">
-                <div class="kpi-icon">&#9989;</div>
-                <div class="kpi-value">{{ report.green_count }}</div>
-                <div class="kpi-label">Compliant</div>
-            </div>
-            <div class="kpi-card amber">
-                <div class="kpi-icon">&#9888;</div>
-                <div class="kpi-value">{{ report.amber_count }}</div>
-                <div class="kpi-label">Warning</div>
-            </div>
-            <div class="kpi-card red">
-                <div class="kpi-icon">&#10060;</div>
-                <div class="kpi-value">{{ report.red_count }}</div>
-                <div class="kpi-label">Breached</div>
-            </div>
-            <div class="kpi-card grey">
-                <div class="kpi-icon">&#9898;</div>
-                <div class="kpi-value">{{ report.not_evaluated_count }}</div>
-                <div class="kpi-label">Not Evaluated</div>
-            </div>
+        <!-- KPI Cards - Hidden, replaced by exec summary -->
+        <div class="kpi-grid" style="display:none;">
             <div class="kpi-card info">
                 <div class="kpi-icon">&#128200;</div>
                 <div class="kpi-value">{{ "%.1f"|format(compliance_pct) }}%</div>
                 <div class="kpi-label">Compliance Rate</div>
-            </div>
-        </div>
-
-        <!-- Health Score Bar -->
-        <div class="health-bar-container">
-            <div class="health-bar-header">
-                <div class="health-bar-title">
-                    &#128154; Data Quality Health Score
-                </div>
-                <div class="health-bar-value">{{ "%.1f"|format(health_score) }}%</div>
-            </div>
-            <div class="health-bar">
-                <div class="health-bar-fill"></div>
-            </div>
-            <div class="health-bar-segments">
-                <span>0%</span>
-                <span>Critical (&lt;70%)</span>
-                <span>Warning (70-90%)</span>
-                <span>Healthy (&gt;90%)</span>
-                <span>100%</span>
             </div>
         </div>
 
