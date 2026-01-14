@@ -97,6 +97,8 @@ examples/sample_data/*.parquet
 !docs/*.html
 !docs/**/*.html
 !examples/sample_config.yaml
+!examples/cda_validation_example.yaml
+!examples/sla_validation_example.yaml
 
 # Track DataK9 Studio application
 !datak9-studio.html

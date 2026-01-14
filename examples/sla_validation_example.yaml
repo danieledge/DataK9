@@ -1,0 +1,192 @@
+# SLA (Service Level Agreement) Validation Example
+# This demonstrates how to define SLA tiers for Critical Data Attributes
+# to track data quality compliance with tolerance-based monitoring.
+
+validation_job:
+  name: "Transaction Data SLA Monitoring"
+  version: "1.0"
+  description: "Example showing SLA tier configuration for compliance tracking"
+
+  # Global SLA configuration
+  # These settings apply to all files unless overridden
+  sla_defaults:
+    warning_at: 0.8          # Amber status at 80% of tolerance threshold
+    default_tier: standard   # Default tier when not specified per-field
+
+    # Built-in tiers (can be customized here)
+    tiers:
+      critical: 0.0          # 0% tolerance - 100% accuracy required
+      high: 0.001            # 0.1% tolerance - 99.9% accuracy
+      standard: 0.01         # 1% tolerance - 99% accuracy
+      low: 0.05              # 5% tolerance - 95% accuracy
+
+  files:
+    - name: "transactions"
+      path: "examples/sample_data/transactions.csv"
+      format: "csv"
+      delimiter: ","
+      encoding: "utf-8"
+
+      # Define CDAs with SLA tiers
+      # Each field can specify a tier OR a custom tolerance
+      critical_data_attributes:
+        # Primary key - must be 100% complete and unique
+        - field: "transaction_id"
+          tier: critical
+          description: "Unique transaction identifier"
+          owner: "Data Engineering"
+
+        # Financial data - high accuracy required
+        - field: "amount"
+          tier: high
+          description: "Transaction amount"
+          owner: "Finance Team"
+
+        # Business data - standard tolerance acceptable
+        - field: "customer_id"
+          tier: standard
+          description: "Customer reference"
+          owner: "Data Team"
+
+        - field: "transaction_date"
+          tier: standard
+          description: "Transaction timestamp"
+          owner: "Data Team"
+
+        # Custom tolerance example (not using a named tier)
+        - field: "merchant_category"
+          tolerance: 0.02      # 2% tolerance - custom value
+          description: "Merchant category code"
+          owner: "Operations"
+
+        # Low priority field
+        - field: "notes"
+          tier: low
+          description: "Optional transaction notes"
+          owner: "Operations"
+
+      validations:
+        # File integrity checks
+        - type: "EmptyFileCheck"
+          severity: "ERROR"
+
+        - type: "CSVFormatCheck"
+          severity: "ERROR"
+
+        # Completeness - feeds into SLA for covered fields
+        - type: "MandatoryFieldCheck"
+          severity: "ERROR"
+          params:
+            fields: ["transaction_id", "customer_id", "amount", "transaction_date"]
+
+        # Uniqueness - critical for transaction_id SLA
+        - type: "UniqueKeyCheck"
+          severity: "ERROR"
+          params:
+            fields: ["transaction_id"]
+
+        # Range validation - feeds into amount SLA
+        - type: "RangeCheck"
+          severity: "ERROR"
+          params:
+            field: "amount"
+            min_value: 0.01
+            max_value: 1000000
+
+        # Date validation
+        - type: "DateFormatCheck"
+          severity: "WARNING"
+          params:
+            field: "transaction_date"
+            format: "%Y-%m-%d"
+
+        # Categorical validation
+        - type: "ValidValuesCheck"
+          severity: "WARNING"
+          params:
+            field: "merchant_category"
+            valid_values: ["retail", "food", "travel", "entertainment", "utilities", "other"]
+
+    - name: "customers"
+      path: "examples/sample_data/customers.csv"
+      format: "csv"
+
+      critical_data_attributes:
+        - field: "customer_id"
+          tier: critical
+          description: "Primary customer identifier"
+          owner: "Data Engineering"
+
+        - field: "email"
+          tier: high
+          description: "Customer email for communications"
+          owner: "Marketing"
+
+        - field: "phone"
+          tier: standard
+          description: "Contact phone number"
+          owner: "Customer Service"
+
+      validations:
+        - type: "MandatoryFieldCheck"
+          severity: "ERROR"
+          params:
+            fields: ["customer_id", "email"]
+
+        - type: "UniqueKeyCheck"
+          severity: "ERROR"
+          params:
+            fields: ["customer_id"]
+
+        - type: "RegexCheck"
+          severity: "ERROR"
+          params:
+            field: "email"
+            pattern: "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
+
+  output:
+    html_report: "sla_validation_report.html"
+    json_summary: "sla_validation_summary.json"
+    fail_on_error: true
+
+# ============================================================
+# SLA Traffic Light Status
+# ============================================================
+#
+# The SLA system uses traffic light status for quick visibility:
+#
+#   GREEN  - Within tolerance (failure_rate < warning_threshold)
+#   AMBER  - Approaching tolerance (failure_rate >= warning_threshold)
+#   RED    - Breached (failure_rate >= tolerance)
+#
+# Warning threshold is calculated as: tolerance * warning_at
+# Default warning_at is 0.8, so AMBER triggers at 80% of tolerance.
+#
+# ============================================================
+# Running Validation with SLA Tracking
+# ============================================================
+#
+# Run validation (SLA results included in output):
+#
+#   python3 -m validation_framework.cli validate examples/sla_validation_example.yaml
+#
+# Run CDA gap analysis to check coverage:
+#
+#   python3 -m validation_framework.cli cda-analysis examples/sla_validation_example.yaml
+#
+# ============================================================
+# Expected SLA Output
+# ============================================================
+#
+# The validation report will include an SLA section like:
+#
+#   Field              Tier       Tolerance  Actual   Status
+#   -------------------------------------------------------
+#   transaction_id     critical   0.00%      0.00%    GREEN
+#   amount             high       0.10%      0.02%    GREEN
+#   customer_id        standard   1.00%      0.50%    GREEN
+#   merchant_category  custom     2.00%      1.80%    AMBER
+#   notes              low        5.00%      3.20%    GREEN
+#
+#   Summary: 4 GREEN  1 AMBER  0 RED
+#

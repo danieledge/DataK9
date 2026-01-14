@@ -291,13 +291,37 @@ class ValidationConfig:
                     "delimiter": file_config.get("delimiter", ","),
                     "encoding": file_config.get("encoding", "utf-8"),
                     "header": file_config.get("header", 0),
-                    "quoting": file_config.get("quoting"),  # CSV quoting mode: minimal, all, none, nonnumeric
+                    "quoting": self._parse_quoting(file_config.get("quoting")),  # CSV quoting mode: minimal, all, none, nonnumeric
                     "skip_rows": file_config.get("skip_rows", file_config.get("skiprows")),  # Rows to skip before header
                 })
 
             parsed_files.append(parsed_file)
 
         return parsed_files
+
+    def _parse_quoting(self, quoting_value):
+        """Convert quoting string to integer constant for csv module.
+
+        Args:
+            quoting_value: String like 'minimal', 'all', 'none', 'nonnumeric' or integer
+
+        Returns:
+            Integer constant for csv.QUOTE_* or None if not specified
+        """
+        import csv
+        if quoting_value is None:
+            return None
+        if isinstance(quoting_value, int):
+            return quoting_value
+        if isinstance(quoting_value, str):
+            quoting_map = {
+                'minimal': csv.QUOTE_MINIMAL,
+                'all': csv.QUOTE_ALL,
+                'none': csv.QUOTE_NONE,
+                'nonnumeric': csv.QUOTE_NONNUMERIC,
+            }
+            return quoting_map.get(quoting_value.lower())
+        return None
 
     def _parse_validations(self, validations_config: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Parse validations configuration."""

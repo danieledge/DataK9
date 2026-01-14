@@ -250,6 +250,30 @@ class CSVLoader(DataLoader):
                 self.kwargs['skiprows'] = detected_skip
                 logger.info(f"Auto-detected: skipping first {detected_skip} row(s) before header")
 
+    def _parse_quoting(self, quoting_value):
+        """Convert quoting string to integer constant for csv module.
+
+        Args:
+            quoting_value: String like 'minimal', 'all', 'none', 'nonnumeric' or integer
+
+        Returns:
+            Integer constant for csv.QUOTE_* (defaults to QUOTE_MINIMAL)
+        """
+        import csv
+        if quoting_value is None:
+            return csv.QUOTE_MINIMAL
+        if isinstance(quoting_value, int):
+            return quoting_value
+        if isinstance(quoting_value, str):
+            quoting_map = {
+                'minimal': csv.QUOTE_MINIMAL,
+                'all': csv.QUOTE_ALL,
+                'none': csv.QUOTE_NONE,
+                'nonnumeric': csv.QUOTE_NONNUMERIC,
+            }
+            return quoting_map.get(quoting_value.lower(), csv.QUOTE_MINIMAL)
+        return csv.QUOTE_MINIMAL
+
     def load(self) -> Iterator[pd.DataFrame]:
         """
         Load CSV data in chunks with robust error handling.
@@ -261,7 +285,7 @@ class CSVLoader(DataLoader):
         encoding = self.kwargs.get("encoding", "utf-8")
         header = self.kwargs.get("header", 0)
         skiprows = self.kwargs.get("skiprows", None)
-        quoting = self.kwargs.get("quoting", 0)  # Default: QUOTE_MINIMAL
+        quoting = self._parse_quoting(self.kwargs.get("quoting", 0))  # Default: QUOTE_MINIMAL
 
         # Log skiprows if set
         if skiprows:
@@ -373,7 +397,7 @@ class CSVLoader(DataLoader):
                 encoding = self.kwargs.get("encoding", "utf-8")
                 header = self.kwargs.get("header", 0)
                 skiprows = self.kwargs.get("skiprows", None)
-                quoting = self.kwargs.get("quoting", 0)
+                quoting = self._parse_quoting(self.kwargs.get("quoting", 0))
 
                 # Read just first chunk to get schema
                 first_chunk = pd.read_csv(
